@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SATAN Toolkit | App Homepage</title>
+    <meta
+      name="description"
+      content="SATAN Toolkit is a local desktop application for managing account data, Gmail pools, IP records, and optional Google Drive app-data synchronization."
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="site-shell">
+      <header class="hero">
+        <div class="hero-badge">Desktop App</div>
+        <h1>SATAN Toolkit</h1>
+        <p class="hero-copy">
+          SATAN Toolkit is a local desktop application that helps users manage operational account data, Gmail
+          records, IP records, and optional encrypted-style sync backups stored inside the app-specific area of their
+          own Google Drive account.
+        </p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="./privacy.html">View Privacy Policy</a>
+          <a class="btn btn-secondary" href="#overview">How It Works</a>
+        </div>
+      </header>
+
+      <main class="content">
+        <section class="card-grid" id="overview">
+          <article class="card">
+            <h2>Local-First by Design</h2>
+            <p>
+              SATAN Toolkit runs locally on the user’s device. Primary data handling happens on the machine itself,
+              not on an external application server controlled by the developer.
+            </p>
+          </article>
+          <article class="card">
+            <h2>Google Drive Scope</h2>
+            <p>
+              When the user enables cloud sync, the app uses the Google Drive <code>drive.appdata</code> scope only.
+              This app-specific storage is separate from the user’s normal Drive files.
+            </p>
+          </article>
+          <article class="card">
+            <h2>No Personal Drive Browsing</h2>
+            <p>
+              SATAN Toolkit does not browse, index, read, modify, or delete the user’s general Google Drive files. It
+              only works inside its own hidden application data area.
+            </p>
+          </article>
+        </section>
+
+        <section class="detail-section">
+          <div class="section-copy">
+            <span class="section-kicker">Data Flow</span>
+            <h2>Direct device-to-drive synchronization</h2>
+            <p>
+              If the user signs in with Google Drive, data moves directly between the local application and the user’s
+              own Google Drive app-data folder through Google APIs. The application does not rely on a separate cloud
+              database, third-party analytics service, or developer-owned storage server.
+            </p>
+          </div>
+          <div class="mini-panel">
+            <div class="mini-row">
+              <span>Application Type</span>
+              <strong>Local desktop software</strong>
+            </div>
+            <div class="mini-row">
+              <span>Cloud Storage Mode</span>
+              <strong>Optional, user-controlled</strong>
+            </div>
+            <div class="mini-row">
+              <span>Google Permission</span>
+              <strong><code>drive.appdata</code> only</strong>
+            </div>
+            <div class="mini-row">
+              <span>Third-Party Analytics</span>
+              <strong>None</strong>
+            </div>
+          </div>
+        </section>
+
+        <section class="card-grid card-grid-wide">
+          <article class="card">
+            <h2>User Control</h2>
+            <p>
+              Users can choose whether to enable Google Drive sync, manually trigger uploads, sign out at any time, and
+              restore local data from cloud-stored application data when needed.
+            </p>
+          </article>
+          <article class="card">
+            <h2>Scope of Stored Data</h2>
+            <p>
+              Depending on user actions inside the app, synchronized data may include account records, Gmail records,
+              IP records, notes, eligibility states, timestamps, and account-level browser or AdsPower-related metadata
+              required for continuity across devices.
+            </p>
+          </article>
+        </section>
+      </main>
+
+      <footer class="footer">
+        <span>© 2026 SATAN Toolkit</span>
+        <a href="./privacy.html">Privacy Policy</a>
+      </footer>
+    </div>
+  </body>
+</html>
