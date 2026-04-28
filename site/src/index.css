@@ -2,15 +2,15 @@
 
 /* Brand / theme tokens (CSS-first, used by both Tailwind + custom CSS) */
 :root {
-  --bg: 6 6 10; /* near-black */
-  --fg: 255 255 255;
-  --muted: 170 170 185;
-  --panel: 18 18 26;
-  --panelBorder: 255 255 255;
+  --bg: 6, 6, 10; /* comma syntax for broader browser support */
+  --fg: 255, 255, 255;
+  --muted: 170, 170, 185;
+  --panel: 18, 18, 26;
+  --panelBorder: 255, 255, 255;
 
-  --red: 239 68 68;
-  --red2: 220 38 38;
-  --redGlow: 255 60 60;
+  --red: 239, 68, 68;
+  --red2: 220, 38, 38;
+  --redGlow: 255, 60, 60;
 
   --radius: 18px;
 }
@@ -23,6 +23,7 @@ body {
 body {
   margin: 0;
   color: rgb(var(--fg));
+  background-color: #06060a; /* hard fallback if gradients fail */
   background: radial-gradient(1200px 600px at 20% 10%, rgba(var(--redGlow), 0.18), transparent 60%),
     radial-gradient(900px 500px at 80% 20%, rgba(var(--redGlow), 0.12), transparent 60%),
     linear-gradient(180deg, rgb(var(--bg)) 0%, rgb(2 2 6) 100%);
