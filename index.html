@@ -3,193 +3,208 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SATAN Toolkit | App Homepage</title>
+    <title>SATAN Toolkit | Desktop Control Platform</title>
     <meta
       name="description"
-      content="SATAN Toolkit is a local desktop application for managing account data, Gmail pools, IP records, and optional Google Drive app-data synchronization."
+      content="SATAN Toolkit is a local-first desktop platform for structured account operations, Gmail pools, IP records, and optional Google Drive app-data synchronization."
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Rajdhani:wght@600;700&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="./styles.css" />
-    <style>
-      body { font-family: "Inter", Arial, sans-serif; }
-      h1, h2, .hero-badge, .brand-copy strong, .stat-item strong { font-family: "Rajdhani", "Inter", Arial, sans-serif; }
-    </style>
   </head>
-  <body>
-    <div class="site-shell">
-      <div class="utility-bar">
-        <div class="brand-lockup">
-          <div class="brand-mark">S</div>
-          <div class="brand-copy">
+  <body class="page-home">
+    <div class="page-shell">
+      <header class="topbar topbar-home">
+        <a class="brand-unit" href="./index.html" aria-label="SATAN Toolkit">
+          <span class="brand-badge">S</span>
+          <span class="brand-text">
             <strong>SATAN TOOLKIT</strong>
-            <span>Desktop control software</span>
-          </div>
-        </div>
-        <nav class="utility-links nav-shell" aria-label="site">
-          <a class="utility-link" href="#overview">Core</a>
-          <a class="utility-link" href="#overview">Features</a>
-          <a class="utility-link" href="#compliance">Compliance</a>
-          <a class="utility-link" href="./privacy.html">Privacy</a>
-          <a class="utility-link" href="./terms.html">Terms</a>
-          <a class="utility-link" href="./updates/latest.json">Updates</a>
+            <small>Desktop Control Platform</small>
+          </span>
+        </a>
+        <nav class="nav-frame" aria-label="Primary">
+          <a href="#core">Core</a>
+          <a href="#security">Security</a>
+          <a href="#sync">Sync</a>
+          <a href="./privacy.html">Privacy</a>
+          <a href="./terms.html">Terms</a>
+          <a href="./updates/latest.json">Updates</a>
         </nav>
-      </div>
+      </header>
 
-      <header class="hero">
-        <div class="hero-grid">
-          <div>
-            <div class="hero-badge">Local-First Desktop Platform</div>
-            <h1>Take <span class="accent-word">Full Control</span><br />of Your Account Stack</h1>
-            <p class="hero-copy">
-              SATAN Toolkit centralizes account records, Gmail pools, IP tracking, and optional Google Drive app-data
-              sync in a local-first workflow that never exposes a user's personal Drive files.
+      <main>
+        <section class="hero-shell">
+          <div class="hero-copy">
+            <div class="eyebrow">LOCAL-FIRST DESKTOP APPLICATION</div>
+            <h1>
+              Control the stack.<br />
+              Own the workflow.
+            </h1>
+            <p class="lead-copy">
+              SATAN Toolkit is built for local execution, structured account handling, Gmail pool
+              management, IP record tracking, and optional Google Drive app-data sync without
+              exposing personal Drive files.
             </p>
-            <div class="hero-actions">
-              <a class="btn btn-primary" href="#overview">Explore Core Capabilities</a>
-            </div>
-            <div class="inline-link-row">
-              <a class="inline-link" href="./privacy.html">Read Privacy Policy</a>
-              <a class="inline-link" href="./terms.html">Review Terms of Service</a>
-              <a class="inline-link" href="./updates/latest.json">Inspect Update Manifest</a>
+            <div class="hero-cta-row">
+              <a class="cta-primary" href="#core">Inspect Core Capabilities</a>
+              <div class="text-link-row">
+                <a href="./privacy.html">Privacy Policy</a>
+                <a href="./terms.html">Terms of Service</a>
+                <a href="./updates/latest.json">Update Manifest</a>
+              </div>
             </div>
           </div>
-          <aside class="mini-panel hero-panel">
-            <div class="stat-strip">
-              <div class="stat-item">
-                <span>Execution Layer</span>
+
+          <aside class="hero-signal-panel" aria-label="Platform snapshot">
+            <div class="panel-kicker">Runtime Signal</div>
+            <div class="signal-list">
+              <div class="signal-row">
+                <span>Execution</span>
                 <strong>Local Machine</strong>
               </div>
-              <div class="stat-item">
+              <div class="signal-row">
                 <span>Drive Scope</span>
                 <strong><code>drive.appdata</code></strong>
               </div>
-              <div class="stat-item">
+              <div class="signal-row">
                 <span>Remote Analytics</span>
-                <strong>Not Used</strong>
+                <strong>Disabled</strong>
               </div>
-              <div class="stat-item">
-                <span>Cloud Storage</span>
-                <strong>User-Controlled</strong>
+              <div class="signal-row">
+                <span>Sync Mode</span>
+                <strong>User Controlled</strong>
               </div>
+            </div>
+            <div class="signal-note">
+              Google Drive access is limited to the app-specific area only. The application does
+              not browse or index normal user Drive content.
             </div>
           </aside>
-        </div>
-      </header>
-
-      <main class="content">
-        <section class="trust-strip" aria-label="trust strip">
-          <span>Local-First Execution</span>
-          <span class="trust-dot">•</span>
-          <span>Google Drive AppData Only</span>
-          <span class="trust-dot">•</span>
-          <span>No Personal Drive Indexing</span>
-          <span class="trust-dot">•</span>
-          <span>User-Controlled Sync</span>
         </section>
 
-        <section class="card-grid" id="overview">
-          <article class="card">
-            <div class="icon-header">
-              <div class="icon-tile">
-                <svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 5-3.6 8.7-7 10-3.4-1.3-7-5-7-10V6l7-3z"></path></svg>
+        <section class="status-strip" aria-label="Trust strip">
+          <span>LOCAL EXECUTION</span>
+          <span>APPDATA-ONLY DRIVE SCOPE</span>
+          <span>NO PERSONAL DRIVE INDEXING</span>
+          <span>NO THIRD-PARTY ANALYTICS</span>
+        </section>
+
+        <section class="feature-grid" id="core">
+          <article class="feature-card">
+            <div class="feature-head">
+              <div class="feature-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 3l7 3v5c0 5-3.6 8.7-7 10-3.4-1.3-7-5-7-10V6l7-3z"></path>
+                </svg>
               </div>
-              <h2>Local-First Control</h2>
+              <h2>Local-first control</h2>
             </div>
             <p>
-              SATAN Toolkit runs on the user's own machine. Operational records are processed locally instead of being
-              routed through a developer-hosted cloud backend.
+              SATAN Toolkit processes operational records on the user's own device instead of
+              routing workflows through a developer-hosted cloud backend.
             </p>
           </article>
-          <article class="card">
-            <div class="icon-header">
-              <div class="icon-tile">
-                <svg viewBox="0 0 24 24"><path d="M4 12h16"></path><path d="M12 4v16"></path><path d="M6.5 6.5 17.5 17.5"></path></svg>
+
+          <article class="feature-card">
+            <div class="feature-head">
+              <div class="feature-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4 12h16"></path>
+                  <path d="M12 4v16"></path>
+                  <path d="M6 6 18 18"></path>
+                </svg>
               </div>
-              <h2>Restricted Google Scope</h2>
+              <h2>Restricted Google scope</h2>
             </div>
             <p>
-              When the user enables cloud sync, the app requests the Google Drive <code>drive.appdata</code> scope only.
-              This is isolated app storage, not general Drive browsing.
+              When sync is enabled, the app requests only the
+              <code>https://www.googleapis.com/auth/drive.appdata</code> scope. It does not inspect
+              the user's personal Google Drive files.
             </p>
           </article>
-          <article class="card">
-            <div class="icon-header">
-              <div class="icon-tile">
-                <svg viewBox="0 0 24 24"><path d="M4 7h16"></path><path d="M4 12h10"></path><path d="M4 17h7"></path></svg>
+
+          <article class="feature-card">
+            <div class="feature-head">
+              <div class="feature-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4 7h16"></path>
+                  <path d="M4 12h12"></path>
+                  <path d="M4 17h8"></path>
+                </svg>
               </div>
-              <h2>Operational Data Continuity</h2>
+              <h2>Structured operational data</h2>
             </div>
             <p>
-              Depending on user workflows, the synchronized payload may include account records, Gmail entries, IP
-              records, notes, eligibility states, timestamps, and per-account browser metadata.
+              Depending on workflow usage, synchronized data may include account records, Gmail
+              entries, IP records, notes, timestamps, workflow states, and per-account browser
+              metadata.
             </p>
           </article>
         </section>
 
-        <section class="detail-section" id="compliance">
-          <div class="section-copy">
-            <span class="section-kicker">Compliance Model</span>
-            <h2>Direct device-to-drive synchronization</h2>
+        <section class="dual-section" id="security">
+          <div class="section-shell">
+            <div class="section-label">Security Boundary</div>
+            <h2>Device-to-drive synchronization without personal Drive exposure</h2>
             <p>
-              If the user signs in with Google Drive, the application writes only to the app-specific data area within
-              that Google account. SATAN Toolkit does not expose the user's normal Drive files, and it does not depend
-              on a third-party analytics vendor or a developer-controlled storage server.
+              If the user connects Google Drive, SATAN Toolkit writes only to the app-specific data
+              area within that account. The application does not expose normal Drive files and does
+              not depend on developer-controlled storage infrastructure.
             </p>
           </div>
-          <div class="mini-panel">
-            <div class="mini-row">
+          <div class="spec-panel">
+            <div class="spec-row">
               <span>Application Type</span>
               <strong>Desktop Software</strong>
             </div>
-            <div class="mini-row">
-              <span>Drive Access Scope</span>
-              <strong><code>drive.appdata</code></strong>
-            </div>
-            <div class="mini-row">
+            <div class="spec-row">
               <span>Personal Drive Browsing</span>
               <strong>Not Allowed</strong>
             </div>
-            <div class="mini-row">
+            <div class="spec-row">
               <span>Telemetry</span>
               <strong>None</strong>
+            </div>
+            <div class="spec-row">
+              <span>Storage Path</span>
+              <strong>Local + Optional AppData</strong>
             </div>
           </div>
         </section>
 
-        <section class="card-grid card-grid-wide">
-          <article class="card">
-            <div class="icon-header">
-              <div class="icon-tile">
-                <svg viewBox="0 0 24 24"><path d="M8 12h8"></path><path d="M12 8v8"></path><path d="M4 4h16v16H4z"></path></svg>
-              </div>
-              <h2>User-Controlled Sync</h2>
-            </div>
+        <section class="command-grid" id="sync">
+          <article class="command-card">
+            <div class="section-label">Operational Model</div>
+            <h2>Manual control with optional cloud continuity</h2>
             <p>
-              Users can connect Google Drive, toggle sync behavior, push updates manually, sign out, and restore local
-              state from stored cloud payloads when needed.
+              Users can connect Google Drive, enable or disable synchronization, push updates
+              manually, and restore local state when needed without exposing general Drive content.
             </p>
           </article>
-          <article class="card">
-            <div class="icon-header">
-              <div class="icon-tile">
-                <svg viewBox="0 0 24 24"><path d="M6 6h12v12H6z"></path><path d="M9 9h6"></path><path d="M9 12h6"></path><path d="M9 15h4"></path></svg>
-              </div>
-              <h2>Published Legal References</h2>
-            </div>
+
+          <article class="command-card">
+            <div class="section-label">Activation Ready</div>
+            <h2>Prepared for controlled rollouts and future licensing</h2>
             <p>
-              Google-facing privacy and terms documents for SATAN Toolkit are published here so users can review how the
-              application handles local files, cloud sync, and stored authorization data.
+              The platform is positioned for managed releases, update manifests, controlled feature
+              evolution, and future subscription or activation workflows without changing the
+              core local-first model.
             </p>
           </article>
         </section>
       </main>
 
-      <footer class="footer">
+      <footer class="site-footer">
         <span>&copy; 2026 SATAN Toolkit</span>
-        <a href="./privacy.html">Privacy Policy</a>
-        <a href="./terms.html">Terms of Service</a>
+        <div class="footer-links">
+          <a href="./privacy.html">Privacy</a>
+          <a href="./terms.html">Terms</a>
+          <a href="./updates/latest.json">Updates</a>
+        </div>
       </footer>
     </div>
   </body>
