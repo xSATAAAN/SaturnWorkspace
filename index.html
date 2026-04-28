@@ -27,7 +27,10 @@
             <span>Desktop control software</span>
           </div>
         </div>
-        <nav class="utility-links" aria-label="site">
+        <nav class="utility-links nav-shell" aria-label="site">
+          <a class="utility-link" href="#overview">Core</a>
+          <a class="utility-link" href="#overview">Features</a>
+          <a class="utility-link" href="#compliance">Compliance</a>
           <a class="utility-link" href="./privacy.html">Privacy</a>
           <a class="utility-link" href="./terms.html">Terms</a>
           <a class="utility-link" href="./updates/latest.json">Updates</a>
@@ -37,26 +40,29 @@
       <header class="hero">
         <div class="hero-grid">
           <div>
-            <div class="hero-badge">Local Desktop Application</div>
-            <h1>SATAN Toolkit</h1>
+            <div class="hero-badge">Local-First Desktop Platform</div>
+            <h1>Take <span class="accent-word">Full Control</span><br />of Your Account Stack</h1>
             <p class="hero-copy">
-              SATAN Toolkit is a local-first control surface for structured account records, Gmail pools, IP tracking,
-              and optional Google Drive app-data synchronization without exposing a user's personal Drive files.
+              SATAN Toolkit centralizes account records, Gmail pools, IP tracking, and optional Google Drive app-data
+              sync in a local-first workflow that never exposes a user's personal Drive files.
             </p>
+            <div class="hero-actions">
+              <a class="btn btn-primary" href="#overview">Explore Core Capabilities</a>
+            </div>
             <div class="inline-link-row">
               <a class="inline-link" href="./privacy.html">Read Privacy Policy</a>
               <a class="inline-link" href="./terms.html">Review Terms of Service</a>
-              <a class="inline-link" href="#overview">Open Architecture Notes</a>
+              <a class="inline-link" href="./updates/latest.json">Inspect Update Manifest</a>
             </div>
           </div>
           <aside class="mini-panel hero-panel">
             <div class="stat-strip">
               <div class="stat-item">
-                <span>Execution Mode</span>
-                <strong>Local Machine Only</strong>
+                <span>Execution Layer</span>
+                <strong>Local Machine</strong>
               </div>
               <div class="stat-item">
-                <span>Google Scope</span>
+                <span>Drive Scope</span>
                 <strong><code>drive.appdata</code></strong>
               </div>
               <div class="stat-item">
@@ -73,6 +79,16 @@
       </header>
 
       <main class="content">
+        <section class="trust-strip" aria-label="trust strip">
+          <span>Local-First Execution</span>
+          <span class="trust-dot">•</span>
+          <span>Google Drive AppData Only</span>
+          <span class="trust-dot">•</span>
+          <span>No Personal Drive Indexing</span>
+          <span class="trust-dot">•</span>
+          <span>User-Controlled Sync</span>
+        </section>
+
         <section class="card-grid" id="overview">
           <article class="card">
             <div class="icon-header">
@@ -112,9 +128,9 @@
           </article>
         </section>
 
-        <section class="detail-section">
+        <section class="detail-section" id="compliance">
           <div class="section-copy">
-            <span class="section-kicker">Data Flow</span>
+            <span class="section-kicker">Compliance Model</span>
             <h2>Direct device-to-drive synchronization</h2>
             <p>
               If the user signs in with Google Drive, the application writes only to the app-specific data area within
