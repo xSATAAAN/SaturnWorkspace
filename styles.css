@@ -1,16 +1,19 @@
 :root {
   color-scheme: dark;
-  --bg: #071018;
-  --bg-soft: #0b1621;
-  --panel: rgba(12, 19, 30, 0.88);
-  --panel-strong: rgba(9, 14, 24, 0.96);
-  --border: rgba(99, 142, 194, 0.2);
-  --text: #ecf4ff;
-  --muted: #93a6bc;
-  --accent: #1af4b4;
-  --accent-2: #57abff;
-  --danger: #ff6986;
-  --font-sans: "Segoe UI", Inter, Arial, sans-serif;
+  --bg: #040404;
+  --bg-soft: #0a0a0d;
+  --panel: #0f0c10;
+  --panel-2: #161116;
+  --panel-3: #1d141a;
+  --border: rgba(198, 28, 52, 0.28);
+  --border-strong: rgba(198, 28, 52, 0.46);
+  --text: #f5eef0;
+  --muted: #a89499;
+  --accent: #c61c34;
+  --accent-strong: #ff3657;
+  --accent-soft: rgba(198, 28, 52, 0.14);
+  --shadow: 0 24px 60px rgba(0, 0, 0, 0.44);
+  --font-sans: "Segoe UI", Arial, sans-serif;
 }
 
 * {
@@ -22,15 +25,14 @@ body {
   margin: 0;
   min-height: 100%;
   background:
-    radial-gradient(circle at top left, rgba(87, 171, 255, 0.18), transparent 30%),
-    radial-gradient(circle at top right, rgba(26, 244, 180, 0.14), transparent 28%),
-    linear-gradient(180deg, var(--bg), #050b12);
+    radial-gradient(circle at top, rgba(198, 28, 52, 0.16), transparent 34%),
+    linear-gradient(180deg, #030304, #09080b 52%, #040405);
   color: var(--text);
   font-family: var(--font-sans);
 }
 
 body {
-  line-height: 1.7;
+  line-height: 1.75;
 }
 
 a {
@@ -39,54 +41,67 @@ a {
 }
 
 code {
-  padding: 0.12rem 0.35rem;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
+  padding: 0.12rem 0.38rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   font-size: 0.94em;
 }
 
-.site-shell {
-  width: min(1120px, calc(100% - 32px));
+.site-shell,
+.legal-shell {
+  width: min(1200px, calc(100% - 36px));
   margin: 0 auto;
-  padding: 40px 0 28px;
+  padding: 36px 0 28px;
 }
 
 .hero {
   position: relative;
   overflow: hidden;
-  padding: 32px;
-  border-radius: 28px;
-  border: 1px solid var(--border);
+  padding: 34px;
+  border: 1px solid var(--border-strong);
   background:
-    linear-gradient(145deg, rgba(87, 171, 255, 0.12), transparent 36%),
-    linear-gradient(315deg, rgba(26, 244, 180, 0.1), transparent 28%),
-    linear-gradient(180deg, rgba(10, 17, 27, 0.92), rgba(8, 13, 22, 0.98));
-  box-shadow: 0 26px 60px rgba(0, 0, 0, 0.22);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 18%),
+    linear-gradient(180deg, rgba(198, 28, 52, 0.12), transparent 24%),
+    linear-gradient(180deg, var(--panel), var(--panel-2));
+  box-shadow: var(--shadow);
+}
+
+.hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, transparent, rgba(198, 28, 52, 0.12), transparent);
+  opacity: 0.4;
+  pointer-events: none;
 }
 
 .hero-badge {
   display: inline-flex;
   align-items: center;
-  padding: 0.42rem 0.8rem;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--accent-2);
-  font-size: 0.82rem;
-  letter-spacing: 0.08em;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+  color: #ffd5dc;
+  font-size: 0.76rem;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
 .hero h1 {
   margin: 18px 0 12px;
-  font-size: clamp(2.2rem, 5vw, 4.25rem);
-  line-height: 1.02;
+  font-size: clamp(2.45rem, 5vw, 4.8rem);
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+  text-transform: uppercase;
 }
 
 .hero-copy {
   max-width: 760px;
   margin: 0;
   color: var(--muted);
-  font-size: 1.05rem;
+  font-size: 1.02rem;
 }
 
 .hero-actions {
@@ -100,12 +115,12 @@ code {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 46px;
+  min-height: 48px;
   padding: 0 18px;
-  border-radius: 999px;
   border: 1px solid transparent;
-  font-weight: 600;
-  transition: transform 0.18s ease, border-color 0.18s ease, opacity 0.18s ease;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
 }
 
 .btn:hover {
@@ -113,13 +128,14 @@ code {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--accent), #91ffe0);
-  color: #071018;
+  background: linear-gradient(180deg, var(--accent-strong), var(--accent));
+  border-color: rgba(255, 101, 127, 0.52);
+  color: #fff;
 }
 
 .btn-secondary {
-  border-color: rgba(87, 171, 255, 0.28);
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.025);
+  border-color: rgba(255, 255, 255, 0.08);
   color: var(--text);
 }
 
@@ -142,10 +158,11 @@ code {
 .card,
 .mini-panel,
 .legal-section {
-  border-radius: 22px;
   border: 1px solid var(--border);
-  background: var(--panel);
-  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.16);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 14%),
+    linear-gradient(180deg, var(--panel), var(--panel-2));
+  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.2);
 }
 
 .card {
@@ -156,7 +173,9 @@ code {
 .detail-section h2,
 .legal-section h2 {
   margin: 0 0 12px;
-  font-size: 1.15rem;
+  font-size: 1.12rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 .card p,
@@ -168,7 +187,7 @@ code {
 
 .detail-section {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
   gap: 18px;
 }
 
@@ -180,14 +199,16 @@ code {
 .section-kicker {
   display: inline-block;
   margin-bottom: 10px;
-  color: var(--accent);
-  font-size: 0.86rem;
+  color: #ffb6c1;
+  font-size: 0.82rem;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.12em;
 }
 
 .mini-panel {
-  background: var(--panel-strong);
+  background:
+    linear-gradient(180deg, rgba(198, 28, 52, 0.11), transparent 18%),
+    linear-gradient(180deg, var(--panel-2), var(--panel-3));
 }
 
 .mini-row {
@@ -207,7 +228,7 @@ code {
 }
 
 .legal-shell {
-  width: min(980px, calc(100% - 32px));
+  width: min(1040px, calc(100% - 36px));
 }
 
 .legal-hero {
@@ -224,7 +245,7 @@ code {
 
 .legal-section ul {
   margin: 0;
-  padding-left: 20px;
+  padding-left: 22px;
 }
 
 .footer {
@@ -236,6 +257,11 @@ code {
   padding: 18px 4px 0;
   color: var(--muted);
   font-size: 0.95rem;
+}
+
+.footer a:hover,
+.hero-actions a:hover {
+  color: #fff;
 }
 
 @media (max-width: 860px) {
@@ -257,9 +283,5 @@ code {
   .card-grid-wide,
   .detail-section {
     grid-template-columns: 1fr;
-  }
-
-  .footer {
-    flex-direction: column;
   }
 }
