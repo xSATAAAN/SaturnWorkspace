@@ -125,13 +125,13 @@ export default function App() {
               ].map((f, idx) => (
                 <Reveal key={f.title} delayMs={60 + idx * 35}>
                   <div className="glow-border">
-                    <div className="h-full rounded-[var(--radius)] border border-white/10 bg-white/5 p-6 backdrop-blur transition hover:bg-white/7">
+                    <div className="h-full rounded-[var(--radius)] border border-red-500/30 bg-gradient-to-br from-red-500/22 via-red-500/14 to-red-600/22 p-6 backdrop-blur transition hover:from-red-500/28 hover:via-red-500/18 hover:to-red-600/28">
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <div className="text-lg font-semibold text-white">{f.title}</div>
                           <p className="mt-2 text-sm leading-relaxed text-white/65">{f.desc}</p>
                         </div>
-                        <div className="h-10 w-10 shrink-0 rounded-xl border border-white/10 bg-gradient-to-b from-red-500/20 to-white/5" />
+                        <div className="h-10 w-10 shrink-0 rounded-xl border border-red-400/35 bg-gradient-to-b from-red-500/45 to-red-700/25" />
                       </div>
                     </div>
                   </div>
@@ -172,10 +172,10 @@ export default function App() {
                 },
               ].map((s, idx) => (
                 <Reveal key={s.step} delayMs={70 + idx * 45}>
-                  <div className="rounded-[var(--radius)] border border-white/10 bg-white/5 p-6 backdrop-blur">
+                  <div className="rounded-[var(--radius)] border border-red-500/30 bg-gradient-to-br from-red-500/20 via-red-500/10 to-red-600/20 p-6 backdrop-blur">
                     <div className="flex items-center justify-between">
                       <div className="text-sm font-semibold text-red-300/90">{s.step}</div>
-                      <div className="h-8 w-8 rounded-full bg-gradient-to-b from-red-500/30 to-white/5" />
+                      <div className="h-8 w-8 rounded-full border border-red-400/30 bg-gradient-to-b from-red-500/55 to-red-700/30" />
                     </div>
                     <div className="mt-4 text-lg font-semibold text-white">{s.title}</div>
                     <p className="mt-2 text-sm leading-relaxed text-white/65">{s.desc}</p>
@@ -212,7 +212,7 @@ export default function App() {
                 { q: 'How do I get my key?', a: 'After checkout, we confirm and send your key.' },
               ].map((item, idx) => (
                 <Reveal key={item.q} delayMs={60 + idx * 35}>
-                  <details className="group rounded-[var(--radius)] border border-white/10 bg-white/5 px-5 py-4 backdrop-blur open:bg-white/7">
+                  <details className="group rounded-[var(--radius)] border border-red-500/25 bg-gradient-to-br from-red-500/15 via-red-500/8 to-red-600/16 px-5 py-4 backdrop-blur open:from-red-500/20 open:via-red-500/12 open:to-red-600/22">
                     <summary className="cursor-pointer list-none select-none text-sm font-semibold text-white">
                       <span className="mr-2 text-red-300/90">+</span>
                       {item.q}

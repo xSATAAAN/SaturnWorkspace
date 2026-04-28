@@ -69,11 +69,11 @@ body {
   border-radius: inherit;
   background: linear-gradient(
     90deg,
-    rgba(var(--red), 0.9),
-    rgba(255, 255, 255, 0.16),
-    rgba(var(--red2), 0.85)
+    rgba(var(--red), 0.75),
+    rgba(var(--red2), 0.65),
+    rgba(var(--red), 0.75)
   );
-  opacity: 0.38;
+  opacity: 0.32;
   filter: blur(0.5px);
   pointer-events: none;
 }
