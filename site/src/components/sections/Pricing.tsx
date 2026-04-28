@@ -28,7 +28,7 @@ export function Pricing({ telegramHref }: PricingProps) {
 
         <div className="mt-10 grid grid-cols-1 gap-4 lg:grid-cols-2">
           <Reveal delayMs={80}>
-            <div className="rounded-[var(--radius)] border border-red-500/28 bg-gradient-to-br from-red-500/18 via-red-500/10 to-red-600/18 p-7 backdrop-blur">
+            <div className="red-panel rounded-[var(--radius)] p-7 backdrop-blur">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="text-sm font-semibold text-white/80">Monthly</div>
@@ -36,7 +36,7 @@ export function Pricing({ telegramHref }: PricingProps) {
                     EGP 499 <span className="text-base font-semibold text-white/60">/mo</span>
                   </div>
                 </div>
-                <span className="rounded-full border border-red-400/35 bg-red-500/20 px-3 py-1 text-xs font-semibold text-white/85">
+                <span className="rounded-full border border-red-700/70 bg-black/25 px-3 py-1 text-xs font-semibold text-white/85">
                   Try it
                 </span>
               </div>
@@ -73,13 +73,13 @@ export function Pricing({ telegramHref }: PricingProps) {
 
           <Reveal delayMs={130}>
             <div className="glow-border">
-              <div className="rounded-[var(--radius)] border border-red-500/30 bg-gradient-to-br from-red-500/24 via-red-500/14 to-red-600/24 p-7 backdrop-blur">
+              <div className="red-panel rounded-[var(--radius)] p-7 backdrop-blur">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <div className="text-sm font-semibold text-white/80">Lifetime</div>
                     <div className="mt-2 text-3xl font-semibold text-white">EGP 1,499</div>
                   </div>
-                  <span className="rounded-full border border-red-400/30 bg-gradient-to-b from-red-500/40 to-red-700/28 px-3 py-1 text-xs font-semibold text-red-200/90">
+                  <span className="rounded-full border border-red-700/70 bg-black/30 px-3 py-1 text-xs font-semibold text-red-200/90">
                     Best value
                   </span>
                 </div>
