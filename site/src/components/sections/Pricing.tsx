@@ -21,7 +21,7 @@ export function Pricing({ telegramHref }: PricingProps) {
               License plans for SATAN Toolkit
             </h2>
             <p className="mt-4 text-pretty text-white/65">
-              Clear plans, direct activation, and upgrade path without rebuilding your setup.
+              Start with the plan that matches your operation size. Upgrade anytime without data loss.
             </p>
           </div>
         </Reveal>
@@ -42,10 +42,10 @@ export function Pricing({ telegramHref }: PricingProps) {
               </div>
 
               <ul className="mt-6 space-y-2 text-sm text-white/70">
-                <li>System Boost</li>
-                <li>Vault + Gmail + IP modules</li>
+                <li>Vault + Gmail + IP storage</li>
+                <li>Quick session tools</li>
                 <li>Standard updates</li>
-                <li>Priority Telegram response</li>
+                <li>Standard support</li>
               </ul>
 
               <div className="mt-7 flex flex-col gap-2 sm:flex-row">
@@ -88,7 +88,7 @@ export function Pricing({ telegramHref }: PricingProps) {
                   <li>All toolkit modules</li>
                   <li>Lifetime updates</li>
                   <li>Priority support lane</li>
-                  <li>Early build access</li>
+                  <li>Future platform expansions included</li>
                 </ul>
 
                 <div className="mt-7 flex flex-col gap-2 sm:flex-row">

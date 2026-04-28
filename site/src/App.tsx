@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { Reveal } from './components/Reveal'
 import { SiteHeader } from './components/SiteHeader'
+import { Feedback } from './components/sections/Feedback'
 import { Pricing } from './components/sections/Pricing'
 
 const TELEGRAM_USERNAME = import.meta.env.VITE_TELEGRAM_USERNAME || 'satantoolkit'
@@ -9,9 +10,9 @@ const TELEGRAM_LINK = `https://t.me/${TELEGRAM_USERNAME}`
 export default function App() {
   const stats = useMemo(
     () => [
-      { label: 'Managed records', value: '250k+' },
-      { label: 'Power users served', value: '2,500+' },
-      { label: 'Setup time', value: '< 2 min' },
+      { label: 'Bybit accounts managed', value: '250k+', hint: 'structured vault history' },
+      { label: 'Operators using toolkit', value: '2,500+', hint: 'daily active workflows' },
+      { label: 'Quick session start', value: '< 2 min', hint: 'AdsPower with/without proxy' },
     ],
     [],
   )
@@ -35,19 +36,19 @@ export default function App() {
 
               <Reveal delayMs={80}>
                 <h1 className="mt-6 text-balance text-4xl font-semibold tracking-tight text-white sm:text-6xl">
-                  Control your{' '}
+                  Professional{' '}
                   <span className="bg-gradient-to-r from-red-400 to-red-600 bg-clip-text text-transparent">
-                    Vault, Gmail, and IP operations
+                    Bybit account operations
                   </span>{' '}
-                  from one secure desktop center.
+                  in one local-first desktop workspace.
                 </h1>
               </Reveal>
 
               <Reveal delayMs={140}>
                 <p className="mt-5 text-pretty text-base leading-relaxed text-white/70 sm:text-lg">
-                  SATAN Toolkit is a local-first Windows toolkit for structured account workflows:
-                  Vault management, Gmail handling, IP tracking, backup, and optional Google Drive
-                  app-data sync.
+                  SATAN Toolkit helps you run Bybit account operations with discipline: account vault,
+                  professional Gmail storage, fast session tools, and private cloud backup to your own
+                  Google Drive account.
                 </p>
               </Reveal>
 
@@ -71,12 +72,16 @@ export default function App() {
             </div>
 
             <Reveal delayMs={260}>
-              <div className="mx-auto mt-10 grid max-w-4xl grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="mx-auto mt-10 grid max-w-5xl grid-cols-1 gap-3 sm:grid-cols-3">
                 {stats.map((s) => (
-                  <div key={s.label} className="glow-border">
-                    <div className="rounded-[var(--radius)] border border-white/10 bg-white/5 px-5 py-4 backdrop-blur">
-                      <div className="text-2xl font-semibold text-white">{s.value}</div>
-                      <div className="mt-1 text-sm text-white/60">{s.label}</div>
+                  <div key={s.label} className="rounded-[var(--radius)] border border-white/10 bg-black/35 px-5 py-5 backdrop-blur">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-3xl font-semibold text-white">{s.value}</div>
+                        <div className="mt-1 text-sm font-semibold text-white/85">{s.label}</div>
+                        <div className="mt-1 text-xs text-white/55">{s.hint}</div>
+                      </div>
+                      <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-red-500/90" />
                     </div>
                   </div>
                 ))}
@@ -95,7 +100,8 @@ export default function App() {
                   Built for real SATAN Toolkit workflows
                 </h2>
                 <p className="mt-4 text-pretty text-white/65">
-                  Practical modules connected in one flow. No extra tabs, no scattered tools.
+                  Every module serves actual execution: create, run, review, sync, and reopen accounts
+                  quickly without scattered sheets or random notes.
                 </p>
               </div>
             </Reveal>
@@ -104,27 +110,27 @@ export default function App() {
               {[
                 {
                   title: 'Vault Manager',
-                  desc: 'Store and maintain account records with clear status and history tracking.',
+                  desc: 'Professional storage for Bybit accounts with notes, status, and organized tracking fields.',
                 },
                 {
-                  title: 'Gmail Workspace',
-                  desc: 'Handle Gmail entries, recovery details, and usage state from one panel.',
+                  title: 'Gmail Storage',
+                  desc: 'Clean Gmail database with recovery details and usage state ready for operational flow.',
                 },
                 {
-                  title: 'IP Register',
-                  desc: 'Track IP records with linked metadata for operational consistency.',
+                  title: 'Smart IP Register',
+                  desc: 'Avoid IP reuse across sessions with smart tracking and duplicate prevention logic.',
                 },
                 {
-                  title: 'Cloud Sync',
-                  desc: 'Optional Google Drive app-data sync for your toolkit dataset.',
+                  title: 'Private Cloud Backup',
+                  desc: 'Sync to your personal Google Drive app-data only. Your data is not routed to third parties.',
                 },
                 {
-                  title: 'Updater Channel',
-                  desc: 'Receive latest toolkit builds through the official update endpoint.',
+                  title: 'Fast Session Start',
+                  desc: 'Launch quick AdsPower session with proxy or without, using prepared profile settings.',
                 },
                 {
-                  title: 'Session Control',
-                  desc: 'Keep local authorization and operation state stable across restarts.',
+                  title: 'Proxy Operations',
+                  desc: 'Pull IPRoyal proxies and use them directly in AdsPower profiles (requires active IPRoyal plan).',
                 },
               ].map((f, idx) => (
                 <Reveal key={f.title} delayMs={60 + idx * 35}>
@@ -161,18 +167,18 @@ export default function App() {
               {[
                 {
                   step: '01',
-                  title: 'Choose your license',
-                  desc: 'Start monthly or unlock lifetime access based on your workload.',
+                  title: 'Prepare operation setup',
+                  desc: 'Store account + Gmail data in structured fields, then choose browser route.',
                 },
                 {
                   step: '02',
-                  title: 'Submit order from site',
-                  desc: 'Generate an order request instantly and complete confirmation on Telegram.',
+                  title: 'Start account session',
+                  desc: 'Run quick session on AdsPower (proxy/no proxy), create account, and save all required notes.',
                 },
                 {
                   step: '03',
-                  title: 'Activate SATAN Toolkit',
-                  desc: 'Receive your key, activate desktop app, and start managing records.',
+                  title: 'Review and sync securely',
+                  desc: 'Update account status/reminders and sync your dataset to personal Google Drive if enabled.',
                 },
               ].map((s, idx) => (
                 <Reveal key={s.step} delayMs={70 + idx * 45}>
@@ -190,8 +196,10 @@ export default function App() {
           </div>
         </section>
 
-        {/* Pricing (checkout UI will be implemented next todo) */}
+        {/* Pricing */}
         <Pricing telegramHref={TELEGRAM_LINK} />
+
+        <Feedback telegramUsername={TELEGRAM_USERNAME} />
 
         {/* FAQ */}
         <section id="faq" className="border-t border-white/10">
@@ -213,7 +221,8 @@ export default function App() {
                 },
                 { q: 'Which Windows versions are supported?', a: 'Windows 10 and Windows 11.' },
                 { q: 'Is license per device?', a: 'Yes. Each license is bound to one device unless agreed otherwise.' },
-                { q: 'How do I receive activation?', a: 'After order confirmation, we send your activation details directly.' },
+                { q: 'Which browsers are supported now?', a: 'AdsPower and Brave are supported now. More browsers may be added later.' },
+                { q: 'How do I receive activation?', a: 'After order confirmation, activation details are sent directly.' },
               ].map((item, idx) => (
                 <Reveal key={item.q} delayMs={60 + idx * 35}>
                   <details className="red-panel group rounded-[var(--radius)] px-5 py-4 backdrop-blur">

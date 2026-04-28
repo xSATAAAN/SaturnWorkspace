@@ -26,6 +26,9 @@ export function SiteHeader({ telegramHref }: SiteHeaderProps) {
           <a className="text-white/70 hover:text-white" href="#faq">
             FAQ
           </a>
+          <a className="text-white/70 hover:text-white" href="#feedback">
+            Feedback
+          </a>
         </nav>
 
         <div className="flex items-center gap-2">
