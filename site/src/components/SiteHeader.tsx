@@ -1,8 +1,32 @@
 type SiteHeaderProps = {
   telegramHref: string
+  lang: 'en' | 'ar'
+  onToggleLang: () => void
 }
 
-export function SiteHeader({ telegramHref }: SiteHeaderProps) {
+export function SiteHeader({ telegramHref, lang, onToggleLang }: SiteHeaderProps) {
+  const t =
+    lang === 'ar'
+      ? {
+          modules: 'المزايا',
+          workflow: 'طريقة العمل',
+          plans: 'الأسعار',
+          faq: 'الأسئلة',
+          feedback: 'المقترحات',
+          telegram: 'تيليجرام',
+          buy: 'اشتراك الآن',
+          switchLabel: 'EN',
+        }
+      : {
+          modules: 'Modules',
+          workflow: 'Workflow',
+          plans: 'Plans',
+          faq: 'FAQ',
+          feedback: 'Feedback',
+          telegram: 'Telegram',
+          buy: 'Get license',
+          switchLabel: 'AR',
+        }
   return (
     <header className="sticky top-0 z-50 border-b border-white/10 bg-black/25 backdrop-blur supports-[backdrop-filter]:bg-black/20">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
@@ -15,36 +39,43 @@ export function SiteHeader({ telegramHref }: SiteHeaderProps) {
 
         <nav className="hidden items-center gap-6 text-sm sm:flex">
           <a className="text-white/70 hover:text-white" href="#features">
-            Modules
+            {t.modules}
           </a>
           <a className="text-white/70 hover:text-white" href="#how">
-            Workflow
+            {t.workflow}
           </a>
           <a className="text-white/70 hover:text-white" href="#pricing">
-            Plans
+            {t.plans}
           </a>
           <a className="text-white/70 hover:text-white" href="#faq">
-            FAQ
+            {t.faq}
           </a>
           <a className="text-white/70 hover:text-white" href="#feedback">
-            Feedback
+            {t.feedback}
           </a>
         </nav>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onToggleLang}
+            className="inline-flex items-center justify-center rounded-xl border border-white/12 bg-white/5 px-3 py-2 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8"
+          >
+            {t.switchLabel}
+          </button>
           <a
             href={telegramHref}
             target="_blank"
             rel="noreferrer"
             className="hidden rounded-xl border border-white/12 bg-white/5 px-4 py-2 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8 sm:inline-flex"
           >
-            Telegram
+            {t.telegram}
           </a>
           <a
             href="#pricing"
             className="inline-flex items-center justify-center rounded-xl bg-gradient-to-b from-red-500 to-red-700 px-4 py-2 text-sm font-semibold text-white shadow-[0_14px_36px_rgba(255,60,60,.22)] transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
           >
-            Get license
+            {t.buy}
           </a>
         </div>
       </div>

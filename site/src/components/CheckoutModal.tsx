@@ -8,6 +8,7 @@ type CheckoutModalProps = {
   onClose: () => void
   telegramUsername: string
   initialPlan?: PlanId
+  lang: 'en' | 'ar'
 }
 
 function createOrderId() {
@@ -21,7 +22,36 @@ export function CheckoutModal({
   onClose,
   telegramUsername,
   initialPlan = 'lifetime',
+  lang,
 }: CheckoutModalProps) {
+  const isAr = lang === 'ar'
+  const t = isAr
+    ? {
+        title: 'إتمام الطلب',
+        close: 'إلغاء',
+        monthly: 'ترخيص شهري',
+        lifetime: 'ترخيص مدى الحياة',
+        email: 'البريد الإلكتروني',
+        phone: 'الهاتف / واتساب',
+        notes: 'ملاحظات الطلب',
+        notesPlaceholder: 'عدد الأجهزة أو أي تفاصيل مهمة.',
+        continue: 'المتابعة على تيليجرام',
+        copy: 'نسخ نص الطلب',
+        footer: 'النموذج ينشئ طلبًا كاملاً لتسريع تأكيد التفعيل.',
+      }
+    : {
+        title: 'License checkout',
+        close: 'Cancel',
+        monthly: 'Monthly license',
+        lifetime: 'Lifetime license',
+        email: 'Email',
+        phone: 'Phone / WhatsApp',
+        notes: 'Order notes',
+        notesPlaceholder: 'Device count, preferred contact time, or any details.',
+        continue: 'Continue to Telegram',
+        copy: 'Copy order request',
+        footer: 'This form creates a complete order request so activation can be confirmed quickly.',
+      }
   const [plan, setPlan] = useState<PlanId>(initialPlan)
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
@@ -44,7 +74,7 @@ export function CheckoutModal({
 
   const message = useMemo(() => {
     const lines: string[] = []
-    lines.push('SATAN Toolkit — License Order')
+    lines.push(`SATAN Toolkit — ${isAr ? 'طلب ترخيص' : 'License Order'}`)
     lines.push('------------------------------')
     lines.push(`Order: ${orderId}`)
     lines.push(`Plan: ${plan === 'monthly' ? 'Monthly (EGP 499)' : 'Lifetime (EGP 1,499)'}`)
@@ -54,7 +84,7 @@ export function CheckoutModal({
     lines.push('------------------------------')
     lines.push('Please share payment method and transfer proof if required.')
     return lines.join('\n')
-  }, [orderId, plan, email, phone, notes])
+  }, [orderId, plan, email, phone, notes, isAr])
 
   const telegramHref = useMemo(
     () => buildTelegramDeepLink({ telegramUsername, message }),
@@ -80,7 +110,7 @@ export function CheckoutModal({
       <div className="relative w-full max-w-xl overflow-hidden rounded-[var(--radius)] border border-white/12 bg-[rgb(var(--panel))]/90 shadow-[0_30px_120px_rgba(0,0,0,.55)] backdrop-blur">
         <div className="flex items-center justify-between gap-3 border-b border-white/10 px-6 py-4">
           <div>
-            <div className="text-sm font-semibold text-white">License checkout</div>
+            <div className="text-sm font-semibold text-white">{t.title}</div>
             <div className="mt-1 text-xs text-white/60">Order ID: {orderId}</div>
           </div>
           <button
@@ -88,7 +118,7 @@ export function CheckoutModal({
             onClick={onClose}
             className="rounded-lg border border-white/12 bg-white/5 px-3 py-2 text-xs font-semibold text-white/80 hover:bg-white/8"
           >
-            Cancel
+            {t.close}
           </button>
         </div>
 
@@ -104,7 +134,7 @@ export function CheckoutModal({
                     : 'rounded-xl border border-white/12 bg-white/5 px-4 py-3 text-left hover:bg-white/7'
                 }
               >
-                <div className="text-sm font-semibold text-white">Monthly license</div>
+                <div className="text-sm font-semibold text-white">{t.monthly}</div>
                 <div className="mt-1 text-sm text-white/70">EGP 499 / mo</div>
               </button>
               <button
@@ -116,14 +146,14 @@ export function CheckoutModal({
                     : 'rounded-xl border border-white/12 bg-white/5 px-4 py-3 text-left hover:bg-white/7'
                 }
               >
-                <div className="text-sm font-semibold text-white">Lifetime license</div>
+                <div className="text-sm font-semibold text-white">{t.lifetime}</div>
                 <div className="mt-1 text-sm text-white/70">EGP 1,499</div>
               </button>
             </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <label className="grid gap-1">
-                <span className="text-xs font-semibold text-white/70">Email</span>
+                <span className="text-xs font-semibold text-white/70">{t.email}</span>
                 <input
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -132,7 +162,7 @@ export function CheckoutModal({
                 />
               </label>
               <label className="grid gap-1">
-                <span className="text-xs font-semibold text-white/70">Phone / WhatsApp</span>
+                <span className="text-xs font-semibold text-white/70">{t.phone}</span>
                 <input
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
@@ -143,12 +173,12 @@ export function CheckoutModal({
             </div>
 
             <label className="grid gap-1">
-              <span className="text-xs font-semibold text-white/70">Order notes</span>
+              <span className="text-xs font-semibold text-white/70">{t.notes}</span>
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={3}
-                placeholder="Device count, preferred contact time, or any details."
+                placeholder={t.notesPlaceholder}
                 className="resize-none rounded-xl border border-white/12 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/35 outline-none focus:border-red-500/40"
               />
             </label>
@@ -161,19 +191,19 @@ export function CheckoutModal({
               rel="noreferrer"
               className="inline-flex flex-1 items-center justify-center rounded-xl bg-gradient-to-b from-red-500 to-red-700 px-5 py-3 text-sm font-semibold text-white shadow-[0_16px_44px_rgba(255,60,60,.25)] transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
             >
-              Continue to Telegram
+              {t.continue}
             </a>
             <button
               type="button"
               onClick={() => navigator.clipboard?.writeText(message)}
               className="inline-flex flex-1 items-center justify-center rounded-xl border border-white/12 bg-white/5 px-5 py-3 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
             >
-              Copy order request
+              {t.copy}
             </button>
           </div>
 
           <div className="mt-4 text-xs text-white/55">
-            This form creates a complete order request so activation can be confirmed quickly.
+            {t.footer}
           </div>
         </div>
       </div>

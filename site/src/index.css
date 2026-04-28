@@ -15,6 +15,7 @@
   --radius: 18px;
   --fontBody: "Plus Jakarta Sans", "Cairo", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
   --fontDisplay: "Cairo", "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+  --fontArabic: "Tajawal", "Cairo", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
 }
 
 html,
@@ -91,17 +92,27 @@ h1, h2, h3 {
 .red-panel {
   border: 1px solid rgba(140, 24, 32, 0.9);
   background:
-    linear-gradient(140deg, rgba(120, 12, 20, 0.78) 0%, rgba(36, 7, 10, 0.86) 52%, rgba(102, 14, 23, 0.78) 100%);
+    linear-gradient(140deg, rgba(122, 14, 22, 0.84) 0%, rgba(116, 13, 21, 0.86) 52%, rgba(108, 12, 19, 0.84) 100%);
 }
 
 .red-panel:hover {
   background:
-    linear-gradient(140deg, rgba(132, 15, 24, 0.84) 0%, rgba(44, 8, 12, 0.88) 52%, rgba(112, 18, 28, 0.84) 100%);
+    linear-gradient(140deg, rgba(136, 17, 26, 0.9) 0%, rgba(124, 15, 23, 0.9) 52%, rgba(114, 13, 21, 0.88) 100%);
 }
 
 .red-badge {
   border: 1px solid rgba(162, 32, 42, 0.75);
-  background: linear-gradient(180deg, rgba(130, 16, 25, 0.9), rgba(44, 7, 11, 0.95));
+  background: linear-gradient(180deg, rgba(142, 22, 30, 0.9), rgba(116, 16, 24, 0.92));
+}
+
+[dir="rtl"] body {
+  font-family: var(--fontArabic);
+}
+
+[dir="rtl"] h1,
+[dir="rtl"] h2,
+[dir="rtl"] h3 {
+  font-family: var(--fontArabic);
 }
 
 /* Reveal on scroll (simple + smooth, prefers-reduced-motion aware) */
