@@ -8,20 +8,41 @@
       name="description"
       content="Privacy Policy for SATAN Toolkit, including its limited Google Drive app-data integration."
     />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="./styles.css" />
+    <style>
+      body { font-family: "Inter", Arial, sans-serif; }
+      h1, h2, .hero-badge, .brand-copy strong { font-family: "Rajdhani", "Inter", Arial, sans-serif; }
+    </style>
   </head>
   <body>
     <div class="site-shell legal-shell">
+      <div class="utility-bar">
+        <div class="brand-lockup">
+          <div class="brand-mark">S</div>
+          <div class="brand-copy">
+            <strong>SATAN TOOLKIT</strong>
+            <span>Privacy reference</span>
+          </div>
+        </div>
+        <nav class="utility-links" aria-label="legal">
+          <a class="utility-link" href="./index.html">Homepage</a>
+          <a class="utility-link" href="./terms.html">Terms</a>
+        </nav>
+      </div>
+
       <header class="hero legal-hero">
         <div class="hero-badge">Privacy Policy</div>
         <h1>SATAN Toolkit Privacy Policy</h1>
         <p class="hero-copy">
-          Effective date: April 26, 2026. This Privacy Policy explains how SATAN Toolkit processes local application
-          data and, when enabled by the user, uses Google Drive app-specific storage.
+          Effective date: April 26, 2026. This document describes how SATAN Toolkit processes local application data
+          and, when enabled by the user, stores app-specific payloads in Google Drive.
         </p>
-        <div class="hero-actions">
-          <a class="btn btn-primary" href="./index.html">Back to Homepage</a>
-          <a class="btn btn-secondary" href="./terms.html">Terms of Service</a>
+        <div class="legal-links">
+          <a class="legal-link" href="./index.html">Back to homepage</a>
+          <a class="legal-link" href="./terms.html">Open terms of service</a>
         </div>
       </header>
 
@@ -29,17 +50,17 @@
         <section class="legal-section">
           <h2>1. Overview</h2>
           <p>
-            SATAN Toolkit is a local desktop application. Its core functionality is performed on the user's own device.
-            The application does not operate a developer-hosted backend for storing the user's operational data.
+            SATAN Toolkit is a local desktop application. Its core functionality runs on the user's own device and does
+            not rely on a developer-hosted cloud backend for operational storage.
           </p>
         </section>
 
         <section class="legal-section">
           <h2>2. Information Processed by the Application</h2>
-          <p>Depending on how the user uses the application, SATAN Toolkit may process the following categories of data locally:</p>
+          <p>Depending on how the user operates the application, SATAN Toolkit may process the following categories of data locally:</p>
           <ul>
             <li>Account records, including email addresses, notes, timestamps, eligibility states, and workflow metadata.</li>
-            <li>Gmail records, including email addresses, usage status, usage timestamps, and optional passwords entered by the user.</li>
+            <li>Gmail records, including email addresses, usage status, usage timestamps, passwords, recovery emails, and recovery links entered by the user.</li>
             <li>IP records, including IP addresses, related dates, and associated Gmail references entered or saved by the user.</li>
             <li>Account-level operational settings such as browser choice, AdsPower profile identifiers, and related proxy configuration metadata where applicable.</li>
           </ul>
@@ -48,10 +69,9 @@
         <section class="legal-section">
           <h2>3. Google User Data and Google Drive Access</h2>
           <p>
-            If the user chooses to sign in with Google, SATAN Toolkit requests access only to the Google Drive scope
+            If the user signs in with Google, SATAN Toolkit requests access only to
             <code>https://www.googleapis.com/auth/drive.appdata</code>.
           </p>
-          <p>This means:</p>
           <ul>
             <li>The application uses only Google Drive's app-specific storage area.</li>
             <li>The application does not browse, list, inspect, read, modify, or delete the user's normal Google Drive files or folders.</li>
@@ -62,73 +82,54 @@
         <section class="legal-section">
           <h2>4. How Data Is Stored</h2>
           <p>
-            SATAN Toolkit stores its working data locally on the user's device. If Google Drive synchronization is
-            enabled by the user, the app may also store application data snapshots and related structured records inside
-            the user's own Google Drive app-data area.
+            SATAN Toolkit stores its working data locally on the user's device. If Google Drive synchronization is enabled,
+            the app may also store application data snapshots and structured records inside the user's own Google Drive
+            app-data area.
           </p>
           <p>
-            Data is transmitted directly between the user's device and Google APIs. SATAN Toolkit does not route this
-            content through a developer-owned database or external storage server.
+            Data moves directly between the user's device and Google APIs. SATAN Toolkit does not route this content
+            through a developer-owned database or remote storage server.
           </p>
         </section>
 
         <section class="legal-section">
           <h2>5. Automatic and Manual Synchronization</h2>
           <p>
-            Users may enable or disable cloud synchronization from within the application. When sync is enabled, the
-            app may upload updated application data to the user's Google Drive app-data area. Users may also trigger a
-            manual upload.
-          </p>
-          <p>
-            Signing out of Google Drive inside the application stops future synchronized access until the user signs in
-            again and re-authorizes the connection.
+            Users may enable or disable Google Drive sync from within the application. When sync is enabled, the app may
+            upload updated application data to the user's app-data area. Users may also trigger a manual upload.
           </p>
         </section>
 
         <section class="legal-section">
           <h2>6. No Sale, No Sharing, No Analytics</h2>
           <p>
-            SATAN Toolkit does not sell user data. It does not share user data with advertisers, data brokers, or
-            analytics networks. The application does not use third-party analytics, tracking pixels, or remote
-            behavioral profiling services.
+            SATAN Toolkit does not sell user data. It does not share user data with advertisers, data brokers, or analytics
+            networks. The application does not use third-party analytics, tracking pixels, or behavioral profiling services.
           </p>
         </section>
 
         <section class="legal-section">
-          <h2>7. Data Retention and User Control</h2>
+          <h2>7. Retention and User Control</h2>
           <p>
-            Local data remains on the user's device until the user edits, removes, migrates, or replaces it. Cloud
-            data stored in Google Drive app-data remains under the user's Google account unless the user deletes it from
-            the application, removes the app's access, or clears the related app-data content from Google Drive.
+            Local data remains on the user's device until the user edits, removes, migrates, or replaces it. Cloud data stored
+            in Google Drive app-data remains under the user's Google account unless the user deletes it from the application,
+            revokes access, or clears the related app-data content from Google Drive.
           </p>
         </section>
 
         <section class="legal-section">
           <h2>8. Security</h2>
           <p>
-            SATAN Toolkit is designed as a local-first application. The app uses Google's OAuth flow for account
-            authorization and stores the resulting Google authorization data locally on the user's machine so the user
-            does not need to sign in again for every session, unless they explicitly sign out or revoke access.
-          </p>
-          <p>
-            No software can guarantee absolute security. Users remain responsible for securing their device, operating
-            system account, local files, and Google account credentials.
+            SATAN Toolkit uses Google's OAuth flow for authorization and stores resulting authorization data locally on the user's
+            machine so repeated sign-ins are not required unless the user explicitly signs out or revokes access.
           </p>
         </section>
 
         <section class="legal-section">
           <h2>9. Changes to This Policy</h2>
           <p>
-            This Privacy Policy may be updated if the application's data-handling model changes. The latest published
-            version should be treated as the current policy for SATAN Toolkit.
-          </p>
-        </section>
-
-        <section class="legal-section">
-          <h2>10. Contact</h2>
-          <p>
-            Questions about this Privacy Policy should be directed through the official SATAN Toolkit distribution or
-            support channel used to provide the application to end users.
+            This Privacy Policy may be updated if the application's data-handling model changes. The latest published version
+            should be treated as the current policy for SATAN Toolkit.
           </p>
         </section>
       </main>
