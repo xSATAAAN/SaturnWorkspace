@@ -92,12 +92,16 @@ h1, h2, h3 {
 .red-panel {
   border: 1px solid rgba(140, 24, 32, 0.9);
   background:
-    linear-gradient(140deg, rgba(122, 14, 22, 0.84) 0%, rgba(116, 13, 21, 0.86) 52%, rgba(108, 12, 19, 0.84) 100%);
+    radial-gradient(120% 120% at 10% 10%, rgba(176, 28, 40, 0.28), transparent 58%),
+    radial-gradient(110% 110% at 90% 80%, rgba(118, 16, 24, 0.22), transparent 56%),
+    linear-gradient(145deg, rgba(102, 12, 19, 0.95) 0%, rgba(88, 10, 17, 0.94) 40%, rgba(74, 9, 15, 0.93) 100%);
 }
 
 .red-panel:hover {
   background:
-    linear-gradient(140deg, rgba(136, 17, 26, 0.9) 0%, rgba(124, 15, 23, 0.9) 52%, rgba(114, 13, 21, 0.88) 100%);
+    radial-gradient(120% 120% at 10% 10%, rgba(190, 34, 47, 0.3), transparent 58%),
+    radial-gradient(110% 110% at 90% 80%, rgba(130, 20, 29, 0.24), transparent 56%),
+    linear-gradient(145deg, rgba(116, 14, 22, 0.96) 0%, rgba(98, 12, 20, 0.95) 40%, rgba(82, 10, 18, 0.94) 100%);
 }
 
 .red-badge {

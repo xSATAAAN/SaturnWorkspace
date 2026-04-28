@@ -29,7 +29,7 @@ export function SiteHeader({ telegramHref, lang, onToggleLang }: SiteHeaderProps
         }
   return (
     <header className="sticky top-0 z-50 border-b border-white/10 bg-black/25 backdrop-blur supports-[backdrop-filter]:bg-black/20">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
+      <div className="relative mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
         <a href="/" className="group inline-flex items-center gap-2">
           <span className="h-2.5 w-2.5 rounded-full bg-red-500 shadow-[0_0_24px_rgba(255,60,60,.55)]" />
           <span className="text-sm font-semibold tracking-wide text-white">
@@ -37,7 +37,7 @@ export function SiteHeader({ telegramHref, lang, onToggleLang }: SiteHeaderProps
           </span>
         </a>
 
-        <nav className="hidden items-center gap-6 text-sm sm:flex">
+        <nav className="hidden items-center gap-6 text-sm sm:absolute sm:left-1/2 sm:flex sm:-translate-x-1/2">
           <a className="text-white/70 hover:text-white" href="#features">
             {t.modules}
           </a>

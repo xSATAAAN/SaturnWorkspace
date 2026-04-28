@@ -77,7 +77,7 @@ export function Feedback({ telegramUsername, lang }: FeedbackProps) {
         </Reveal>
 
         <Reveal delayMs={80}>
-          <div className="red-panel mx-auto mt-10 max-w-3xl rounded-[var(--radius)] p-6 backdrop-blur">
+          <div className="mx-auto mt-10 max-w-3xl rounded-[var(--radius)] border border-red-900/80 bg-[#14090d] p-6 backdrop-blur">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <label className="grid gap-1">
                 <span className="text-xs font-semibold text-white/70">{t.type}</span>
