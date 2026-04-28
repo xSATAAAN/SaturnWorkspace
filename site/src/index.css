@@ -1,0 +1,104 @@
+@import "tailwindcss";
+
+/* Brand / theme tokens (CSS-first, used by both Tailwind + custom CSS) */
+:root {
+  --bg: 6 6 10; /* near-black */
+  --fg: 255 255 255;
+  --muted: 170 170 185;
+  --panel: 18 18 26;
+  --panelBorder: 255 255 255;
+
+  --red: 239 68 68;
+  --red2: 220 38 38;
+  --redGlow: 255 60 60;
+
+  --radius: 18px;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  color: rgb(var(--fg));
+  background: radial-gradient(1200px 600px at 20% 10%, rgba(var(--redGlow), 0.18), transparent 60%),
+    radial-gradient(900px 500px at 80% 20%, rgba(var(--redGlow), 0.12), transparent 60%),
+    linear-gradient(180deg, rgb(var(--bg)) 0%, rgb(2 2 6) 100%);
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Apple Color Emoji",
+    "Segoe UI Emoji";
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+/* Smooth scrolling but still accessible */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* Selection matches red brand */
+::selection {
+  background: rgba(var(--red), 0.35);
+}
+
+/* Subtle animated grain */
+.noise {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  opacity: 0.08;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23n)' opacity='.45'/%3E%3C/svg%3E");
+}
+
+/* Thin glowing border utility for cards */
+.glow-border {
+  position: relative;
+  border-radius: var(--radius);
+}
+.glow-border::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    rgba(var(--red), 0.9),
+    rgba(255, 255, 255, 0.16),
+    rgba(var(--red2), 0.85)
+  );
+  opacity: 0.38;
+  filter: blur(0.5px);
+  pointer-events: none;
+}
+.glow-border > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Reveal on scroll (simple + smooth, prefers-reduced-motion aware) */
+.reveal {
+  opacity: 0;
+  transform: translateY(14px);
+  transition:
+    opacity 700ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+.reveal--in {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
