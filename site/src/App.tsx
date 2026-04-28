@@ -9,9 +9,9 @@ const TELEGRAM_LINK = `https://t.me/${TELEGRAM_USERNAME}`
 export default function App() {
   const stats = useMemo(
     () => [
-      { label: 'Active installs', value: '2,500+' },
-      { label: 'Satisfaction', value: '4.9/5' },
-      { label: 'Time to set up', value: '< 2 min' },
+      { label: 'Managed records', value: '250k+' },
+      { label: 'Power users served', value: '2,500+' },
+      { label: 'Setup time', value: '< 2 min' },
     ],
     [],
   )
@@ -29,24 +29,25 @@ export default function App() {
               <Reveal>
                 <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-white/80 backdrop-blur">
                   <span className="h-2 w-2 rounded-full bg-red-500 shadow-[0_0_24px_rgba(255,60,60,.55)]" />
-                  Latest build available now
+                  Desktop build available now
                 </div>
               </Reveal>
 
               <Reveal delayMs={80}>
                 <h1 className="mt-6 text-balance text-4xl font-semibold tracking-tight text-white sm:text-6xl">
-                  Make your Windows setup{' '}
+                  Control your{' '}
                   <span className="bg-gradient-to-r from-red-400 to-red-600 bg-clip-text text-transparent">
-                    faster, cleaner, sharper
+                    Vault, Gmail, and IP operations
                   </span>{' '}
-                  in minutes.
+                  from one secure desktop center.
                 </h1>
               </Reveal>
 
               <Reveal delayMs={140}>
                 <p className="mt-5 text-pretty text-base leading-relaxed text-white/70 sm:text-lg">
-                  SATAN Toolkit is a focused performance + maintenance suite for power users. One
-                  dashboard to boost, clean, harden privacy, and keep your machine responsive.
+                  SATAN Toolkit is a local-first Windows toolkit for structured account workflows:
+                  Vault management, Gmail handling, IP tracking, backup, and optional Google Drive
+                  app-data sync.
                 </p>
               </Reveal>
 
@@ -56,14 +57,14 @@ export default function App() {
                     href="#pricing"
                     className="group inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-red-500 to-red-700 px-5 py-3 text-sm font-semibold text-white shadow-[0_16px_40px_rgba(255,60,60,.22)] transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
                   >
-                    Get started
+                    Start now
                     <span className="translate-x-0 transition group-hover:translate-x-0.5">→</span>
                   </a>
                   <a
                     href="#features"
                     className="inline-flex items-center justify-center rounded-xl border border-white/12 bg-white/4 px-5 py-3 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/7 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
                   >
-                    Explore features
+                    Explore modules
                   </a>
                 </div>
               </Reveal>
@@ -91,10 +92,10 @@ export default function App() {
               <div className="mx-auto max-w-2xl text-center">
                 <p className="text-sm font-semibold text-red-300/90">FEATURES</p>
                 <h2 className="mt-3 text-balance text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-                  Everything you need, in one toolkit
+                  Built for real SATAN Toolkit workflows
                 </h2>
                 <p className="mt-4 text-pretty text-white/65">
-                  Each action is designed to be reversible. You stay in control.
+                  Practical modules connected in one flow. No extra tabs, no scattered tools.
                 </p>
               </div>
             </Reveal>
@@ -102,25 +103,28 @@ export default function App() {
             <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {[
                 {
-                  title: 'System Boost',
-                  desc: 'Targeted tuning for responsiveness and smoother desktop experience.',
-                },
-                { title: 'Deep Clean', desc: 'Clear temp + cache + leftovers that waste storage.' },
-                {
-                  title: 'Privacy Shield',
-                  desc: 'Reduce noise: disable known telemetry surfaces (safely).',
+                  title: 'Vault Manager',
+                  desc: 'Store and maintain account records with clear status and history tracking.',
                 },
                 {
-                  title: 'Game Mode',
-                  desc: 'Prioritize performance and reduce stutter while you play.',
+                  title: 'Gmail Workspace',
+                  desc: 'Handle Gmail entries, recovery details, and usage state from one panel.',
                 },
                 {
-                  title: 'Bloat Removal',
-                  desc: 'Trim unnecessary apps and background extras.',
+                  title: 'IP Register',
+                  desc: 'Track IP records with linked metadata for operational consistency.',
                 },
                 {
-                  title: 'Auto Updates',
-                  desc: 'New features and improvements shipped regularly.',
+                  title: 'Cloud Sync',
+                  desc: 'Optional Google Drive app-data sync for your toolkit dataset.',
+                },
+                {
+                  title: 'Updater Channel',
+                  desc: 'Receive latest toolkit builds through the official update endpoint.',
+                },
+                {
+                  title: 'Session Control',
+                  desc: 'Keep local authorization and operation state stable across restarts.',
                 },
               ].map((f, idx) => (
                 <Reveal key={f.title} delayMs={60 + idx * 35}>
@@ -148,7 +152,7 @@ export default function App() {
               <div className="mx-auto max-w-2xl text-center">
                 <p className="text-sm font-semibold text-red-300/90">HOW IT WORKS</p>
                 <h2 className="mt-3 text-balance text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-                  Three steps. Done.
+                  Workflow in three steps
                 </h2>
               </div>
             </Reveal>
@@ -157,18 +161,18 @@ export default function App() {
               {[
                 {
                   step: '01',
-                  title: 'Pick your plan',
-                  desc: 'Monthly to try it, or lifetime if you want everything.',
+                  title: 'Choose your license',
+                  desc: 'Start monthly or unlock lifetime access based on your workload.',
                 },
                 {
                   step: '02',
-                  title: 'Checkout inside the site',
-                  desc: 'No payment provider yet? You can still place an order and complete via Telegram.',
+                  title: 'Submit order from site',
+                  desc: 'Generate an order request instantly and complete confirmation on Telegram.',
                 },
                 {
                   step: '03',
-                  title: 'Activate & enjoy',
-                  desc: 'Download, activate, and apply improvements with one click.',
+                  title: 'Activate SATAN Toolkit',
+                  desc: 'Receive your key, activate desktop app, and start managing records.',
                 },
               ].map((s, idx) => (
                 <Reveal key={s.step} delayMs={70 + idx * 45}>
@@ -196,7 +200,7 @@ export default function App() {
               <div className="mx-auto max-w-2xl text-center">
                 <p className="text-sm font-semibold text-red-300/90">FAQ</p>
                 <h2 className="mt-3 text-balance text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-                  Quick answers
+                  Questions from real users
                 </h2>
               </div>
             </Reveal>
@@ -204,12 +208,12 @@ export default function App() {
             <div className="mx-auto mt-10 grid max-w-3xl grid-cols-1 gap-3">
               {[
                 {
-                  q: 'Is it safe?',
-                  a: 'The toolkit is designed to be reversible. We focus on safe defaults and clarity.',
+                  q: 'Does SATAN Toolkit work locally?',
+                  a: 'Yes. Core operations are local-first. Cloud sync is optional and user-controlled.',
                 },
-                { q: 'Windows versions?', a: 'Windows 10 and 11 are supported.' },
-                { q: 'Multiple devices?', a: 'Licenses are per-device. Ask us for bundles.' },
-                { q: 'How do I get my key?', a: 'After checkout, we confirm and send your key.' },
+                { q: 'Which Windows versions are supported?', a: 'Windows 10 and Windows 11.' },
+                { q: 'Is license per device?', a: 'Yes. Each license is bound to one device unless agreed otherwise.' },
+                { q: 'How do I receive activation?', a: 'After order confirmation, we send your activation details directly.' },
               ].map((item, idx) => (
                 <Reveal key={item.q} delayMs={60 + idx * 35}>
                   <details className="red-panel group rounded-[var(--radius)] px-5 py-4 backdrop-blur">
@@ -232,7 +236,7 @@ export default function App() {
               <div>
                 <div className="text-sm font-semibold text-white">SATAN Toolkit</div>
                 <div className="mt-1 text-sm text-white/60">
-                  Performance, cleanup, and privacy — built for control.
+                  Official desktop toolkit for Vault, Gmail, IP, and controlled cloud sync workflows.
                 </div>
               </div>
               <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">

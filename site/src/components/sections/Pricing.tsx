@@ -18,10 +18,10 @@ export function Pricing({ telegramHref }: PricingProps) {
           <div className="mx-auto max-w-2xl text-center">
             <p className="text-sm font-semibold text-red-300/90">PRICING</p>
             <h2 className="mt-3 text-balance text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-              Simple pricing. No surprises.
+              License plans for SATAN Toolkit
             </h2>
             <p className="mt-4 text-pretty text-white/65">
-              Start monthly, or get lifetime access with updates included.
+              Clear plans, direct activation, and upgrade path without rebuilding your setup.
             </p>
           </div>
         </Reveal>
@@ -37,15 +37,15 @@ export function Pricing({ telegramHref }: PricingProps) {
                   </div>
                 </div>
                 <span className="rounded-full border border-red-700/70 bg-black/25 px-3 py-1 text-xs font-semibold text-white/85">
-                  Try it
+                  Starter
                 </span>
               </div>
 
               <ul className="mt-6 space-y-2 text-sm text-white/70">
                 <li>System Boost</li>
-                <li>Deep Clean</li>
-                <li>Privacy Shield</li>
-                <li>Basic support</li>
+                <li>Vault + Gmail + IP modules</li>
+                <li>Standard updates</li>
+                <li>Priority Telegram response</li>
               </ul>
 
               <div className="mt-7 flex flex-col gap-2 sm:flex-row">
@@ -57,7 +57,7 @@ export function Pricing({ telegramHref }: PricingProps) {
                   }}
                   className="inline-flex flex-1 items-center justify-center rounded-xl bg-gradient-to-b from-red-500 to-red-700 px-5 py-3 text-sm font-semibold text-white shadow-[0_14px_36px_rgba(255,60,60,.22)] transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
                 >
-                  Checkout
+                  Place order
                 </button>
                 <a
                   href={telegramHref}
@@ -65,7 +65,7 @@ export function Pricing({ telegramHref }: PricingProps) {
                   rel="noreferrer"
                   className="inline-flex flex-1 items-center justify-center rounded-xl border border-white/12 bg-white/5 px-5 py-3 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
                 >
-                  Buy via Telegram
+                  Contact on Telegram
                 </a>
               </div>
             </div>
@@ -80,15 +80,15 @@ export function Pricing({ telegramHref }: PricingProps) {
                     <div className="mt-2 text-3xl font-semibold text-white">EGP 1,499</div>
                   </div>
                   <span className="rounded-full border border-red-700/70 bg-black/30 px-3 py-1 text-xs font-semibold text-red-200/90">
-                    Best value
+                    Operator choice
                   </span>
                 </div>
 
                 <ul className="mt-6 space-y-2 text-sm text-white/70">
-                  <li>All features</li>
+                  <li>All toolkit modules</li>
                   <li>Lifetime updates</li>
-                  <li>VIP support</li>
-                  <li>Early access builds</li>
+                  <li>Priority support lane</li>
+                  <li>Early build access</li>
                 </ul>
 
                 <div className="mt-7 flex flex-col gap-2 sm:flex-row">
@@ -100,7 +100,7 @@ export function Pricing({ telegramHref }: PricingProps) {
                     }}
                     className="inline-flex flex-1 items-center justify-center rounded-xl bg-gradient-to-b from-red-500 to-red-700 px-5 py-3 text-sm font-semibold text-white shadow-[0_16px_44px_rgba(255,60,60,.26)] transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
                   >
-                    Checkout
+                    Place order
                   </button>
                   <a
                     href={telegramHref}
@@ -108,7 +108,7 @@ export function Pricing({ telegramHref }: PricingProps) {
                     rel="noreferrer"
                     className="inline-flex flex-1 items-center justify-center rounded-xl border border-white/12 bg-white/5 px-5 py-3 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
                   >
-                    Buy via Telegram
+                    Contact on Telegram
                   </a>
                 </div>
               </div>
@@ -119,7 +119,7 @@ export function Pricing({ telegramHref }: PricingProps) {
         <Reveal delayMs={220}>
           <div className="mx-auto mt-10 max-w-3xl rounded-[var(--radius)] border border-white/10 bg-white/4 px-6 py-5 text-center text-sm text-white/70 backdrop-blur">
             Checkout starts here, then finishes on Telegram (fast confirmation). Payment provider
-            integration will be added next.
+            gateway integration can be attached next without changing this flow.
           </div>
         </Reveal>
       </div>

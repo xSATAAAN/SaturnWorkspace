@@ -13,6 +13,8 @@
   --redGlow: 255, 60, 60;
 
   --radius: 18px;
+  --fontBody: "Plus Jakarta Sans", "Cairo", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+  --fontDisplay: "Cairo", "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
 }
 
 html,
@@ -27,12 +29,15 @@ body {
   background: radial-gradient(1200px 600px at 20% 10%, rgba(var(--redGlow), 0.18), transparent 60%),
     radial-gradient(900px 500px at 80% 20%, rgba(var(--redGlow), 0.12), transparent 60%),
     linear-gradient(180deg, rgb(var(--bg)) 0%, rgb(2 2 6) 100%);
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Apple Color Emoji",
-    "Segoe UI Emoji";
+  font-family: var(--fontBody);
   text-rendering: geometricPrecision;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
+}
+
+h1, h2, h3 {
+  font-family: var(--fontDisplay);
 }
 
 /* Smooth scrolling but still accessible */
