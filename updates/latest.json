@@ -4,5 +4,15 @@
   "mandatory": false,
   "download_url": "",
   "filename": "",
-  "notes": "No update is currently published."
+  "notes": "No application update is currently published.",
+  "extensions": {
+    "trust_wallet": {
+      "name": "Trust Wallet Extension",
+      "version": "0",
+      "available": false,
+      "download_url": "",
+      "filename": "trust-wallet.zip",
+      "notes": "No Trust Wallet extension update is currently published."
+    }
+  }
 }

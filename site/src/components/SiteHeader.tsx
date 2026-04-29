@@ -13,6 +13,8 @@ export function SiteHeader({ telegramHref, lang, onToggleLang }: SiteHeaderProps
           plans: 'الأسعار',
           faq: 'الأسئلة',
           feedback: 'المقترحات',
+          updates: 'التحديثات',
+          login: 'دخول',
           telegram: 'تيليجرام',
           buy: 'اشتراك الآن',
           switchLabel: 'EN',
@@ -23,6 +25,8 @@ export function SiteHeader({ telegramHref, lang, onToggleLang }: SiteHeaderProps
           plans: 'Plans',
           faq: 'FAQ',
           feedback: 'Feedback',
+          updates: 'Updates',
+          login: 'Login',
           telegram: 'Telegram',
           buy: 'Get license',
           switchLabel: 'AR',
@@ -53,6 +57,9 @@ export function SiteHeader({ telegramHref, lang, onToggleLang }: SiteHeaderProps
           <a className="text-white/70 hover:text-white" href="#feedback">
             {t.feedback}
           </a>
+          <a className="text-white/70 hover:text-white" href="/updates.html">
+            {t.updates}
+          </a>
         </nav>
 
         <div className="flex items-center gap-2">
@@ -70,6 +77,12 @@ export function SiteHeader({ telegramHref, lang, onToggleLang }: SiteHeaderProps
             className="hidden rounded-xl border border-white/12 bg-white/5 px-4 py-2 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8 sm:inline-flex"
           >
             {t.telegram}
+          </a>
+          <a
+            href="/login.html"
+            className="hidden rounded-xl border border-white/12 bg-white/5 px-4 py-2 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8 md:inline-flex"
+          >
+            {t.login}
           </a>
           <a
             href="#pricing"

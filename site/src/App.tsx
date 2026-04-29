@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { Reveal } from './components/Reveal'
 import { SiteHeader } from './components/SiteHeader'
 import { Feedback } from './components/sections/Feedback'
@@ -6,6 +6,79 @@ import { Pricing } from './components/sections/Pricing'
 
 const TELEGRAM_USERNAME = import.meta.env.VITE_TELEGRAM_USERNAME || 'satantoolkit'
 const TELEGRAM_LINK = `https://t.me/${TELEGRAM_USERNAME}`
+
+type FeatureIconName = 'vault' | 'gmail' | 'ip' | 'cloud' | 'session' | 'proxy'
+
+function FeatureIcon({ name }: { name: FeatureIconName }) {
+  if (name === 'gmail') {
+    return (
+      <svg viewBox="0 0 48 48" aria-hidden="true" className="h-8 w-8">
+        <path fill="#fff" d="M10 13h28a4 4 0 0 1 4 4v18a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4V17a4 4 0 0 1 4-4Z" opacity=".94" />
+        <path fill="#ea4335" d="M8 17.6 24 29.4l16-11.8v5.2L24 34.6 8 22.8Z" />
+        <path fill="#fbbc04" d="M8 17.6v17.2c0 1.1.9 2 2 2h4V22Z" />
+        <path fill="#34a853" d="M40 17.6v17.2a2 2 0 0 1-2 2h-4V22Z" />
+        <path fill="#4285f4" d="M10 13h28c1.3 0 2.4.6 3.1 1.6L24 27.2 6.9 14.6A4 4 0 0 1 10 13Z" opacity=".95" />
+        <path fill="#0b0b10" d="M15 30h18v6H15z" opacity=".16" />
+      </svg>
+    )
+  }
+
+  const paths: Record<Exclude<FeatureIconName, 'gmail'>, ReactNode> = {
+    vault: (
+      <>
+        <rect x="12" y="18" width="24" height="18" rx="4" />
+        <path d="M17 18v-3a7 7 0 0 1 14 0v3" />
+        <circle cx="24" cy="27" r="3" />
+      </>
+    ),
+    ip: (
+      <>
+        <path d="M24 40s13-9.5 13-22a13 13 0 0 0-26 0c0 12.5 13 22 13 22Z" />
+        <circle cx="24" cy="18" r="5" />
+        <path d="M16 33h16" />
+      </>
+    ),
+    cloud: (
+      <>
+        <path d="M17 34h20a7 7 0 0 0 0-14h-1.2A11 11 0 0 0 14.5 23 5.8 5.8 0 0 0 17 34Z" />
+        <path d="M24 30V18" />
+        <path d="m19 23 5-5 5 5" />
+      </>
+    ),
+    session: (
+      <>
+        <rect x="10" y="12" width="28" height="24" rx="5" />
+        <path d="M16 20h9" />
+        <path d="M16 27h16" />
+        <path d="m29 18 5 5-5 5" />
+      </>
+    ),
+    proxy: (
+      <>
+        <path d="M13 16h22" />
+        <path d="M13 32h22" />
+        <circle cx="18" cy="16" r="4" />
+        <circle cx="30" cy="32" r="4" />
+        <path d="M24 16h11" />
+        <path d="M13 32h11" />
+      </>
+    ),
+  }
+
+  return (
+    <svg viewBox="0 0 48 48" aria-hidden="true" className="h-8 w-8">
+      <g
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        {paths[name]}
+      </g>
+    </svg>
+  )
+}
 
 export default function App() {
   const [lang, setLang] = useState<'en' | 'ar'>('en')
@@ -29,33 +102,39 @@ export default function App() {
         stats: [
           { label: 'حسابات Bybit مُدارة', value: '250k+', hint: 'أرشفة منظمة لكل الحسابات' },
           { label: 'مستخدمين فعّالين', value: '2,500+', hint: 'تشغيل يومي للأداة' },
-          { label: 'بدء جلسة سريع', value: '< 2 min', hint: 'AdsPower ببروكسي أو بدون' },
+          { label: 'بدء جلسة سريع', value: 'أقل من دقيقتين', hint: 'AdsPower ببروكسي أو بدون' },
         ],
         featuresTag: 'المزايا',
         featuresTitle: 'كل ما تحتاجه لإدارة الحسابات في أداة واحدة',
         featuresDesc: 'الموديولات مبنية للتنفيذ الفعلي وليس الحشو، وكل خطوة لها مكان واضح.',
         features: [
           {
+            icon: 'vault' as const,
             title: 'إدارة Vault',
             desc: 'تخزين احترافي لحسابات Bybit مع ملاحظات وحالة كل حساب بشكل مرتب.',
           },
           {
+            icon: 'gmail' as const,
             title: 'تخزين Gmail',
             desc: 'قاعدة بيانات Gmail منظمة مع بيانات الاسترداد وحالة الاستخدام.',
           },
           {
+            icon: 'ip' as const,
             title: 'تتبع IP ذكي',
             desc: 'منع تكرار IP في الجلسات المختلفة عبر سجل ذكي للتتبع.',
           },
           {
+            icon: 'cloud' as const,
             title: 'نسخ سحابي آمن',
             desc: 'مزامنة على Google Drive الشخصي للمستخدم فقط بدون أي طرف ثالث.',
           },
           {
+            icon: 'session' as const,
             title: 'جلسة سريعة',
             desc: 'تشغيل سريع على AdsPower ببروكسي أو بدون مع بروفايل جاهز.',
           },
           {
+            icon: 'proxy' as const,
             title: 'إدارة البروكسي',
             desc: 'سحب بروكسيات IPRoyal واستخدامها مباشرة داخل جلسات AdsPower.',
           },
@@ -117,26 +196,32 @@ export default function App() {
           'Every module serves actual execution: create, run, review, sync, and reopen accounts quickly.',
         features: [
           {
+            icon: 'vault' as const,
             title: 'Vault Manager',
             desc: 'Professional storage for Bybit accounts with notes, status, and organized tracking fields.',
           },
           {
+            icon: 'gmail' as const,
             title: 'Gmail Storage',
             desc: 'Clean Gmail database with recovery details and usage state ready for operational flow.',
           },
           {
+            icon: 'ip' as const,
             title: 'Smart IP Register',
             desc: 'Avoid IP reuse across sessions with smart tracking and duplicate prevention logic.',
           },
           {
+            icon: 'cloud' as const,
             title: 'Private Cloud Backup',
             desc: 'Sync to your personal Google Drive app-data only. Your data is not routed to third parties.',
           },
           {
+            icon: 'session' as const,
             title: 'Fast Session Start',
             desc: 'Launch quick AdsPower session with proxy or without, using prepared profile settings.',
           },
           {
+            icon: 'proxy' as const,
             title: 'Proxy Operations',
             desc: 'Pull IPRoyal proxies and use them directly in AdsPower profiles (requires active IPRoyal plan).',
           },
@@ -280,7 +365,9 @@ export default function App() {
                           <div className="text-lg font-semibold text-white">{f.title}</div>
                           <p className="mt-2 text-sm leading-relaxed text-white/65">{f.desc}</p>
                         </div>
-                        <div className="red-badge h-10 w-10 shrink-0 rounded-xl" />
+                        <div className="feature-icon-box h-11 w-11 shrink-0 rounded-xl">
+                          <FeatureIcon name={f.icon} />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -369,8 +456,11 @@ export default function App() {
                 <a className="text-white/70 hover:text-white" href="/terms.html">
                   {copy.footerTerms}
                 </a>
-                <a className="text-white/70 hover:text-white" href="/updates/latest.json">
+                <a className="text-white/70 hover:text-white" href="/updates.html">
                   {copy.footerUpdates}
+                </a>
+                <a className="text-white/70 hover:text-white" href="/login.html">
+                  {isAr ? 'تسجيل الدخول' : 'Login'}
                 </a>
               </div>
             </div>
