@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 type SiteHeaderProps = {
   telegramHref: string
   lang: 'en' | 'ar'
@@ -31,11 +33,15 @@ export function SiteHeader({ telegramHref, lang, onToggleLang }: SiteHeaderProps
           buy: 'Get license',
           switchLabel: 'AR',
         }
+  const [mobileOpen, setMobileOpen] = useState(false)
+
+  const closeMobile = () => setMobileOpen(false)
+
   return (
     <header className="sticky top-0 z-50 border-b border-white/10 bg-black/25 backdrop-blur supports-[backdrop-filter]:bg-black/20">
       <div className="relative mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
-        <a href="/" className="group inline-flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-full bg-red-500 shadow-[0_0_24px_rgba(255,60,60,.55)]" />
+        <a href="/" className="group inline-flex items-center gap-2" onClick={closeMobile}>
+          <span className="h-2.5 w-2.5 rounded-full bg-sky-500 shadow-[0_0_24px_rgba(56,189,248,.55)]" />
           <span className="text-sm font-semibold tracking-wide text-white">
             SATAN <span className="text-white/70">Toolkit</span>
           </span>
@@ -65,6 +71,20 @@ export function SiteHeader({ telegramHref, lang, onToggleLang }: SiteHeaderProps
         <div className="flex items-center gap-2">
           <button
             type="button"
+            onClick={() => setMobileOpen((p) => !p)}
+            className="inline-flex items-center justify-center rounded-xl border border-white/12 bg-white/5 px-3 py-2 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8 sm:hidden"
+            aria-label="Open menu"
+            aria-expanded={mobileOpen}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5">
+              <path
+                fill="currentColor"
+                d="M4 6.5h16a1 1 0 0 1 0 2H4a1 1 0 1 1 0-2Zm0 4.5h16a1 1 0 0 1 0 2H4a1 1 0 1 1 0-2Zm0 4.5h16a1 1 0 0 1 0 2H4a1 1 0 1 1 0-2Z"
+              />
+            </svg>
+          </button>
+          <button
+            type="button"
             onClick={onToggleLang}
             className="inline-flex items-center justify-center rounded-xl border border-white/12 bg-white/5 px-3 py-2 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8"
           >
@@ -86,12 +106,58 @@ export function SiteHeader({ telegramHref, lang, onToggleLang }: SiteHeaderProps
           </a>
           <a
             href="#pricing"
-            className="inline-flex items-center justify-center rounded-xl bg-gradient-to-b from-red-500 to-red-700 px-4 py-2 text-sm font-semibold text-white shadow-[0_14px_36px_rgba(255,60,60,.22)] transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+            onClick={closeMobile}
+            className="inline-flex items-center justify-center rounded-xl bg-gradient-to-b from-sky-500 to-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-[0_14px_36px_rgba(56,189,248,.18)] transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
           >
             {t.buy}
           </a>
         </div>
       </div>
+
+      {mobileOpen ? (
+        <div className="border-t border-white/10 bg-black/35 backdrop-blur sm:hidden">
+          <div className="mx-auto max-w-6xl px-5 py-3">
+            <div className="grid gap-2 text-sm">
+              <a className="rounded-lg px-3 py-2 text-white/80 hover:bg-white/5 hover:text-white" href="#features" onClick={closeMobile}>
+                {t.modules}
+              </a>
+              <a className="rounded-lg px-3 py-2 text-white/80 hover:bg-white/5 hover:text-white" href="#how" onClick={closeMobile}>
+                {t.workflow}
+              </a>
+              <a className="rounded-lg px-3 py-2 text-white/80 hover:bg-white/5 hover:text-white" href="#pricing" onClick={closeMobile}>
+                {t.plans}
+              </a>
+              <a className="rounded-lg px-3 py-2 text-white/80 hover:bg-white/5 hover:text-white" href="#faq" onClick={closeMobile}>
+                {t.faq}
+              </a>
+              <a className="rounded-lg px-3 py-2 text-white/80 hover:bg-white/5 hover:text-white" href="#feedback" onClick={closeMobile}>
+                {t.feedback}
+              </a>
+              <a className="rounded-lg px-3 py-2 text-white/80 hover:bg-white/5 hover:text-white" href="/updates.html" onClick={closeMobile}>
+                {t.updates}
+              </a>
+              <div className="mt-1 grid grid-cols-1 gap-2">
+                <a
+                  href={telegramHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center justify-center rounded-xl border border-white/12 bg-white/5 px-4 py-2 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8"
+                  onClick={closeMobile}
+                >
+                  {t.telegram}
+                </a>
+                <a
+                  href="/login.html"
+                  className="inline-flex items-center justify-center rounded-xl border border-white/12 bg-white/5 px-4 py-2 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8"
+                  onClick={closeMobile}
+                >
+                  {t.login}
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </header>
   )
 }

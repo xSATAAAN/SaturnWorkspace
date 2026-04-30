@@ -47,7 +47,7 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
       <div className="mx-auto max-w-6xl px-5 py-16 sm:py-20">
         <Reveal>
           <div className="mx-auto max-w-2xl text-center">
-            <p className="text-sm font-semibold text-red-300/90">{t.tag}</p>
+            <p className="text-sm font-semibold text-sky-300/90">{t.tag}</p>
             <h2 className="mt-3 text-balance text-3xl font-semibold tracking-tight text-white sm:text-4xl">
               {t.title}
             </h2>
@@ -67,7 +67,7 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
                     EGP 499 <span className="text-base font-semibold text-white/60">/mo</span>
                   </div>
                 </div>
-                <span className="rounded-full border border-red-700/70 bg-black/25 px-3 py-1 text-xs font-semibold text-white/85">
+                <span className="rounded-full border border-sky-700/55 bg-black/25 px-3 py-1 text-xs font-semibold text-white/85">
                   {t.starter}
                 </span>
               </div>
@@ -85,7 +85,7 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
                     setInitialPlan('monthly')
                     setOpen(true)
                   }}
-                  className="inline-flex flex-1 items-center justify-center rounded-xl bg-gradient-to-b from-red-500 to-red-700 px-5 py-3 text-sm font-semibold text-white shadow-[0_14px_36px_rgba(255,60,60,.22)] transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                  className="inline-flex flex-1 items-center justify-center rounded-xl bg-gradient-to-b from-sky-500 to-blue-700 px-5 py-3 text-sm font-semibold text-white shadow-[0_14px_36px_rgba(56,189,248,.18)] transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
                 >
                   {t.order}
                 </button>
@@ -93,7 +93,7 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
                   href={telegramHref}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex flex-1 items-center justify-center rounded-xl border border-white/12 bg-white/5 px-5 py-3 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                  className="inline-flex flex-1 items-center justify-center rounded-xl border border-white/12 bg-white/5 px-5 py-3 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
                 >
                   {t.telegram}
                 </a>
@@ -109,7 +109,7 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
                     <div className="text-sm font-semibold text-white/80">{t.lifetime}</div>
                     <div className="mt-2 text-3xl font-semibold text-white">EGP 1,499</div>
                   </div>
-                  <span className="rounded-full border border-red-700/70 bg-black/30 px-3 py-1 text-xs font-semibold text-red-200/90">
+                  <span className="rounded-full border border-sky-700/55 bg-black/30 px-3 py-1 text-xs font-semibold text-sky-200/90">
                     {t.best}
                   </span>
                 </div>
@@ -127,7 +127,7 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
                       setInitialPlan('lifetime')
                       setOpen(true)
                     }}
-                    className="inline-flex flex-1 items-center justify-center rounded-xl bg-gradient-to-b from-red-500 to-red-700 px-5 py-3 text-sm font-semibold text-white shadow-[0_16px_44px_rgba(255,60,60,.26)] transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                    className="inline-flex flex-1 items-center justify-center rounded-xl bg-gradient-to-b from-sky-500 to-blue-700 px-5 py-3 text-sm font-semibold text-white shadow-[0_16px_44px_rgba(56,189,248,.18)] transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
                   >
                     {t.order}
                   </button>
@@ -135,7 +135,7 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
                     href={telegramHref}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex flex-1 items-center justify-center rounded-xl border border-white/12 bg-white/5 px-5 py-3 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                    className="inline-flex flex-1 items-center justify-center rounded-xl border border-white/12 bg-white/5 px-5 py-3 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
                   >
                     {t.telegram}
                   </a>

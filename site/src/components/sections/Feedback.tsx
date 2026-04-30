@@ -68,7 +68,7 @@ export function Feedback({ telegramUsername, lang }: FeedbackProps) {
       <div className="mx-auto max-w-6xl px-5 py-16 sm:py-20">
         <Reveal>
           <div className="mx-auto max-w-2xl text-center">
-            <p className="text-sm font-semibold text-red-300/90">{t.tag}</p>
+            <p className="text-sm font-semibold text-sky-300/90">{t.tag}</p>
             <h2 className="mt-3 text-balance text-3xl font-semibold tracking-tight text-white sm:text-4xl">{t.title}</h2>
             <p className="mt-4 text-pretty text-white/65">
               {t.desc}
@@ -77,14 +77,14 @@ export function Feedback({ telegramUsername, lang }: FeedbackProps) {
         </Reveal>
 
         <Reveal delayMs={80}>
-          <div className="mx-auto mt-10 max-w-3xl rounded-[var(--radius)] border border-red-900/80 bg-[#14090d] p-6 backdrop-blur">
+          <div className="mx-auto mt-10 max-w-3xl rounded-[var(--radius)] border border-sky-700/35 bg-[rgba(11,18,32,.72)] p-6 backdrop-blur">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <label className="grid gap-1">
                 <span className="text-xs font-semibold text-white/70">{t.type}</span>
                 <select
                   value={kind}
                   onChange={(e) => setKind(e.target.value as 'suggestion' | 'issue')}
-                  className="h-11 rounded-xl border border-white/12 bg-white/5 px-3 text-sm text-white outline-none focus:border-red-500/40"
+                  className="h-11 rounded-xl border border-white/12 bg-white/5 px-3 text-sm text-white outline-none focus:border-sky-500/40"
                 >
                   <option value="suggestion">{t.suggestion}</option>
                   <option value="issue">{t.issue}</option>
@@ -96,7 +96,7 @@ export function Feedback({ telegramUsername, lang }: FeedbackProps) {
                   value={contact}
                   onChange={(e) => setContact(e.target.value)}
                   placeholder={t.contactPlaceholder}
-                  className="h-11 rounded-xl border border-white/12 bg-white/5 px-3 text-sm text-white placeholder:text-white/35 outline-none focus:border-red-500/40"
+                  className="h-11 rounded-xl border border-white/12 bg-white/5 px-3 text-sm text-white placeholder:text-white/35 outline-none focus:border-sky-500/40"
                 />
               </label>
             </div>
@@ -108,7 +108,7 @@ export function Feedback({ telegramUsername, lang }: FeedbackProps) {
                 onChange={(e) => setMessage(e.target.value)}
                 rows={5}
                 placeholder={t.detailsPlaceholder}
-                className="resize-none rounded-xl border border-white/12 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/35 outline-none focus:border-red-500/40"
+                className="resize-none rounded-xl border border-white/12 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/35 outline-none focus:border-sky-500/40"
               />
             </label>
 
@@ -119,7 +119,7 @@ export function Feedback({ telegramUsername, lang }: FeedbackProps) {
                 rel="noreferrer"
                 className={`inline-flex flex-1 items-center justify-center rounded-xl px-5 py-3 text-sm font-semibold text-white transition ${
                   ready
-                    ? 'bg-gradient-to-b from-red-500 to-red-700 shadow-[0_16px_44px_rgba(255,60,60,.24)] hover:brightness-110'
+                    ? 'bg-gradient-to-b from-sky-500 to-blue-700 shadow-[0_16px_44px_rgba(56,189,248,.18)] hover:brightness-110'
                     : 'cursor-not-allowed border border-white/12 bg-white/5 text-white/55'
                 }`}
               >

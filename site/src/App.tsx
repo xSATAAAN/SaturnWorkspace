@@ -13,12 +13,17 @@ function FeatureIcon({ name }: { name: FeatureIconName }) {
   if (name === 'gmail') {
     return (
       <svg viewBox="0 0 48 48" aria-hidden="true" className="h-8 w-8">
-        <path fill="#fff" d="M10 13h28a4 4 0 0 1 4 4v18a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4V17a4 4 0 0 1 4-4Z" opacity=".94" />
-        <path fill="#ea4335" d="M8 17.6 24 29.4l16-11.8v5.2L24 34.6 8 22.8Z" />
-        <path fill="#fbbc04" d="M8 17.6v17.2c0 1.1.9 2 2 2h4V22Z" />
-        <path fill="#34a853" d="M40 17.6v17.2a2 2 0 0 1-2 2h-4V22Z" />
-        <path fill="#4285f4" d="M10 13h28c1.3 0 2.4.6 3.1 1.6L24 27.2 6.9 14.6A4 4 0 0 1 10 13Z" opacity=".95" />
-        <path fill="#0b0b10" d="M15 30h18v6H15z" opacity=".16" />
+        {/* Official-style Gmail mark (M envelope) */}
+        <path
+          fill="#EA4335"
+          d="M10 14c-2.2 0-4 1.8-4 4v16c0 2.2 1.8 4 4 4h28c2.2 0 4-1.8 4-4V18c0-2.2-1.8-4-4-4H10Z"
+          opacity=".12"
+        />
+        <path fill="#EA4335" d="M10 16h28c1 0 1.8.2 2.6.8L24 28 7.4 16.8c.8-.6 1.6-.8 2.6-.8Z" opacity=".95" />
+        <path fill="#4285F4" d="M40.6 16.8V34c0 1.1-.9 2-2 2h-6.2V24.4l8.2-7.6Z" />
+        <path fill="#34A853" d="M7.4 16.8l8.2 7.6V36H10c-1.1 0-2-.9-2-2V16.8Z" />
+        <path fill="#FBBC05" d="M15.6 24.4 24 32.2l8.4-7.8V36H15.6V24.4Z" />
+        <path fill="#FFFFFF" d="M10 14h28a4 4 0 0 1 4 4v16a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4V18a4 4 0 0 1 4-4Z" opacity=".12" />
       </svg>
     )
   }
@@ -281,7 +286,7 @@ export default function App() {
             <div className="mx-auto max-w-3xl text-center">
               <Reveal>
                 <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-white/80 backdrop-blur">
-                  <span className="h-2 w-2 rounded-full bg-red-500 shadow-[0_0_24px_rgba(255,60,60,.55)]" />
+                  <span className="h-2 w-2 rounded-full bg-sky-500 shadow-[0_0_24px_rgba(56,189,248,.55)]" />
                   {copy.heroBadge}
                 </div>
               </Reveal>
@@ -289,7 +294,7 @@ export default function App() {
               <Reveal delayMs={80}>
                 <h1 className="mt-6 text-balance text-4xl font-semibold tracking-tight text-white sm:text-6xl">
                   {copy.heroTitleA}{' '}
-                  <span className="bg-gradient-to-r from-red-400 to-red-600 bg-clip-text text-transparent">
+                  <span className="bg-gradient-to-r from-sky-300 to-blue-600 bg-clip-text text-transparent">
                     {copy.heroTitleB}
                   </span>{' '}
                   {copy.heroTitleC}
@@ -306,14 +311,14 @@ export default function App() {
                 <div className="mt-8 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center">
                   <a
                     href="#pricing"
-                    className="group inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-red-500 to-red-700 px-5 py-3 text-sm font-semibold text-white shadow-[0_16px_40px_rgba(255,60,60,.22)] transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                    className="group inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-sky-500 to-blue-700 px-5 py-3 text-sm font-semibold text-white shadow-[0_16px_40px_rgba(56,189,248,.18)] transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
                   >
                     {copy.ctaStart}
                     <span className="translate-x-0 transition group-hover:translate-x-0.5">→</span>
                   </a>
                   <a
                     href="#features"
-                    className="inline-flex items-center justify-center rounded-xl border border-white/12 bg-white/4 px-5 py-3 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/7 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                    className="inline-flex items-center justify-center rounded-xl border border-white/12 bg-white/4 px-5 py-3 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/7 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
                   >
                     {copy.ctaExplore}
                   </a>
@@ -331,7 +336,7 @@ export default function App() {
                         <div className="mt-1 text-sm font-semibold text-white/85">{s.label}</div>
                         <div className="mt-1 text-xs text-white/55">{s.hint}</div>
                       </div>
-                      <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-red-500/90" />
+                      <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-sky-500/90" />
                     </div>
                   </div>
                 ))}
@@ -345,7 +350,7 @@ export default function App() {
           <div className="mx-auto max-w-6xl px-5 py-16 sm:py-20">
             <Reveal>
               <div className="mx-auto max-w-2xl text-center">
-                <p className="text-sm font-semibold text-red-300/90">{copy.featuresTag}</p>
+                <p className="text-sm font-semibold text-sky-300/90">{copy.featuresTag}</p>
                 <h2 className="mt-3 text-balance text-3xl font-semibold tracking-tight text-white sm:text-4xl">
                   {copy.featuresTitle}
                 </h2>
@@ -382,7 +387,7 @@ export default function App() {
           <div className="mx-auto max-w-6xl px-5 py-16 sm:py-20">
             <Reveal>
               <div className="mx-auto max-w-2xl text-center">
-                <p className="text-sm font-semibold text-red-300/90">{copy.howTag}</p>
+                <p className="text-sm font-semibold text-sky-300/90">{copy.howTag}</p>
                 <h2 className="mt-3 text-balance text-3xl font-semibold tracking-tight text-white sm:text-4xl">
                   {copy.howTitle}
                 </h2>
@@ -394,7 +399,7 @@ export default function App() {
                 <Reveal key={s.step} delayMs={70 + idx * 45}>
                   <div className="red-panel rounded-[var(--radius)] p-6 backdrop-blur">
                     <div className="flex items-center justify-between">
-                      <div className="text-sm font-semibold text-red-300/90">{s.step}</div>
+                      <div className="text-sm font-semibold text-sky-200/90">{s.step}</div>
                       <div className="red-badge h-8 w-8 rounded-full" />
                     </div>
                     <div className="mt-4 text-lg font-semibold text-white">{s.title}</div>
@@ -416,7 +421,7 @@ export default function App() {
           <div className="mx-auto max-w-6xl px-5 py-16 sm:py-20">
             <Reveal>
               <div className="mx-auto max-w-2xl text-center">
-                <p className="text-sm font-semibold text-red-300/90">{copy.faqTag}</p>
+                <p className="text-sm font-semibold text-sky-300/90">{copy.faqTag}</p>
                 <h2 className="mt-3 text-balance text-3xl font-semibold tracking-tight text-white sm:text-4xl">
                   {copy.faqTitle}
                 </h2>
@@ -428,7 +433,7 @@ export default function App() {
                 <Reveal key={item.q} delayMs={60 + idx * 35}>
                   <details className="red-panel group rounded-[var(--radius)] px-5 py-4 backdrop-blur">
                     <summary className="cursor-pointer list-none select-none text-sm font-semibold text-white">
-                      <span className="mr-2 text-red-300/90">+</span>
+                      <span className="mr-2 text-sky-200/90">+</span>
                       {item.q}
                     </summary>
                     <p className="mt-3 text-sm leading-relaxed text-white/65">{item.a}</p>
