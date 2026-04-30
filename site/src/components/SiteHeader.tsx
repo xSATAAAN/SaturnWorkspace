@@ -1,12 +1,12 @@
 import { useState } from 'react'
 
 type SiteHeaderProps = {
-  telegramHref: string
   lang: 'en' | 'ar'
   onToggleLang: () => void
 }
 
-export function SiteHeader({ telegramHref, lang, onToggleLang }: SiteHeaderProps) {
+export function SiteHeader({ lang, onToggleLang }: SiteHeaderProps) {
+  const isAr = lang === 'ar'
   const t =
     lang === 'ar'
       ? {
@@ -17,7 +17,6 @@ export function SiteHeader({ telegramHref, lang, onToggleLang }: SiteHeaderProps
           feedback: 'المقترحات',
           updates: 'التحديثات',
           login: 'دخول',
-          telegram: 'تيليجرام',
           buy: 'اشتراك الآن',
           switchLabel: 'EN',
         }
@@ -29,7 +28,6 @@ export function SiteHeader({ telegramHref, lang, onToggleLang }: SiteHeaderProps
           feedback: 'Feedback',
           updates: 'Updates',
           login: 'Login',
-          telegram: 'Telegram',
           buy: 'Get license',
           switchLabel: 'AR',
         }
@@ -83,27 +81,21 @@ export function SiteHeader({ telegramHref, lang, onToggleLang }: SiteHeaderProps
               />
             </svg>
           </button>
-          <button
-            type="button"
-            onClick={onToggleLang}
-            className="inline-flex items-center justify-center rounded-xl border border-white/12 bg-white/5 px-3 py-2 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8"
-          >
-            {t.switchLabel}
-          </button>
-          <a
-            href={telegramHref}
-            target="_blank"
-            rel="noreferrer"
-            className="hidden rounded-xl border border-white/12 bg-white/5 px-4 py-2 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8 sm:inline-flex"
-          >
-            {t.telegram}
-          </a>
           <a
             href="/login.html"
             className="hidden rounded-xl border border-white/12 bg-white/5 px-4 py-2 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8 md:inline-flex"
           >
             {t.login}
           </a>
+          {isAr ? (
+            <button
+              type="button"
+              onClick={onToggleLang}
+              className="inline-flex items-center justify-center rounded-xl border border-white/12 bg-white/5 px-3 py-2 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8"
+            >
+              {t.switchLabel}
+            </button>
+          ) : null}
           <a
             href="#pricing"
             onClick={closeMobile}
@@ -111,6 +103,15 @@ export function SiteHeader({ telegramHref, lang, onToggleLang }: SiteHeaderProps
           >
             {t.buy}
           </a>
+          {!isAr ? (
+            <button
+              type="button"
+              onClick={onToggleLang}
+              className="inline-flex items-center justify-center rounded-xl border border-white/12 bg-white/5 px-3 py-2 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8"
+            >
+              {t.switchLabel}
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -138,21 +139,22 @@ export function SiteHeader({ telegramHref, lang, onToggleLang }: SiteHeaderProps
               </a>
               <div className="mt-1 grid grid-cols-1 gap-2">
                 <a
-                  href={telegramHref}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center justify-center rounded-xl border border-white/12 bg-white/5 px-4 py-2 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8"
-                  onClick={closeMobile}
-                >
-                  {t.telegram}
-                </a>
-                <a
                   href="/login.html"
                   className="inline-flex items-center justify-center rounded-xl border border-white/12 bg-white/5 px-4 py-2 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8"
                   onClick={closeMobile}
                 >
                   {t.login}
                 </a>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onToggleLang()
+                    closeMobile()
+                  }}
+                  className="inline-flex items-center justify-center rounded-xl border border-white/12 bg-white/5 px-4 py-2 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8"
+                >
+                  {t.switchLabel}
+                </button>
               </div>
             </div>
           </div>
