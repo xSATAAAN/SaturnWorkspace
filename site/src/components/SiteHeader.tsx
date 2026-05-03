@@ -38,8 +38,15 @@ export function SiteHeader({ lang, onToggleLang }: SiteHeaderProps) {
   return (
     <header className="sticky top-0 z-50 border-b border-white/5 bg-[rgba(2,6,23,0.72)] backdrop-blur supports-[backdrop-filter]:bg-[rgba(2,6,23,0.58)]">
       <div className="relative mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
-        <a href="/" className="group inline-flex items-center gap-2" onClick={closeMobile}>
-          <span className="h-2.5 w-2.5 rounded-full bg-[#2884ff] shadow-[0_0_16px_rgba(40,132,255,.32)]" />
+        <a href="/" className="group inline-flex items-center gap-2.5" onClick={closeMobile}>
+          <img
+            src="/favicon.png"
+            alt=""
+            width={28}
+            height={28}
+            decoding="async"
+            className="h-7 w-7 shrink-0 rounded-lg object-cover ring-1 ring-white/10"
+          />
           <span className="text-sm font-semibold tracking-wide text-white">
             SATAN <span className="text-white/70">Toolkit</span>
           </span>
