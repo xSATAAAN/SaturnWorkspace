@@ -21,7 +21,7 @@ export function SiteHeader({ lang, onToggleLang }: SiteHeaderProps) {
           switchLabel: 'EN',
         }
       : {
-          modules: 'Modules',
+          modules: 'Features',
           workflow: 'Workflow',
           plans: 'Plans',
           faq: 'FAQ',
