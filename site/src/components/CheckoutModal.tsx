@@ -20,7 +20,7 @@ export function CheckoutModal({
   open,
   onClose,
   telegramUsername,
-  initialPlan = 'lifetime',
+  initialPlan = 'six_months',
   lang,
 }: CheckoutModalProps) {
   const isAr = lang === 'ar'
@@ -29,7 +29,7 @@ export function CheckoutModal({
         title: 'إتمام الطلب',
         close: 'إلغاء',
         monthly: 'ترخيص شهري',
-        lifetime: 'ترخيص مدى الحياة',
+        sixMonths: 'ترخيص 6 شهور',
         email: 'البريد الإلكتروني',
         phone: 'الهاتف / واتساب',
         notes: 'ملاحظات الطلب',
@@ -44,7 +44,7 @@ export function CheckoutModal({
         title: 'License checkout',
         close: 'Cancel',
         monthly: 'Monthly license',
-        lifetime: 'Lifetime license',
+        sixMonths: '6-Month license',
         email: 'Email',
         phone: 'Phone / WhatsApp',
         notes: 'Order notes',
@@ -86,7 +86,7 @@ export function CheckoutModal({
     lines.push(`SATAN Toolkit — ${isAr ? 'طلب ترخيص' : 'License Order'}`)
     lines.push('------------------------------')
     lines.push(`Order: ${orderId}`)
-    lines.push(`Plan: ${plan === 'monthly' ? 'Monthly' : 'Lifetime'}`)
+    lines.push(`Plan: ${plan === 'monthly' ? 'Monthly ($20/mo)' : '6 Months ($105)'}`)
     if (email.trim()) lines.push(`Email: ${normalizeField(email, 120)}`)
     if (phone.trim()) lines.push(`Phone: ${normalizeField(phone, 40)}`)
     if (notes.trim()) lines.push(`Notes: ${normalizeField(notes, 500)}`)
@@ -180,19 +180,19 @@ export function CheckoutModal({
                 }
               >
                 <div className="text-sm font-semibold text-white">{t.monthly}</div>
-                <div className="mt-1 text-sm text-white/70">EGP 499 / mo</div>
+                <div className="mt-1 text-sm text-white/70">$20 / mo</div>
               </button>
               <button
                 type="button"
-                onClick={() => setPlan('lifetime')}
+                onClick={() => setPlan('six_months')}
                 className={
-                  plan === 'lifetime'
+                  plan === 'six_months'
                     ? 'rounded-xl border border-sky-500/40 bg-sky-500/10 px-4 py-3 text-left'
                     : 'rounded-xl border border-white/12 bg-white/5 px-4 py-3 text-left hover:bg-white/7'
                 }
               >
-                <div className="text-sm font-semibold text-white">{t.lifetime}</div>
-                <div className="mt-1 text-sm text-white/70">EGP 1,499</div>
+                <div className="text-sm font-semibold text-white">{t.sixMonths}</div>
+                <div className="mt-1 text-sm text-white/70">$105</div>
               </button>
             </div>
 

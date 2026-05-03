@@ -17,9 +17,9 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
         monthly: 'شهري',
         starter: 'بداية',
         monthlyFeatures: ['Vault + Gmail + IP', 'جلسات سريعة', 'تحديثات دورية', 'دعم قياسي'],
-        lifetime: 'مدى الحياة',
+        sixMonths: '6 شهور',
         best: 'الأفضل للمحترفين',
-        lifetimeFeatures: ['كل مزايا الأداة', 'تحديثات مدى الحياة', 'أولوية في الدعم', 'يشمل التوسعات القادمة'],
+        sixMonthsFeatures: ['كل مزايا الأداة', 'تحديثات مستمرة', 'أولوية في الدعم', 'خطة تشغيل مستقرة لـ 6 شهور'],
         order: 'تنفيذ الطلب',
         telegram: 'تواصل عبر تيليجرام',
         note: 'الطلب يبدأ من هنا ثم التأكيد عبر تيليجرام بسرعة.',
@@ -31,16 +31,16 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
         monthly: 'Monthly',
         starter: 'Starter',
         monthlyFeatures: ['Vault + Gmail + IP storage', 'Quick session tools', 'Standard updates', 'Standard support'],
-        lifetime: 'Lifetime',
+        sixMonths: '6 Months',
         best: 'Operator choice',
-        lifetimeFeatures: ['Complete SATAN Toolkit feature set', 'Lifetime updates', 'Priority support lane', 'Future platform expansions included'],
+        sixMonthsFeatures: ['Complete SATAN Toolkit feature set', 'Continuous updates', 'Priority support lane', 'Stable 6-month operating plan'],
         order: 'Place order',
         telegram: 'Contact on Telegram',
         note: 'Checkout starts here, then finishes on Telegram (fast confirmation).',
       }
   const telegramUsername = telegramHref.replace(/^https?:\/\/t\.me\//, '').replace(/\?.*$/, '')
   const [open, setOpen] = useState(false)
-  const [initialPlan, setInitialPlan] = useState<PlanId>('lifetime')
+  const [initialPlan, setInitialPlan] = useState<PlanId>('six_months')
 
   return (
     <section id="pricing" className="border-t border-white/10">
@@ -63,9 +63,7 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="text-sm font-semibold text-white/80">{t.monthly}</div>
-                  <div className="mt-2 text-3xl font-semibold text-white">
-                    EGP 499 <span className="text-base font-semibold text-white/60">/mo</span>
-                  </div>
+                  <div className="mt-2 text-3xl font-semibold text-white">$20 <span className="text-base font-semibold text-white/60">/mo</span></div>
                 </div>
                 <span className="rounded-full border border-sky-700/55 bg-black/25 px-3 py-1 text-xs font-semibold text-white/85">
                   {t.starter}
@@ -106,8 +104,8 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
               <div className="red-panel rounded-[var(--radius)] p-7 backdrop-blur">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <div className="text-sm font-semibold text-white/80">{t.lifetime}</div>
-                    <div className="mt-2 text-3xl font-semibold text-white">EGP 1,499</div>
+                    <div className="text-sm font-semibold text-white/80">{t.sixMonths}</div>
+                    <div className="mt-2 text-3xl font-semibold text-white">$105</div>
                   </div>
                   <span className="rounded-full border border-sky-700/55 bg-black/30 px-3 py-1 text-xs font-semibold text-sky-200/90">
                     {t.best}
@@ -115,7 +113,7 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
                 </div>
 
                 <ul className="mt-6 space-y-2 text-sm text-white/70">
-                  {t.lifetimeFeatures.map((f) => (
+                  {t.sixMonthsFeatures.map((f) => (
                     <li key={f}>{f}</li>
                   ))}
                 </ul>
@@ -124,7 +122,7 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
                   <button
                     type="button"
                     onClick={() => {
-                      setInitialPlan('lifetime')
+                      setInitialPlan('six_months')
                       setOpen(true)
                     }}
                     className="inline-flex flex-1 items-center justify-center rounded-xl bg-gradient-to-b from-sky-500 to-blue-700 px-5 py-3 text-sm font-semibold text-white shadow-[0_16px_44px_rgba(56,189,248,.18)] transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"

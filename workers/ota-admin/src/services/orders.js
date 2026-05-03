@@ -5,14 +5,14 @@ const PLAN_CATALOG = {
   monthly: {
     code: 'monthly',
     display_name: 'Monthly License',
-    amount_egp: 49900,
-    currency: 'EGP',
+    amount_cents: 2000,
+    currency: 'USD',
   },
-  lifetime: {
-    code: 'lifetime',
-    display_name: 'Lifetime License',
-    amount_egp: 149900,
-    currency: 'EGP',
+  six_months: {
+    code: 'six_months',
+    display_name: '6-Month License',
+    amount_cents: 10500,
+    currency: 'USD',
   },
 }
 

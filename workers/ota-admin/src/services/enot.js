@@ -14,8 +14,8 @@ export async function createEnotInvoice(env, order) {
 
   const body = {
     merchant_id: merchantId,
-    amount: Number(order.pricing?.amount_egp || 0) / 100,
-    currency: String(order.pricing?.currency || 'EGP'),
+    amount: Number(order.pricing?.amount_cents || 0) / 100,
+    currency: String(order.pricing?.currency || 'USD'),
     order_id: order.order_id,
     description: `SATAN Toolkit ${order.pricing?.display_name || order.plan}`,
     success_url: successBaseUrl || undefined,

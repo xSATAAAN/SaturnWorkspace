@@ -1,4 +1,4 @@
-const PLAN_VALUES = ['monthly', 'lifetime']
+const PLAN_VALUES = ['monthly', 'six_months']
 const LOCALE_VALUES = ['en', 'ar']
 
 function cleanText(value, maxLen = 180) {
