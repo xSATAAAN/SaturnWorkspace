@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
+import { createPaymentIntent, type PaymentPlan } from '../api/payments'
 import { buildTelegramDeepLink } from '../lib/telegram'
 
-export type PlanId = 'monthly' | 'lifetime'
+export type PlanId = PaymentPlan
 
 type CheckoutModalProps = {
   open: boolean
@@ -11,10 +12,8 @@ type CheckoutModalProps = {
   lang: 'en' | 'ar'
 }
 
-function createOrderId() {
-  const rand = Math.random().toString(16).slice(2, 8).toUpperCase()
-  const t = Date.now().toString(16).slice(-6).toUpperCase()
-  return `STK-${t}-${rand}`
+function normalizeField(value: string, max = 180) {
+  return value.replace(/\s+/g, ' ').trim().slice(0, max)
 }
 
 export function CheckoutModal({
@@ -35,9 +34,11 @@ export function CheckoutModal({
         phone: 'الهاتف / واتساب',
         notes: 'ملاحظات الطلب',
         notesPlaceholder: 'عدد الأجهزة أو أي تفاصيل مهمة.',
-        continue: 'المتابعة على تيليجرام',
+        continue: 'متابعة الدفع',
         copy: 'نسخ نص الطلب',
         footer: 'النموذج ينشئ طلبًا كاملاً لتسريع تأكيد التفعيل.',
+        creating: 'جارٍ تجهيز الطلب...',
+        failed: 'تعذر تجهيز رابط الدفع، يمكنك المتابعة عبر تيليجرام.',
       }
     : {
         title: 'License checkout',
@@ -48,19 +49,24 @@ export function CheckoutModal({
         phone: 'Phone / WhatsApp',
         notes: 'Order notes',
         notesPlaceholder: 'Device count, preferred contact time, or any details.',
-        continue: 'Continue to Telegram',
+        continue: 'Continue to payment',
         copy: 'Copy order request',
         footer: 'This form creates a complete order request so activation can be confirmed quickly.',
+        creating: 'Preparing secure checkout...',
+        failed: 'Could not prepare payment link. You can continue via Telegram.',
       }
   const [plan, setPlan] = useState<PlanId>(initialPlan)
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [notes, setNotes] = useState('')
-  const [orderId, setOrderId] = useState(() => createOrderId())
+  const [orderId, setOrderId] = useState('PENDING')
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
 
   useEffect(() => {
     if (!open) return
-    setOrderId(createOrderId())
+    setOrderId('PENDING')
+    setSubmitError('')
   }, [open])
 
   useEffect(() => {
@@ -77,10 +83,10 @@ export function CheckoutModal({
     lines.push(`SATAN Toolkit — ${isAr ? 'طلب ترخيص' : 'License Order'}`)
     lines.push('------------------------------')
     lines.push(`Order: ${orderId}`)
-    lines.push(`Plan: ${plan === 'monthly' ? 'Monthly (EGP 499)' : 'Lifetime (EGP 1,499)'}`)
-    if (email.trim()) lines.push(`Email: ${email.trim()}`)
-    if (phone.trim()) lines.push(`Phone: ${phone.trim()}`)
-    if (notes.trim()) lines.push(`Notes: ${notes.trim()}`)
+    lines.push(`Plan: ${plan === 'monthly' ? 'Monthly' : 'Lifetime'}`)
+    if (email.trim()) lines.push(`Email: ${normalizeField(email, 120)}`)
+    if (phone.trim()) lines.push(`Phone: ${normalizeField(phone, 40)}`)
+    if (notes.trim()) lines.push(`Notes: ${normalizeField(notes, 500)}`)
     lines.push('------------------------------')
     lines.push('Please share payment method and transfer proof if required.')
     return lines.join('\n')
@@ -90,6 +96,42 @@ export function CheckoutModal({
     () => buildTelegramDeepLink({ telegramUsername, message }),
     [telegramUsername, message],
   )
+
+  async function handleContinueToPayment() {
+    if (submitting) return
+    setSubmitting(true)
+    setSubmitError('')
+    try {
+      const response = await createPaymentIntent({
+        plan,
+        customer: {
+          email: normalizeField(email, 120) || undefined,
+          phone: normalizeField(phone, 40) || undefined,
+          contact: normalizeField(phone || email, 120) || undefined,
+        },
+        notes: normalizeField(notes, 500) || undefined,
+        locale: lang,
+      })
+      if (response.order_id) setOrderId(response.order_id)
+      if (response.hosted_url) {
+        window.location.assign(response.hosted_url)
+        return
+      }
+      window.open(
+        buildTelegramDeepLink({
+          telegramUsername,
+          message: response.fallback_telegram_message || message,
+        }),
+        '_blank',
+        'noopener,noreferrer',
+      )
+    } catch {
+      setSubmitError(t.failed)
+      window.open(telegramHref, '_blank', 'noopener,noreferrer')
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   if (!open) return null
 
@@ -185,14 +227,14 @@ export function CheckoutModal({
           </div>
 
           <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-            <a
-              href={telegramHref}
-              target="_blank"
-              rel="noreferrer"
+            <button
+              type="button"
+              onClick={handleContinueToPayment}
+              disabled={submitting}
               className="inline-flex flex-1 items-center justify-center rounded-xl bg-gradient-to-b from-sky-500 to-blue-700 px-5 py-3 text-sm font-semibold text-white shadow-[0_16px_44px_rgba(56,189,248,.18)] transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
             >
-              {t.continue}
-            </a>
+              {submitting ? t.creating : t.continue}
+            </button>
             <button
               type="button"
               onClick={() => navigator.clipboard?.writeText(message)}
@@ -205,6 +247,7 @@ export function CheckoutModal({
           <div className="mt-4 text-xs text-white/55">
             {t.footer}
           </div>
+          {submitError ? <div className="mt-2 text-xs text-amber-200/90">{submitError}</div> : null}
         </div>
       </div>
     </div>
