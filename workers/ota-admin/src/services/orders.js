@@ -8,10 +8,10 @@ const PLAN_CATALOG = {
     amount_cents: 2000,
     currency: 'USD',
   },
-  six_months: {
-    code: 'six_months',
-    display_name: '6-Month License',
-    amount_cents: 10500,
+  yearly: {
+    code: 'yearly',
+    display_name: 'Yearly License (promotional)',
+    amount_cents: 12000,
     currency: 'USD',
   },
 }
@@ -27,7 +27,8 @@ function makeOrderId() {
 }
 
 export function getPlanConfig(plan) {
-  return PLAN_CATALOG[plan] || null
+  const code = plan === 'six_months' ? 'yearly' : plan
+  return PLAN_CATALOG[code] || null
 }
 
 export async function createOrder(env, payload) {

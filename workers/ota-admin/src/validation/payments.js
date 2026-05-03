@@ -1,4 +1,4 @@
-const PLAN_VALUES = ['monthly', 'six_months']
+const PLAN_VALUES = ['monthly', 'yearly']
 const LOCALE_VALUES = ['en', 'ar']
 
 function cleanText(value, maxLen = 180) {
@@ -17,7 +17,8 @@ export async function parseCreatePaymentRequest(request) {
   }
   if (!payload || typeof payload !== 'object') throw new Error('invalid_payload')
 
-  const plan = cleanText(payload.plan, 20).toLowerCase()
+  let plan = cleanText(payload.plan, 20).toLowerCase()
+  if (plan === 'six_months') plan = 'yearly'
   if (!PLAN_VALUES.includes(plan)) throw new Error('invalid_plan')
 
   const locale = cleanText(payload.locale, 4).toLowerCase()

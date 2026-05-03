@@ -7,19 +7,38 @@ type PricingProps = {
   lang: 'en' | 'ar'
 }
 
+const FULL_FEATURES_EN = [
+  'Full SATAN Toolkit — Vault, Gmail, IP & every module',
+  'Continuous updates and security fixes',
+  'Telegram support for setup and issues',
+  'Same complete license — pick monthly or yearly billing',
+]
+
+const FULL_FEATURES_AR = [
+  'SATAN Toolkit كامل — Vault وGmail وIP وكل الوحدات',
+  'تحديثات وأمان مستمرة',
+  'دعم عبر تيليجرام للإعداد والمشاكل',
+  'نفس الترخيص الكامل — دفع شهري أو سنوي',
+]
+
 export function Pricing({ telegramHref, lang }: PricingProps) {
   const isAr = lang === 'ar'
+  const fullFeatures = isAr ? FULL_FEATURES_AR : FULL_FEATURES_EN
+
   const t = isAr
     ? {
         tag: 'الأسعار',
         title: 'خطط ترخيص SATAN Toolkit',
-        desc: 'اختر الخطة المناسبة لحجم عملك، ويمكنك الترقية لاحقًا بسهولة.',
+        desc: 'نفس المزايا الكاملة في الخطتين — الفرق في مدة الفوترة والعرض السنوي.',
         monthly: 'شهري',
-        starter: 'بداية',
-        monthlyFeatures: ['Vault + Gmail + IP', 'جلسات سريعة', 'تحديثات دورية', 'دعم قياسي'],
-        sixMonths: '6 شهور',
-        best: 'الأفضل للمحترفين',
-        sixMonthsFeatures: ['كل مزايا الأداة', 'تحديثات مستمرة', 'أولوية في الدعم', 'خطة تشغيل مستقرة لـ 6 شهور'],
+        starter: 'مرن',
+        yearly: 'سنوي',
+        best: 'الأوفر',
+        promo50: 'خصم ٥٠٪',
+        limitedTime: 'لفترة محدودة',
+        compareAt: 'بدلًا من $240 لو دفعت شهريًا لمدة سنة',
+        yearlyEquiv: '≈ $10/شهر خلال العرض',
+        perYear: '/سنة',
         order: 'تنفيذ الطلب',
         telegram: 'تواصل عبر تيليجرام',
         note: 'الطلب يبدأ من هنا ثم التأكيد عبر تيليجرام بسرعة.',
@@ -27,20 +46,24 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
     : {
         tag: 'PRICING',
         title: 'License plans for SATAN Toolkit',
-        desc: 'Start with the plan that matches your operation size. Upgrade anytime without data loss.',
+        desc: 'Both plans include the complete toolkit — billing cadence and the yearly promo differ.',
         monthly: 'Monthly',
-        starter: 'Starter',
-        monthlyFeatures: ['Vault + Gmail + IP storage', 'Quick session tools', 'Standard updates', 'Standard support'],
-        sixMonths: '6 Months',
-        best: 'Operator choice',
-        sixMonthsFeatures: ['Complete SATAN Toolkit feature set', 'Continuous updates', 'Priority support lane', 'Stable 6-month operating plan'],
+        starter: 'Flexible',
+        yearly: 'Yearly',
+        best: 'Best value',
+        promo50: '−50%',
+        limitedTime: 'Limited time',
+        compareAt: 'vs. $240 if billed monthly for 12 months',
+        yearlyEquiv: '≈ $10/mo during promo',
+        perYear: '/yr',
         order: 'Place order',
         telegram: 'Contact on Telegram',
         note: 'Checkout starts here, then finishes on Telegram (fast confirmation).',
       }
+
   const telegramUsername = telegramHref.replace(/^https?:\/\/t\.me\//, '').replace(/\?.*$/, '')
   const [open, setOpen] = useState(false)
-  const [initialPlan, setInitialPlan] = useState<PlanId>('six_months')
+  const [initialPlan, setInitialPlan] = useState<PlanId>('yearly')
 
   return (
     <section id="pricing" className="bg-transparent">
@@ -67,13 +90,13 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
                     $20 <span className="text-base font-semibold text-white/60">/mo</span>
                   </div>
                 </div>
-                <span className="rounded-full border border-[#1f4f82]/80 bg-[rgba(7,19,35,0.55)] px-3 py-1 text-xs font-semibold text-white/88">
+                <span className="rounded-full border border-white/12 bg-white/[0.06] px-3 py-1 text-xs font-semibold text-white/88">
                   {t.starter}
                 </span>
               </div>
 
               <ul className="mt-6 space-y-2 text-sm text-white/70">
-                {t.monthlyFeatures.map((f) => (
+                {fullFeatures.map((f) => (
                   <li key={f}>{f}</li>
                 ))}
               </ul>
@@ -102,20 +125,38 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
           </Reveal>
 
           <Reveal delayMs={130}>
-            <div className="surface-card rounded-[var(--radius)] p-7">
-              <div className="flex items-start justify-between gap-4">
+            <div className="surface-card relative overflow-hidden rounded-[var(--radius)] p-7 ring-1 ring-[#2884ff]/25">
+              <div
+                className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#2884ff]/55 to-transparent"
+                aria-hidden
+              />
+              <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <div className="text-sm font-semibold text-white/80">{t.sixMonths}</div>
-                  <div className="mt-2 text-3xl font-semibold text-white">$105</div>
+                  <div className="text-sm font-semibold text-white/80">{t.yearly}</div>
+                  <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                    <span className="text-xl font-medium text-white/45 line-through decoration-white/30">$240</span>
+                    <span className="text-3xl font-semibold text-white">$120</span>
+                    <span className="text-base font-semibold text-white/55">{t.perYear}</span>
+                  </div>
+                  <p className="mt-1 text-xs text-white/50">{t.compareAt}</p>
+                  <p className="mt-0.5 text-xs font-medium text-emerald-200/85">{t.yearlyEquiv}</p>
                 </div>
-                <span className="rounded-full border border-[#2884ff]/35 bg-[#2884ff]/10 px-3 py-1 text-xs font-semibold text-[#7ab8ff]">
-                  {t.best}
-                </span>
+                <div className="flex flex-col items-end gap-1.5 sm:items-end">
+                  <span className="rounded-full border border-emerald-400/35 bg-emerald-500/15 px-2.5 py-0.5 text-[11px] font-bold tracking-wide text-emerald-100">
+                    {t.promo50}
+                  </span>
+                  <span className="rounded-full border border-white/12 bg-white/[0.06] px-3 py-1 text-xs font-semibold text-[#7ab8ff]">
+                    {t.limitedTime}
+                  </span>
+                  <span className="rounded-full border border-[#2884ff]/35 bg-[#2884ff]/10 px-3 py-1 text-xs font-semibold text-white/90">
+                    {t.best}
+                  </span>
+                </div>
               </div>
 
               <ul className="mt-6 space-y-2 text-sm text-white/70">
-                {t.sixMonthsFeatures.map((f) => (
-                  <li key={f}>{f}</li>
+                {fullFeatures.map((f) => (
+                  <li key={`y-${f}`}>{f}</li>
                 ))}
               </ul>
 
@@ -123,7 +164,7 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
                 <button
                   type="button"
                   onClick={() => {
-                    setInitialPlan('six_months')
+                    setInitialPlan('yearly')
                     setOpen(true)
                   }}
                   className="btn-primary inline-flex flex-1 items-center justify-center rounded-xl px-5 py-3 text-sm font-semibold transition focus:outline-none"
@@ -160,4 +201,3 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
     </section>
   )
 }
-

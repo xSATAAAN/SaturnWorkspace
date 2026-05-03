@@ -20,7 +20,7 @@ export function CheckoutModal({
   open,
   onClose,
   telegramUsername,
-  initialPlan = 'six_months',
+  initialPlan = 'yearly',
   lang,
 }: CheckoutModalProps) {
   const isAr = lang === 'ar'
@@ -29,7 +29,7 @@ export function CheckoutModal({
         title: 'إتمام الطلب',
         close: 'إلغاء',
         monthly: 'ترخيص شهري',
-        sixMonths: 'ترخيص 6 شهور',
+        yearly: 'ترخيص سنوي (عرض محدود)',
         email: 'البريد الإلكتروني',
         phone: 'الهاتف / واتساب',
         notes: 'ملاحظات الطلب',
@@ -44,7 +44,7 @@ export function CheckoutModal({
         title: 'License checkout',
         close: 'Cancel',
         monthly: 'Monthly license',
-        sixMonths: '6-Month license',
+        yearly: 'Yearly license (limited promo)',
         email: 'Email',
         phone: 'Phone / WhatsApp',
         notes: 'Order notes',
@@ -74,6 +74,11 @@ export function CheckoutModal({
 
   useEffect(() => {
     if (!open) return
+    setPlan(initialPlan)
+  }, [open, initialPlan])
+
+  useEffect(() => {
+    if (!open) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
     }
@@ -86,12 +91,23 @@ export function CheckoutModal({
     lines.push(`SATAN Toolkit — ${isAr ? 'طلب ترخيص' : 'License Order'}`)
     lines.push('------------------------------')
     lines.push(`Order: ${orderId}`)
-    lines.push(`Plan: ${plan === 'monthly' ? 'Monthly ($20/mo)' : '6 Months ($105)'}`)
+    const planLine = isAr
+      ? plan === 'monthly'
+        ? 'الخطة: شهري — 20$/شهر'
+        : 'الخطة: سنوي — 120$ (عرض −50% مقارنة بـ 240$ لو دفعت شهريًا لسنة)'
+      : plan === 'monthly'
+        ? 'Plan: Monthly — $20/mo'
+        : 'Plan: Yearly — $120 (limited-time −50% vs. $240 at monthly rate for 12 mo.)'
+    lines.push(planLine)
     if (email.trim()) lines.push(`Email: ${normalizeField(email, 120)}`)
     if (phone.trim()) lines.push(`Phone: ${normalizeField(phone, 40)}`)
     if (notes.trim()) lines.push(`Notes: ${normalizeField(notes, 500)}`)
     lines.push('------------------------------')
-    lines.push('Please share payment method and transfer proof if required.')
+    lines.push(
+      isAr
+        ? 'يرجى إرسال طريقة الدفع وإثبات التحويل إن لزم.'
+        : 'Please share payment method and transfer proof if required.',
+    )
     return lines.join('\n')
   }, [orderId, plan, email, phone, notes, isAr])
 
@@ -175,8 +191,8 @@ export function CheckoutModal({
                 onClick={() => setPlan('monthly')}
                 className={
                   plan === 'monthly'
-                    ? 'rounded-xl border border-[#2884ff]/45 bg-[#2884ff]/10 px-4 py-3 text-left'
-                    : 'rounded-xl border border-white/12 bg-white/5 px-4 py-3 text-left hover:bg-white/7'
+                    ? 'rounded-xl border border-[#2884ff]/45 bg-[#2884ff]/10 px-4 py-3 text-start'
+                    : 'rounded-xl border border-white/12 bg-white/5 px-4 py-3 text-start hover:bg-white/7'
                 }
               >
                 <div className="text-sm font-semibold text-white">{t.monthly}</div>
@@ -184,15 +200,19 @@ export function CheckoutModal({
               </button>
               <button
                 type="button"
-                onClick={() => setPlan('six_months')}
+                onClick={() => setPlan('yearly')}
                 className={
-                  plan === 'six_months'
-                    ? 'rounded-xl border border-[#2884ff]/45 bg-[#2884ff]/10 px-4 py-3 text-left'
-                    : 'rounded-xl border border-white/12 bg-white/5 px-4 py-3 text-left hover:bg-white/7'
+                  plan === 'yearly'
+                    ? 'rounded-xl border border-[#2884ff]/45 bg-[#2884ff]/10 px-4 py-3 text-start'
+                    : 'rounded-xl border border-white/12 bg-white/5 px-4 py-3 text-start hover:bg-white/7'
                 }
               >
-                <div className="text-sm font-semibold text-white">{t.sixMonths}</div>
-                <div className="mt-1 text-sm text-white/70">$105</div>
+                <div className="text-sm font-semibold text-white">{t.yearly}</div>
+                <div className="mt-1 flex flex-wrap items-baseline gap-2 text-sm">
+                  <span className="text-white/45 line-through">$240</span>
+                  <span className="text-white/85">$120</span>
+                  <span className="text-xs font-semibold text-emerald-200/90">−50%</span>
+                </div>
               </button>
             </div>
 

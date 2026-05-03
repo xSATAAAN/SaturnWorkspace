@@ -1,7 +1,7 @@
 import { postJson } from './http'
 import type { Lang } from '../types/content'
 
-export type PaymentPlan = 'monthly' | 'six_months'
+export type PaymentPlan = 'monthly' | 'yearly'
 
 export type CreatePaymentRequest = {
   plan: PaymentPlan
