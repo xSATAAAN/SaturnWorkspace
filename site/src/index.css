@@ -26,10 +26,8 @@ body {
 body {
   margin: 0;
   color: rgb(var(--fg));
-  background-color: #06060a; /* hard fallback if gradients fail */
-  background: radial-gradient(1200px 600px at 20% 10%, rgba(var(--redGlow), 0.18), transparent 60%),
-    radial-gradient(900px 500px at 80% 20%, rgba(var(--redGlow), 0.12), transparent 60%),
-    linear-gradient(180deg, rgb(var(--bg)) 0%, rgb(2 2 6) 100%);
+  /* Flat base; page gradient lives on #root > .app-canvas for one continuous canvas */
+  background-color: #020617;
   font-family: var(--fontBody);
   text-rendering: geometricPrecision;
   -webkit-font-smoothing: antialiased;
@@ -51,6 +49,38 @@ h1, h2, h3 {
 /* Selection matches premium blue brand */
 ::selection {
   background: rgba(var(--red), 0.35);
+}
+
+/* Single full-page canvas (used on App root wrapper) */
+.app-canvas {
+  min-height: 100dvh;
+  background-color: #020617;
+  background-image:
+    radial-gradient(ellipse 80% 80% at 50% -20%, rgba(20, 50, 100, 0.32), transparent),
+    radial-gradient(ellipse 70% 55% at 100% 100%, rgba(15, 40, 80, 0.18), transparent),
+    radial-gradient(ellipse 55% 45% at 0% 85%, rgba(12, 35, 70, 0.12), transparent);
+}
+
+/* Primary CTA — high contrast on dark navy canvas */
+.btn-primary {
+  background: linear-gradient(180deg, #3b9eff 0%, #2563eb 52%, #1d4ed8 100%);
+  color: #fff;
+  box-shadow:
+    0 14px 36px rgba(37, 99, 235, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(147, 197, 253, 0.35);
+}
+.btn-primary:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+.btn-primary:focus-visible {
+  outline: 2px solid #2884ff;
+  outline-offset: 2px;
+}
+.btn-primary:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  filter: none;
 }
 
 /* Subtle animated grain */

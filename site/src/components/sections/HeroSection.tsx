@@ -7,7 +7,7 @@ type HeroSectionProps = {
 
 export function HeroSection({ copy }: HeroSectionProps) {
   return (
-    <section className="relative overflow-hidden">
+    <section className="relative overflow-hidden bg-transparent">
       <div className="mx-auto max-w-6xl px-5 pb-16 pt-10 sm:pb-20 sm:pt-14">
         <div className="mx-auto max-w-3xl text-center">
           <Reveal>
@@ -33,7 +33,7 @@ export function HeroSection({ copy }: HeroSectionProps) {
             <div className="mt-8 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center">
               <a
                 href="#pricing"
-                className="group inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-[#0d2a4a] to-[#07192f] px-5 py-3 text-sm font-semibold text-white shadow-[0_14px_32px_rgba(40,132,255,.15)] transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2884ff]"
+                className="btn-primary group inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold transition focus:outline-none"
               >
                 {copy.ctaStart}
                 <span className="translate-x-0 transition group-hover:translate-x-0.5">→</span>
@@ -51,7 +51,7 @@ export function HeroSection({ copy }: HeroSectionProps) {
         <Reveal delayMs={260}>
           <div className="mx-auto mt-10 grid max-w-5xl grid-cols-1 gap-3 sm:grid-cols-3">
             {copy.stats.map((s) => (
-              <div key={s.label} className="rounded-[var(--radius)] border border-white/10 bg-[rgba(7,19,35,0.7)] px-5 py-5 backdrop-blur">
+              <div key={s.label} className="rounded-[var(--radius)] border border-white/10 bg-white/[0.05] px-5 py-5 backdrop-blur">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="text-3xl font-semibold text-white">{s.value}</div>

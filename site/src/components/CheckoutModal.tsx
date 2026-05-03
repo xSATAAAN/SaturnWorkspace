@@ -234,7 +234,7 @@ export function CheckoutModal({
               type="button"
               onClick={handleContinueToPayment}
               disabled={submitting}
-              className="inline-flex flex-1 items-center justify-center rounded-xl bg-gradient-to-b from-[#0d2a4a] to-[#07192f] px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(40,132,255,.16)] transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2884ff]"
+              className="btn-primary inline-flex flex-1 items-center justify-center rounded-xl px-5 py-3 text-sm font-semibold transition focus:outline-none"
             >
               {submitting ? t.creating : t.continue}
             </button>

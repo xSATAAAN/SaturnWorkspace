@@ -64,7 +64,7 @@ export function Feedback({ telegramUsername, lang }: FeedbackProps) {
   }, [telegramUsername, kind, contact, message, t.msgTitleIssue, t.msgTitleSuggestion, t.notProvided])
 
   return (
-    <section id="feedback" className="border-t border-white/10">
+    <section id="feedback" className="border-t border-white/5 bg-transparent">
       <div className="mx-auto max-w-6xl px-5 py-16 sm:py-20">
         <Reveal>
           <div className="mx-auto max-w-2xl text-center">
@@ -77,7 +77,7 @@ export function Feedback({ telegramUsername, lang }: FeedbackProps) {
         </Reveal>
 
         <Reveal delayMs={80}>
-          <div className="mx-auto mt-10 max-w-3xl rounded-[var(--radius)] border border-[#1f4f82]/70 bg-gradient-to-b from-[#0d2a4a] to-[#07192f] p-6 shadow-[0_16px_34px_rgba(40,132,255,.12)] backdrop-blur">
+          <div className="red-panel mx-auto mt-10 max-w-3xl rounded-[var(--radius)] p-6 shadow-[0_16px_34px_rgba(40,132,255,.12)] backdrop-blur">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <label className="grid gap-1">
                 <span className="text-xs font-semibold text-white/70">{t.type}</span>
@@ -117,9 +117,9 @@ export function Feedback({ telegramUsername, lang }: FeedbackProps) {
                 href={ready ? href : '#feedback'}
                 target="_blank"
                 rel="noreferrer"
-                className={`inline-flex flex-1 items-center justify-center rounded-xl px-5 py-3 text-sm font-semibold text-white transition ${
+                className={`inline-flex flex-1 items-center justify-center rounded-xl px-5 py-3 text-sm font-semibold transition ${
                   ready
-                    ? 'bg-gradient-to-b from-[#0d2a4a] to-[#07192f] shadow-[0_12px_30px_rgba(40,132,255,.16)] hover:brightness-110'
+                    ? 'btn-primary text-white'
                     : 'cursor-not-allowed border border-white/12 bg-white/5 text-white/55'
                 }`}
               >

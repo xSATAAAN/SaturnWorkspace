@@ -43,7 +43,7 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
   const [initialPlan, setInitialPlan] = useState<PlanId>('six_months')
 
   return (
-    <section id="pricing" className="border-t border-white/10">
+    <section id="pricing" className="border-t border-white/5 bg-transparent">
       <div className="mx-auto max-w-6xl px-5 py-16 sm:py-20">
         <Reveal>
           <div className="mx-auto max-w-2xl text-center">
@@ -59,7 +59,7 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
 
         <div className="mt-10 grid grid-cols-1 gap-4 lg:grid-cols-2">
           <Reveal delayMs={80}>
-            <div className="rounded-[var(--radius)] border border-[#1f4f82]/70 bg-gradient-to-b from-[#0d2a4a] to-[#07192f] p-7 shadow-[0_16px_34px_rgba(40,132,255,.12)] backdrop-blur">
+            <div className="red-panel rounded-[var(--radius)] p-7 shadow-[0_16px_34px_rgba(40,132,255,.12)] backdrop-blur">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="text-sm font-semibold text-white/80">{t.monthly}</div>
@@ -85,7 +85,7 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
                     setInitialPlan('monthly')
                     setOpen(true)
                   }}
-                  className="inline-flex flex-1 items-center justify-center rounded-xl bg-gradient-to-b from-[#0d2a4a] to-[#07192f] px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(40,132,255,.16)] transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2884ff]"
+                  className="btn-primary inline-flex flex-1 items-center justify-center rounded-xl px-5 py-3 text-sm font-semibold transition focus:outline-none"
                 >
                   {t.order}
                 </button>
@@ -102,7 +102,7 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
           </Reveal>
 
           <Reveal delayMs={130}>
-            <div className="rounded-[var(--radius)] border border-[#1f4f82]/70 bg-gradient-to-b from-[#0d2a4a] to-[#07192f] p-7 shadow-[0_16px_34px_rgba(40,132,255,.12)] backdrop-blur">
+            <div className="red-panel rounded-[var(--radius)] p-7 shadow-[0_16px_34px_rgba(40,132,255,.12)] backdrop-blur">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="text-sm font-semibold text-white/80">{t.sixMonths}</div>
@@ -126,7 +126,7 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
                     setInitialPlan('six_months')
                     setOpen(true)
                   }}
-                  className="inline-flex flex-1 items-center justify-center rounded-xl bg-gradient-to-b from-[#0d2a4a] to-[#07192f] px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(40,132,255,.16)] transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2884ff]"
+                  className="btn-primary inline-flex flex-1 items-center justify-center rounded-xl px-5 py-3 text-sm font-semibold transition focus:outline-none"
                 >
                   {t.order}
                 </button>
@@ -144,7 +144,7 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
         </div>
 
         <Reveal delayMs={220}>
-          <div className="mx-auto mt-10 max-w-3xl rounded-[var(--radius)] border border-white/10 bg-[rgba(7,19,35,0.6)] px-6 py-5 text-center text-sm text-white/74 backdrop-blur">
+          <div className="mx-auto mt-10 max-w-3xl rounded-[var(--radius)] border border-white/10 bg-white/[0.04] px-6 py-5 text-center text-sm text-white/74 backdrop-blur">
             {t.note}
           </div>
         </Reveal>

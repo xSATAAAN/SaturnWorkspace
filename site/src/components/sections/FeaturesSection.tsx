@@ -8,7 +8,7 @@ type FeaturesSectionProps = {
 
 export function FeaturesSection({ copy }: FeaturesSectionProps) {
   return (
-    <section id="features" className="border-t border-white/10">
+    <section id="features" className="border-t border-white/5 bg-transparent">
       <div className="mx-auto max-w-6xl px-5 py-16 sm:py-20">
         <Reveal>
           <div className="mx-auto max-w-2xl text-center">
@@ -21,7 +21,7 @@ export function FeaturesSection({ copy }: FeaturesSectionProps) {
         <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {copy.features.map((f, idx) => (
             <Reveal key={f.title} delayMs={60 + idx * 35}>
-              <div className="rounded-[var(--radius)] border border-[#1f4f82]/70 bg-gradient-to-b from-[#0d2a4a] to-[#07192f] p-6 shadow-[0_16px_34px_rgba(40,132,255,.12)] backdrop-blur transition">
+              <div className="red-panel rounded-[var(--radius)] p-6 shadow-[0_16px_34px_rgba(40,132,255,.12)] backdrop-blur transition">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <div className="text-lg font-semibold text-white">{f.title}</div>
