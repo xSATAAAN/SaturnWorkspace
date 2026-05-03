@@ -21,6 +21,9 @@ export function SiteFooter({ copy, isAr }: SiteFooterProps) {
             <a className="text-white/70 hover:text-white" href="/terms.html">
               {copy.footerTerms}
             </a>
+            <a className="text-white/70 hover:text-white" href="/refund.html">
+              {copy.footerRefund}
+            </a>
             <a className="text-white/70 hover:text-white" href="/updates.html">
               {copy.footerUpdates}
             </a>

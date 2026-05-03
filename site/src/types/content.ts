@@ -49,6 +49,7 @@ export type SiteCopy = {
   footerDesc: string
   footerPrivacy: string
   footerTerms: string
+  footerRefund: string
   footerUpdates: string
 }
 

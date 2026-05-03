@@ -3,25 +3,27 @@ import { CheckoutModal, type PlanId } from '../CheckoutModal'
 import { Reveal } from '../Reveal'
 
 type PricingProps = {
-  telegramHref: string
   lang: 'en' | 'ar'
 }
 
 const FULL_FEATURES_EN = [
   'Full SATAN Toolkit — Vault, Gmail, IP & every module',
   'Continuous updates and security fixes',
-  'Telegram support for setup and issues',
+  'Email support for setup and licensing questions',
   'Same complete license — pick monthly or yearly billing',
 ]
 
 const FULL_FEATURES_AR = [
   'SATAN Toolkit كامل — Vault وGmail وIP وكل الوحدات',
   'تحديثات وأمان مستمرة',
-  'دعم عبر تيليجرام للإعداد والمشاكل',
+  'دعم بالبريد للإعداد واستفسارات الترخيص',
   'نفس الترخيص الكامل — دفع شهري أو سنوي',
 ]
 
-export function Pricing({ telegramHref, lang }: PricingProps) {
+const SUPPORT_EMAIL = 'admin@satantoolkit.com'
+const DEV_TELEGRAM = 'https://t.me/v1u_0'
+
+export function Pricing({ lang }: PricingProps) {
   const isAr = lang === 'ar'
   const fullFeatures = isAr ? FULL_FEATURES_AR : FULL_FEATURES_EN
 
@@ -40,8 +42,10 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
         yearlyEquiv: '≈ $10/شهر خلال العرض',
         perYear: '/سنة',
         order: 'تنفيذ الطلب',
-        telegram: 'تواصل عبر تيليجرام',
-        note: 'الطلب يبدأ من هنا ثم التأكيد عبر تيليجرام بسرعة.',
+        supportHint: 'للدعم:',
+        supportEmail: SUPPORT_EMAIL,
+        supportTele: 'تيليجرام المطوّر',
+        note: 'الدفع يتم عبر بوابات دفع آمنة بعد تنفيذ الطلب. لا نستقبل مدفوعات عبر تيليجرام.',
       }
     : {
         tag: 'PRICING',
@@ -57,11 +61,13 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
         yearlyEquiv: '≈ $10/mo during promo',
         perYear: '/yr',
         order: 'Place order',
-        telegram: 'Contact on Telegram',
-        note: 'Checkout starts here, then finishes on Telegram (fast confirmation).',
+        supportHint: 'Support:',
+        supportEmail: SUPPORT_EMAIL,
+        supportTele: 'Developer on Telegram',
+        note: 'Payments are completed through secure payment gateways after you place your order. We do not take payments via Telegram.',
       }
 
-  const telegramUsername = telegramHref.replace(/^https?:\/\/t\.me\//, '').replace(/\?.*$/, '')
+  const telegramUsername = 'v1u_0'
   const [open, setOpen] = useState(false)
   const [initialPlan, setInitialPlan] = useState<PlanId>('yearly')
 
@@ -101,25 +107,27 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
                 ))}
               </ul>
 
-              <div className="mt-7 flex flex-col gap-2 sm:flex-row">
+              <div className="mt-7">
                 <button
                   type="button"
                   onClick={() => {
                     setInitialPlan('monthly')
                     setOpen(true)
                   }}
-                  className="btn-primary inline-flex flex-1 items-center justify-center rounded-xl px-5 py-3 text-sm font-semibold transition focus:outline-none"
+                  className="btn-primary inline-flex w-full items-center justify-center rounded-xl px-5 py-3 text-sm font-semibold transition focus:outline-none"
                 >
                   {t.order}
                 </button>
-                <a
-                  href={telegramHref}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex flex-1 items-center justify-center rounded-xl border border-white/12 bg-white/5 px-5 py-3 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-500/35"
-                >
-                  {t.telegram}
-                </a>
+                <p className="mt-3 text-center text-xs text-white/55">
+                  {t.supportHint}{' '}
+                  <a className="text-accent underline-offset-2 hover:underline" href={`mailto:${SUPPORT_EMAIL}`}>
+                    {t.supportEmail}
+                  </a>
+                  {' · '}
+                  <a className="text-accent underline-offset-2 hover:underline" href={DEV_TELEGRAM} target="_blank" rel="noreferrer">
+                    {t.supportTele}
+                  </a>
+                </p>
               </div>
             </div>
           </Reveal>
@@ -160,25 +168,27 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
                 ))}
               </ul>
 
-              <div className="mt-7 flex flex-col gap-2 sm:flex-row">
+              <div className="mt-7">
                 <button
                   type="button"
                   onClick={() => {
                     setInitialPlan('yearly')
                     setOpen(true)
                   }}
-                  className="btn-primary inline-flex flex-1 items-center justify-center rounded-xl px-5 py-3 text-sm font-semibold transition focus:outline-none"
+                  className="btn-primary inline-flex w-full items-center justify-center rounded-xl px-5 py-3 text-sm font-semibold transition focus:outline-none"
                 >
                   {t.order}
                 </button>
-                <a
-                  href={telegramHref}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex flex-1 items-center justify-center rounded-xl border border-white/12 bg-white/5 px-5 py-3 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-500/35"
-                >
-                  {t.telegram}
-                </a>
+                <p className="mt-3 text-center text-xs text-white/55">
+                  {t.supportHint}{' '}
+                  <a className="text-accent underline-offset-2 hover:underline" href={`mailto:${SUPPORT_EMAIL}`}>
+                    {t.supportEmail}
+                  </a>
+                  {' · '}
+                  <a className="text-accent underline-offset-2 hover:underline" href={DEV_TELEGRAM} target="_blank" rel="noreferrer">
+                    {t.supportTele}
+                  </a>
+                </p>
               </div>
             </div>
           </Reveal>
@@ -194,7 +204,7 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
       <CheckoutModal
         open={open}
         onClose={() => setOpen(false)}
-        telegramUsername={telegramUsername || 'satantoolkit'}
+        telegramUsername={telegramUsername}
         initialPlan={initialPlan}
         lang={lang}
       />

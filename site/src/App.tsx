@@ -7,7 +7,7 @@ import { HeroSection } from './components/sections/HeroSection'
 import { HowSection } from './components/sections/HowSection'
 import { Pricing } from './components/sections/Pricing'
 import { SiteFooter } from './components/sections/SiteFooter'
-import { TELEGRAM_LINK, TELEGRAM_USERNAME, getSiteCopy } from './constants/siteCopy'
+import { TELEGRAM_USERNAME, getSiteCopy } from './constants/siteCopy'
 
 export default function App() {
   const [lang, setLang] = useState<'en' | 'ar'>('en')
@@ -29,7 +29,7 @@ export default function App() {
         <HeroSection copy={copy} />
         <FeaturesSection copy={copy} />
         <HowSection copy={copy} />
-        <Pricing telegramHref={TELEGRAM_LINK} lang={lang} />
+        <Pricing lang={lang} />
         <Feedback telegramUsername={TELEGRAM_USERNAME} lang={lang} />
         <FaqSection copy={copy} />
         <SiteFooter copy={copy} isAr={isAr} />

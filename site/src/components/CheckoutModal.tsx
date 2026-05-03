@@ -38,7 +38,7 @@ export function CheckoutModal({
         copy: 'نسخ نص الطلب',
         footer: 'النموذج ينشئ طلبًا كاملاً لتسريع تأكيد التفعيل.',
         creating: 'جارٍ تجهيز الطلب...',
-        failed: 'تعذر تجهيز رابط الدفع، يمكنك المتابعة عبر تيليجرام.',
+        failed: 'تعذر تجهيز رابط الدفع. راسل admin@satantoolkit.com أو المطوّر على تيليجرام مع رقم الطلب.',
       }
     : {
         title: 'License checkout',
@@ -53,7 +53,7 @@ export function CheckoutModal({
         copy: 'Copy order request',
         footer: 'This form creates a complete order request so activation can be confirmed quickly.',
         creating: 'Preparing secure checkout...',
-        failed: 'Could not prepare payment link. You can continue via Telegram.',
+        failed: 'Could not prepare payment link. Email admin@satantoolkit.com or message the developer on Telegram with your order id.',
       }
   const [plan, setPlan] = useState<PlanId>(initialPlan)
   const [email, setEmail] = useState('')

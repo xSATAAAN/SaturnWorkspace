@@ -1,6 +1,6 @@
 import type { Lang, SiteCopy } from '../types/content'
 
-export const TELEGRAM_USERNAME = import.meta.env.VITE_TELEGRAM_USERNAME || 'satantoolkit'
+export const TELEGRAM_USERNAME = import.meta.env.VITE_TELEGRAM_USERNAME || 'v1u_0'
 export const TELEGRAM_LINK = `https://t.me/${TELEGRAM_USERNAME}`
 
 const arCopy: SiteCopy = {
@@ -83,6 +83,7 @@ const arCopy: SiteCopy = {
   footerDesc: 'أداة سطح مكتب لإدارة حسابات Bybit وتخزين Gmail وIP ومزامنة سحابية آمنة.',
   footerPrivacy: 'الخصوصية',
   footerTerms: 'الشروط',
+  footerRefund: 'الاسترجاع',
   footerUpdates: 'التحديثات',
 }
 
@@ -166,6 +167,7 @@ const enCopy: SiteCopy = {
   footerDesc: 'Official desktop toolkit for Vault, Gmail, IP, and controlled cloud sync workflows.',
   footerPrivacy: 'Privacy',
   footerTerms: 'Terms',
+  footerRefund: 'Refund',
   footerUpdates: 'Updates',
 }
 
