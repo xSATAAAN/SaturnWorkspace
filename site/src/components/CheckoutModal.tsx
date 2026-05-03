@@ -148,7 +148,7 @@ export function CheckoutModal({
       <button
         type="button"
         onClick={onClose}
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+        className="absolute inset-0 bg-[rgba(2,8,16,0.74)] backdrop-blur-sm"
         aria-label="Close checkout"
       />
 
@@ -175,7 +175,7 @@ export function CheckoutModal({
                 onClick={() => setPlan('monthly')}
                 className={
                   plan === 'monthly'
-                    ? 'rounded-xl border border-sky-500/40 bg-sky-500/10 px-4 py-3 text-left'
+                    ? 'rounded-xl border border-[#2884ff]/45 bg-[#2884ff]/10 px-4 py-3 text-left'
                     : 'rounded-xl border border-white/12 bg-white/5 px-4 py-3 text-left hover:bg-white/7'
                 }
               >
@@ -187,7 +187,7 @@ export function CheckoutModal({
                 onClick={() => setPlan('six_months')}
                 className={
                   plan === 'six_months'
-                    ? 'rounded-xl border border-sky-500/40 bg-sky-500/10 px-4 py-3 text-left'
+                    ? 'rounded-xl border border-[#2884ff]/45 bg-[#2884ff]/10 px-4 py-3 text-left'
                     : 'rounded-xl border border-white/12 bg-white/5 px-4 py-3 text-left hover:bg-white/7'
                 }
               >
@@ -203,7 +203,7 @@ export function CheckoutModal({
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
-                  className="h-11 rounded-xl border border-white/12 bg-white/5 px-3 text-sm text-white placeholder:text-white/35 outline-none focus:border-sky-500/40"
+                  className="h-11 rounded-xl border border-white/12 bg-white/5 px-3 text-sm text-white placeholder:text-white/35 outline-none focus:border-[#2884ff]/55"
                 />
               </label>
               <label className="grid gap-1">
@@ -212,7 +212,7 @@ export function CheckoutModal({
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="+20..."
-                  className="h-11 rounded-xl border border-white/12 bg-white/5 px-3 text-sm text-white placeholder:text-white/35 outline-none focus:border-sky-500/40"
+                  className="h-11 rounded-xl border border-white/12 bg-white/5 px-3 text-sm text-white placeholder:text-white/35 outline-none focus:border-[#2884ff]/55"
                 />
               </label>
             </div>
@@ -224,7 +224,7 @@ export function CheckoutModal({
                 onChange={(e) => setNotes(e.target.value)}
                 rows={3}
                 placeholder={t.notesPlaceholder}
-                className="resize-none rounded-xl border border-white/12 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/35 outline-none focus:border-sky-500/40"
+                className="resize-none rounded-xl border border-white/12 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/35 outline-none focus:border-[#2884ff]/55"
               />
             </label>
           </div>
@@ -234,14 +234,14 @@ export function CheckoutModal({
               type="button"
               onClick={handleContinueToPayment}
               disabled={submitting}
-              className="inline-flex flex-1 items-center justify-center rounded-xl bg-gradient-to-b from-sky-500 to-blue-700 px-5 py-3 text-sm font-semibold text-white shadow-[0_16px_44px_rgba(56,189,248,.18)] transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+              className="inline-flex flex-1 items-center justify-center rounded-xl bg-gradient-to-b from-[#0d2a4a] to-[#07192f] px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(40,132,255,.16)] transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2884ff]"
             >
               {submitting ? t.creating : t.continue}
             </button>
             <button
               type="button"
               onClick={() => navigator.clipboard?.writeText(message)}
-              className="inline-flex flex-1 items-center justify-center rounded-xl border border-white/12 bg-white/5 px-5 py-3 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+              className="inline-flex flex-1 items-center justify-center rounded-xl border border-white/12 bg-white/5 px-5 py-3 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2884ff]"
             >
               {t.copy}
             </button>

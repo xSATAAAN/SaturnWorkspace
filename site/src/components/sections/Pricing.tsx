@@ -47,7 +47,7 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
       <div className="mx-auto max-w-6xl px-5 py-16 sm:py-20">
         <Reveal>
           <div className="mx-auto max-w-2xl text-center">
-            <p className="text-sm font-semibold text-sky-300/90">{t.tag}</p>
+            <p className="text-sm font-semibold text-[#2884ff]">{t.tag}</p>
             <h2 className="mt-3 text-balance text-3xl font-semibold tracking-tight text-white sm:text-4xl">
               {t.title}
             </h2>
@@ -59,13 +59,15 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
 
         <div className="mt-10 grid grid-cols-1 gap-4 lg:grid-cols-2">
           <Reveal delayMs={80}>
-            <div className="red-panel rounded-[var(--radius)] p-7 backdrop-blur">
+            <div className="rounded-[var(--radius)] border border-[#1f4f82]/70 bg-gradient-to-b from-[#0d2a4a] to-[#07192f] p-7 shadow-[0_16px_34px_rgba(40,132,255,.12)] backdrop-blur">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="text-sm font-semibold text-white/80">{t.monthly}</div>
-                  <div className="mt-2 text-3xl font-semibold text-white">$20 <span className="text-base font-semibold text-white/60">/mo</span></div>
+                  <div className="mt-2 text-3xl font-semibold text-white">
+                    $20 <span className="text-base font-semibold text-white/60">/mo</span>
+                  </div>
                 </div>
-                <span className="rounded-full border border-sky-700/55 bg-black/25 px-3 py-1 text-xs font-semibold text-white/85">
+                <span className="rounded-full border border-[#1f4f82]/80 bg-[rgba(7,19,35,0.55)] px-3 py-1 text-xs font-semibold text-white/88">
                   {t.starter}
                 </span>
               </div>
@@ -83,7 +85,7 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
                     setInitialPlan('monthly')
                     setOpen(true)
                   }}
-                  className="inline-flex flex-1 items-center justify-center rounded-xl bg-gradient-to-b from-sky-500 to-blue-700 px-5 py-3 text-sm font-semibold text-white shadow-[0_14px_36px_rgba(56,189,248,.18)] transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                  className="inline-flex flex-1 items-center justify-center rounded-xl bg-gradient-to-b from-[#0d2a4a] to-[#07192f] px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(40,132,255,.16)] transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2884ff]"
                 >
                   {t.order}
                 </button>
@@ -91,7 +93,7 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
                   href={telegramHref}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex flex-1 items-center justify-center rounded-xl border border-white/12 bg-white/5 px-5 py-3 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                  className="inline-flex flex-1 items-center justify-center rounded-xl border border-white/12 bg-white/5 px-5 py-3 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2884ff]"
                 >
                   {t.telegram}
                 </a>
@@ -100,51 +102,49 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
           </Reveal>
 
           <Reveal delayMs={130}>
-            <div className="glow-border">
-              <div className="red-panel rounded-[var(--radius)] p-7 backdrop-blur">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <div className="text-sm font-semibold text-white/80">{t.sixMonths}</div>
-                    <div className="mt-2 text-3xl font-semibold text-white">$105</div>
-                  </div>
-                  <span className="rounded-full border border-sky-700/55 bg-black/30 px-3 py-1 text-xs font-semibold text-sky-200/90">
-                    {t.best}
-                  </span>
+            <div className="rounded-[var(--radius)] border border-[#1f4f82]/70 bg-gradient-to-b from-[#0d2a4a] to-[#07192f] p-7 shadow-[0_16px_34px_rgba(40,132,255,.12)] backdrop-blur">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="text-sm font-semibold text-white/80">{t.sixMonths}</div>
+                  <div className="mt-2 text-3xl font-semibold text-white">$105</div>
                 </div>
+                <span className="rounded-full border border-[#1f4f82]/80 bg-[rgba(7,19,35,0.62)] px-3 py-1 text-xs font-semibold text-[#2884ff]">
+                  {t.best}
+                </span>
+              </div>
 
-                <ul className="mt-6 space-y-2 text-sm text-white/70">
-                  {t.sixMonthsFeatures.map((f) => (
-                    <li key={f}>{f}</li>
-                  ))}
-                </ul>
+              <ul className="mt-6 space-y-2 text-sm text-white/70">
+                {t.sixMonthsFeatures.map((f) => (
+                  <li key={f}>{f}</li>
+                ))}
+              </ul>
 
-                <div className="mt-7 flex flex-col gap-2 sm:flex-row">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setInitialPlan('six_months')
-                      setOpen(true)
-                    }}
-                    className="inline-flex flex-1 items-center justify-center rounded-xl bg-gradient-to-b from-sky-500 to-blue-700 px-5 py-3 text-sm font-semibold text-white shadow-[0_16px_44px_rgba(56,189,248,.18)] transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
-                  >
-                    {t.order}
-                  </button>
-                  <a
-                    href={telegramHref}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex flex-1 items-center justify-center rounded-xl border border-white/12 bg-white/5 px-5 py-3 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
-                  >
-                    {t.telegram}
-                  </a>
-                </div>
+              <div className="mt-7 flex flex-col gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setInitialPlan('six_months')
+                    setOpen(true)
+                  }}
+                  className="inline-flex flex-1 items-center justify-center rounded-xl bg-gradient-to-b from-[#0d2a4a] to-[#07192f] px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(40,132,255,.16)] transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2884ff]"
+                >
+                  {t.order}
+                </button>
+                <a
+                  href={telegramHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex flex-1 items-center justify-center rounded-xl border border-white/12 bg-white/5 px-5 py-3 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2884ff]"
+                >
+                  {t.telegram}
+                </a>
               </div>
             </div>
           </Reveal>
         </div>
 
         <Reveal delayMs={220}>
-          <div className="mx-auto mt-10 max-w-3xl rounded-[var(--radius)] border border-white/10 bg-white/4 px-6 py-5 text-center text-sm text-white/70 backdrop-blur">
+          <div className="mx-auto mt-10 max-w-3xl rounded-[var(--radius)] border border-white/10 bg-[rgba(7,19,35,0.6)] px-6 py-5 text-center text-sm text-white/74 backdrop-blur">
             {t.note}
           </div>
         </Reveal>

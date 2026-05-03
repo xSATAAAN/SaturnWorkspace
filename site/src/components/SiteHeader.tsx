@@ -36,10 +36,10 @@ export function SiteHeader({ lang, onToggleLang }: SiteHeaderProps) {
   const closeMobile = () => setMobileOpen(false)
 
   return (
-    <header className="sticky top-0 z-50 border-b border-white/10 bg-black/25 backdrop-blur supports-[backdrop-filter]:bg-black/20">
+    <header className="sticky top-0 z-50 border-b border-white/10 bg-[rgba(4,12,24,0.72)] backdrop-blur supports-[backdrop-filter]:bg-[rgba(4,12,24,0.64)]">
       <div className="relative mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
         <a href="/" className="group inline-flex items-center gap-2" onClick={closeMobile}>
-          <span className="h-2.5 w-2.5 rounded-full bg-sky-500 shadow-[0_0_24px_rgba(56,189,248,.55)]" />
+          <span className="h-2.5 w-2.5 rounded-full bg-[#2884ff] shadow-[0_0_16px_rgba(40,132,255,.32)]" />
           <span className="text-sm font-semibold tracking-wide text-white">
             SATAN <span className="text-white/70">Toolkit</span>
           </span>
@@ -99,7 +99,7 @@ export function SiteHeader({ lang, onToggleLang }: SiteHeaderProps) {
           <a
             href="#pricing"
             onClick={closeMobile}
-            className="inline-flex items-center justify-center rounded-xl bg-gradient-to-b from-sky-500 to-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-[0_14px_36px_rgba(56,189,248,.18)] transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+            className="inline-flex items-center justify-center rounded-xl bg-gradient-to-b from-[#0d2a4a] to-[#07192f] px-4 py-2 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(40,132,255,.16)] transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2884ff]"
           >
             {t.buy}
           </a>
@@ -116,7 +116,7 @@ export function SiteHeader({ lang, onToggleLang }: SiteHeaderProps) {
       </div>
 
       {mobileOpen ? (
-        <div className="border-t border-white/10 bg-black/35 backdrop-blur sm:hidden">
+        <div className="border-t border-white/10 bg-[rgba(5,14,28,0.78)] backdrop-blur sm:hidden">
           <div className="mx-auto max-w-6xl px-5 py-3">
             <div className="grid gap-2 text-sm">
               <a className="rounded-lg px-3 py-2 text-white/80 hover:bg-white/5 hover:text-white" href="#features" onClick={closeMobile}>

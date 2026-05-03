@@ -21,7 +21,10 @@ export default function App() {
   const copy = getSiteCopy(lang)
 
   return (
-    <div className="relative" dir={isAr ? 'rtl' : 'ltr'}>
+    <div
+      className="relative bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[#081a2f] via-[#05101f] to-[#01060a]"
+      dir={isAr ? 'rtl' : 'ltr'}
+    >
       <div className="noise" aria-hidden="true" />
       <SiteHeader lang={lang} onToggleLang={() => setLang((p) => (p === 'en' ? 'ar' : 'en'))} />
 
