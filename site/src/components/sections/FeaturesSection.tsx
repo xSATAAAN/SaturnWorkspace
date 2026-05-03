@@ -12,7 +12,7 @@ export function FeaturesSection({ copy }: FeaturesSectionProps) {
       <div className="mx-auto max-w-6xl px-5 py-16 sm:py-20">
         <Reveal>
           <div className="mx-auto max-w-2xl text-center">
-            <p className="text-sm font-semibold text-[#2884ff]">{copy.featuresTag}</p>
+            <p className="text-accent text-sm font-semibold">{copy.featuresTag}</p>
             <h2 className="mt-3 text-balance text-3xl font-semibold tracking-tight text-white sm:text-4xl">{copy.featuresTitle}</h2>
             <p className="mt-4 text-pretty text-white/65">{copy.featuresDesc}</p>
           </div>

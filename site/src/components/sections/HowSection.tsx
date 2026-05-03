@@ -11,7 +11,7 @@ export function HowSection({ copy }: HowSectionProps) {
       <div className="mx-auto max-w-6xl px-5 py-16 sm:py-20">
         <Reveal>
           <div className="mx-auto max-w-2xl text-center">
-            <p className="text-sm font-semibold text-[#2884ff]">{copy.howTag}</p>
+            <p className="text-accent text-sm font-semibold">{copy.howTag}</p>
             <h2 className="mt-3 text-balance text-3xl font-semibold tracking-tight text-white sm:text-4xl">{copy.howTitle}</h2>
           </div>
         </Reveal>
@@ -21,7 +21,7 @@ export function HowSection({ copy }: HowSectionProps) {
             <Reveal key={s.step} delayMs={70 + idx * 45}>
               <div className="surface-card rounded-[var(--radius)] p-6">
                 <div className="flex items-center justify-between">
-                  <div className="text-sm font-semibold text-[#2884ff]">{s.step}</div>
+                  <div className="text-accent text-sm font-semibold">{s.step}</div>
                   <div className="red-badge h-8 w-8 rounded-full" />
                 </div>
                 <div className="mt-4 text-lg font-semibold text-white">{s.title}</div>

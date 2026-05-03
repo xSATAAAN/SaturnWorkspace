@@ -70,7 +70,7 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
       <div className="mx-auto max-w-6xl px-5 py-16 sm:py-20">
         <Reveal>
           <div className="mx-auto max-w-2xl text-center">
-            <p className="text-sm font-semibold text-[#2884ff]">{t.tag}</p>
+            <p className="text-accent text-sm font-semibold">{t.tag}</p>
             <h2 className="mt-3 text-balance text-3xl font-semibold tracking-tight text-white sm:text-4xl">
               {t.title}
             </h2>
@@ -116,7 +116,7 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
                   href={telegramHref}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex flex-1 items-center justify-center rounded-xl border border-white/12 bg-white/5 px-5 py-3 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2884ff]"
+                  className="inline-flex flex-1 items-center justify-center rounded-xl border border-white/12 bg-white/5 px-5 py-3 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-500/35"
                 >
                   {t.telegram}
                 </a>
@@ -125,9 +125,9 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
           </Reveal>
 
           <Reveal delayMs={130}>
-            <div className="surface-card relative overflow-hidden rounded-[var(--radius)] p-7 ring-1 ring-[#2884ff]/25">
+            <div className="surface-card relative overflow-hidden rounded-[var(--radius)] p-7 ring-1 ring-slate-500/20">
               <div
-                className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#2884ff]/55 to-transparent"
+                className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-slate-400/35 to-transparent"
                 aria-hidden
               />
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -145,10 +145,10 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
                   <span className="rounded-full border border-emerald-400/35 bg-emerald-500/15 px-2.5 py-0.5 text-[11px] font-bold tracking-wide text-emerald-100">
                     {t.promo50}
                   </span>
-                  <span className="rounded-full border border-white/12 bg-white/[0.06] px-3 py-1 text-xs font-semibold text-[#7ab8ff]">
+                  <span className="text-accent-muted rounded-full border border-white/12 bg-white/[0.06] px-3 py-1 text-xs font-semibold">
                     {t.limitedTime}
                   </span>
-                  <span className="rounded-full border border-[#2884ff]/35 bg-[#2884ff]/10 px-3 py-1 text-xs font-semibold text-white/90">
+                  <span className="rounded-full border border-slate-500/30 bg-slate-500/10 px-3 py-1 text-xs font-semibold text-white/90">
                     {t.best}
                   </span>
                 </div>
@@ -175,7 +175,7 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
                   href={telegramHref}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex flex-1 items-center justify-center rounded-xl border border-white/12 bg-white/5 px-5 py-3 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2884ff]"
+                  className="inline-flex flex-1 items-center justify-center rounded-xl border border-white/12 bg-white/5 px-5 py-3 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-500/35"
                 >
                   {t.telegram}
                 </a>

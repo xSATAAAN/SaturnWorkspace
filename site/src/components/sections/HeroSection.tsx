@@ -12,7 +12,7 @@ export function HeroSection({ copy }: HeroSectionProps) {
         <div className="mx-auto max-w-3xl text-center">
           <Reveal>
             <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-white/85 backdrop-blur">
-              <span className="h-2 w-2 rounded-full bg-[#2884ff] shadow-[0_0_14px_rgba(40,132,255,.28)]" />
+              <span className="bg-accent-dot h-2 w-2 shrink-0 rounded-full" />
               {copy.heroBadge}
             </div>
           </Reveal>
@@ -20,7 +20,7 @@ export function HeroSection({ copy }: HeroSectionProps) {
           <Reveal delayMs={80}>
             <h1 className="mt-6 text-balance text-4xl font-semibold tracking-tight text-white sm:text-6xl">
               {copy.heroTitleA}{' '}
-              <span className="bg-gradient-to-r from-[#3b8eff] to-[#1b4f8f] bg-clip-text text-transparent">{copy.heroTitleB}</span>{' '}
+              <span className="hero-title-accent">{copy.heroTitleB}</span>{' '}
               {copy.heroTitleC}
             </h1>
           </Reveal>
@@ -40,7 +40,7 @@ export function HeroSection({ copy }: HeroSectionProps) {
               </a>
               <a
                 href="#features"
-                className="inline-flex items-center justify-center rounded-xl border border-white/12 bg-white/4 px-5 py-3 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2884ff]"
+                className="inline-flex items-center justify-center rounded-xl border border-white/12 bg-white/4 px-5 py-3 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-500/35"
               >
                 {copy.ctaExplore}
               </a>
@@ -58,7 +58,7 @@ export function HeroSection({ copy }: HeroSectionProps) {
                     <div className="mt-1 text-sm font-semibold text-white/85">{s.label}</div>
                     <div className="mt-1 text-xs text-white/60">{s.hint}</div>
                   </div>
-                  <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-[#2884ff]" />
+                  <span className="bg-accent-dot mt-1 h-2.5 w-2.5 shrink-0 rounded-full" />
                 </div>
               </div>
             ))}

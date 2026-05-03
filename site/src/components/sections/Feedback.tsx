@@ -68,7 +68,7 @@ export function Feedback({ telegramUsername, lang }: FeedbackProps) {
       <div className="mx-auto max-w-6xl px-5 py-16 sm:py-20">
         <Reveal>
           <div className="mx-auto max-w-2xl text-center">
-            <p className="text-sm font-semibold text-[#2884ff]">{t.tag}</p>
+            <p className="text-accent text-sm font-semibold">{t.tag}</p>
             <h2 className="mt-3 text-balance text-3xl font-semibold tracking-tight text-white sm:text-4xl">{t.title}</h2>
             <p className="mt-4 text-pretty text-white/65">
               {t.desc}
@@ -84,7 +84,7 @@ export function Feedback({ telegramUsername, lang }: FeedbackProps) {
                 <select
                   value={kind}
                   onChange={(e) => setKind(e.target.value as 'suggestion' | 'issue')}
-                  className="h-11 rounded-xl border border-white/12 bg-white/5 px-3 text-sm text-white outline-none focus:border-[#2884ff]/55"
+                  className="h-11 rounded-xl border border-white/12 bg-white/5 px-3 text-sm text-white outline-none focus:border-slate-400/50"
                 >
                   <option value="suggestion">{t.suggestion}</option>
                   <option value="issue">{t.issue}</option>
@@ -96,7 +96,7 @@ export function Feedback({ telegramUsername, lang }: FeedbackProps) {
                   value={contact}
                   onChange={(e) => setContact(e.target.value)}
                   placeholder={t.contactPlaceholder}
-                  className="h-11 rounded-xl border border-white/12 bg-white/5 px-3 text-sm text-white placeholder:text-white/35 outline-none focus:border-[#2884ff]/55"
+                  className="h-11 rounded-xl border border-white/12 bg-white/5 px-3 text-sm text-white placeholder:text-white/35 outline-none focus:border-slate-400/50"
                 />
               </label>
             </div>
@@ -108,7 +108,7 @@ export function Feedback({ telegramUsername, lang }: FeedbackProps) {
                 onChange={(e) => setMessage(e.target.value)}
                 rows={5}
                 placeholder={t.detailsPlaceholder}
-                className="resize-none rounded-xl border border-white/12 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/35 outline-none focus:border-[#2884ff]/55"
+                className="resize-none rounded-xl border border-white/12 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/35 outline-none focus:border-slate-400/50"
               />
             </label>
 

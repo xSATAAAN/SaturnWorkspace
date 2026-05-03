@@ -191,7 +191,7 @@ export function CheckoutModal({
                 onClick={() => setPlan('monthly')}
                 className={
                   plan === 'monthly'
-                    ? 'rounded-xl border border-[#2884ff]/45 bg-[#2884ff]/10 px-4 py-3 text-start'
+                    ? 'rounded-xl border border-slate-400/35 bg-slate-500/10 px-4 py-3 text-start'
                     : 'rounded-xl border border-white/12 bg-white/5 px-4 py-3 text-start hover:bg-white/7'
                 }
               >
@@ -203,7 +203,7 @@ export function CheckoutModal({
                 onClick={() => setPlan('yearly')}
                 className={
                   plan === 'yearly'
-                    ? 'rounded-xl border border-[#2884ff]/45 bg-[#2884ff]/10 px-4 py-3 text-start'
+                    ? 'rounded-xl border border-slate-400/35 bg-slate-500/10 px-4 py-3 text-start'
                     : 'rounded-xl border border-white/12 bg-white/5 px-4 py-3 text-start hover:bg-white/7'
                 }
               >
@@ -223,7 +223,7 @@ export function CheckoutModal({
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
-                  className="h-11 rounded-xl border border-white/12 bg-white/5 px-3 text-sm text-white placeholder:text-white/35 outline-none focus:border-[#2884ff]/55"
+                  className="h-11 rounded-xl border border-white/12 bg-white/5 px-3 text-sm text-white placeholder:text-white/35 outline-none focus:border-slate-400/50"
                 />
               </label>
               <label className="grid gap-1">
@@ -232,7 +232,7 @@ export function CheckoutModal({
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="+20..."
-                  className="h-11 rounded-xl border border-white/12 bg-white/5 px-3 text-sm text-white placeholder:text-white/35 outline-none focus:border-[#2884ff]/55"
+                  className="h-11 rounded-xl border border-white/12 bg-white/5 px-3 text-sm text-white placeholder:text-white/35 outline-none focus:border-slate-400/50"
                 />
               </label>
             </div>
@@ -244,7 +244,7 @@ export function CheckoutModal({
                 onChange={(e) => setNotes(e.target.value)}
                 rows={3}
                 placeholder={t.notesPlaceholder}
-                className="resize-none rounded-xl border border-white/12 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/35 outline-none focus:border-[#2884ff]/55"
+                className="resize-none rounded-xl border border-white/12 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/35 outline-none focus:border-slate-400/50"
               />
             </label>
           </div>
@@ -261,7 +261,7 @@ export function CheckoutModal({
             <button
               type="button"
               onClick={() => navigator.clipboard?.writeText(message)}
-              className="inline-flex flex-1 items-center justify-center rounded-xl border border-white/12 bg-white/5 px-5 py-3 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2884ff]"
+              className="inline-flex flex-1 items-center justify-center rounded-xl border border-white/12 bg-white/5 px-5 py-3 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-500/35"
             >
               {t.copy}
             </button>

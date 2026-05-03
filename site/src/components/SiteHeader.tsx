@@ -40,11 +40,12 @@ export function SiteHeader({ lang, onToggleLang }: SiteHeaderProps) {
       <div className="relative mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
         <a href="/" className="group inline-flex items-center gap-2.5" onClick={closeMobile}>
           <img
-            src="/favicon.png"
+            src="/logo-header.png"
             alt=""
             width={32}
             height={32}
-            decoding="async"
+            decoding="sync"
+            fetchPriority="high"
             className="site-logo h-8 w-8 shrink-0 object-contain"
           />
           <span className="text-sm font-semibold tracking-wide text-white">

@@ -46,9 +46,28 @@ h1, h2, h3 {
   }
 }
 
-/* Selection matches premium blue brand */
+/* Selection — muted slate (was loud cyan) */
 ::selection {
-  background: rgba(var(--red), 0.35);
+  background: rgba(148, 163, 184, 0.28);
+}
+
+/* Softer midnight accents (section labels, FAQ markers) */
+.text-accent {
+  color: rgb(186 210 238 / 0.94);
+}
+.text-accent-muted {
+  color: rgb(156 180 210 / 0.88);
+}
+.bg-accent-dot {
+  background: radial-gradient(circle at 32% 28%, rgb(226 232 240 / 0.22), transparent 52%),
+    rgb(71 85 105 / 0.92);
+  box-shadow: 0 0 12px rgb(15 23 42 / 0.55);
+}
+.hero-title-accent {
+  background: linear-gradient(90deg, rgb(210 220 235), rgb(148 163 184));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 /* Single full-page canvas (used on App root wrapper) */
@@ -74,7 +93,7 @@ h1, h2, h3 {
   filter: brightness(1.06);
 }
 .btn-primary:focus-visible {
-  outline: 2px solid #2884ff;
+  outline: 2px solid rgb(148 163 184 / 0.75);
   outline-offset: 2px;
 }
 .btn-primary:disabled {
@@ -83,9 +102,10 @@ h1, h2, h3 {
   filter: none;
 }
 
-/* Header mark: no box frame — natural aspect + soft glow */
+/* Header mark: fixed footprint + light rounding (no heavy blue glow) */
 .site-logo {
-  filter: drop-shadow(0 0 12px rgba(59, 158, 255, 0.22));
+  display: block;
+  border-radius: 0.5rem;
 }
 
 /* Subtle animated grain */
@@ -207,19 +227,20 @@ main > section + footer::before {
 }
 
 .red-badge {
-  border: 1px solid rgba(56, 189, 248, 0.45);
-  background: linear-gradient(180deg, rgba(37, 99, 235, 0.9), rgba(14, 70, 150, 0.92));
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.08) 0%, rgba(30, 41, 59, 0.75) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .feature-icon-box {
   display: grid;
   place-items: center;
-  color: rgb(255 255 255 / .95);
-  border: 1px solid rgba(56, 189, 248, 0.45);
-  background:
-    radial-gradient(circle at 30% 24%, rgb(255 255 255 / .24), transparent 34%),
-    linear-gradient(180deg, rgba(37, 99, 235, 0.94), rgba(14, 70, 150, 0.92));
-  box-shadow: 0 18px 44px rgba(var(--redGlow), .14);
+  color: rgb(226 232 240 / 0.95);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.1) 0%, rgba(30, 41, 59, 0.72) 55%, rgba(15, 23, 42, 0.85) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 10px 28px rgba(0, 0, 0, 0.35);
 }
 
 [dir="rtl"] body {
