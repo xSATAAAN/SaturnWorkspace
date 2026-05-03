@@ -64,7 +64,7 @@ export function Feedback({ telegramUsername, lang }: FeedbackProps) {
   }, [telegramUsername, kind, contact, message, t.msgTitleIssue, t.msgTitleSuggestion, t.notProvided])
 
   return (
-    <section id="feedback" className="border-t border-white/5 bg-transparent">
+    <section id="feedback" className="bg-transparent">
       <div className="mx-auto max-w-6xl px-5 py-16 sm:py-20">
         <Reveal>
           <div className="mx-auto max-w-2xl text-center">
@@ -77,7 +77,7 @@ export function Feedback({ telegramUsername, lang }: FeedbackProps) {
         </Reveal>
 
         <Reveal delayMs={80}>
-          <div className="red-panel mx-auto mt-10 max-w-3xl rounded-[var(--radius)] p-6 shadow-[0_16px_34px_rgba(40,132,255,.12)] backdrop-blur">
+          <div className="surface-card mx-auto mt-10 max-w-3xl rounded-[var(--radius)] p-6">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <label className="grid gap-1">
                 <span className="text-xs font-semibold text-white/70">{t.type}</span>

@@ -51,7 +51,7 @@ export function HeroSection({ copy }: HeroSectionProps) {
         <Reveal delayMs={260}>
           <div className="mx-auto mt-10 grid max-w-5xl grid-cols-1 gap-3 sm:grid-cols-3">
             {copy.stats.map((s) => (
-              <div key={s.label} className="rounded-[var(--radius)] border border-white/10 bg-white/[0.05] px-5 py-5 backdrop-blur">
+              <div key={s.label} className="surface-card rounded-[var(--radius)] px-5 py-5">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="text-3xl font-semibold text-white">{s.value}</div>

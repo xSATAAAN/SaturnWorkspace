@@ -7,7 +7,7 @@ type HowSectionProps = {
 
 export function HowSection({ copy }: HowSectionProps) {
   return (
-    <section id="how" className="border-t border-white/5 bg-transparent">
+    <section id="how" className="bg-transparent">
       <div className="mx-auto max-w-6xl px-5 py-16 sm:py-20">
         <Reveal>
           <div className="mx-auto max-w-2xl text-center">
@@ -19,7 +19,7 @@ export function HowSection({ copy }: HowSectionProps) {
         <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-3">
           {copy.how.map((s, idx) => (
             <Reveal key={s.step} delayMs={70 + idx * 45}>
-              <div className="red-panel rounded-[var(--radius)] p-6 shadow-[0_16px_34px_rgba(40,132,255,.12)] backdrop-blur">
+              <div className="surface-card rounded-[var(--radius)] p-6">
                 <div className="flex items-center justify-between">
                   <div className="text-sm font-semibold text-[#2884ff]">{s.step}</div>
                   <div className="red-badge h-8 w-8 rounded-full" />

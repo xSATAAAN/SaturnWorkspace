@@ -42,10 +42,10 @@ export function SiteHeader({ lang, onToggleLang }: SiteHeaderProps) {
           <img
             src="/favicon.png"
             alt=""
-            width={28}
-            height={28}
+            width={32}
+            height={32}
             decoding="async"
-            className="h-7 w-7 shrink-0 rounded-lg object-cover ring-1 ring-white/10"
+            className="site-logo h-8 w-8 shrink-0 object-contain"
           />
           <span className="text-sm font-semibold tracking-wide text-white">
             SATAN <span className="text-white/70">Toolkit</span>
@@ -123,7 +123,7 @@ export function SiteHeader({ lang, onToggleLang }: SiteHeaderProps) {
       </div>
 
       {mobileOpen ? (
-        <div className="border-t border-white/5 bg-[rgba(2,6,23,0.88)] backdrop-blur sm:hidden">
+        <div className="border-t border-white/[0.06] bg-[rgba(2,6,23,0.88)] backdrop-blur sm:hidden">
           <div className="mx-auto max-w-6xl px-5 py-3">
             <div className="grid gap-2 text-sm">
               <a className="rounded-lg px-3 py-2 text-white/80 hover:bg-white/5 hover:text-white" href="#features" onClick={closeMobile}>

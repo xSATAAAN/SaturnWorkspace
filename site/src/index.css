@@ -83,6 +83,11 @@ h1, h2, h3 {
   filter: none;
 }
 
+/* Header mark: no box frame — natural aspect + soft glow */
+.site-logo {
+  filter: drop-shadow(0 0 12px rgba(59, 158, 255, 0.22));
+}
+
 /* Subtle animated grain */
 .noise {
   pointer-events: none;
@@ -118,20 +123,87 @@ h1, h2, h3 {
   z-index: 1;
 }
 
-/* Darker saturated blue cards (no flashy neon) */
-.red-panel {
-  border: 1px solid rgba(37, 99, 235, 0.72);
-  background:
-    radial-gradient(120% 120% at 10% 10%, rgba(56, 189, 248, 0.22), transparent 58%),
-    radial-gradient(110% 110% at 90% 80%, rgba(37, 99, 235, 0.22), transparent 56%),
-    linear-gradient(145deg, rgba(15, 44, 89, 0.95) 0%, rgba(14, 34, 72, 0.94) 40%, rgba(10, 25, 55, 0.93) 100%);
+/* Content cards — frosted glass on unified canvas */
+.surface-card {
+  border-radius: var(--radius);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: linear-gradient(
+    165deg,
+    rgba(255, 255, 255, 0.075) 0%,
+    rgba(255, 255, 255, 0.03) 42%,
+    rgba(2, 8, 23, 0.55) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 18px 48px rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  transition:
+    border-color 240ms ease,
+    box-shadow 240ms ease,
+    background 240ms ease;
 }
 
-.red-panel:hover {
-  background:
-    radial-gradient(120% 120% at 10% 10%, rgba(56, 189, 248, 0.28), transparent 58%),
-    radial-gradient(110% 110% at 90% 80%, rgba(37, 99, 235, 0.26), transparent 56%),
-    linear-gradient(145deg, rgba(18, 54, 108, 0.96) 0%, rgba(15, 43, 92, 0.95) 40%, rgba(12, 32, 72, 0.94) 100%);
+.surface-card:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: linear-gradient(
+    165deg,
+    rgba(255, 255, 255, 0.095) 0%,
+    rgba(255, 255, 255, 0.045) 48%,
+    rgba(2, 8, 23, 0.45) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 22px 56px rgba(0, 0, 0, 0.42);
+}
+
+/* Section rhythm: soft gradient hairline between stacked sections */
+main > section {
+  position: relative;
+  background: transparent;
+}
+
+main > section + section::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: min(calc(100% - 2rem), 72rem);
+  height: 1px;
+  transform: translateX(-50%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(148, 163, 184, 0.05) 22%,
+    rgba(226, 232, 240, 0.12) 50%,
+    rgba(148, 163, 184, 0.05) 78%,
+    transparent 100%
+  );
+  pointer-events: none;
+}
+
+main > section + footer {
+  position: relative;
+  border-top: none;
+}
+
+main > section + footer::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: min(calc(100% - 2rem), 72rem);
+  height: 1px;
+  transform: translateX(-50%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(148, 163, 184, 0.05) 22%,
+    rgba(226, 232, 240, 0.1) 50%,
+    rgba(148, 163, 184, 0.05) 78%,
+    transparent 100%
+  );
+  pointer-events: none;
 }
 
 .red-badge {

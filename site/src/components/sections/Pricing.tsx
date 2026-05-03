@@ -43,7 +43,7 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
   const [initialPlan, setInitialPlan] = useState<PlanId>('six_months')
 
   return (
-    <section id="pricing" className="border-t border-white/5 bg-transparent">
+    <section id="pricing" className="bg-transparent">
       <div className="mx-auto max-w-6xl px-5 py-16 sm:py-20">
         <Reveal>
           <div className="mx-auto max-w-2xl text-center">
@@ -59,7 +59,7 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
 
         <div className="mt-10 grid grid-cols-1 gap-4 lg:grid-cols-2">
           <Reveal delayMs={80}>
-            <div className="red-panel rounded-[var(--radius)] p-7 shadow-[0_16px_34px_rgba(40,132,255,.12)] backdrop-blur">
+            <div className="surface-card rounded-[var(--radius)] p-7">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="text-sm font-semibold text-white/80">{t.monthly}</div>
@@ -102,13 +102,13 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
           </Reveal>
 
           <Reveal delayMs={130}>
-            <div className="red-panel rounded-[var(--radius)] p-7 shadow-[0_16px_34px_rgba(40,132,255,.12)] backdrop-blur">
+            <div className="surface-card rounded-[var(--radius)] p-7">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="text-sm font-semibold text-white/80">{t.sixMonths}</div>
                   <div className="mt-2 text-3xl font-semibold text-white">$105</div>
                 </div>
-                <span className="rounded-full border border-[#1f4f82]/80 bg-[rgba(7,19,35,0.62)] px-3 py-1 text-xs font-semibold text-[#2884ff]">
+                <span className="rounded-full border border-[#2884ff]/35 bg-[#2884ff]/10 px-3 py-1 text-xs font-semibold text-[#7ab8ff]">
                   {t.best}
                 </span>
               </div>
@@ -144,7 +144,7 @@ export function Pricing({ telegramHref, lang }: PricingProps) {
         </div>
 
         <Reveal delayMs={220}>
-          <div className="mx-auto mt-10 max-w-3xl rounded-[var(--radius)] border border-white/10 bg-white/[0.04] px-6 py-5 text-center text-sm text-white/74 backdrop-blur">
+          <div className="surface-card mx-auto mt-10 max-w-3xl rounded-[var(--radius)] px-6 py-5 text-center text-sm text-white/74">
             {t.note}
           </div>
         </Reveal>
