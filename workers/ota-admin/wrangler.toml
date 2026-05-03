@@ -1,0 +1,21 @@
+name = "satan-toolkit-ota-admin"
+main = "src/index.js"
+compatibility_date = "2026-05-01"
+
+[[r2_buckets]]
+binding = "OTA_BUCKET"
+bucket_name = "satan-toolkit-ota"
+
+[vars]
+ADMIN_ORIGIN = "https://admin.satantoolkit.com"
+PUBLIC_UPDATES_BASE_URL = "https://satantoolkit.com/updates"
+MAX_UPLOAD_MB = "150"
+PAYMENTS_ALLOWED_ORIGIN = "https://satantoolkit.com"
+# ENOT_CREATE_URL = "https://api.enot.io/v1/payment/create"
+# ENOT_SUCCESS_URL = "https://satantoolkit.com/?payment=success"
+# ENOT_FAIL_URL = "https://satantoolkit.com/?payment=failed"
+# ADMIN_EMAIL_ALLOWLIST = "you@example.com,admin@example.com"
+# ADMIN_API_TOKEN = "optional-fallback-token"
+# ENOT_API_KEY = "set_as_secret"
+# ENOT_MERCHANT_ID = "set_as_secret"
+# ENOT_WEBHOOK_SECRET = "set_as_secret"

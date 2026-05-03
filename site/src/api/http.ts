@@ -17,11 +17,11 @@ export async function postJson<TResponse>(url: string, body: unknown): Promise<T
     body: JSON.stringify(body),
   })
 
-  let payload: unknown = null
+  let payload: unknown
   try {
     payload = await response.json()
   } catch {
-    payload = null
+    payload = undefined
   }
 
   if (!response.ok) {

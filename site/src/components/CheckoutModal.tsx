@@ -65,8 +65,11 @@ export function CheckoutModal({
 
   useEffect(() => {
     if (!open) return
-    setOrderId('PENDING')
-    setSubmitError('')
+    const timer = window.setTimeout(() => {
+      setOrderId('PENDING')
+      setSubmitError('')
+    }, 0)
+    return () => window.clearTimeout(timer)
   }, [open])
 
   useEffect(() => {

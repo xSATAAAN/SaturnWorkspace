@@ -1,0 +1,14 @@
+{
+  "name": "satan-toolkit-ota-admin-worker",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "check:syntax": "node --check src/index.js && node --check src/routes/payments.js && node --check src/services/orders.js && node --check src/services/enot.js && node --check src/security/payments.js && node --check src/validation/payments.js"
+  },
+  "devDependencies": {
+    "wrangler": "^4.16.1"
+  }
+}
