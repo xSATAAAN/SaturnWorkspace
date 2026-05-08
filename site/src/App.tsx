@@ -9,6 +9,7 @@ import { Pricing } from './components/sections/Pricing'
 import { SiteFooter } from './components/sections/SiteFooter'
 import { AdminDashboard } from './components/admin/AdminDashboard'
 import { AdminAuthGate } from './components/admin/AdminAuthGate'
+import { DeviceActivation } from './components/DeviceActivation'
 import { TELEGRAM_USERNAME, getSiteCopy } from './constants/siteCopy'
 
 export default function App() {
@@ -21,14 +22,18 @@ export default function App() {
   }, [lang, isAr])
 
   const copy = getSiteCopy(lang)
+  const currentPath = typeof window !== 'undefined' ? window.location.pathname : ''
+  const isActivationRoute = currentPath.startsWith('/activate')
   const isAdminRoute =
     typeof window !== 'undefined' &&
-    (window.location.pathname.startsWith('/admin') || window.location.hostname.toLowerCase().startsWith('admin.'))
+    (currentPath.startsWith('/admin') || window.location.hostname.toLowerCase().startsWith('admin.'))
 
   return (
     <div className="app-canvas relative" dir={isAr ? 'rtl' : 'ltr'}>
       <div className="noise" aria-hidden="true" />
-      {isAdminRoute ? (
+      {isActivationRoute ? (
+        <DeviceActivation lang={lang} />
+      ) : isAdminRoute ? (
         <AdminAuthGate lang={lang}>
           <AdminDashboard lang={lang} />
         </AdminAuthGate>
