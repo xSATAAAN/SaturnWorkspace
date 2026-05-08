@@ -12,6 +12,9 @@ Cloudflare Worker + R2 backend for secure SATAN Toolkit OTA publishing and payme
   - `GET /api/payments/:orderId`
   - `POST /api/payments/webhook`
 - Admin (protected by Cloudflare Access):
+  - `GET /api/admin/preauth/state`
+  - `POST /api/admin/preauth`
+  - `POST /api/admin/preauth/logout`
   - `GET /api/admin/state`
   - `POST /api/admin/upload` (multipart form: `file`, `version`, `channel`)
   - `POST /api/admin/publish`
@@ -27,6 +30,9 @@ Cloudflare Worker + R2 backend for secure SATAN Toolkit OTA publishing and payme
 3. Configure vars/secrets:
    - `ADMIN_EMAIL_ALLOWLIST` (comma separated)
    - `ADMIN_ORIGIN` (for admin UI origin)
+   - `ADMIN_LAYER1_USERNAME` (secret)
+   - `ADMIN_LAYER1_PASSWORD` (secret)
+   - `ADMIN_LAYER1_SESSION_SECRET` (secret, random 32+ bytes)
    - `PUBLIC_UPDATES_BASE_URL` (default `https://satantoolkit.com/updates`)
    - `PAYMENTS_ALLOWED_ORIGIN` (public website origin allowed to create/check payment intents)
    - `ENOT_CREATE_URL` (optional override)
@@ -35,7 +41,7 @@ Cloudflare Worker + R2 backend for secure SATAN Toolkit OTA publishing and payme
    - `ENOT_API_KEY`
    - `ENOT_MERCHANT_ID`
    - `ENOT_WEBHOOK_SECRET`
-5. Protect admin API host with Cloudflare Access (Google login + allowlist).
+5. Protect admin API host with Cloudflare Access (Google login + allowlist). The in-app layer-1 login is an additional server-side gate, not a replacement for Access/Firebase allowlisting.
 
 ## Payment Security Notes
 

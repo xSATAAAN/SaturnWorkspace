@@ -44,6 +44,15 @@ export default {
       if (url.pathname.startsWith("/updates/file/") && request.method === "GET") {
         return serveReleaseBinary(url, env);
       }
+      if (url.pathname === "/api/admin/preauth/state" && request.method === "GET") {
+        return json({ success: true, authenticated: await hasAdminLayer1Session(request, env) }, 200, corsHeaders(request, env));
+      }
+      if (url.pathname === "/api/admin/preauth" && request.method === "POST") {
+        return handleAdminPreauth(request, env);
+      }
+      if (url.pathname === "/api/admin/preauth/logout" && request.method === "POST") {
+        return handleAdminPreauthLogout(request, env);
+      }
       if (url.pathname === "/api/admin/state" && request.method === "GET") {
         await requireAdmin(request, env);
         return json(await loadDashboardState(env), 200, corsHeaders(request, env));
@@ -205,6 +214,8 @@ async function requireAdmin(request, env) {
     if (provided === configuredToken) return "token-admin";
   }
 
+  await requireAdminLayer1(request, env);
+
   if (bearer.startsWith("Bearer ")) {
     const idToken = bearer.slice("Bearer ".length).trim();
     if (idToken) {
@@ -221,6 +232,120 @@ async function requireAdmin(request, env) {
     throw new Error("unauthorized");
   }
   return email;
+}
+
+function adminLayer1Configured(env) {
+  return Boolean(
+    String(env.ADMIN_LAYER1_USERNAME || "").trim() &&
+      String(env.ADMIN_LAYER1_PASSWORD || "").trim() &&
+      String(env.ADMIN_LAYER1_SESSION_SECRET || "").trim(),
+  );
+}
+
+function getCookie(request, name) {
+  const cookieHeader = request.headers.get("Cookie") || "";
+  for (const part of cookieHeader.split(";")) {
+    const [rawKey, ...rawValue] = part.trim().split("=");
+    if (rawKey === name) return rawValue.join("=");
+  }
+  return "";
+}
+
+function base64UrlEncode(value) {
+  const bytes = typeof value === "string" ? new TextEncoder().encode(value) : value;
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function base64UrlDecodeToString(value) {
+  const padded = String(value || "").replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(String(value || "").length / 4) * 4, "=");
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+
+async function hmacHex(secret, message) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message));
+  return [...new Uint8Array(signature)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function timingSafeEqual(a, b) {
+  const left = String(a || "");
+  const right = String(b || "");
+  if (left.length !== right.length) return false;
+  let diff = 0;
+  for (let i = 0; i < left.length; i += 1) diff |= left.charCodeAt(i) ^ right.charCodeAt(i);
+  return diff === 0;
+}
+
+async function createAdminLayer1Cookie(env, username) {
+  const maxAgeSeconds = 60 * 60;
+  const payload = base64UrlEncode(
+    JSON.stringify({
+      u: username,
+      exp: Date.now() + maxAgeSeconds * 1000,
+      n: crypto.randomUUID(),
+    }),
+  );
+  const sig = await hmacHex(env.ADMIN_LAYER1_SESSION_SECRET, payload);
+  return `st_admin_pre_auth=${payload}.${sig}; Max-Age=${maxAgeSeconds}; Path=/; HttpOnly; Secure; SameSite=Strict`;
+}
+
+async function hasAdminLayer1Session(request, env) {
+  if (!adminLayer1Configured(env)) return true;
+  const value = getCookie(request, "st_admin_pre_auth");
+  const [payload, sig] = value.split(".");
+  if (!payload || !sig) return false;
+  const expected = await hmacHex(env.ADMIN_LAYER1_SESSION_SECRET, payload);
+  if (!timingSafeEqual(sig, expected)) return false;
+  try {
+    const decoded = JSON.parse(base64UrlDecodeToString(payload));
+    return Number(decoded?.exp || 0) > Date.now();
+  } catch {
+    return false;
+  }
+}
+
+async function requireAdminLayer1(request, env) {
+  if (!(await hasAdminLayer1Session(request, env))) {
+    throw new Error("preauth_required");
+  }
+}
+
+async function handleAdminPreauth(request, env) {
+  if (!adminLayer1Configured(env)) {
+    return json({ success: false, error: "admin_layer1_not_configured" }, 503, corsHeaders(request, env));
+  }
+  const body = await request.json().catch(() => null);
+  const username = String(body?.username || "").trim();
+  const password = String(body?.password || "");
+  const expectedUsername = String(env.ADMIN_LAYER1_USERNAME || "").trim();
+  const expectedPassword = String(env.ADMIN_LAYER1_PASSWORD || "");
+  if (!timingSafeEqual(username, expectedUsername) || !timingSafeEqual(password, expectedPassword)) {
+    return json({ success: false, authenticated: false, error: "invalid_credentials" }, 401, corsHeaders(request, env));
+  }
+  const headers = { ...corsHeaders(request, env), "Set-Cookie": await createAdminLayer1Cookie(env, username) };
+  return json({ success: true, authenticated: true }, 200, headers);
+}
+
+function handleAdminPreauthLogout(request, env) {
+  return json(
+    { success: true },
+    200,
+    {
+      ...corsHeaders(request, env),
+      "Set-Cookie": "st_admin_pre_auth=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Strict",
+    },
+  );
 }
 
 function parseAdminAllowlist(env) {
@@ -618,11 +743,11 @@ async function listLicenses(url, env) {
 
 async function createLicense(request, env, adminEmail) {
   const body = await request.json();
-  const licenseKey = String(body?.license_key || body?.licenseKey || "").trim();
+  const licenseKey = String(body?.license_key || body?.licenseKey || "").trim().toUpperCase() || buildLicenseKey();
   const plan = String(body?.plan || "monthly").trim().toLowerCase();
   const tier = String(body?.tier || "public").trim().toLowerCase();
   const expiresAt = String(body?.expires_at || "").trim();
-  if (!licenseKey || !expiresAt) throw new Error("missing_license_fields");
+  if (!expiresAt) throw new Error("missing_license_fields");
   const payload = {
     license_key: licenseKey,
     user_email: String(body?.user_email || "").trim() || null,
@@ -779,10 +904,11 @@ async function ingestCrashLog(request, env) {
 }
 
 function buildLicenseKey() {
-  const a = crypto.randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase();
-  const b = crypto.randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase();
-  const c = Date.now().toString(36).toUpperCase().slice(-6);
-  return `STK-${a}-${b}-${c}`;
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  const group = (offset) => Array.from(bytes.slice(offset, offset + 8), (byte) => chars[byte % chars.length]).join("");
+  return `SATAN-${group(0)}-${group(8)}-${group(16)}-${group(24)}`;
 }
 
 function addPlanDuration(startIso, plan) {

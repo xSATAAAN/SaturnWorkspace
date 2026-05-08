@@ -165,11 +165,11 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
   }
 
   const handleCreateLicense = async () => {
-    if (!newLicenseKey.trim() || !newLicenseExpiry) return
+    if (!newLicenseExpiry) return
     setSavingLicense(true)
     try {
       const res = await createLicense({
-        license_key: newLicenseKey.trim(),
+        license_key: newLicenseKey.trim() || undefined,
         user_email: newLicenseEmail.trim() || undefined,
         plan: newLicensePlan,
         tier: newLicenseTier,

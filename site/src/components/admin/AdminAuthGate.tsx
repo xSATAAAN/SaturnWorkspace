@@ -8,8 +8,7 @@ import {
   signOut,
   type User,
 } from 'firebase/auth'
-import { setAdminBearerToken } from '../../api/admin'
-import { fetchAdminDashboard } from '../../api/admin'
+import { clearAdminPreauth, fetchAdminDashboard, fetchAdminPreauthState, setAdminBearerToken, submitAdminPreauth } from '../../api/admin'
 import { firebaseAuth } from '../../lib/firebase'
 
 type AdminAuthGateProps = {
@@ -18,9 +17,6 @@ type AdminAuthGateProps = {
 }
 
 const TOKEN_REFRESH_MS = 40 * 60 * 1000
-const PRE_AUTH_SESSION_KEY = 'st_admin_layer1_ok'
-const LAYER1_USERNAME = 'stk_admin_gate_9Q7vK2'
-const LAYER1_PASSWORD = 'M9!vT2#pL7@xR4$hN8'
 
 export function AdminAuthGate({ lang, children }: AdminAuthGateProps) {
   const isAr = lang === 'ar'
@@ -33,10 +29,7 @@ export function AdminAuthGate({ lang, children }: AdminAuthGateProps) {
   const [authorizing, setAuthorizing] = useState(false)
   const [isAuthorized, setIsAuthorized] = useState(false)
   const [authzError, setAuthzError] = useState<string | null>(null)
-  const [layer1Passed, setLayer1Passed] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false
-    return window.sessionStorage.getItem(PRE_AUTH_SESSION_KEY) === '1'
-  })
+  const [layer1Passed, setLayer1Passed] = useState(false)
 
   const labels = useMemo(
     () =>
@@ -110,6 +103,20 @@ export function AdminAuthGate({ lang, children }: AdminAuthGateProps) {
   }, [])
 
   useEffect(() => {
+    let alive = true
+    void fetchAdminPreauthState()
+      .then((state) => {
+        if (alive) setLayer1Passed(Boolean(state.authenticated))
+      })
+      .catch(() => {
+        if (alive) setLayer1Passed(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  useEffect(() => {
     if (!user) return
     const timer = window.setInterval(() => {
       void user.getIdToken(true).then((token) => {
@@ -131,23 +138,32 @@ export function AdminAuthGate({ lang, children }: AdminAuthGateProps) {
   const handleLayer1Submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setLayer1Error(null)
-    const valid = layer1UserInput.trim() === LAYER1_USERNAME && layer1PassInput === LAYER1_PASSWORD
-    if (!valid) {
-      setLayer1Error(labels.layer1Invalid)
-      return
-    }
-    setLayer1Passed(true)
-    window.sessionStorage.setItem(PRE_AUTH_SESSION_KEY, '1')
-    setLayer1PassInput('')
+    void submitAdminPreauth({
+      username: layer1UserInput.trim(),
+      password: layer1PassInput,
+    })
+      .then((result) => {
+        if (!result.authenticated) {
+          setLayer1Error(labels.layer1Invalid)
+          return
+        }
+        setLayer1Passed(true)
+        setLayer1PassInput('')
+      })
+      .catch(() => {
+        setLayer1Error(labels.layer1Invalid)
+      })
   }
 
   const handleSignOut = async () => {
     setError(null)
     try {
       await signOut(firebaseAuth)
+      await clearAdminPreauth().catch(() => {
+        // Session cookie may already be gone.
+      })
       setAdminBearerToken(null)
       setLayer1Passed(false)
-      window.sessionStorage.removeItem(PRE_AUTH_SESSION_KEY)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'logout_failed')
     }

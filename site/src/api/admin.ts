@@ -53,16 +53,16 @@ export type AdminCrashLog = {
 
 function getAdminToken() {
   if (inMemoryBearerToken) return inMemoryBearerToken
-  return window.localStorage.getItem(ADMIN_FIREBASE_TOKEN_KEY) || ''
+  return window.sessionStorage.getItem(ADMIN_FIREBASE_TOKEN_KEY) || ''
 }
 
 export function setAdminBearerToken(token: string | null) {
   inMemoryBearerToken = token?.trim() || ''
   if (inMemoryBearerToken) {
-    window.localStorage.setItem(ADMIN_FIREBASE_TOKEN_KEY, inMemoryBearerToken)
+    window.sessionStorage.setItem(ADMIN_FIREBASE_TOKEN_KEY, inMemoryBearerToken)
     return
   }
-  window.localStorage.removeItem(ADMIN_FIREBASE_TOKEN_KEY)
+  window.sessionStorage.removeItem(ADMIN_FIREBASE_TOKEN_KEY)
 }
 
 async function adminFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -71,7 +71,7 @@ async function adminFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = getAdminToken()
   if (token) headers.set('Authorization', `Bearer ${token}`)
 
-  const response = await fetch(`${ADMIN_BASE}${path}`, { ...init, headers })
+  const response = await fetch(`${ADMIN_BASE}${path}`, { ...init, headers, credentials: 'same-origin' })
   let payload: unknown
   try {
     payload = await response.json()
@@ -88,6 +88,23 @@ async function adminFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   return payload as T
 }
 
+export async function fetchAdminPreauthState() {
+  return adminFetch<{ success: boolean; authenticated: boolean }>('/preauth/state')
+}
+
+export async function submitAdminPreauth(payload: { username: string; password: string }) {
+  return adminFetch<{ success: boolean; authenticated: boolean }>('/preauth', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function clearAdminPreauth() {
+  return adminFetch<{ success: boolean }>('/preauth/logout', {
+    method: 'POST',
+  })
+}
+
 export async function fetchAdminDashboard() {
   return adminFetch<{ success: boolean; kpis?: Record<string, number | null>; recent_activity?: unknown[] }>('/dashboard')
 }
@@ -97,7 +114,7 @@ export async function fetchLicenses() {
 }
 
 export async function createLicense(payload: {
-  license_key: string
+  license_key?: string
   user_email?: string
   plan: 'monthly' | 'yearly'
   tier: 'public' | 'private'
