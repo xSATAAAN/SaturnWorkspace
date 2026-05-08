@@ -13,6 +13,7 @@ create table if not exists public.licenses (
   id uuid primary key default gen_random_uuid(),
   license_key text not null unique,
   user_id uuid,
+  firebase_user_id text,
   user_email text,
   plan public.subscription_plan not null,
   tier public.license_tier not null default 'public',
@@ -32,6 +33,7 @@ create table if not exists public.licenses (
 );
 
 create index if not exists licenses_user_id_idx on public.licenses(user_id);
+create index if not exists licenses_firebase_user_id_idx on public.licenses(firebase_user_id);
 create index if not exists licenses_status_idx on public.licenses(status);
 create index if not exists licenses_tier_idx on public.licenses(tier);
 create index if not exists licenses_hwid_idx on public.licenses(hwid);
