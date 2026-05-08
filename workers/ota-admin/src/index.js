@@ -584,7 +584,7 @@ function safeInt(value, fallback = 25, max = 200) {
 async function getAdminDashboard(env) {
   const [licenses, crashes, alerts, updates] = await Promise.all([
     supabaseRequest(env, "licenses", "GET", { query: "select=id,status,tier,created_at&limit=200" }),
-    supabaseRequest(env, "crash_logs", "GET", { query: "select=id,error_type,happened_at,user_id&order=happened_at.desc&limit=20" }),
+    safeSupabaseRead(env, "crash_logs", "select=id,error_type,happened_at,user_id&order=happened_at.desc&limit=20"),
     supabaseRequest(env, "tamper_alerts", "GET", { query: "select=id,severity,resolved,happened_at,reason&resolved=is.false&order=happened_at.desc&limit=50" }),
     supabaseRequest(env, "ota_updates", "GET", { query: "select=id,version,channel,is_mandatory,is_published,created_at&order=created_at.desc&limit=20" }),
   ]);
@@ -725,10 +725,24 @@ async function createOtaUpdate(request, env, adminEmail) {
 
 async function listCrashLogs(url, env) {
   const limit = safeInt(url.searchParams.get("limit"), 50);
-  const data = await supabaseRequest(env, "crash_logs", "GET", {
-    query: `select=*&order=happened_at.desc&limit=${limit}`,
-  });
+  const data = await safeSupabaseRead(env, "crash_logs", `select=*&order=happened_at.desc&limit=${limit}`);
   return { success: true, items: data || [] };
+}
+
+async function safeSupabaseRead(env, table, query) {
+  try {
+    return await supabaseRequest(env, table, "GET", { query });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error || "");
+    if (isMissingSupabaseTable(message, table)) return [];
+    throw error;
+  }
+}
+
+function isMissingSupabaseTable(message, table) {
+  const text = String(message || "").toLowerCase();
+  const tableName = String(table || "").toLowerCase();
+  return text.includes("schema cache") && text.includes(`public.${tableName}`);
 }
 
 async function ingestCrashLog(request, env) {

@@ -38,9 +38,9 @@ export function AdminAuthGate({ lang, children }: AdminAuthGateProps) {
     () =>
       isAr
         ? {
-            title: 'تسجيل دخول الإدارة',
+            title: 'تسجيل الدخول',
             subtitle: 'سجل الدخول بحساب Google المصرح له للوصول إلى لوحة الأدمن.',
-            layer1Title: 'التحقق الأول',
+            layer1Title: 'تسجيل الدخول',
             layer1Subtitle: 'أدخل البريد وكلمة المرور للمتابعة إلى تسجيل دخول Google.',
             fakeEmailLabel: 'البريد الإلكتروني',
             fakePassLabel: 'كلمة المرور',
@@ -50,9 +50,9 @@ export function AdminAuthGate({ lang, children }: AdminAuthGateProps) {
             logout: 'تسجيل الخروج',
           }
         : {
-            title: 'Admin Sign In',
+            title: 'Sign In',
             subtitle: 'Use your allowed Google account to access the dashboard.',
-            layer1Title: 'Layer 1 Verification',
+            layer1Title: 'Sign In',
             layer1Subtitle: 'Enter email and password to continue to Google sign-in.',
             fakeEmailLabel: 'Email',
             fakePassLabel: 'Password',
@@ -133,13 +133,17 @@ export function AdminAuthGate({ lang, children }: AdminAuthGateProps) {
   }
 
   if (loading) {
-    return <section className="mx-auto mt-8 w-full max-w-xl rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/75">Loading authentication...</section>
+    return (
+      <main className="mx-auto flex min-h-screen w-full max-w-xl items-center justify-center px-4">
+        <section className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/75">Loading authentication...</section>
+      </main>
+    )
   }
 
   if (!layer1Passed) {
     return (
-      <main className="mx-auto mt-10 w-full max-w-xl px-4">
-        <section className="surface-card p-6">
+      <main className="mx-auto flex min-h-screen w-full max-w-xl items-center justify-center px-4">
+        <section className="surface-card w-full p-6">
           <h1 className="text-xl font-bold text-white">{labels.layer1Title}</h1>
           <p className="mt-2 text-sm text-white/70">{labels.layer1Subtitle}</p>
           <form className="mt-4 grid gap-3" onSubmit={handleLayer1Submit}>
@@ -171,8 +175,8 @@ export function AdminAuthGate({ lang, children }: AdminAuthGateProps) {
 
   if (!user) {
     return (
-      <main className="mx-auto mt-10 w-full max-w-xl px-4">
-        <section className="surface-card p-6">
+      <main className="mx-auto flex min-h-screen w-full max-w-xl items-center justify-center px-4">
+        <section className="surface-card w-full p-6">
           <h1 className="text-xl font-bold text-white">{labels.title}</h1>
           <p className="mt-2 text-sm text-white/70">{labels.subtitle}</p>
           {error ? <p className="mt-3 rounded-lg border border-rose-300/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-100">{error}</p> : null}
