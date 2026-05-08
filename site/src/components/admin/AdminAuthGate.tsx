@@ -9,6 +9,7 @@ import {
   type User,
 } from 'firebase/auth'
 import { setAdminBearerToken } from '../../api/admin'
+import { fetchAdminDashboard } from '../../api/admin'
 import { firebaseAuth } from '../../lib/firebase'
 
 type AdminAuthGateProps = {
@@ -29,6 +30,9 @@ export function AdminAuthGate({ lang, children }: AdminAuthGateProps) {
   const [layer1Error, setLayer1Error] = useState<string | null>(null)
   const [layer1UserInput, setLayer1UserInput] = useState('')
   const [layer1PassInput, setLayer1PassInput] = useState('')
+  const [authorizing, setAuthorizing] = useState(false)
+  const [isAuthorized, setIsAuthorized] = useState(false)
+  const [authzError, setAuthzError] = useState<string | null>(null)
   const [layer1Passed, setLayer1Passed] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false
     return window.sessionStorage.getItem(PRE_AUTH_SESSION_KEY) === '1'
@@ -48,6 +52,8 @@ export function AdminAuthGate({ lang, children }: AdminAuthGateProps) {
             layer1Invalid: 'بيانات التحقق غير صحيحة.',
             login: 'تسجيل الدخول عبر Google',
             logout: 'تسجيل الخروج',
+            accessDenied: 'هذا الحساب غير مصرح له بالدخول.',
+            authChecking: 'جار التحقق من صلاحية الحساب...',
           }
         : {
             title: 'Sign In',
@@ -60,6 +66,8 @@ export function AdminAuthGate({ lang, children }: AdminAuthGateProps) {
             layer1Invalid: 'Invalid verification credentials.',
             login: 'Sign In With Google',
             logout: 'Sign out',
+            accessDenied: 'This Google account is not allowed.',
+            authChecking: 'Verifying account access...',
           },
     [isAr],
   )
@@ -77,11 +85,24 @@ export function AdminAuthGate({ lang, children }: AdminAuthGateProps) {
         try {
           const token = await nextUser.getIdToken()
           setAdminBearerToken(token)
+          setAuthorizing(true)
+          setAuthzError(null)
+          await fetchAdminDashboard()
+          setIsAuthorized(true)
         } catch {
           setAdminBearerToken(null)
+          setIsAuthorized(false)
+          setAuthzError(labels.accessDenied)
+          void signOut(firebaseAuth).catch(() => {
+            // no-op
+          })
+        } finally {
+          setAuthorizing(false)
         }
       } else {
         setAdminBearerToken(null)
+        setIsAuthorized(false)
+        setAuthzError(null)
       }
       setLoading(false)
     })
@@ -182,6 +203,30 @@ export function AdminAuthGate({ lang, children }: AdminAuthGateProps) {
           {error ? <p className="mt-3 rounded-lg border border-rose-300/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-100">{error}</p> : null}
           <button className="btn-primary mt-4 rounded-xl px-4 py-2 text-sm font-semibold" onClick={() => void handleSignIn()}>
             {labels.login}
+          </button>
+        </section>
+      </main>
+    )
+  }
+
+  if (authorizing) {
+    return (
+      <main className="mx-auto flex min-h-screen w-full max-w-xl items-center justify-center px-4">
+        <section className="surface-card w-full p-6 text-center">
+          <p className="text-sm text-white/75">{labels.authChecking}</p>
+        </section>
+      </main>
+    )
+  }
+
+  if (!isAuthorized) {
+    return (
+      <main className="mx-auto flex min-h-screen w-full max-w-xl items-center justify-center px-4">
+        <section className="surface-card w-full p-6">
+          <h1 className="text-xl font-bold text-white">{labels.title}</h1>
+          <p className="mt-2 text-sm text-rose-200">{authzError || labels.accessDenied}</p>
+          <button className="btn-primary mt-4 rounded-xl px-4 py-2 text-sm font-semibold" onClick={() => void handleSignOut()}>
+            {labels.logout}
           </button>
         </section>
       </main>
