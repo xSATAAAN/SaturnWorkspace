@@ -2,9 +2,17 @@ name = "satan-toolkit-ota-admin"
 main = "src/index.js"
 compatibility_date = "2026-05-01"
 
-[[r2_buckets]]
-binding = "OTA_BUCKET"
-bucket_name = "satan-toolkit-ota"
+routes = [
+  { pattern = "admin.satantoolkit.com/*", zone_name = "satantoolkit.com" },
+  { pattern = "satantoolkit.com/updates/*", zone_name = "satantoolkit.com" },
+  { pattern = "admin-api.satantoolkit.com/api/*", zone_name = "satantoolkit.com" }
+]
+
+# NOTE: R2 binding is temporarily disabled for deployability on accounts
+# where R2 isn't enabled yet. Re-enable after activating R2 in dashboard.
+# [[r2_buckets]]
+# binding = "OTA_BUCKET"
+# bucket_name = "satan-toolkit-ota"
 
 [vars]
 ADMIN_ORIGIN = "https://admin.satantoolkit.com"
@@ -14,8 +22,12 @@ PAYMENTS_ALLOWED_ORIGIN = "https://satantoolkit.com"
 # ENOT_CREATE_URL = "https://api.enot.io/v1/payment/create"
 # ENOT_SUCCESS_URL = "https://satantoolkit.com/?payment=success"
 # ENOT_FAIL_URL = "https://satantoolkit.com/?payment=failed"
-# ADMIN_EMAIL_ALLOWLIST = "you@example.com,admin@example.com"
-# ADMIN_API_TOKEN = "optional-fallback-token"
+# ADMIN_EMAIL_ALLOWLIST = ""
+# ADMIN_API_TOKEN = ""
+# SUPABASE_URL = ""
+# SUPABASE_SERVICE_ROLE_KEY = ""
+# CRASH_INGEST_TOKEN = ""
+# LICENSE_ISSUE_TOKEN = ""
 # ENOT_API_KEY = "set_as_secret"
 # ENOT_MERCHANT_ID = "set_as_secret"
 # ENOT_WEBHOOK_SECRET = "set_as_secret"

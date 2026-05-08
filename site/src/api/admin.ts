@@ -1,0 +1,146 @@
+import { ApiError } from './http'
+
+const ADMIN_BASE = '/api/admin'
+
+export type AdminLicense = {
+  id: string
+  license_key: string
+  user_email?: string | null
+  plan: 'monthly' | 'yearly'
+  tier: 'public' | 'private'
+  status: 'active' | 'suspended' | 'revoked' | 'expired'
+  hwid?: string | null
+  expires_at: string
+  created_at: string
+}
+
+export type AdminPromoCode = {
+  id: string
+  code: string
+  discount_type: 'percent' | 'fixed'
+  discount_value: number
+  is_private_tier_trigger: boolean
+  is_active: boolean
+  max_uses?: number | null
+  used_count?: number
+  expires_at?: string | null
+}
+
+export type AdminOtaUpdate = {
+  id: string
+  version: string
+  channel: string
+  release_notes: string
+  download_url: string
+  is_mandatory: boolean
+  is_published: boolean
+  created_at: string
+}
+
+export type AdminCrashLog = {
+  id: string
+  happened_at: string
+  user_id?: string | null
+  windows_version?: string | null
+  cpu?: string | null
+  gpu?: string | null
+  ram_gb?: number | null
+  error_type: string
+  stack_trace: string
+}
+
+function getAdminToken() {
+  return window.localStorage.getItem('st_admin_token') || ''
+}
+
+async function adminFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const headers = new Headers(init.headers || {})
+  if (!headers.has('Content-Type') && init.body) headers.set('Content-Type', 'application/json')
+  const token = getAdminToken()
+  if (token) headers.set('Authorization', `Bearer ${token}`)
+
+  const response = await fetch(`${ADMIN_BASE}${path}`, { ...init, headers })
+  let payload: unknown
+  try {
+    payload = await response.json()
+  } catch {
+    payload = undefined
+  }
+  if (!response.ok) {
+    const message =
+      typeof payload === 'object' && payload !== null && 'error' in payload && typeof payload.error === 'string'
+        ? payload.error
+        : `request_failed_${response.status}`
+    throw new ApiError(message, response.status)
+  }
+  return payload as T
+}
+
+export async function fetchAdminDashboard() {
+  return adminFetch<{ success: boolean; kpis?: Record<string, number | null>; recent_activity?: unknown[] }>('/dashboard')
+}
+
+export async function fetchLicenses() {
+  return adminFetch<{ success: boolean; items: AdminLicense[] }>('/licenses?limit=100')
+}
+
+export async function createLicense(payload: {
+  license_key: string
+  user_email?: string
+  plan: 'monthly' | 'yearly'
+  tier: 'public' | 'private'
+  expires_at: string
+}) {
+  return adminFetch<{ success: boolean; item: AdminLicense }>('/licenses', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function patchLicenseStatus(id: string, status: AdminLicense['status']) {
+  return adminFetch<{ success: boolean; item: AdminLicense }>(`/licenses/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  })
+}
+
+export async function fetchPromoCodes() {
+  return adminFetch<{ success: boolean; items: AdminPromoCode[] }>('/promo-codes?limit=100')
+}
+
+export async function createPromoCode(payload: {
+  code: string
+  discount_type: 'percent' | 'fixed'
+  discount_value: number
+  is_private_tier_trigger: boolean
+  max_uses?: number
+  expires_at?: string
+}) {
+  return adminFetch<{ success: boolean; item: AdminPromoCode }>('/promo-codes', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function fetchOtaUpdates() {
+  return adminFetch<{ success: boolean; items: AdminOtaUpdate[] }>('/ota-updates?limit=100')
+}
+
+export async function createOtaUpdate(payload: {
+  version: string
+  channel: string
+  release_notes: string
+  download_url: string
+  is_mandatory: boolean
+  is_published?: boolean
+}) {
+  return adminFetch<{ success: boolean; item: AdminOtaUpdate }>('/ota-updates', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function fetchCrashLogs() {
+  return adminFetch<{ success: boolean; items: AdminCrashLog[] }>('/crash-logs?limit=100')
+}
+
