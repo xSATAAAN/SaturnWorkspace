@@ -135,9 +135,7 @@ async function proxyAdminFrontend(url) {
   source.hostname = "satantoolkit.com";
   source.protocol = "https:";
   source.port = "";
-  if (source.pathname === "/" || source.pathname === "") {
-    source.pathname = "/";
-  }
+  source.hash = "";
   const upstream = await fetch(source.toString(), {
     method: "GET",
     headers: {
@@ -145,10 +143,28 @@ async function proxyAdminFrontend(url) {
       "Accept": "*/*",
     },
   });
-  const headers = new Headers(upstream.headers);
+
+  const path = source.pathname || "/";
+  const lastSegment = path.split("/").pop() || "";
+  const looksLikeStaticFile = lastSegment.includes(".");
+  let finalUpstream = upstream;
+  if (upstream.status === 404 && !looksLikeStaticFile) {
+    const fallback = new URL(source.toString());
+    fallback.pathname = "/";
+    fallback.search = "";
+    finalUpstream = await fetch(fallback.toString(), {
+      method: "GET",
+      headers: {
+        "User-Agent": "SATAN-Toolkit-AdminProxy/1",
+        "Accept": "*/*",
+      },
+    });
+  }
+
+  const headers = new Headers(finalUpstream.headers);
   headers.set("Cache-Control", "no-store");
-  return new Response(upstream.body, {
-    status: upstream.status,
+  return new Response(finalUpstream.body, {
+    status: finalUpstream.status,
     headers,
   });
 }
@@ -189,15 +205,51 @@ async function requireAdmin(request, env) {
     if (provided === configuredToken) return "token-admin";
   }
 
+  if (bearer.startsWith("Bearer ")) {
+    const idToken = bearer.slice("Bearer ".length).trim();
+    if (idToken) {
+      const firebaseAdminEmail = await verifyFirebaseAdminEmail(idToken, env);
+      if (firebaseAdminEmail) {
+        return firebaseAdminEmail;
+      }
+    }
+  }
+
   const email = (request.headers.get("cf-access-authenticated-user-email") || "").trim().toLowerCase();
-  const allowlist = String(env.ADMIN_EMAIL_ALLOWLIST || "")
-    .split(",")
-    .map((item) => item.trim().toLowerCase())
-    .filter(Boolean);
+  const allowlist = parseAdminAllowlist(env);
   if (!email || !allowlist.includes(email)) {
     throw new Error("unauthorized");
   }
   return email;
+}
+
+function parseAdminAllowlist(env) {
+  return String(env.ADMIN_EMAIL_ALLOWLIST || "")
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+async function verifyFirebaseAdminEmail(idToken, env) {
+  const allowlist = parseAdminAllowlist(env);
+  if (!allowlist.length) return null;
+  const webApiKey = String(env.FIREBASE_WEB_API_KEY || "").trim();
+  if (!webApiKey) return null;
+
+  const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${encodeURIComponent(webApiKey)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json; charset=utf-8" },
+    body: JSON.stringify({ idToken }),
+  });
+  if (!response.ok) return null;
+
+  const payload = await response.json().catch(() => null);
+  const user = payload?.users?.[0];
+  const email = String(user?.email || "").trim().toLowerCase();
+  const emailVerified = Boolean(user?.emailVerified);
+
+  if (!email || !emailVerified) return null;
+  return allowlist.includes(email) ? email : null;
 }
 
 function normalizeChannel(value) {

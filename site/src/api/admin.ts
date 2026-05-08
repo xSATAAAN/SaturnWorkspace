@@ -1,6 +1,8 @@
 import { ApiError } from './http'
 
 const ADMIN_BASE = '/api/admin'
+const ADMIN_FIREBASE_TOKEN_KEY = 'st_admin_firebase_token'
+let inMemoryBearerToken = ''
 
 export type AdminLicense = {
   id: string
@@ -50,7 +52,17 @@ export type AdminCrashLog = {
 }
 
 function getAdminToken() {
-  return window.localStorage.getItem('st_admin_token') || ''
+  if (inMemoryBearerToken) return inMemoryBearerToken
+  return window.localStorage.getItem(ADMIN_FIREBASE_TOKEN_KEY) || ''
+}
+
+export function setAdminBearerToken(token: string | null) {
+  inMemoryBearerToken = token?.trim() || ''
+  if (inMemoryBearerToken) {
+    window.localStorage.setItem(ADMIN_FIREBASE_TOKEN_KEY, inMemoryBearerToken)
+    return
+  }
+  window.localStorage.removeItem(ADMIN_FIREBASE_TOKEN_KEY)
 }
 
 async function adminFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
