@@ -13,7 +13,12 @@ Designed for GitHub Pages deployment.
   - `src/components/`: modular UI sections and reusable blocks
   - `src/api/`: typed browser API clients (no sensitive payment logic)
   - `src/constants/`: static display copy and UI constants
-- `workers/ota-admin/`: Cloudflare Worker backend
+- `workers/auth/`: Cloudflare Worker for device login, license/session checks, and Google Drive OAuth config delivery
+- `workers/admin/`: Cloudflare Worker backend
   - OTA release routes
-  - payment routes for secure checkout orchestration
+  - manual payment request routes until the replacement payment gateway is selected
   - validation/security/services split for maintainability
+
+## Cloudflare Secrets
+
+Run `scripts\setup-cloudflare-secrets.bat` from Windows to generate local random Worker secrets and upload both auth/admin Worker secrets without saving secret values in the repository.

@@ -10,8 +10,6 @@ Cloudflare Worker serving:
 - `GET /oauth/google-drive-config` : returns Google Drive OAuth client config after authorization.
 - `GET /health` : basic health endpoint.
 
-`POST /webhook/enot` is present but disabled unless `ENOT_WEBHOOK_SECRET` is configured.
-
 ## 1) Install and run locally
 
 ```bash
@@ -70,7 +68,3 @@ Responses:
 - `{"success":true,"status":"activated","policy":{"allow":true}}`
 - `{"success":true,"status":"verified","policy":{"allow":true}}`
 - `{"success":false,"error":"hwid_mismatch"}`
-
-### POST /webhook/enot
-
-- Disabled unless `ENOT_WEBHOOK_SECRET` is configured.

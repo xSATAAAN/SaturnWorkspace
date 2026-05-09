@@ -1,17 +1,15 @@
-import { generateLicenseKey, hmacSha256Hex, randomBase64Url, randomUserCode, sha256Hex, timingSafeEqualHex } from "./lib/crypto"
+import { randomBase64Url, randomUserCode, sha256Hex } from "./lib/crypto"
 import { allowRateLimit } from "./lib/rateLimit"
 import {
   attachLicenseToUser,
   bindLicenseHwid,
   createAppSession,
   createDeviceLogin,
-  createLicense,
   getActiveLicenseForUser,
   getAppSessionByHash,
   getDeviceLoginByCode,
   getLicenseById,
   getLicenseByKey,
-  getLicenseByOrder,
   getPendingDeviceLoginByUserCode,
   revokeAppSession,
   touchAppSession,
@@ -46,53 +44,6 @@ function corsHeaders(env: Env, request?: Request): HeadersInit {
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
     Vary: "Origin",
   }
-}
-
-async function handleEnotWebhook(request: Request, env: Env): Promise<Response> {
-  if (!env.ENOT_WEBHOOK_SECRET) {
-    return json({ success: false, error: "payment_provider_disabled" }, 404)
-  }
-  const signatureHeaderName = String(env.ENOT_SIGNATURE_HEADER || "x-enot-signature").toLowerCase()
-  const bodyText = await request.text()
-  const providedSignature = request.headers.get(signatureHeaderName) || request.headers.get(signatureHeaderName.toUpperCase()) || ""
-  const expected = await hmacSha256Hex(env.ENOT_WEBHOOK_SECRET, bodyText)
-  if (!timingSafeEqualHex(providedSignature, expected)) {
-    return json({ success: false, error: "invalid_signature" }, 401)
-  }
-
-  let payload: any
-  try {
-    payload = JSON.parse(bodyText)
-  } catch {
-    return json({ success: false, error: "invalid_json" }, 400)
-  }
-
-  const status = String(payload?.status || payload?.payment_status || "").toLowerCase()
-  if (!["success", "paid", "completed"].includes(status)) {
-    return json({ success: true, ignored: true })
-  }
-
-  const orderId = String(payload?.order_id || payload?.invoice_id || payload?.id || "").trim()
-  const userEmail = String(payload?.email || payload?.customer_email || "").trim() || null
-  if (orderId) {
-    const existing = await getLicenseByOrder(env, "enot", orderId)
-    if (existing) {
-      return json({ success: true, license_key: existing.license_key, duplicate: true })
-    }
-  }
-
-  const licenseKey = generateLicenseKey()
-  const expiryIso = payload?.expiry_date ? new Date(payload.expiry_date).toISOString() : null
-  const row = await createLicense(env, {
-    license_key: licenseKey,
-    user_email: userEmail,
-    status: "active",
-    hwid: null,
-    expiry_date: expiryIso,
-    provider: "enot",
-    order_id: orderId || null,
-  })
-  return json({ success: true, license_key: row.license_key })
 }
 
 function oauthConfigPayload(env: Env): unknown {
@@ -432,10 +383,6 @@ export default {
     }
 
     try {
-      if (request.method === "POST" && url.pathname === "/webhook/enot") {
-        const res = await handleEnotWebhook(request, env)
-        return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
-      }
       if (request.method === "POST" && url.pathname === "/verify") {
         const res = await handleVerify(request, env)
         return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
