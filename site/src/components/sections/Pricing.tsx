@@ -7,20 +7,20 @@ type PricingProps = {
 }
 
 const FULL_FEATURES_EN = [
-  'Full SATAN Toolkit — Vault, Gmail, IP & every module',
+  'Full Saturn Workspace — Vault, Gmail, IP & every module',
   'Continuous updates and security fixes',
   'Email support for setup and licensing questions',
   'Same complete license — pick monthly or yearly billing',
 ]
 
 const FULL_FEATURES_AR = [
-  'SATAN Toolkit كامل — Vault وGmail وIP وكل الوحدات',
+  'Saturn Workspace كامل — Vault وGmail وIP وكل الوحدات',
   'تحديثات وأمان مستمرة',
   'دعم بالبريد للإعداد واستفسارات الترخيص',
   'نفس الترخيص الكامل — دفع شهري أو سنوي',
 ]
 
-const SUPPORT_EMAIL = 'admin@saturnws.com'
+const SUPPORT_EMAIL = 'support@saturnws.com'
 const DEV_TELEGRAM = 'https://t.me/v1u_0'
 
 export function Pricing({ lang }: PricingProps) {
@@ -30,7 +30,7 @@ export function Pricing({ lang }: PricingProps) {
   const t = isAr
     ? {
         tag: 'الأسعار',
-        title: 'خطط ترخيص SATAN Toolkit',
+        title: 'خطط ترخيص Saturn Workspace',
         desc: 'نفس المزايا الكاملة في الخطتين — الفرق في مدة الفوترة والعرض السنوي.',
         monthly: 'شهري',
         starter: 'مرن',
@@ -49,7 +49,7 @@ export function Pricing({ lang }: PricingProps) {
       }
     : {
         tag: 'PRICING',
-        title: 'License plans for SATAN Toolkit',
+        title: 'License plans for Saturn Workspace',
         desc: 'Both plans include the complete toolkit — billing cadence and the yearly promo differ.',
         monthly: 'Monthly',
         starter: 'Flexible',

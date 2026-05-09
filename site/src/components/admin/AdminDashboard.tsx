@@ -53,7 +53,7 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
     () =>
       isAr
         ? {
-            title: 'لوحة إدارة SATAN Toolkit',
+            title: 'لوحة إدارة Saturn Workspace',
             subtitle: 'إدارة التراخيص، أكواد الخصم، التحديثات الهوائية، وسجلات الأعطال.',
             publish: 'نشر تحديث',
             save: 'حفظ',
@@ -69,7 +69,7 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
             security: 'الأمان ومكافحة العبث',
           }
         : {
-            title: 'SATAN Toolkit Admin Dashboard',
+            title: 'Saturn Workspace Admin Dashboard',
             subtitle: 'Manage licenses, promo codes, OTA releases, crash telemetry, and security actions.',
             publish: 'Publish Update',
             save: 'Save',

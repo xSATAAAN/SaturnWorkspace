@@ -52,7 +52,7 @@ export function Feedback({ telegramUsername, lang }: FeedbackProps) {
 
   const href = useMemo(() => {
     const lines = [
-      `SATAN Toolkit - ${kind === 'issue' ? t.msgTitleIssue : t.msgTitleSuggestion}`,
+      `Saturn Workspace - ${kind === 'issue' ? t.msgTitleIssue : t.msgTitleSuggestion}`,
       `Contact: ${contact.trim() || t.notProvided}`,
       '---',
       message.trim() || '(empty)',

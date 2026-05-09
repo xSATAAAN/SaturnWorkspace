@@ -129,7 +129,7 @@ export function DeviceActivation({ lang }: DeviceActivationProps) {
                   className="h-11 rounded-xl border border-white/12 bg-white/5 px-3 text-sm text-white outline-none"
                   value={licenseKey}
                   onChange={(event) => setLicenseKey(event.target.value.toUpperCase())}
-                  placeholder="SATAN-XXXX-XXXX-XXXX-XXXX"
+                  placeholder="SATURN-XXXX-XXXX-XXXX-XXXX"
                   dir="ltr"
                 />
                 <span className="text-xs text-white/45">{t.licenseHint}</span>

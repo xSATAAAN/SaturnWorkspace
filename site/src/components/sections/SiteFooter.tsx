@@ -11,7 +11,7 @@ export function SiteFooter({ copy, isAr }: SiteFooterProps) {
       <div className="mx-auto max-w-6xl px-5 py-10">
         <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="text-sm font-semibold text-white">SATAN Toolkit</div>
+            <div className="text-sm font-semibold text-white">Saturn Workspace</div>
             <div className="mt-1 text-sm text-white/60">{copy.footerDesc}</div>
           </div>
           <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
@@ -32,7 +32,7 @@ export function SiteFooter({ copy, isAr }: SiteFooterProps) {
             </a>
           </div>
         </div>
-        <div className="mt-8 text-xs text-white/45">© {new Date().getFullYear()} SATAN Toolkit</div>
+        <div className="mt-8 text-xs text-white/45">© {new Date().getFullYear()} Saturn Workspace</div>
       </div>
     </footer>
   )

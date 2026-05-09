@@ -1,0 +1,17 @@
+name = "saturnws-auth"
+account_id = "0665376659b7e5b47ccc2114b25f75a6"
+main = "src/index.ts"
+compatibility_date = "2026-05-04"
+workers_dev = true
+routes = [
+  { pattern = "auth.saturnws.com/*", zone_name = "saturnws.com" }
+]
+
+[observability]
+enabled = true
+
+[vars]
+APP_ENV = "production"
+VERIFY_RATE_LIMIT_PER_MIN = "40"
+ALLOW_ORIGIN = "https://saturnws.com,https://www.saturnws.com,https://admin.saturnws.com"
+DEVICE_LOGIN_URL = "https://saturnws.com/activate"

@@ -1,6 +1,6 @@
-# SATAN Toolkit Legal
+# Saturn Workspace Legal
 
-Public legal pages for SATAN Toolkit.
+Public legal pages for Saturn Workspace.
 
 - `index.html`: app homepage
 - `privacy.html`: privacy policy

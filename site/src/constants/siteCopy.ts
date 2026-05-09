@@ -9,7 +9,7 @@ const arCopy: SiteCopy = {
   heroTitleB: 'حسابات Bybit باحترافية',
   heroTitleC: 'من داخل مساحة عمل واحدة على جهازك.',
   heroDesc:
-    'SATAN Toolkit بتخليك تدير الحسابات بشكل منظم: تخزين حسابات Bybit، تخزين Gmail احترافي، جلسات سريعة، ومزامنة آمنة على Google Drive الشخصي للمستخدم.',
+    'Saturn Workspace بتخليك تدير الحسابات بشكل منظم: تخزين حسابات Bybit، تخزين Gmail احترافي، جلسات سريعة، ومزامنة آمنة على Google Drive الشخصي للمستخدم.',
   ctaStart: 'ابدأ الآن',
   ctaExplore: 'استكشف المزايا',
   stats: [
@@ -93,7 +93,7 @@ const enCopy: SiteCopy = {
   heroTitleB: 'Bybit account operations',
   heroTitleC: 'in one local-first desktop workspace.',
   heroDesc:
-    'SATAN Toolkit helps you run Bybit account operations with discipline: account vault, professional Gmail storage, fast session tools, and private cloud backup to your own Google Drive account.',
+    'Saturn Workspace helps you run Bybit account operations with discipline: account vault, professional Gmail storage, fast session tools, and private cloud backup to your own Google Drive account.',
   ctaStart: 'Start now',
   ctaExplore: 'Explore modules',
   stats: [
@@ -102,7 +102,7 @@ const enCopy: SiteCopy = {
     { label: 'Quick session start', value: '< 2 min', hint: 'AdsPower with/without proxy' },
   ],
   featuresTag: 'FEATURES',
-  featuresTitle: 'Built for real SATAN Toolkit workflows',
+  featuresTitle: 'Built for real Saturn Workspace workflows',
   featuresDesc: 'Every module serves actual execution: create, run, review, sync, and reopen accounts quickly.',
   features: [
     {
@@ -158,7 +158,7 @@ const enCopy: SiteCopy = {
   faqTag: 'FAQ',
   faqTitle: 'Questions from real users',
   faq: [
-    { q: 'Does SATAN Toolkit work locally?', a: 'Yes. Core operations are local-first. Cloud sync is optional and user-controlled.' },
+    { q: 'Does Saturn Workspace work locally?', a: 'Yes. Core operations are local-first. Cloud sync is optional and user-controlled.' },
     { q: 'Which Windows versions are supported?', a: 'Windows 10 and Windows 11.' },
     { q: 'Is license per device?', a: 'Yes. Each license is bound to one device unless agreed otherwise.' },
     { q: 'Which browsers are supported now?', a: 'AdsPower and Brave are supported now. More browsers may be added later.' },

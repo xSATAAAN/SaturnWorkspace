@@ -1,6 +1,9 @@
+node_modules/
 site/node_modules/
 site/dist/
 site/.vite/
 site/*.tsbuildinfo
+workers/**/node_modules/
+workers/**/dist-worker/
 workers/**/.wrangler/
 
