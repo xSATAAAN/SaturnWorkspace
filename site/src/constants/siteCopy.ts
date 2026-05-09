@@ -160,9 +160,9 @@ const enCopy: SiteCopy = {
   faq: [
     { q: 'Does Saturn Workspace work locally?', a: 'Yes. Core operations are local-first. Cloud sync is optional and user-controlled.' },
     { q: 'Which Windows versions are supported?', a: 'Windows 10 and Windows 11.' },
-    { q: 'Is license per device?', a: 'Yes. Each license is bound to one device unless agreed otherwise.' },
+    { q: 'Is the subscription per device?', a: 'Yes. Each subscription is bound to one device unless agreed otherwise.' },
     { q: 'Which browsers are supported now?', a: 'AdsPower and Brave are supported now. More browsers may be added later.' },
-    { q: 'How do I receive activation?', a: 'After order confirmation, activation details are sent directly.' },
+    { q: 'How do I get access?', a: 'After payment confirmation, the subscription appears on the same Google account used in the desktop app.' },
   ],
   footerDesc: 'Official desktop toolkit for Vault, Gmail, IP, and controlled cloud sync workflows.',
   footerPrivacy: 'Privacy',

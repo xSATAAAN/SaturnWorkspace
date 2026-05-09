@@ -14,7 +14,7 @@ import {
   touchSubscription,
   updateDeviceLogin,
 } from "./lib/supabase"
-import { isLicenseExpired, isValidHwid, normalizeHwid } from "./lib/validators"
+import { isIsoExpired, isValidHwid, normalizeHwid } from "./lib/validators"
 import type { Env } from "./types"
 
 function json(data: unknown, status = 200, extraHeaders: HeadersInit = {}): Response {
@@ -137,7 +137,7 @@ function verificationUrl(env: Env, userCode: string): string {
 function isActiveUsableSubscription(row: any): string {
   if (!row) return "subscription_not_found"
   if (String(row.status || "").toLowerCase() !== "active") return "subscription_inactive"
-  if (isLicenseExpired(row.expires_at || null)) return "subscription_expired"
+  if (isIsoExpired(row.expires_at || null)) return "subscription_expired"
   return ""
 }
 
@@ -169,7 +169,7 @@ async function resolveSessionSubscription(
   if (!session) return { session: null, subscription: null, error: "session_not_found" }
   if (session.revoked_at) return { session, subscription: null, error: "session_revoked" }
   if (session.hwid !== hwid) return { session, subscription: null, error: "session_hwid_mismatch" }
-  if (isLicenseExpired(session.expires_at)) return { session, subscription: null, error: "session_expired" }
+  if (isIsoExpired(session.expires_at)) return { session, subscription: null, error: "session_expired" }
   if (!session.subscription_id) return { session, subscription: null, error: "subscription_missing" }
   const subscription = await getSubscriptionById(env, session.subscription_id)
   const subscriptionError = isActiveUsableSubscription(subscription)
@@ -221,7 +221,7 @@ async function handleDeviceComplete(request: Request, env: Env): Promise<Respons
   const firebaseUser = await verifyFirebaseUser(idToken, env)
   const pending = await getPendingDeviceLoginByUserCode(env, userCode)
   if (!pending) return json({ success: false, error: "device_code_not_found" }, 404)
-  if (isLicenseExpired(pending.expires_at)) {
+  if (isIsoExpired(pending.expires_at)) {
     await updateDeviceLogin(env, pending.id, { status: "expired" })
     return json({ success: false, error: "device_code_expired" }, 410)
   }
@@ -275,7 +275,7 @@ async function handleDevicePoll(request: Request, env: Env): Promise<Response> {
   const row = await getDeviceLoginByCode(env, deviceCode)
   if (!row) return json({ success: false, error: "device_code_not_found" }, 404)
   if (row.hwid !== hwid) return json({ success: false, error: "device_hwid_mismatch" }, 403)
-  if (isLicenseExpired(row.expires_at)) {
+  if (isIsoExpired(row.expires_at)) {
     await updateDeviceLogin(env, row.id, { status: "expired" })
     return json({ success: false, error: "device_code_expired" }, 410)
   }

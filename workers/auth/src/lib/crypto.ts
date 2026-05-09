@@ -39,12 +39,6 @@ export function timingSafeEqualHex(a: string, b: string): boolean {
   return diff === 0
 }
 
-export function generateLicenseKey(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(24))
-  const parts = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("").toUpperCase()
-  return `SATURN-${parts.slice(0, 8)}-${parts.slice(8, 16)}-${parts.slice(16, 24)}-${parts.slice(24, 32)}`
-}
-
 export function randomBase64Url(byteCount = 32): string {
   const bytes = crypto.getRandomValues(new Uint8Array(byteCount))
   let binary = ""
