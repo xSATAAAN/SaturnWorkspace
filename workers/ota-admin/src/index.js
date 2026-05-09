@@ -35,7 +35,7 @@ export default {
     if (request.method === "OPTIONS") return handleOptions(request, env);
 
     try {
-      if (host === "admin.satantoolkit.com" && request.method === "GET" && !url.pathname.startsWith("/api/")) {
+      if ((host === "admin.satantoolkit.com" || host === "admin.saturnws.com") && request.method === "GET" && !url.pathname.startsWith("/api/")) {
         return proxyAdminFrontend(url);
       }
       if (url.pathname === "/updates/latest.json" && request.method === "GET") {
@@ -141,7 +141,7 @@ export default {
 
 async function proxyAdminFrontend(url) {
   const source = new URL(url.toString());
-  source.hostname = "satantoolkit.com";
+  source.hostname = source.hostname === "admin.saturnws.com" ? "saturnws.com" : "satantoolkit.com";
   source.protocol = "https:";
   source.port = "";
   source.hash = "";

@@ -5,7 +5,10 @@ compatibility_date = "2026-05-01"
 routes = [
   { pattern = "admin.satantoolkit.com/*", zone_name = "satantoolkit.com" },
   { pattern = "satantoolkit.com/updates/*", zone_name = "satantoolkit.com" },
-  { pattern = "admin-api.satantoolkit.com/api/*", zone_name = "satantoolkit.com" }
+  { pattern = "admin-api.satantoolkit.com/api/*", zone_name = "satantoolkit.com" },
+  { pattern = "admin.saturnws.com/*", zone_name = "saturnws.com" },
+  { pattern = "saturnws.com/updates/*", zone_name = "saturnws.com" },
+  { pattern = "admin-api.saturnws.com/api/*", zone_name = "saturnws.com" }
 ]
 
 # NOTE: R2 binding is temporarily disabled for deployability on accounts
@@ -15,10 +18,10 @@ routes = [
 # bucket_name = "satan-toolkit-ota"
 
 [vars]
-ADMIN_ORIGIN = "https://admin.satantoolkit.com"
-PUBLIC_UPDATES_BASE_URL = "https://satantoolkit.com/updates"
+ADMIN_ORIGIN = "https://admin.saturnws.com"
+PUBLIC_UPDATES_BASE_URL = "https://saturnws.com/updates"
 MAX_UPLOAD_MB = "150"
-PAYMENTS_ALLOWED_ORIGIN = "https://satantoolkit.com"
+PAYMENTS_ALLOWED_ORIGIN = "https://saturnws.com"
 # ENOT_CREATE_URL = "https://api.enot.io/v1/payment/create"
 # ENOT_SUCCESS_URL = "https://satantoolkit.com/?payment=success"
 # ENOT_FAIL_URL = "https://satantoolkit.com/?payment=failed"

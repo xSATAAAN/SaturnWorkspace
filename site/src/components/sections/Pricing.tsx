@@ -20,7 +20,7 @@ const FULL_FEATURES_AR = [
   'نفس الترخيص الكامل — دفع شهري أو سنوي',
 ]
 
-const SUPPORT_EMAIL = 'admin@satantoolkit.com'
+const SUPPORT_EMAIL = 'admin@saturnws.com'
 const DEV_TELEGRAM = 'https://t.me/v1u_0'
 
 export function Pricing({ lang }: PricingProps) {

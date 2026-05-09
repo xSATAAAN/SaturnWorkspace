@@ -6,7 +6,7 @@ type DeviceActivationProps = {
   lang: 'en' | 'ar'
 }
 
-const AUTH_BASE = 'https://auth.satantoolkit.com'
+const AUTH_BASE = 'https://auth.saturnws.com'
 
 function initialCode() {
   if (typeof window === 'undefined') return ''
