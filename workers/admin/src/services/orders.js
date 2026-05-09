@@ -4,13 +4,13 @@ const ORDER_TTL_MS = 1000 * 60 * 60 * 24 * 3
 const PLAN_CATALOG = {
   monthly: {
     code: 'monthly',
-    display_name: 'Monthly License',
+    display_name: 'Monthly Subscription',
     amount_cents: 2000,
     currency: 'USD',
   },
   yearly: {
     code: 'yearly',
-    display_name: 'Yearly License (promotional)',
+    display_name: 'Yearly Subscription (promotional)',
     amount_cents: 12000,
     currency: 'USD',
   },

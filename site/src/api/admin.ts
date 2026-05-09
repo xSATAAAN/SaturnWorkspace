@@ -4,13 +4,13 @@ const ADMIN_BASE = '/api/admin'
 const ADMIN_FIREBASE_TOKEN_KEY = 'st_admin_firebase_token'
 let inMemoryBearerToken = ''
 
-export type AdminLicense = {
+export type AdminSubscription = {
   id: string
-  license_key: string
+  firebase_user_id?: string | null
   user_email?: string | null
   plan: 'monthly' | 'yearly'
   tier: 'public' | 'private'
-  status: 'active' | 'suspended' | 'revoked' | 'expired'
+  status: 'active' | 'past_due' | 'canceled' | 'expired' | 'suspended'
   hwid?: string | null
   expires_at: string
   created_at: string
@@ -109,25 +109,24 @@ export async function fetchAdminDashboard() {
   return adminFetch<{ success: boolean; kpis?: Record<string, number | null>; recent_activity?: unknown[] }>('/dashboard')
 }
 
-export async function fetchLicenses() {
-  return adminFetch<{ success: boolean; items: AdminLicense[] }>('/licenses?limit=100')
+export async function fetchSubscriptions() {
+  return adminFetch<{ success: boolean; items: AdminSubscription[] }>('/subscriptions?limit=100')
 }
 
-export async function createLicense(payload: {
-  license_key?: string
-  user_email?: string
+export async function createSubscription(payload: {
+  user_email: string
   plan: 'monthly' | 'yearly'
   tier: 'public' | 'private'
   expires_at: string
 }) {
-  return adminFetch<{ success: boolean; item: AdminLicense }>('/licenses', {
+  return adminFetch<{ success: boolean; item: AdminSubscription }>('/subscriptions', {
     method: 'POST',
     body: JSON.stringify(payload),
   })
 }
 
-export async function patchLicenseStatus(id: string, status: AdminLicense['status']) {
-  return adminFetch<{ success: boolean; item: AdminLicense }>(`/licenses/${encodeURIComponent(id)}`, {
+export async function patchSubscriptionStatus(id: string, status: AdminSubscription['status']) {
+  return adminFetch<{ success: boolean; item: AdminSubscription }>(`/subscriptions/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     body: JSON.stringify({ status }),
   })

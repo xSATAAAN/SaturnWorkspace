@@ -1,22 +1,20 @@
 import { randomBase64Url, randomUserCode, sha256Hex } from "./lib/crypto"
 import { allowRateLimit } from "./lib/rateLimit"
 import {
-  attachLicenseToUser,
-  bindLicenseHwid,
+  attachSubscriptionToUser,
   createAppSession,
   createDeviceLogin,
-  getActiveLicenseForUser,
+  getActiveSubscriptionForUser,
   getAppSessionByHash,
   getDeviceLoginByCode,
-  getLicenseById,
-  getLicenseByKey,
   getPendingDeviceLoginByUserCode,
+  getSubscriptionById,
   revokeAppSession,
   touchAppSession,
-  touchVerify,
+  touchSubscription,
   updateDeviceLogin,
 } from "./lib/supabase"
-import { isLicenseExpired, isValidHwid, isValidLicenseKey, normalizeHwid } from "./lib/validators"
+import { isLicenseExpired, isValidHwid, normalizeHwid } from "./lib/validators"
 import type { Env } from "./types"
 
 function json(data: unknown, status = 200, extraHeaders: HeadersInit = {}): Response {
@@ -40,7 +38,7 @@ function corsHeaders(env: Env, request?: Request): HeadersInit {
   if (!allowOrigin) return {}
   return {
     "Access-Control-Allow-Origin": allowOrigin,
-    "Access-Control-Allow-Headers": "authorization,content-type,x-saturn-hwid,x-saturn-license-key",
+    "Access-Control-Allow-Headers": "authorization,content-type,x-saturn-hwid",
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
     Vary: "Origin",
   }
@@ -84,23 +82,12 @@ async function authorizeOAuthConfigRequest(request: Request, env: Env): Promise<
   if (bearer.startsWith("Bearer ")) {
     const hwid = normalizeHwid(request.headers.get("X-SATURN-HWID"))
     if (isValidHwid(hwid)) {
-      const resolved = await resolveSessionLicense(env, bearer.slice("Bearer ".length).trim(), hwid)
+      const resolved = await resolveSessionSubscription(env, bearer.slice("Bearer ".length).trim(), hwid)
       if (!resolved.error) return true
     }
   }
 
-  const licenseKey = String(request.headers.get("X-SATURN-License-Key") || "").trim().toUpperCase()
-  const hwid = normalizeHwid(request.headers.get("X-SATURN-HWID"))
-  if (!isValidLicenseKey(licenseKey) || !isValidHwid(hwid)) {
-    return false
-  }
-
-  const row = await getLicenseByKey(env, licenseKey)
-  if (!row) return false
-  if (String(row.status || "").toLowerCase() !== "active") return false
-  if (isLicenseExpired(row.expires_at || row.expiry_date || null)) return false
-  if (row.hwid && row.hwid !== hwid) return false
-  return true
+  return false
 }
 
 async function handleGoogleDriveOAuthConfig(request: Request, env: Env): Promise<Response> {
@@ -115,55 +102,22 @@ async function handleGoogleDriveOAuthConfig(request: Request, env: Env): Promise
 }
 
 async function handleVerify(request: Request, env: Env): Promise<Response> {
-  const ip = request.headers.get("CF-Connecting-IP") || "unknown"
-  const limit = Number.parseInt(String(env.VERIFY_RATE_LIMIT_PER_MIN || "40"), 10) || 40
-  if (!allowRateLimit(`verify:ip:${ip}`, limit, 60_000)) {
-    return json({ success: false, error: "rate_limited" }, 429)
-  }
-
-  const body = await request.json<any>().catch(() => null)
-  const licenseKey = String(body?.license_key || "").trim().toUpperCase()
-  const hwid = normalizeHwid(body?.hwid)
-  if (!isValidLicenseKey(licenseKey) || !isValidHwid(hwid)) {
-    return json({ success: false, error: "invalid_payload" }, 400)
-  }
-  if (!allowRateLimit(`verify:license:${licenseKey}`, limit, 60_000)) {
-    return json({ success: false, error: "rate_limited" }, 429)
-  }
-
-  const row = await getLicenseByKey(env, licenseKey)
-  if (!row) return json({ success: false, error: "license_not_valid" }, 401)
-  if (String(row.status || "").toLowerCase() !== "active") {
-    return json({ success: false, error: "license_inactive" }, 403)
-  }
-  if (isLicenseExpired(row.expires_at || row.expiry_date || null)) {
-    return json({ success: false, error: "license_expired" }, 403)
-  }
-
-  if (!row.hwid) {
-    const bound = await bindLicenseHwid(env, row.id, hwid)
-    if (!bound) return json({ success: false, error: "bind_failed_retry" }, 409)
-    return json(buildLicenseRuntime(row, "activated"))
-  }
-
-  if (row.hwid !== hwid) {
-    return json({ success: false, error: "hwid_mismatch" }, 403)
-  }
-
-  await touchVerify(env, row.id)
-  return json(buildLicenseRuntime(row, "verified"))
+  return json({ success: false, error: "account_session_required" }, 410)
 }
 
-function buildLicenseRuntime(row: { [key: string]: any }, status: string): Record<string, unknown> {
+function buildSubscriptionRuntime(row: { [key: string]: any }, status: string): Record<string, unknown> {
   const tier = String(row.tier || "public").trim().toLowerCase() === "private" ? "private" : "public"
   const featurePayload = row.feature_payload && typeof row.feature_payload === "object" ? row.feature_payload : {}
   return {
     success: true,
     status,
     tier,
+    subscription_id: row.id,
     license_id: row.id,
     user_id: row.firebase_user_id || row.user_id || null,
-    expires_at: row.expires_at || row.expiry_date || null,
+    user_email: row.user_email || null,
+    plan: row.plan || null,
+    expires_at: row.expires_at || null,
     runtime_payload: tier === "private" ? featurePayload : {},
     policy: {
       allow: true,
@@ -180,10 +134,10 @@ function verificationUrl(env: Env, userCode: string): string {
   return url.toString()
 }
 
-function isActiveUsableLicense(row: any): string {
-  if (!row) return "license_not_found"
-  if (String(row.status || "").toLowerCase() !== "active") return "license_inactive"
-  if (isLicenseExpired(row.expires_at || row.expiry_date || null)) return "license_expired"
+function isActiveUsableSubscription(row: any): string {
+  if (!row) return "subscription_not_found"
+  if (String(row.status || "").toLowerCase() !== "active") return "subscription_inactive"
+  if (isLicenseExpired(row.expires_at || null)) return "subscription_expired"
   return ""
 }
 
@@ -205,18 +159,23 @@ async function verifyFirebaseUser(idToken: string, env: Env): Promise<{ userId: 
   return { userId, email }
 }
 
-async function resolveSessionLicense(env: Env, sessionToken: string, hwid: string): Promise<{ session: any; license: any; error?: string }> {
+async function resolveSessionSubscription(
+  env: Env,
+  sessionToken: string,
+  hwid: string,
+): Promise<{ session: any; subscription: any; error?: string }> {
   const tokenHash = await sha256Hex(sessionToken)
   const session = await getAppSessionByHash(env, tokenHash)
-  if (!session) return { session: null, license: null, error: "session_not_found" }
-  if (session.revoked_at) return { session, license: null, error: "session_revoked" }
-  if (session.hwid !== hwid) return { session, license: null, error: "session_hwid_mismatch" }
-  if (isLicenseExpired(session.expires_at)) return { session, license: null, error: "session_expired" }
-  const license = await getLicenseById(env, session.license_id)
-  const licenseError = isActiveUsableLicense(license)
-  if (licenseError) return { session, license, error: licenseError }
-  if (license?.hwid && license.hwid !== hwid) return { session, license, error: "license_hwid_mismatch" }
-  return { session, license }
+  if (!session) return { session: null, subscription: null, error: "session_not_found" }
+  if (session.revoked_at) return { session, subscription: null, error: "session_revoked" }
+  if (session.hwid !== hwid) return { session, subscription: null, error: "session_hwid_mismatch" }
+  if (isLicenseExpired(session.expires_at)) return { session, subscription: null, error: "session_expired" }
+  if (!session.subscription_id) return { session, subscription: null, error: "subscription_missing" }
+  const subscription = await getSubscriptionById(env, session.subscription_id)
+  const subscriptionError = isActiveUsableSubscription(subscription)
+  if (subscriptionError) return { session, subscription, error: subscriptionError }
+  if (subscription?.hwid && subscription.hwid !== hwid) return { session, subscription, error: "subscription_hwid_mismatch" }
+  return { session, subscription }
 }
 
 async function handleDeviceStart(request: Request, env: Env): Promise<Response> {
@@ -257,7 +216,6 @@ async function handleDeviceComplete(request: Request, env: Env): Promise<Respons
   const body = await request.json<any>().catch(() => null)
   const userCode = String(body?.user_code || body?.code || "").trim().toUpperCase()
   const idToken = String(body?.id_token || "").trim()
-  const licenseKey = String(body?.license_key || "").trim().toUpperCase()
   if (!userCode || !idToken) return json({ success: false, error: "missing_device_login_fields" }, 400)
 
   const firebaseUser = await verifyFirebaseUser(idToken, env)
@@ -268,26 +226,25 @@ async function handleDeviceComplete(request: Request, env: Env): Promise<Respons
     return json({ success: false, error: "device_code_expired" }, 410)
   }
 
-  const license = licenseKey
-    ? await getLicenseByKey(env, licenseKey)
-    : await getActiveLicenseForUser(env, firebaseUser.userId, firebaseUser.email)
-  const licenseError = isActiveUsableLicense(license)
-  if (licenseError) return json({ success: false, error: licenseKey ? licenseError : "license_required" }, 403)
-  if (!license) return json({ success: false, error: "license_required" }, 403)
-
-  const licenseUserId = String(license.firebase_user_id || "").trim()
-  const licenseEmail = String(license.user_email || "").trim().toLowerCase()
-  if (licenseUserId && licenseUserId !== firebaseUser.userId) {
-    return json({ success: false, error: "license_user_mismatch" }, 403)
-  }
-  if (licenseEmail && licenseEmail !== firebaseUser.email) {
-    return json({ success: false, error: "license_email_mismatch" }, 403)
-  }
-  if (license.hwid && license.hwid !== pending.hwid) {
-    return json({ success: false, error: "license_hwid_mismatch" }, 403)
+  const subscription = await getActiveSubscriptionForUser(env, firebaseUser.userId, firebaseUser.email)
+  const subscriptionError = isActiveUsableSubscription(subscription)
+  if (subscriptionError || !subscription) {
+    return json({ success: false, error: subscriptionError === "subscription_not_found" ? "subscription_required" : subscriptionError }, 403)
   }
 
-  const attached = await attachLicenseToUser(env, license.id, {
+  const subscriptionUserId = String(subscription.firebase_user_id || "").trim()
+  const subscriptionEmail = String(subscription.user_email || "").trim().toLowerCase()
+  if (subscriptionUserId && subscriptionUserId !== firebaseUser.userId) {
+    return json({ success: false, error: "subscription_user_mismatch" }, 403)
+  }
+  if (subscriptionEmail && subscriptionEmail !== firebaseUser.email) {
+    return json({ success: false, error: "subscription_email_mismatch" }, 403)
+  }
+  if (subscription.hwid && subscription.hwid !== pending.hwid) {
+    return json({ success: false, error: "subscription_hwid_mismatch" }, 403)
+  }
+
+  const attached = await attachSubscriptionToUser(env, subscription.id, {
     userId: firebaseUser.userId,
     email: firebaseUser.email,
     hwid: pending.hwid,
@@ -296,15 +253,17 @@ async function handleDeviceComplete(request: Request, env: Env): Promise<Respons
     status: "authorized",
     user_id: firebaseUser.userId,
     user_email: firebaseUser.email,
-    license_id: attached.id,
-    license_key: attached.license_key,
+    subscription_id: attached.id,
+    license_id: null,
     authorized_at: new Date().toISOString(),
   })
+  const runtime = buildSubscriptionRuntime(attached, "authorized")
   return json({
     success: true,
     status: "authorized",
     user_email: firebaseUser.email,
-    license: buildLicenseRuntime(attached, "authorized"),
+    subscription: runtime,
+    license: runtime,
   })
 }
 
@@ -322,29 +281,31 @@ async function handleDevicePoll(request: Request, env: Env): Promise<Response> {
   }
   if (row.status === "pending") return json({ success: true, status: "pending" })
   if (row.status !== "authorized") return json({ success: false, status: row.status, error: `device_${row.status}` }, 409)
-  if (!row.license_id || !row.user_id) return json({ success: false, error: "device_authorization_incomplete" }, 409)
+  if (!row.subscription_id || !row.user_id) return json({ success: false, error: "device_authorization_incomplete" }, 409)
 
-  const license = await getLicenseById(env, row.license_id)
-  const licenseError = isActiveUsableLicense(license)
-  if (licenseError || !license) return json({ success: false, error: licenseError || "license_not_found" }, 403)
+  const subscription = await getSubscriptionById(env, row.subscription_id)
+  const subscriptionError = isActiveUsableSubscription(subscription)
+  if (subscriptionError || !subscription) return json({ success: false, error: subscriptionError || "subscription_not_found" }, 403)
   const sessionToken = `stk_${randomBase64Url(32)}`
   const tokenHash = await sha256Hex(sessionToken)
-  const sessionExpiresAt = String(license.expires_at || license.expiry_date || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString())
+  const sessionExpiresAt = String(subscription.expires_at || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString())
   await createAppSession(env, {
     session_token_hash: tokenHash,
     user_id: row.user_id,
     user_email: row.user_email,
-    license_id: license.id,
+    subscription_id: subscription.id,
     hwid,
     expires_at: sessionExpiresAt,
   })
   await updateDeviceLogin(env, row.id, { status: "consumed", consumed_at: new Date().toISOString() })
+  const runtime = buildSubscriptionRuntime(subscription, "verified")
   return json({
     success: true,
     status: "authorized",
     session_token: sessionToken,
     user_email: row.user_email,
-    license: buildLicenseRuntime(license, "verified"),
+    subscription: runtime,
+    license: runtime,
   })
 }
 
@@ -353,14 +314,14 @@ async function handleSessionVerify(request: Request, env: Env): Promise<Response
   const sessionToken = String(body?.session_token || "").trim()
   const hwid = normalizeHwid(body?.hwid)
   if (!sessionToken || !isValidHwid(hwid)) return json({ success: false, error: "invalid_payload" }, 400)
-  const resolved = await resolveSessionLicense(env, sessionToken, hwid)
-  if (resolved.error || !resolved.session || !resolved.license) {
+  const resolved = await resolveSessionSubscription(env, sessionToken, hwid)
+  if (resolved.error || !resolved.session || !resolved.subscription) {
     return json({ success: false, error: resolved.error || "session_invalid" }, 401)
   }
   await touchAppSession(env, resolved.session.id)
-  await touchVerify(env, resolved.license.id)
+  await touchSubscription(env, resolved.subscription.id)
   return json({
-    ...buildLicenseRuntime(resolved.license, "verified"),
+    ...buildSubscriptionRuntime(resolved.subscription, "verified"),
     user_email: resolved.session.user_email,
     session_expires_at: resolved.session.expires_at,
   })
@@ -412,7 +373,7 @@ export default {
         return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
       }
       if (request.method === "GET" && url.pathname === "/health") {
-        return json({ success: true, service: "license-worker", at: Date.now() }, 200, cors)
+        return json({ success: true, service: "auth-worker", at: Date.now() }, 200, cors)
       }
       return json({ success: false, error: "not_found" }, 404, cors)
     } catch (err: any) {

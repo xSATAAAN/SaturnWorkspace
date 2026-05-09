@@ -119,7 +119,6 @@ $generated = [ordered]@{
   ADMIN_LAYER1_SESSION_SECRET = New-RandomSecret 64
   ADMIN_API_TOKEN = New-RandomSecret 32
   CRASH_INGEST_TOKEN = New-RandomSecret 32
-  LICENSE_ISSUE_TOKEN = New-RandomSecret 32
 }
 
 Write-Host ""
@@ -163,7 +162,6 @@ Put-WorkerSecret $AdminWorkerDir "ADMIN_LAYER1_SESSION_SECRET" $generated.ADMIN_
 Put-WorkerSecret $AdminWorkerDir "ADMIN_EMAIL_ALLOWLIST" $adminAllowlist
 Put-WorkerSecret $AdminWorkerDir "ADMIN_API_TOKEN" $generated.ADMIN_API_TOKEN
 Put-WorkerSecret $AdminWorkerDir "CRASH_INGEST_TOKEN" $generated.CRASH_INGEST_TOKEN
-Put-WorkerSecret $AdminWorkerDir "LICENSE_ISSUE_TOKEN" $generated.LICENSE_ISSUE_TOKEN
 
 Write-Host ""
 Write-Host "Auth Worker secrets:" -ForegroundColor Green

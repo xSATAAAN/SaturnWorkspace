@@ -12,25 +12,26 @@ export interface Env {
   APP_ENV?: string
 }
 
-export interface LicenseRow {
+export interface SubscriptionRow {
   id: string
-  license_key: string
-  user_id?: string | null
   firebase_user_id?: string | null
-  user_email: string | null
-  status: string
+  user_email: string
+  plan: "monthly" | "yearly" | string
   tier?: string | null
+  status: "active" | "past_due" | "canceled" | "expired" | "suspended" | string
   hwid: string | null
-  expires_at?: string | null
-  expiry_date?: string | null
+  bound_at?: string | null
+  starts_at: string
+  expires_at: string
+  last_seen_at?: string | null
+  provider?: string | null
+  provider_customer_id?: string | null
+  provider_subscription_id?: string | null
+  source_promo_code?: string | null
   feature_payload?: Record<string, unknown> | null
+  metadata?: Record<string, unknown> | null
   created_at: string
   updated_at: string | null
-  provider: string | null
-  order_id: string | null
-  last_verify_at?: string | null
-  last_seen_at?: string | null
-  bound_at?: string | null
 }
 
 export interface DeviceLoginRow {
@@ -42,7 +43,7 @@ export interface DeviceLoginRow {
   user_id: string | null
   user_email: string | null
   license_id: string | null
-  license_key: string | null
+  subscription_id?: string | null
   expires_at: string
   authorized_at: string | null
   consumed_at: string | null
@@ -54,7 +55,8 @@ export interface AppSessionRow {
   session_token_hash: string
   user_id: string
   user_email: string | null
-  license_id: string
+  license_id?: string | null
+  subscription_id?: string | null
   hwid: string
   expires_at: string
   revoked_at: string | null

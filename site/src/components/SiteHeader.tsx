@@ -28,7 +28,7 @@ export function SiteHeader({ lang, onToggleLang }: SiteHeaderProps) {
           feedback: 'Feedback',
           updates: 'Updates',
           login: 'Login',
-          buy: 'Get license',
+          buy: 'Subscribe',
           switchLabel: 'AR',
         }
   const [mobileOpen, setMobileOpen] = useState(false)

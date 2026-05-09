@@ -1,4 +1,4 @@
-import type { AppSessionRow, DeviceLoginRow, Env, LicenseRow } from "../types"
+import type { AppSessionRow, DeviceLoginRow, Env, SubscriptionRow } from "../types"
 
 function baseUrl(env: Env): string {
   const raw = String(env.SUPABASE_API_URL || env.SUPABASE_URL || "").replace(/\/+$/, "")
@@ -39,105 +39,56 @@ async function supabaseJson<T>(env: Env, path: string, init: RequestInit = {}): 
   return payload as T
 }
 
-export async function getLicenseByKey(env: Env, licenseKey: string): Promise<LicenseRow | null> {
-  const rows = await supabaseJson<LicenseRow[]>(
+export async function getSubscriptionById(env: Env, subscriptionId: string): Promise<SubscriptionRow | null> {
+  const rows = await supabaseJson<SubscriptionRow[]>(
     env,
-    `/licenses?license_key=eq.${encodeURIComponent(licenseKey)}&select=*&limit=1`,
+    `/account_subscriptions?id=eq.${encodeURIComponent(subscriptionId)}&select=*&limit=1`,
   )
   return rows[0] || null
 }
 
-export async function getLicenseById(env: Env, licenseId: string): Promise<LicenseRow | null> {
-  const rows = await supabaseJson<LicenseRow[]>(
+export async function getActiveSubscriptionForUser(env: Env, userId: string, email: string): Promise<SubscriptionRow | null> {
+  const filters = [`firebase_user_id.eq.${encodeURIComponent(userId)}`]
+  if (email) filters.push(`user_email.ilike.${encodeURIComponent(email)}`)
+  const rows = await supabaseJson<SubscriptionRow[]>(
     env,
-    `/licenses?id=eq.${encodeURIComponent(licenseId)}&select=*&limit=1`,
+    `/account_subscriptions?or=(${filters.join(",")})&status=eq.active&select=*&order=expires_at.desc&limit=1`,
   )
   return rows[0] || null
 }
 
-export async function getActiveLicenseForUser(env: Env, userId: string, email: string): Promise<LicenseRow | null> {
-  const emailFilter = email ? `,user_email.eq.${encodeURIComponent(email)}` : ""
-  const rows = await supabaseJson<LicenseRow[]>(
-    env,
-    `/licenses?or=(firebase_user_id.eq.${encodeURIComponent(userId)}${emailFilter})&status=eq.active&select=*&order=expires_at.desc&limit=1`,
-  )
-  return rows[0] || null
-}
-
-export async function createLicense(
+export async function attachSubscriptionToUser(
   env: Env,
-  payload: {
-    license_key: string
-    user_email: string | null
-    status: string
-    hwid: string | null
-    expiry_date: string | null
-    provider: string
-    order_id: string | null
-  },
-): Promise<LicenseRow> {
-  const rows = await supabaseJson<LicenseRow[]>(env, "/licenses", {
-    method: "POST",
-    headers: { Prefer: "return=representation" },
-    body: JSON.stringify(payload),
-  })
-  if (!rows[0]) throw new Error("supabase_insert_empty")
-  return rows[0]
-}
-
-export async function bindLicenseHwid(env: Env, licenseId: string, hwid: string): Promise<boolean> {
-  const res = await fetch(`${baseUrl(env)}/licenses?id=eq.${encodeURIComponent(licenseId)}&hwid=is.null`, {
-    method: "PATCH",
-    headers: { ...headers(env), Prefer: "return=minimal" },
-    body: JSON.stringify({
-      hwid,
-      bound_at: new Date().toISOString(),
-      last_seen_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    }),
-  })
-  return res.ok
-}
-
-export async function attachLicenseToUser(
-  env: Env,
-  licenseId: string,
+  subscriptionId: string,
   payload: { userId: string; email: string; hwid: string },
-): Promise<LicenseRow> {
-  const rows = await supabaseJson<LicenseRow[]>(
+): Promise<SubscriptionRow> {
+  const now = new Date().toISOString()
+  const rows = await supabaseJson<SubscriptionRow[]>(
     env,
-    `/licenses?id=eq.${encodeURIComponent(licenseId)}&select=*`,
+    `/account_subscriptions?id=eq.${encodeURIComponent(subscriptionId)}&select=*`,
     {
       method: "PATCH",
       headers: { Prefer: "return=representation" },
       body: JSON.stringify({
         firebase_user_id: payload.userId,
-        user_email: payload.email || null,
+        user_email: payload.email,
         hwid: payload.hwid,
-        bound_at: new Date().toISOString(),
-        last_seen_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        bound_at: now,
+        last_seen_at: now,
+        updated_at: now,
       }),
     },
   )
-  if (!rows[0]) throw new Error("license_update_empty")
+  if (!rows[0]) throw new Error("subscription_update_empty")
   return rows[0]
 }
 
-export async function touchVerify(env: Env, licenseId: string): Promise<void> {
-  await supabaseJson<unknown>(env, `/licenses?id=eq.${encodeURIComponent(licenseId)}`, {
+export async function touchSubscription(env: Env, subscriptionId: string): Promise<void> {
+  await supabaseJson<unknown>(env, `/account_subscriptions?id=eq.${encodeURIComponent(subscriptionId)}`, {
     method: "PATCH",
     headers: { Prefer: "return=minimal" },
     body: JSON.stringify({ last_seen_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
   })
-}
-
-export async function getLicenseByOrder(env: Env, provider: string, orderId: string): Promise<LicenseRow | null> {
-  const rows = await supabaseJson<LicenseRow[]>(
-    env,
-    `/licenses?provider=eq.${encodeURIComponent(provider)}&order_id=eq.${encodeURIComponent(orderId)}&select=*&limit=1`,
-  )
-  return rows[0] || null
 }
 
 export async function createDeviceLogin(
@@ -199,7 +150,7 @@ export async function createAppSession(
     session_token_hash: string
     user_id: string
     user_email: string | null
-    license_id: string
+    subscription_id: string
     hwid: string
     expires_at: string
   },
@@ -207,7 +158,7 @@ export async function createAppSession(
   const rows = await supabaseJson<AppSessionRow[]>(env, "/app_sessions", {
     method: "POST",
     headers: { Prefer: "return=representation" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ ...payload, license_id: null }),
   })
   if (!rows[0]) throw new Error("app_session_insert_empty")
   return rows[0]

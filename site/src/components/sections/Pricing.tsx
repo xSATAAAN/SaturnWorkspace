@@ -9,8 +9,8 @@ type PricingProps = {
 const FULL_FEATURES_EN = [
   'Full Saturn Workspace — Vault, Gmail, IP & every module',
   'Continuous updates and security fixes',
-  'Email support for setup and licensing questions',
-  'Same complete license — pick monthly or yearly billing',
+  'Email support for setup and subscription questions',
+  'Same complete subscription — pick monthly or yearly billing',
 ]
 
 const FULL_FEATURES_AR = [
@@ -49,8 +49,8 @@ export function Pricing({ lang }: PricingProps) {
       }
     : {
         tag: 'PRICING',
-        title: 'License plans for Saturn Workspace',
-        desc: 'Both plans include the complete toolkit — billing cadence and the yearly promo differ.',
+        title: 'Subscription plans for Saturn Workspace',
+        desc: 'Both plans include the complete workspace — billing cadence and the yearly promo differ.',
         monthly: 'Monthly',
         starter: 'Flexible',
         yearly: 'Yearly',

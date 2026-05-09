@@ -74,18 +74,18 @@ export default {
         await requireAdmin(request, env);
         return json(await getAdminDashboard(env), 200, corsHeaders(request, env));
       }
-      if (url.pathname === "/api/admin/licenses" && request.method === "GET") {
+      if ((url.pathname === "/api/admin/subscriptions" || url.pathname === "/api/admin/licenses") && request.method === "GET") {
         await requireAdmin(request, env);
-        return json(await listLicenses(url, env), 200, corsHeaders(request, env));
+        return json(await listSubscriptions(url, env), 200, corsHeaders(request, env));
       }
-      if (url.pathname === "/api/admin/licenses" && request.method === "POST") {
+      if ((url.pathname === "/api/admin/subscriptions" || url.pathname === "/api/admin/licenses") && request.method === "POST") {
         const adminEmail = await requireAdmin(request, env);
-        return json(await createLicense(request, env, adminEmail), 200, corsHeaders(request, env));
+        return json(await createSubscription(request, env, adminEmail), 200, corsHeaders(request, env));
       }
-      if (url.pathname.startsWith("/api/admin/licenses/") && request.method === "PATCH") {
+      if ((url.pathname.startsWith("/api/admin/subscriptions/") || url.pathname.startsWith("/api/admin/licenses/")) && request.method === "PATCH") {
         const adminEmail = await requireAdmin(request, env);
-        const licenseId = decodeURIComponent(url.pathname.replace("/api/admin/licenses/", "")).trim();
-        return json(await updateLicense(licenseId, request, env, adminEmail), 200, corsHeaders(request, env));
+        const subscriptionId = decodeURIComponent(url.pathname.replace("/api/admin/subscriptions/", "").replace("/api/admin/licenses/", "")).trim();
+        return json(await updateSubscription(subscriptionId, request, env, adminEmail), 200, corsHeaders(request, env));
       }
       if (url.pathname === "/api/admin/promo-codes" && request.method === "GET") {
         await requireAdmin(request, env);
@@ -111,10 +111,10 @@ export default {
         return json(await ingestCrashLog(request, env), 200, corsHeaders(request, env));
       }
       if (url.pathname === "/api/licenses/issue" && request.method === "POST") {
-        return json(await issueLicense(request, env), 200, corsHeaders(request, env));
+        return json({ success: false, error: "account_subscription_required" }, 410, corsHeaders(request, env));
       }
       if (url.pathname === "/api/licenses/verify" && request.method === "POST") {
-        return json(await verifyLicense(request, env), 200, corsHeaders(request, env));
+        return json({ success: false, error: "account_session_required" }, 410, corsHeaders(request, env));
       }
       if (url.pathname === "/api/admin/rollback" && request.method === "POST") {
         const adminEmail = await requireAdmin(request, env);
@@ -230,7 +230,6 @@ async function requireAdmin(request, env) {
   }
   return email;
 }
-
 function adminLayer1Configured(env) {
   return Boolean(
     String(env.ADMIN_LAYER1_USERNAME || "").trim() &&
@@ -704,14 +703,16 @@ function safeInt(value, fallback = 25, max = 200) {
 }
 
 async function getAdminDashboard(env) {
-  const [licenses, crashes, alerts, updates] = await Promise.all([
-    supabaseRequest(env, "licenses", "GET", { query: "select=id,status,tier,created_at&limit=200" }),
+  const [subscriptions, crashes, alerts, updates] = await Promise.all([
+    safeSupabaseRead(env, "account_subscriptions", "select=id,status,tier,created_at&limit=200"),
     safeSupabaseRead(env, "crash_logs", "select=id,error_type,happened_at,user_id&order=happened_at.desc&limit=20"),
     supabaseRequest(env, "tamper_alerts", "GET", { query: "select=id,severity,resolved,happened_at,reason&resolved=is.false&order=happened_at.desc&limit=50" }),
     supabaseRequest(env, "ota_updates", "GET", { query: "select=id,version,channel,is_mandatory,is_published,created_at&order=created_at.desc&limit=20" }),
   ]);
-  const activeUsers = Array.isArray(licenses) ? licenses.filter((x) => x.status === "active").length : 0;
-  const churnedUsers = Array.isArray(licenses) ? licenses.filter((x) => x.status === "expired" || x.status === "revoked").length : 0;
+  const activeUsers = Array.isArray(subscriptions) ? subscriptions.filter((x) => x.status === "active").length : 0;
+  const churnedUsers = Array.isArray(subscriptions)
+    ? subscriptions.filter((x) => x.status === "expired" || x.status === "canceled").length
+    : 0;
   return {
     success: true,
     kpis: {
@@ -726,7 +727,7 @@ async function getAdminDashboard(env) {
   };
 }
 
-async function listLicenses(url, env) {
+async function listSubscriptions(url, env) {
   const limit = safeInt(url.searchParams.get("limit"), 50);
   const status = String(url.searchParams.get("status") || "").trim();
   const tier = String(url.searchParams.get("tier") || "").trim();
@@ -734,45 +735,51 @@ async function listLicenses(url, env) {
   if (status) filters.push(`status.eq.${encodeURIComponent(status)}`);
   if (tier) filters.push(`tier.eq.${encodeURIComponent(tier)}`);
   const query = `select=*&order=created_at.desc&limit=${limit}${filters.length ? `&${filters.join("&")}` : ""}`;
-  const data = await supabaseRequest(env, "licenses", "GET", { query });
+  const data = await supabaseRequest(env, "account_subscriptions", "GET", { query });
   return { success: true, items: data || [] };
 }
 
-async function createLicense(request, env, adminEmail) {
+async function createSubscription(request, env, adminEmail) {
   const body = await request.json();
-  const licenseKey = String(body?.license_key || body?.licenseKey || "").trim().toUpperCase() || buildLicenseKey();
+  const userEmail = String(body?.user_email || body?.email || "").trim().toLowerCase();
   const plan = String(body?.plan || "monthly").trim().toLowerCase();
   const tier = String(body?.tier || "public").trim().toLowerCase();
   const expiresAt = String(body?.expires_at || "").trim();
-  if (!expiresAt) throw new Error("missing_license_fields");
+  if (!userEmail || !expiresAt) throw new Error("missing_subscription_fields");
   const payload = {
-    license_key: licenseKey,
-    user_email: String(body?.user_email || "").trim() || null,
+    firebase_user_id: String(body?.firebase_user_id || "").trim() || null,
+    user_email: userEmail,
     plan,
     tier,
     status: "active",
+    starts_at: body?.starts_at ? String(body.starts_at).trim() : new Date().toISOString(),
     expires_at: expiresAt,
+    provider: String(body?.provider || "manual").trim().toLowerCase(),
+    provider_customer_id: String(body?.provider_customer_id || "").trim() || null,
+    provider_subscription_id: String(body?.provider_subscription_id || "").trim() || null,
     feature_payload: body?.feature_payload && typeof body.feature_payload === "object" ? body.feature_payload : {},
     metadata: { ...(body?.metadata && typeof body.metadata === "object" ? body.metadata : {}), created_by: adminEmail },
   };
-  const created = await supabaseRequest(env, "licenses", "POST", {
+  const created = await supabaseRequest(env, "account_subscriptions", "POST", {
     body: payload,
     prefer: "return=representation",
   });
   return { success: true, item: Array.isArray(created) ? created[0] : created };
 }
 
-async function updateLicense(licenseId, request, env, adminEmail) {
-  if (!licenseId) throw new Error("missing_license_id");
+async function updateSubscription(subscriptionId, request, env, adminEmail) {
+  if (!subscriptionId) throw new Error("missing_subscription_id");
   const body = await request.json();
   const patch = {};
   if (body?.status) patch.status = String(body.status).trim().toLowerCase();
   if (body?.tier) patch.tier = String(body.tier).trim().toLowerCase();
   if (body?.hwid !== undefined) patch.hwid = body.hwid ? String(body.hwid).trim() : null;
   if (body?.expires_at) patch.expires_at = String(body.expires_at).trim();
+  if (body?.user_email) patch.user_email = String(body.user_email).trim().toLowerCase();
+  if (body?.firebase_user_id !== undefined) patch.firebase_user_id = body.firebase_user_id ? String(body.firebase_user_id).trim() : null;
   patch.metadata = { ...(body?.metadata && typeof body.metadata === "object" ? body.metadata : {}), updated_by: adminEmail };
-  const updated = await supabaseRequest(env, "licenses", "PATCH", {
-    query: `id=eq.${encodeURIComponent(licenseId)}&select=*`,
+  const updated = await supabaseRequest(env, "account_subscriptions", "PATCH", {
+    query: `id=eq.${encodeURIComponent(subscriptionId)}&select=*`,
     body: patch,
     prefer: "return=representation",
   });
@@ -878,6 +885,7 @@ async function ingestCrashLog(request, env) {
   const payload = {
     happened_at: body?.happened_at || new Date().toISOString(),
     user_id: body?.user_id || null,
+    subscription_id: body?.subscription_id || body?.license_id || null,
     license_id: body?.license_id || null,
     hwid: body?.hwid || null,
     windows_version: body?.windows_version || null,
@@ -900,14 +908,6 @@ async function ingestCrashLog(request, env) {
   return { success: true, item: Array.isArray(created) ? created[0] : created };
 }
 
-function buildLicenseKey() {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes);
-  const group = (offset) => Array.from(bytes.slice(offset, offset + 8), (byte) => chars[byte % chars.length]).join("");
-  return `SATURN-${group(0)}-${group(8)}-${group(16)}-${group(24)}`;
-}
-
 function addPlanDuration(startIso, plan) {
   const start = new Date(startIso || new Date().toISOString());
   const out = new Date(start);
@@ -917,12 +917,6 @@ function addPlanDuration(startIso, plan) {
     out.setMonth(out.getMonth() + 1);
   }
   return out.toISOString();
-}
-
-function clampStatus(status) {
-  const value = String(status || "active").trim().toLowerCase();
-  if (["active", "suspended", "revoked", "expired"].includes(value)) return value;
-  return "active";
 }
 
 async function resolvePromoForIssue(env, promoCodeRaw) {
@@ -953,134 +947,5 @@ async function resolvePromoForIssue(env, promoCodeRaw) {
     promo,
     tier: isPrivate ? "private" : "public",
     feature_payload: isPrivate ? promo.private_feature_payload || {} : {},
-  };
-}
-
-async function issueLicense(request, env) {
-  const issueToken = String(env.LICENSE_ISSUE_TOKEN || "").trim();
-  if (issueToken) {
-    const auth = String(request.headers.get("Authorization") || "");
-    if (auth !== `Bearer ${issueToken}`) throw new Error("unauthorized");
-  }
-  const body = await request.json();
-  const plan = String(body?.plan || "monthly").trim().toLowerCase();
-  if (!["monthly", "yearly"].includes(plan)) throw new Error("invalid_plan");
-  const userEmail = String(body?.user_email || body?.email || "").trim() || null;
-  const promoCode = String(body?.promo_code || "").trim();
-  const source = await resolvePromoForIssue(env, promoCode);
-  const createdAt = new Date().toISOString();
-  const licenseKey = String(body?.license_key || "").trim().toUpperCase() || buildLicenseKey();
-  const payload = {
-    license_key: licenseKey,
-    user_email: userEmail,
-    plan,
-    tier: source.tier,
-    status: "active",
-    starts_at: createdAt,
-    expires_at: addPlanDuration(createdAt, plan),
-    source_promo_code: source.promo ? source.promo.code : null,
-    feature_payload: source.feature_payload,
-    metadata: {
-      issued_via: "api_issue",
-      purchase_ref: body?.purchase_ref || null,
-    },
-  };
-  const created = await supabaseRequest(env, "licenses", "POST", {
-    body: payload,
-    prefer: "return=representation",
-  });
-  if (source.promo?.id) {
-    await supabaseRequest(env, "promo_codes", "PATCH", {
-      query: `id=eq.${encodeURIComponent(source.promo.id)}&select=id,used_count`,
-      body: { used_count: Number(source.promo.used_count || 0) + 1 },
-      prefer: "return=minimal",
-    });
-  }
-  return {
-    success: true,
-    item: Array.isArray(created) ? created[0] : created,
-  };
-}
-
-async function verifyLicense(request, env) {
-  const body = await request.json();
-  const licenseKey = String(body?.license_key || "").trim().toUpperCase();
-  const hwid = String(body?.hwid || "").trim();
-  if (!licenseKey || !hwid) throw new Error("missing_license_or_hwid");
-
-  const rows = await supabaseRequest(env, "licenses", "GET", {
-    query: `select=*&license_key=eq.${encodeURIComponent(licenseKey)}&limit=1`,
-  });
-  const row = Array.isArray(rows) && rows.length ? rows[0] : null;
-  if (!row) {
-    return { success: false, status: "not_found", error: "license_not_found" };
-  }
-  const now = Date.now();
-  const expiresAt = Date.parse(String(row.expires_at || ""));
-  if (Number.isFinite(expiresAt) && expiresAt <= now) {
-    await supabaseRequest(env, "licenses", "PATCH", {
-      query: `id=eq.${encodeURIComponent(row.id)}&select=id`,
-      body: { status: "expired" },
-      prefer: "return=minimal",
-    });
-    return { success: false, status: "expired", error: "license_expired" };
-  }
-  const status = clampStatus(row.status);
-  if (status !== "active") {
-    return { success: false, status, error: `license_${status}` };
-  }
-
-  let boundHwid = row.hwid ? String(row.hwid).trim() : "";
-  if (!boundHwid) {
-    const updated = await supabaseRequest(env, "licenses", "PATCH", {
-      query: `id=eq.${encodeURIComponent(row.id)}&select=*`,
-      body: {
-        hwid,
-        bound_at: new Date().toISOString(),
-        last_seen_at: new Date().toISOString(),
-        metadata: { ...(row.metadata || {}), first_bind_source: "verify_endpoint" },
-      },
-      prefer: "return=representation",
-    });
-    const next = Array.isArray(updated) ? updated[0] : updated;
-    boundHwid = String(next?.hwid || hwid).trim();
-    row.hwid = boundHwid;
-  } else if (boundHwid !== hwid) {
-    await supabaseRequest(env, "tamper_alerts", "POST", {
-      body: {
-        user_id: row.user_id || null,
-        license_id: row.id,
-        hwid,
-        severity: "high",
-        reason: "hwid_mismatch",
-        details: { expected_hwid: boundHwid, provided_hwid: hwid },
-      },
-      prefer: "return=minimal",
-    });
-    return { success: false, status: "blocked", error: "hwid_mismatch" };
-  } else {
-    await supabaseRequest(env, "licenses", "PATCH", {
-      query: `id=eq.${encodeURIComponent(row.id)}&select=id`,
-      body: { last_seen_at: new Date().toISOString() },
-      prefer: "return=minimal",
-    });
-  }
-
-  const isPrivate = String(row.tier || "public").toLowerCase() === "private";
-  const featurePayload = row.feature_payload && typeof row.feature_payload === "object" ? row.feature_payload : {};
-  const runtimePayload = isPrivate ? featurePayload : {};
-
-  return {
-    success: true,
-    status: "active",
-    tier: isPrivate ? "private" : "public",
-    license_id: row.id,
-    user_id: row.user_id || null,
-    expires_at: row.expires_at,
-    runtime_payload: runtimePayload,
-    policy: {
-      allow_offline: true,
-      blocked_actions: [],
-    },
   };
 }

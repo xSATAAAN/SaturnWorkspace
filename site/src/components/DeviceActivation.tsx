@@ -17,7 +17,6 @@ export function DeviceActivation({ lang }: DeviceActivationProps) {
   const isAr = lang === 'ar'
   const [user, setUser] = useState<User | null>(null)
   const [userCode, setUserCode] = useState(initialCode)
-  const [licenseKey, setLicenseKey] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState(false)
@@ -27,28 +26,24 @@ export function DeviceActivation({ lang }: DeviceActivationProps) {
       isAr
         ? {
             title: 'ربط الأداة بالحساب',
-            subtitle: 'سجل دخولك بحساب Google ثم اربط كود التفعيل بالجهاز.',
+            subtitle: 'سجل دخولك بنفس حساب Google الذي عليه اشتراك Saturn Workspace النشط، ثم اربط الجهاز.',
             login: 'تسجيل الدخول عبر Google',
             logout: 'تسجيل الخروج',
             userCode: 'كود الجهاز',
-            license: 'كود التفعيل',
-            licenseHint: 'اتركه فارغًا لو حسابك مربوط بالفعل بترخيص نشط.',
             submit: 'ربط الجهاز',
             working: 'جارٍ الربط...',
-            success: 'تم ربط الجهاز. ارجع إلى الأداة وسيتم فتحها تلقائيًا.',
+            success: 'تم ربط الجهاز بالاشتراك. ارجع إلى الأداة وسيتم فتحها تلقائيًا.',
             failed: 'فشل ربط الجهاز.',
           }
         : {
             title: 'Link Tool To Account',
-            subtitle: 'Sign in with Google, then link the activation code to this device.',
+            subtitle: 'Sign in with the Google account that has an active Saturn Workspace subscription, then link this device.',
             login: 'Sign in with Google',
             logout: 'Sign out',
             userCode: 'Device code',
-            license: 'Activation code',
-            licenseHint: 'Leave empty if your account already has an active license.',
             submit: 'Link device',
             working: 'Linking...',
-            success: 'Device linked. Return to the tool; it will open automatically.',
+            success: 'Device linked to your subscription. Return to the tool; it will open automatically.',
             failed: 'Could not link this device.',
           },
     [isAr],
@@ -79,7 +74,6 @@ export function DeviceActivation({ lang }: DeviceActivationProps) {
         body: JSON.stringify({
           id_token: idToken,
           user_code: userCode.trim().toUpperCase(),
-          license_key: licenseKey.trim().toUpperCase() || undefined,
         }),
       })
       const payload = await response.json().catch(() => null)
@@ -122,17 +116,6 @@ export function DeviceActivation({ lang }: DeviceActivationProps) {
                   placeholder="ABCD-1234"
                   dir="ltr"
                 />
-              </label>
-              <label className="grid gap-1">
-                <span className="text-xs font-semibold text-white/70">{t.license}</span>
-                <input
-                  className="h-11 rounded-xl border border-white/12 bg-white/5 px-3 text-sm text-white outline-none"
-                  value={licenseKey}
-                  onChange={(event) => setLicenseKey(event.target.value.toUpperCase())}
-                  placeholder="SATURN-XXXX-XXXX-XXXX-XXXX"
-                  dir="ltr"
-                />
-                <span className="text-xs text-white/45">{t.licenseHint}</span>
               </label>
               {error ? <p className="rounded-lg border border-rose-300/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-100">{error}</p> : null}
               {done ? <p className="rounded-lg border border-emerald-300/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">{t.success}</p> : null}

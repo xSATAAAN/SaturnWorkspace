@@ -41,10 +41,10 @@ export function CheckoutModal({
         failed: 'تعذر تجهيز رابط الدفع. راسل support@saturnws.com أو المطوّر على تيليجرام مع رقم الطلب.',
       }
     : {
-        title: 'License checkout',
+        title: 'Subscription checkout',
         close: 'Cancel',
-        monthly: 'Monthly license',
-        yearly: 'Yearly license (limited promo)',
+        monthly: 'Monthly subscription',
+        yearly: 'Yearly subscription (limited promo)',
         email: 'Email',
         phone: 'Phone / WhatsApp',
         notes: 'Order notes',
@@ -88,7 +88,7 @@ export function CheckoutModal({
 
   const message = useMemo(() => {
     const lines: string[] = []
-    lines.push(`Saturn Workspace — ${isAr ? 'طلب ترخيص' : 'License Order'}`)
+    lines.push(`Saturn Workspace — ${isAr ? 'طلب اشتراك' : 'Subscription Order'}`)
     lines.push('------------------------------')
     lines.push(`Order: ${orderId}`)
     const planLine = isAr
@@ -159,7 +159,7 @@ export function CheckoutModal({
       className="fixed inset-0 z-[60] flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
-      aria-label="License checkout"
+      aria-label="Subscription checkout"
     >
       <button
         type="button"

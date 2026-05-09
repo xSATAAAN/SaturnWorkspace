@@ -1,16 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  createLicense,
+  createSubscription as createLicense,
   createOtaUpdate,
   createPromoCode,
   fetchAdminDashboard,
   fetchCrashLogs,
-  fetchLicenses,
+  fetchSubscriptions as fetchLicenses,
   fetchOtaUpdates,
   fetchPromoCodes,
-  patchLicenseStatus,
+  patchSubscriptionStatus as patchLicenseStatus,
   type AdminCrashLog,
-  type AdminLicense,
+  type AdminSubscription as AdminLicense,
   type AdminOtaUpdate,
   type AdminPromoCode,
 } from '../../api/admin'
@@ -38,7 +38,6 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
   const [newPromoValue, setNewPromoValue] = useState('10')
   const [newPromoPrivate, setNewPromoPrivate] = useState(false)
   const [newPromoMaxUses, setNewPromoMaxUses] = useState('')
-  const [newLicenseKey, setNewLicenseKey] = useState('')
   const [newLicenseEmail, setNewLicenseEmail] = useState('')
   const [newLicensePlan, setNewLicensePlan] = useState<'monthly' | 'yearly'>('monthly')
   const [newLicenseTier, setNewLicenseTier] = useState<'public' | 'private'>('public')
@@ -61,7 +60,7 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
             suspend: 'تعليق',
             overview: 'نظرة عامة',
             activity: 'آخر النشاطات',
-            licenses: 'إدارة التراخيص',
+            licenses: 'إدارة الاشتراكات',
             promos: 'إدارة أكواد الخصم',
             ota: 'التحديثات الهوائية OTA',
             crashes: 'Crash Logs & Telemetry',
@@ -70,14 +69,14 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
           }
         : {
             title: 'Saturn Workspace Admin Dashboard',
-            subtitle: 'Manage licenses, promo codes, OTA releases, crash telemetry, and security actions.',
+            subtitle: 'Manage account subscriptions, promo codes, OTA releases, crash telemetry, and security actions.',
             publish: 'Publish Update',
             save: 'Save',
             revoke: 'Revoke',
             suspend: 'Suspend',
             overview: 'Overview',
             activity: 'Recent Activity',
-            licenses: 'License Management',
+            licenses: 'Subscription Management',
             promos: 'Promo Codes',
             ota: 'OTA Updates',
             crashes: 'Crash Logs & Telemetry',
@@ -165,18 +164,16 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
   }
 
   const handleCreateLicense = async () => {
-    if (!newLicenseExpiry) return
+    if (!newLicenseEmail.trim() || !newLicenseExpiry) return
     setSavingLicense(true)
     try {
       const res = await createLicense({
-        license_key: newLicenseKey.trim() || undefined,
-        user_email: newLicenseEmail.trim() || undefined,
+        user_email: newLicenseEmail.trim(),
         plan: newLicensePlan,
         tier: newLicenseTier,
         expires_at: new Date(newLicenseExpiry).toISOString(),
       })
       setLicenses((prev) => [res.item, ...prev])
-      setNewLicenseKey('')
       setNewLicenseEmail('')
       setNewLicenseExpiry('')
     } finally {
@@ -246,7 +243,7 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
             <table className="w-full min-w-[640px] text-sm">
               <thead className="bg-white/5 text-white/60">
                 <tr>
-                  <th className="px-3 py-2 text-start">License</th>
+                  <th className="px-3 py-2 text-start">Account</th>
                   <th className="px-3 py-2 text-start">Plan</th>
                   <th className="px-3 py-2 text-start">Tier</th>
                   <th className="px-3 py-2 text-start">Status</th>
@@ -256,7 +253,7 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
               <tbody>
                 {licenses.map((row) => (
                   <tr key={row.id} className="border-t border-white/10 text-white/80">
-                    <td className="px-3 py-2">{row.license_key}</td>
+                    <td className="px-3 py-2">{row.user_email || row.firebase_user_id || row.id}</td>
                     <td className="px-3 py-2">{row.plan}</td>
                     <td className="px-3 py-2">{row.tier}</td>
                     <td className="px-3 py-2">{row.status}</td>
@@ -267,9 +264,9 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
                         </button>
                         <button
                           className="rounded-lg border border-rose-300/40 bg-rose-500/10 px-2.5 py-1 text-rose-200"
-                          onClick={() => void handlePatchLicense(row.id, 'revoked')}
+                          onClick={() => void handlePatchLicense(row.id, 'canceled')}
                         >
-                          {t.revoke}
+                          Cancel
                         </button>
                       </div>
                     </td>
@@ -411,7 +408,7 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
         <article className="surface-card p-5">
           <h3 className="mb-3 text-sm font-semibold text-white/85">{t.security}</h3>
           <div className="rounded-xl border border-amber-300/35 bg-amber-400/10 p-3 text-sm text-amber-100">
-            HWID mismatch detected for license ST-LIC-992
+            HWID mismatch detected for an account subscription
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
             <button className="rounded-xl border border-rose-300/45 bg-rose-500/12 px-3 py-2 text-sm font-semibold text-rose-100">
@@ -426,16 +423,10 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
 
       <section className="surface-card p-5">
         <h3 className="mb-3 text-sm font-semibold text-white/85">{t.users}</h3>
-        <div className="mb-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="mb-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <input
             className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none"
-            placeholder="License key"
-            value={newLicenseKey}
-            onChange={(e) => setNewLicenseKey(e.target.value)}
-          />
-          <input
-            className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none"
-            placeholder="User email (optional)"
+            placeholder="User email"
             value={newLicenseEmail}
             onChange={(e) => setNewLicenseEmail(e.target.value)}
           />
@@ -464,14 +455,14 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
         </div>
         <div className="mb-4">
           <button className="btn-primary rounded-xl px-4 py-2 text-sm font-semibold" onClick={handleCreateLicense} disabled={savingLicense}>
-            Create License
+            Create Subscription
           </button>
         </div>
         <div className="overflow-x-auto rounded-xl border border-white/10">
           <table className="w-full min-w-[760px] text-sm">
             <thead className="bg-white/5 text-white/60">
               <tr>
-                <th className="px-3 py-2 text-start">License ID</th>
+                <th className="px-3 py-2 text-start">Subscription ID</th>
                 <th className="px-3 py-2 text-start">Email</th>
                 <th className="px-3 py-2 text-start">Plan</th>
                 <th className="px-3 py-2 text-start">Tier</th>

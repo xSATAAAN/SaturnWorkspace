@@ -6,6 +6,7 @@ create extension if not exists pgcrypto;
 create type public.subscription_plan as enum ('monthly', 'yearly');
 create type public.license_tier as enum ('public', 'private');
 create type public.license_status as enum ('active', 'suspended', 'revoked', 'expired');
+create type public.account_subscription_status as enum ('active', 'past_due', 'canceled', 'expired', 'suspended');
 create type public.promo_discount_type as enum ('percent', 'fixed');
 create type public.alert_severity as enum ('low', 'medium', 'high', 'critical');
 
@@ -38,6 +39,39 @@ create index if not exists licenses_status_idx on public.licenses(status);
 create index if not exists licenses_tier_idx on public.licenses(tier);
 create index if not exists licenses_hwid_idx on public.licenses(hwid);
 create index if not exists licenses_expires_at_idx on public.licenses(expires_at);
+
+create table if not exists public.account_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  firebase_user_id text,
+  user_email text not null,
+  plan public.subscription_plan not null default 'monthly',
+  tier public.license_tier not null default 'public',
+  status public.account_subscription_status not null default 'active',
+  hwid text,
+  bound_at timestamptz,
+  starts_at timestamptz not null default now(),
+  expires_at timestamptz not null,
+  last_seen_at timestamptz,
+  provider text not null default 'manual',
+  provider_customer_id text,
+  provider_subscription_id text,
+  source_promo_code text,
+  feature_payload jsonb not null default '{}'::jsonb,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint account_subscriptions_dates_chk check (expires_at > starts_at)
+);
+
+create index if not exists account_subscriptions_firebase_user_id_idx on public.account_subscriptions(firebase_user_id);
+create index if not exists account_subscriptions_user_email_idx on public.account_subscriptions(lower(user_email));
+create index if not exists account_subscriptions_status_idx on public.account_subscriptions(status);
+create index if not exists account_subscriptions_tier_idx on public.account_subscriptions(tier);
+create index if not exists account_subscriptions_hwid_idx on public.account_subscriptions(hwid);
+create index if not exists account_subscriptions_expires_at_idx on public.account_subscriptions(expires_at);
+create unique index if not exists account_subscriptions_provider_subscription_uidx
+  on public.account_subscriptions(provider, provider_subscription_id)
+  where provider_subscription_id is not null;
 
 create table if not exists public.promo_codes (
   id uuid primary key default gen_random_uuid(),
@@ -87,6 +121,7 @@ create table if not exists public.crash_logs (
   happened_at timestamptz not null default now(),
   user_id uuid,
   license_id uuid references public.licenses(id) on delete set null,
+  subscription_id uuid references public.account_subscriptions(id) on delete set null,
   hwid text,
   windows_version text,
   device_name text,
@@ -111,6 +146,7 @@ create table if not exists public.tamper_alerts (
   happened_at timestamptz not null default now(),
   user_id uuid,
   license_id uuid references public.licenses(id) on delete set null,
+  subscription_id uuid references public.account_subscriptions(id) on delete set null,
   hwid text,
   severity public.alert_severity not null default 'medium',
   reason text not null,
@@ -127,6 +163,7 @@ create table if not exists public.purchase_events (
   user_id uuid,
   user_email text,
   license_id uuid references public.licenses(id) on delete set null,
+  subscription_id uuid references public.account_subscriptions(id) on delete set null,
   promo_code text,
   plan public.subscription_plan not null,
   amount numeric(12, 2) not null,
@@ -165,6 +202,11 @@ $$;
 drop trigger if exists licenses_touch_updated_at on public.licenses;
 create trigger licenses_touch_updated_at
 before update on public.licenses
+for each row execute function public.touch_updated_at();
+
+drop trigger if exists account_subscriptions_touch_updated_at on public.account_subscriptions;
+create trigger account_subscriptions_touch_updated_at
+before update on public.account_subscriptions
 for each row execute function public.touch_updated_at();
 
 drop trigger if exists promo_codes_touch_updated_at on public.promo_codes;

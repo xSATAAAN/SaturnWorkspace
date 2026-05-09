@@ -2,8 +2,8 @@ import { enforceBrowserOrigin, enforcePaymentRateLimit } from '../security/payme
 import { parseCreatePaymentRequest } from '../validation/payments.js'
 
 const PLAN_LABELS = {
-  monthly: 'Monthly license',
-  yearly: 'Yearly license',
+  monthly: 'Monthly subscription',
+  yearly: 'Yearly subscription',
 }
 
 function makeManualOrderId() {
