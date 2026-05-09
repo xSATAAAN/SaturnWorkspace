@@ -2,6 +2,7 @@ name = "saturnws-admin"
 account_id = "0665376659b7e5b47ccc2114b25f75a6"
 main = "src/index.js"
 compatibility_date = "2026-05-01"
+workers_dev = false
 
 routes = [
   { pattern = "admin.saturnws.com/*", zone_name = "saturnws.com" },
