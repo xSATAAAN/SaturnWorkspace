@@ -38,6 +38,23 @@ function Read-Required {
   }
 }
 
+function Read-RequiredSecret {
+  param([string]$Prompt)
+  while ($true) {
+    $secure = Read-Host $Prompt -AsSecureString
+    $ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+    try {
+      $value = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr)
+    }
+    finally {
+      [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr)
+    }
+    $value = String($value).Trim()
+    if ($value) { return $value }
+    Write-Host "Value is required." -ForegroundColor Yellow
+  }
+}
+
 function Read-OAuthJson {
   while ($true) {
     $path = Read-Host "Google OAuth client JSON file path"
@@ -115,7 +132,7 @@ Write-Host ""
 $adminUsername = Read-Required "ADMIN_LAYER1_USERNAME" "admin"
 $adminAllowlist = Read-Required "ADMIN_EMAIL_ALLOWLIST (comma-separated admin Google emails)" "abdelrahman@saturnws.com"
 $supabaseUrl = Read-Required "Supabase project URL, example https://xxxxx.supabase.co"
-$supabaseServiceRole = Read-Required "Supabase service_role key"
+$supabaseServiceRole = Read-RequiredSecret "Supabase service_role key"
 $firebaseProjectId = Read-Required "Firebase project id"
 $firebaseWebApiKey = Read-Required "Firebase web API key"
 $googleDriveConfigJson = Read-OAuthJson
