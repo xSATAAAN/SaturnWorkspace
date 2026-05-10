@@ -105,6 +105,10 @@ export async function clearAdminPreauth() {
   })
 }
 
+export async function fetchAdminSession() {
+  return adminFetch<{ success: boolean; email: string }>('/session')
+}
+
 export async function fetchAdminDashboard() {
   return adminFetch<{ success: boolean; kpis?: Record<string, number | null>; recent_activity?: unknown[] }>('/dashboard')
 }

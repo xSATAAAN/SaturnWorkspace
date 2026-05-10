@@ -8,7 +8,7 @@ import {
   signOut,
   type User,
 } from 'firebase/auth'
-import { clearAdminPreauth, fetchAdminDashboard, fetchAdminPreauthState, setAdminBearerToken, submitAdminPreauth } from '../../api/admin'
+import { clearAdminPreauth, fetchAdminPreauthState, fetchAdminSession, setAdminBearerToken, submitAdminPreauth } from '../../api/admin'
 import { firebaseAuth } from '../../lib/firebase'
 
 type AdminAuthGateProps = {
@@ -80,15 +80,12 @@ export function AdminAuthGate({ lang, children }: AdminAuthGateProps) {
           setAdminBearerToken(token)
           setAuthorizing(true)
           setAuthzError(null)
-          await fetchAdminDashboard()
+          await fetchAdminSession()
           setIsAuthorized(true)
-        } catch {
+        } catch (err) {
           setAdminBearerToken(null)
           setIsAuthorized(false)
-          setAuthzError(labels.accessDenied)
-          void signOut(firebaseAuth).catch(() => {
-            // no-op
-          })
+          setAuthzError(err instanceof Error ? err.message : labels.accessDenied)
         } finally {
           setAuthorizing(false)
         }

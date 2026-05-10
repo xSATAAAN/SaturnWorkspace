@@ -53,6 +53,10 @@ export default {
       if (url.pathname === "/api/admin/preauth/logout" && request.method === "POST") {
         return handleAdminPreauthLogout(request, env);
       }
+      if (url.pathname === "/api/admin/session" && request.method === "GET") {
+        const adminEmail = await requireAdmin(request, env);
+        return json({ success: true, email: adminEmail }, 200, corsHeaders(request, env));
+      }
       if (url.pathname === "/api/admin/state" && request.method === "GET") {
         await requireAdmin(request, env);
         return json(await loadDashboardState(env), 200, corsHeaders(request, env));
@@ -130,7 +134,15 @@ export default {
       return json({ success: false, error: "not_found" }, 404, corsHeaders(request, env));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error || "unexpected_error");
-      const status = message === "unauthorized" ? 401 : 400;
+      const authErrors = new Set([
+        "unauthorized",
+        "preauth_required",
+        "admin_allowlist_empty",
+        "firebase_not_configured",
+        "firebase_token_invalid",
+        "firebase_email_not_verified",
+      ]);
+      const status = authErrors.has(message) || message.startsWith("admin_email_not_allowed") ? 401 : 400;
       return json({ success: false, error: message }, status, corsHeaders(request, env));
     }
   },
@@ -353,24 +365,26 @@ function parseAdminAllowlist(env) {
 
 async function verifyFirebaseAdminEmail(idToken, env) {
   const allowlist = parseAdminAllowlist(env);
-  if (!allowlist.length) return null;
+  if (!allowlist.length) throw new Error("admin_allowlist_empty");
   const webApiKey = String(env.FIREBASE_WEB_API_KEY || "").trim();
-  if (!webApiKey) return null;
+  if (!webApiKey) throw new Error("firebase_not_configured");
 
   const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${encodeURIComponent(webApiKey)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json; charset=utf-8" },
     body: JSON.stringify({ idToken }),
   });
-  if (!response.ok) return null;
+  if (!response.ok) throw new Error("firebase_token_invalid");
 
   const payload = await response.json().catch(() => null);
   const user = payload?.users?.[0];
   const email = String(user?.email || "").trim().toLowerCase();
   const emailVerified = Boolean(user?.emailVerified);
 
-  if (!email || !emailVerified) return null;
-  return allowlist.includes(email) ? email : null;
+  if (!email) throw new Error("firebase_token_invalid");
+  if (!emailVerified) throw new Error("firebase_email_not_verified");
+  if (!allowlist.includes(email)) throw new Error(`admin_email_not_allowed:${email}`);
+  return email;
 }
 
 function normalizeChannel(value) {
