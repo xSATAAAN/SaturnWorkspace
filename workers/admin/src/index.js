@@ -6,6 +6,7 @@ const DEFAULT_MANIFEST = {
   available: false,
   mandatory: false,
   download_url: "",
+  download_sha256: "",
   filename: "",
   notes: "",
   channels: {
@@ -193,7 +194,7 @@ function corsHeaders(request, env) {
   const value = allowed && origin === allowed ? origin : allowed || "*";
   return {
     "Access-Control-Allow-Origin": value,
-    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+    "Access-Control-Allow-Methods": "GET,POST,PATCH,OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
     "Access-Control-Max-Age": "86400",
     Vary: "Origin",
@@ -498,6 +499,7 @@ async function publishRelease(request, env, adminEmail) {
     available: true,
     mandatory,
     download_url: downloadUrl,
+    download_sha256: release.sha256 || "",
     filename: release.filename || "Saturn Workspace.exe",
     notes,
     remote_config: {
@@ -512,6 +514,7 @@ async function publishRelease(request, env, adminEmail) {
     available: true,
     mandatory: channel === "stable" ? mandatory : Boolean(manifest.mandatory),
     download_url: channel === "stable" ? downloadUrl : manifest.download_url || "",
+    download_sha256: channel === "stable" ? release.sha256 || "" : manifest.download_sha256 || "",
     filename: channel === "stable" ? channelManifest.filename : manifest.filename || "",
     notes: channel === "stable" ? notes : manifest.notes || "",
     channels: {
@@ -521,7 +524,17 @@ async function publishRelease(request, env, adminEmail) {
     },
   };
 
-  await saveManifest(env, nextManifest);
+  const signedManifest = await saveManifest(env, nextManifest);
+  await recordPublishedOtaUpdate(env, {
+    version,
+    channel,
+    release_notes: notes,
+    download_url: downloadUrl,
+    checksum_sha256: release.sha256 || null,
+    file_size_bytes: release.size || null,
+    is_mandatory: mandatory,
+    created_by: adminEmail,
+  });
   await appendAudit(env, {
     type: "publish",
     channel,
@@ -530,7 +543,7 @@ async function publishRelease(request, env, adminEmail) {
     actor: adminEmail,
     at: new Date().toISOString(),
   });
-  return { success: true, manifest: nextManifest };
+  return { success: true, manifest: signedManifest };
 }
 
 async function rollbackRelease(request, env, adminEmail) {
@@ -552,6 +565,7 @@ async function rollbackRelease(request, env, adminEmail) {
     version,
     available: true,
     download_url: downloadUrl,
+    download_sha256: release.sha256 || existing.download_sha256 || "",
     filename: release.filename || existing.filename || "Saturn Workspace.exe",
     published_at: new Date().toISOString(),
   };
@@ -560,6 +574,7 @@ async function rollbackRelease(request, env, adminEmail) {
     ...manifest,
     version: channel === "stable" ? version : manifest.version,
     download_url: channel === "stable" ? downloadUrl : manifest.download_url,
+    download_sha256: channel === "stable" ? release.sha256 || "" : manifest.download_sha256 || "",
     filename: channel === "stable" ? updatedChannel.filename : manifest.filename,
     channels: {
       stable: manifest.channels?.stable || {},
@@ -567,7 +582,7 @@ async function rollbackRelease(request, env, adminEmail) {
       [channel]: updatedChannel,
     },
   };
-  await saveManifest(env, nextManifest);
+  const signedManifest = await saveManifest(env, nextManifest);
   await appendAudit(env, {
     type: "rollback",
     channel,
@@ -575,7 +590,7 @@ async function rollbackRelease(request, env, adminEmail) {
     actor: adminEmail,
     at: new Date().toISOString(),
   });
-  return { success: true, manifest: nextManifest };
+  return { success: true, manifest: signedManifest };
 }
 
 async function getReleaseHistory(env, channel) {
@@ -619,10 +634,94 @@ async function loadManifest(env) {
 }
 
 async function saveManifest(env, manifest) {
-  if (!hasOtaBucket(env)) return;
-  await env.OTA_BUCKET.put("updates/latest.json", JSON.stringify(manifest, null, 2), {
+  if (!hasOtaBucket(env)) return structuredClone(manifest);
+  const signedManifest = await signManifest(env, manifest);
+  await env.OTA_BUCKET.put("updates/latest.json", JSON.stringify(signedManifest, null, 2), {
     httpMetadata: { contentType: "application/json; charset=utf-8" },
   });
+  return signedManifest;
+}
+
+function stableStringify(value) {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map((item) => stableStringify(item)).join(",")}]`;
+  return `{${Object.keys(value)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`)
+    .join(",")}}`;
+}
+
+function stripManifestSignature(manifest) {
+  const clone = JSON.parse(JSON.stringify(manifest || {}));
+  delete clone.manifest_signature;
+  return clone;
+}
+
+function pemToArrayBuffer(pem) {
+  const b64 = String(pem || "")
+    .replace(/-----BEGIN [^-]+-----/g, "")
+    .replace(/-----END [^-]+-----/g, "")
+    .replace(/\s+/g, "");
+  if (!b64) throw new Error("manifest_signing_key_missing");
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+}
+
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+async function signManifest(env, manifest) {
+  const privateKeyPem = String(env.UPDATE_MANIFEST_PRIVATE_KEY_PEM || "").trim();
+  if (!privateKeyPem) throw new Error("manifest_signing_key_missing");
+  const clean = stripManifestSignature(manifest);
+  const key = await crypto.subtle.importKey(
+    "pkcs8",
+    pemToArrayBuffer(privateKeyPem),
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const bytes = new TextEncoder().encode(stableStringify(clean));
+  const signature = await crypto.subtle.sign({ name: "RSASSA-PKCS1-v1_5" }, key, bytes);
+  return { ...clean, manifest_signature: arrayBufferToBase64(signature) };
+}
+
+async function recordPublishedOtaUpdate(env, payload) {
+  const body = {
+    version: String(payload.version || "").trim(),
+    channel: String(payload.channel || "stable").trim().toLowerCase(),
+    release_notes: String(payload.release_notes || "").trim(),
+    download_url: String(payload.download_url || "").trim(),
+    checksum_sha256: payload.checksum_sha256 || null,
+    file_size_bytes: payload.file_size_bytes || null,
+    is_mandatory: Boolean(payload.is_mandatory),
+    is_published: true,
+    published_at: new Date().toISOString(),
+    created_by: payload.created_by || null,
+  };
+  try {
+    await supabaseRequest(env, "ota_updates", "POST", {
+      body,
+      prefer: "return=representation",
+    });
+  } catch (error) {
+    await appendAudit(env, {
+      type: "ota_update_record_failed",
+      version: body.version,
+      channel: body.channel,
+      error: error instanceof Error ? error.message : String(error || "unknown_error"),
+      at: new Date().toISOString(),
+    });
+  }
 }
 
 async function loadAudit(env) {
@@ -649,7 +748,8 @@ async function appendAudit(env, event) {
 
 async function serveLatestManifest(env) {
   const manifest = await loadManifest(env);
-  return new Response(JSON.stringify(manifest, null, 2), {
+  const signedManifest = await signManifest(env, manifest);
+  return new Response(JSON.stringify(signedManifest, null, 2), {
     status: 200,
     headers: {
       "Content-Type": "application/json; charset=utf-8",
@@ -888,31 +988,76 @@ function isMissingSupabaseTable(message, table) {
   return text.includes("schema cache") && text.includes(`public.${tableName}`);
 }
 
+async function sha256Hex(value) {
+  const buffer = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(value || "")));
+  return [...new Uint8Array(buffer)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function isUuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ""));
+}
+
+function limitString(value, max) {
+  const text = String(value || "");
+  return text.length > max ? text.slice(0, max) : text;
+}
+
+async function resolveCrashIngestAuth(request, env, body) {
+  const configuredToken = String(env.CRASH_INGEST_TOKEN || "").trim();
+  const auth = String(request.headers.get("Authorization") || "").trim();
+  const bearer = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length).trim() : "";
+  if (configuredToken && bearer && timingSafeEqual(bearer, configuredToken)) {
+    return { source: "ingest_token", session: null };
+  }
+  if (bearer) {
+    const tokenHash = await sha256Hex(bearer);
+    const rows = await supabaseRequest(env, "app_sessions", "GET", {
+      query: `select=*&session_token_hash=eq.${encodeURIComponent(tokenHash)}&limit=1`,
+    });
+    const session = Array.isArray(rows) && rows.length ? rows[0] : null;
+    if (!session) throw new Error("unauthorized");
+    if (session.revoked_at) throw new Error("session_revoked");
+    if (session.expires_at && Date.parse(String(session.expires_at)) <= Date.now()) throw new Error("session_expired");
+    const requestHwid = String(body?.hwid || "").trim();
+    const sessionHwid = String(session.hwid || "").trim();
+    return {
+      source: "app_session",
+      session,
+      warning: requestHwid && sessionHwid && requestHwid !== sessionHwid ? "hwid_mismatch" : "",
+    };
+  }
+  if (!configuredToken) return { source: "anonymous", session: null };
+  throw new Error("unauthorized");
+}
+
 async function ingestCrashLog(request, env) {
   const body = await request.json();
-  const token = String(env.CRASH_INGEST_TOKEN || "").trim();
-  const auth = String(request.headers.get("Authorization") || "");
-  if (token) {
-    const expected = `Bearer ${token}`;
-    if (auth !== expected) throw new Error("unauthorized");
-  }
+  const auth = await resolveCrashIngestAuth(request, env, body);
+  const session = auth.session || {};
+  const rawPayload = body && typeof body === "object" ? { ...body } : {};
+  rawPayload.auth = {
+    source: auth.source,
+    firebase_user_id: session.user_id || rawPayload.firebase_user_id || null,
+    user_email: session.user_email || rawPayload.user_email || null,
+    warning: auth.warning || null,
+  };
   const payload = {
     happened_at: body?.happened_at || new Date().toISOString(),
-    user_id: body?.user_id || null,
-    subscription_id: body?.subscription_id || body?.license_id || null,
+    user_id: isUuid(body?.user_id) ? String(body.user_id) : null,
+    subscription_id: body?.subscription_id || session.subscription_id || body?.license_id || null,
     license_id: body?.license_id || null,
-    hwid: body?.hwid || null,
+    hwid: body?.hwid || session.hwid || null,
     windows_version: body?.windows_version || null,
     device_name: body?.device_name || null,
     cpu: body?.cpu || null,
     ram_gb: body?.ram_gb || null,
     gpu: body?.gpu || null,
-    error_type: String(body?.error_type || "unknown").trim(),
-    message: body?.message || null,
-    stack_trace: String(body?.stack_trace || "").trim(),
+    error_type: limitString(String(body?.error_type || "unknown").trim(), 180),
+    message: body?.message ? limitString(body.message, 4000) : null,
+    stack_trace: limitString(String(body?.stack_trace || "").trim(), 120000),
     app_version: body?.app_version || null,
     tool_channel: body?.tool_channel || null,
-    raw_payload: body && typeof body === "object" ? body : {},
+    raw_payload: rawPayload,
   };
   if (!payload.stack_trace) throw new Error("missing_stack_trace");
   const created = await supabaseRequest(env, "crash_logs", "POST", {

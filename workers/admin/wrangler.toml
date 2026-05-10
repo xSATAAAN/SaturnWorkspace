@@ -10,8 +10,8 @@ routes = [
   { pattern = "admin-api.saturnws.com/api/*", zone_name = "saturnws.com" }
 ]
 
-# NOTE: R2 binding is temporarily disabled for deployability on accounts
-# where R2 isn't enabled yet. Re-enable after activating R2 in dashboard.
+# Enable after R2 is activated on the Cloudflare account and the
+# saturnws-ota bucket is created.
 # [[r2_buckets]]
 # binding = "OTA_BUCKET"
 # bucket_name = "saturnws-ota"

@@ -67,7 +67,8 @@ export function setAdminBearerToken(token: string | null) {
 
 async function adminFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers || {})
-  if (!headers.has('Content-Type') && init.body) headers.set('Content-Type', 'application/json')
+  const isFormData = typeof FormData !== 'undefined' && init.body instanceof FormData
+  if (!headers.has('Content-Type') && init.body && !isFormData) headers.set('Content-Type', 'application/json')
   const token = getAdminToken()
   if (token) headers.set('Authorization', `Bearer ${token}`)
 
@@ -167,6 +168,53 @@ export async function createOtaUpdate(payload: {
   is_published?: boolean
 }) {
   return adminFetch<{ success: boolean; item: AdminOtaUpdate }>('/ota-updates', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export type AdminReleaseUpload = {
+  key: string
+  channel: string
+  version: string
+  filename: string
+  size: number
+  sha256: string
+  uploaded_at: string
+  uploaded_by: string
+}
+
+export type AdminReleaseManifest = {
+  version: string
+  available: boolean
+  mandatory: boolean
+  download_url: string
+  download_sha256?: string
+  filename: string
+  notes: string
+  channels?: Record<string, Partial<AdminReleaseManifest>>
+  manifest_signature?: string
+}
+
+export async function uploadReleaseBinary(payload: { file: File; version: string; channel: string }) {
+  const form = new FormData()
+  form.set('file', payload.file)
+  form.set('version', payload.version)
+  form.set('channel', payload.channel)
+  return adminFetch<{ success: boolean; release: AdminReleaseUpload }>('/upload', {
+    method: 'POST',
+    body: form,
+  })
+}
+
+export async function publishRelease(payload: {
+  version: string
+  channel: string
+  notes: string
+  mandatory: boolean
+  update_mode: 'optional' | 'force' | 'required' | 'silent'
+}) {
+  return adminFetch<{ success: boolean; manifest: AdminReleaseManifest }>('/publish', {
     method: 'POST',
     body: JSON.stringify(payload),
   })

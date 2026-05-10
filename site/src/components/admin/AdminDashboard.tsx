@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   createSubscription as createLicense,
-  createOtaUpdate,
   createPromoCode,
   fetchAdminDashboard,
   fetchCrashLogs,
@@ -9,6 +8,8 @@ import {
   fetchOtaUpdates,
   fetchPromoCodes,
   patchSubscriptionStatus as patchLicenseStatus,
+  publishRelease,
+  uploadReleaseBinary,
   type AdminCrashLog,
   type AdminSubscription as AdminLicense,
   type AdminOtaUpdate,
@@ -44,9 +45,11 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
   const [newLicenseExpiry, setNewLicenseExpiry] = useState('')
   const [newOtaVersion, setNewOtaVersion] = useState('')
   const [newOtaChannel, setNewOtaChannel] = useState('stable')
-  const [newOtaUrl, setNewOtaUrl] = useState('')
   const [newOtaNotes, setNewOtaNotes] = useState('')
   const [newOtaMandatory, setNewOtaMandatory] = useState(false)
+  const [newOtaMode, setNewOtaMode] = useState<'optional' | 'force' | 'required' | 'silent'>('optional')
+  const [newOtaFile, setNewOtaFile] = useState<File | null>(null)
+  const [otaPublishMessage, setOtaPublishMessage] = useState<string | null>(null)
 
   const t = useMemo(
     () =>
@@ -187,22 +190,47 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
   }
 
   const handleCreateOta = async () => {
-    if (!newOtaVersion.trim() || !newOtaUrl.trim()) return
+    if (!newOtaVersion.trim() || !newOtaFile) return
     setSavingOta(true)
+    setError(null)
+    setOtaPublishMessage(null)
     try {
-      const res = await createOtaUpdate({
-        version: newOtaVersion.trim(),
-        channel: newOtaChannel.trim() || 'stable',
-        release_notes: newOtaNotes.trim(),
-        download_url: newOtaUrl.trim(),
-        is_mandatory: newOtaMandatory,
-        is_published: true,
+      const channel = newOtaChannel.trim() || 'stable'
+      const version = newOtaVersion.trim()
+      const upload = await uploadReleaseBinary({
+        file: newOtaFile,
+        version,
+        channel,
       })
-      setOtaUpdates((prev) => [res.item, ...prev])
+      const publish = await publishRelease({
+        version,
+        channel,
+        notes: newOtaNotes.trim(),
+        mandatory: newOtaMandatory,
+        update_mode: newOtaMandatory ? 'force' : newOtaMode,
+      })
+      const channelManifest = publish.manifest.channels?.[channel]
+      setOtaUpdates((prev) => [
+        {
+          id: `published-${Date.now()}`,
+          version,
+          channel,
+          release_notes: newOtaNotes.trim(),
+          download_url: channelManifest?.download_url || publish.manifest.download_url || '',
+          is_mandatory: Boolean(channelManifest?.mandatory ?? publish.manifest.mandatory),
+          is_published: true,
+          created_at: new Date().toISOString(),
+        },
+        ...prev,
+      ])
+      setOtaPublishMessage(`Published ${version} (${channel}) - SHA-256 ${upload.release.sha256}`)
       setNewOtaVersion('')
-      setNewOtaUrl('')
       setNewOtaNotes('')
       setNewOtaMandatory(false)
+      setNewOtaMode('optional')
+      setNewOtaFile(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'ota_publish_failed')
     } finally {
       setSavingOta(false)
     }
@@ -216,8 +244,12 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
             <h1 className="text-2xl font-bold text-white">{t.title}</h1>
             <p className="mt-1 text-sm text-white/65">{t.subtitle}</p>
           </div>
-          <button className="btn-primary rounded-xl px-4 py-2 text-sm font-semibold" onClick={handleCreateOta} disabled={savingOta}>
-            {t.publish}
+          <button
+            className="btn-primary rounded-xl px-4 py-2 text-sm font-semibold"
+            onClick={handleCreateOta}
+            disabled={savingOta || !newOtaVersion.trim() || !newOtaFile}
+          >
+            {savingOta ? 'Publishing...' : t.publish}
           </button>
         </div>
       </section>
@@ -351,10 +383,31 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
             />
             <input
               className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none"
-              placeholder="Download URL"
-              value={newOtaUrl}
-              onChange={(e) => setNewOtaUrl(e.target.value)}
+              type="file"
+              accept=".exe,application/vnd.microsoft.portable-executable,application/octet-stream"
+              onChange={(e) => setNewOtaFile(e.currentTarget.files?.[0] || null)}
             />
+            <select
+              className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none"
+              value={newOtaMode}
+              onChange={(e) => setNewOtaMode(e.target.value as 'optional' | 'force' | 'required' | 'silent')}
+              disabled={newOtaMandatory}
+            >
+              <option value="optional">Optional</option>
+              <option value="force">Force</option>
+              <option value="required">Required</option>
+              <option value="silent">Silent</option>
+            </select>
+            {newOtaFile ? (
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-white/65">
+                {newOtaFile.name} - {(newOtaFile.size / 1024 / 1024).toFixed(2)} MB
+              </div>
+            ) : null}
+            {otaPublishMessage ? (
+              <div className="rounded-xl border border-emerald-300/35 bg-emerald-400/10 px-3 py-2 text-xs text-emerald-100">
+                {otaPublishMessage}
+              </div>
+            ) : null}
             <textarea
               className="min-h-24 rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none"
               placeholder="Release Notes"
@@ -365,8 +418,12 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
               <input type="checkbox" checked={newOtaMandatory} onChange={(e) => setNewOtaMandatory(e.target.checked)} />
               Mandatory update
             </label>
-            <button className="btn-primary rounded-xl px-4 py-2 text-sm font-semibold" onClick={handleCreateOta} disabled={savingOta}>
-              {t.publish}
+            <button
+              className="btn-primary rounded-xl px-4 py-2 text-sm font-semibold"
+              onClick={handleCreateOta}
+              disabled={savingOta || !newOtaVersion.trim() || !newOtaFile}
+            >
+              {savingOta ? 'Publishing...' : t.publish}
             </button>
             {otaUpdates.length ? (
               <div className="rounded-xl border border-white/10 bg-white/[0.02] p-2 text-xs text-white/70">{otaUpdates.length} OTA records loaded</div>
