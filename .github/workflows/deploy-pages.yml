@@ -47,7 +47,9 @@ jobs:
       - name: Add SPA fallback
         run: |
           cp index.html 404.html
-          mkdir -p privacy terms refund release-notes
+          mkdir -p account activate privacy terms refund release-notes
+          cp index.html account/index.html
+          cp index.html activate/index.html
           cp privacy.html privacy/index.html
           cp terms.html terms/index.html
           cp refund.html refund/index.html
