@@ -46,8 +46,8 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
   const [newLicensePlan, setNewLicensePlan] = useState<'monthly' | 'yearly'>('monthly')
   const [newLicenseTier, setNewLicenseTier] = useState<'public' | 'private'>('public')
   const [newLicenseExpiry, setNewLicenseExpiry] = useState('')
-  const [newOtaVersion, setNewOtaVersion] = useState('')
-  const [newOtaChannel, setNewOtaChannel] = useState('stable')
+  const [newOtaVersion, setNewOtaVersion] = useState('1.0.0-beta')
+  const [newOtaChannel, setNewOtaChannel] = useState('beta')
   const [newOtaNotes, setNewOtaNotes] = useState('')
   const [newOtaMandatory, setNewOtaMandatory] = useState(false)
   const [newOtaMode, setNewOtaMode] = useState<'optional' | 'force' | 'required' | 'silent'>('optional')
@@ -208,7 +208,7 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
     setError(null)
     setOtaPublishMessage(null)
     try {
-      const channel = newOtaChannel.trim() || 'stable'
+      const channel = newOtaChannel.trim() || 'beta'
       const version = newOtaVersion.trim()
       const upload = await uploadReleaseBinary({
         file: newOtaFile,
@@ -237,7 +237,7 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
         ...prev,
       ])
       setOtaPublishMessage(`Published ${version} (${channel}) - SHA-256 ${upload.release.sha256}`)
-      setNewOtaVersion('')
+      setNewOtaVersion('1.0.0-beta')
       setNewOtaNotes('')
       setNewOtaMandatory(false)
       setNewOtaMode('optional')
