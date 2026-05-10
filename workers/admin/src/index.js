@@ -502,19 +502,29 @@ function normalizeAnnouncements(value) {
 
 function mergeChannelControls(existing, body) {
   const remoteConfig = safePlainObject(existing.remote_config);
+  const requestedRemoteConfig = safePlainObject(body.remote_config);
   const nextRemoteConfig = {
     ...remoteConfig,
-    update_mode: body.update_mode ? normalizeUpdateMode(body.update_mode) : normalizeUpdateMode(remoteConfig.update_mode),
+    update_mode:
+      body.update_mode || requestedRemoteConfig.update_mode
+        ? normalizeUpdateMode(body.update_mode || requestedRemoteConfig.update_mode)
+        : normalizeUpdateMode(remoteConfig.update_mode),
     kill_switch_enabled:
-      body.kill_switch_enabled !== undefined ? Boolean(body.kill_switch_enabled) : Boolean(remoteConfig.kill_switch_enabled),
+      body.kill_switch_enabled !== undefined || requestedRemoteConfig.kill_switch_enabled !== undefined
+        ? Boolean(body.kill_switch_enabled ?? requestedRemoteConfig.kill_switch_enabled)
+        : Boolean(remoteConfig.kill_switch_enabled),
     kill_switch_message:
-      body.kill_switch_message !== undefined
-        ? String(body.kill_switch_message || "").trim().slice(0, 600)
+      body.kill_switch_message !== undefined || requestedRemoteConfig.kill_switch_message !== undefined
+        ? String(body.kill_switch_message ?? requestedRemoteConfig.kill_switch_message ?? "").trim().slice(0, 600)
         : String(remoteConfig.kill_switch_message || ""),
     feature_flags:
-      body.feature_flags !== undefined ? safePlainObject(body.feature_flags) : safePlainObject(remoteConfig.feature_flags),
+      body.feature_flags !== undefined || requestedRemoteConfig.feature_flags !== undefined
+        ? safePlainObject(body.feature_flags ?? requestedRemoteConfig.feature_flags)
+        : safePlainObject(remoteConfig.feature_flags),
     announcements:
-      body.announcements !== undefined ? normalizeAnnouncements(body.announcements) : normalizeAnnouncements(remoteConfig.announcements),
+      body.announcements !== undefined || requestedRemoteConfig.announcements !== undefined
+        ? normalizeAnnouncements(body.announcements ?? requestedRemoteConfig.announcements)
+        : normalizeAnnouncements(remoteConfig.announcements),
   };
   return {
     ...existing,
