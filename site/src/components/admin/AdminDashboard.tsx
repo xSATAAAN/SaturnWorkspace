@@ -1,166 +1,245 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  createSubscription as createLicense,
   createPromoCode,
+  createSubscription,
+  disableRelease,
   fetchAdminDashboard,
+  fetchAuditLog,
+  fetchCrashGroups,
   fetchCrashLogs,
-  fetchSubscriptions as fetchLicenses,
   fetchOtaUpdates,
   fetchPromoCodes,
-  patchSubscriptionStatus as patchLicenseStatus,
+  fetchRemoteControls,
+  fetchSubscriptions,
+  fetchUserDetail,
+  patchSubscriptionStatus,
   publishRelease,
+  resetSubscriptionHwid,
+  rollbackRelease,
+  updateRemoteControls,
   uploadReleaseBinary,
+  type AdminAuditLogItem,
+  type AdminCrashGroup,
   type AdminCrashLog,
-  type AdminSubscription as AdminLicense,
   type AdminOtaUpdate,
   type AdminPromoCode,
+  type AdminRemoteControls,
+  type AdminSubscription,
+  type AdminUserDetail,
 } from '../../api/admin'
 
 type AdminDashboardProps = {
   lang: 'en' | 'ar'
 }
 
-type AdminPage = 'overview' | 'subscriptions' | 'promos' | 'ota' | 'crashes' | 'security' | 'users'
+type AdminPage = 'overview' | 'users' | 'subscriptions' | 'promos' | 'ota' | 'controls' | 'crashes' | 'audit'
+
+const pageSize = 12
+
+function daysRemaining(expiresAt?: string | null) {
+  if (!expiresAt) return '--'
+  const diff = Date.parse(expiresAt) - Date.now()
+  if (!Number.isFinite(diff)) return '--'
+  if (diff <= 0) return 'Expired'
+  return `${Math.ceil(diff / 86_400_000)} days`
+}
+
+function visiblePage<T>(items: T[], page: number) {
+  return items.slice((page - 1) * pageSize, page * pageSize)
+}
+
+function Pager({ page, total, onPage }: { page: number; total: number; onPage: (next: number) => void }) {
+  const pages = Math.max(1, Math.ceil(total / pageSize))
+  return (
+    <div className="mt-3 flex items-center justify-between gap-3 text-xs text-white/60">
+      <span>
+        Page {page} of {pages}
+      </span>
+      <div className="flex gap-2">
+        <button
+          className="rounded-lg border border-white/15 bg-white/5 px-2.5 py-1 disabled:opacity-40"
+          disabled={page <= 1}
+          onClick={() => onPage(Math.max(1, page - 1))}
+        >
+          Previous
+        </button>
+        <button
+          className="rounded-lg border border-white/15 bg-white/5 px-2.5 py-1 disabled:opacity-40"
+          disabled={page >= pages}
+          onClick={() => onPage(Math.min(pages, page + 1))}
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  )
+}
 
 export function AdminDashboard({ lang }: AdminDashboardProps) {
   const isAr = lang === 'ar'
-  const [expandedCrashId, setExpandedCrashId] = useState<string | null>(null)
   const [activePage, setActivePage] = useState<AdminPage>('overview')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const [kpis, setKpis] = useState<Record<string, number | null>>({})
   const [recentActivity, setRecentActivity] = useState<unknown[]>([])
-  const [licenses, setLicenses] = useState<AdminLicense[]>([])
+  const [subscriptions, setSubscriptions] = useState<AdminSubscription[]>([])
   const [promoCodes, setPromoCodes] = useState<AdminPromoCode[]>([])
   const [otaUpdates, setOtaUpdates] = useState<AdminOtaUpdate[]>([])
   const [crashes, setCrashes] = useState<AdminCrashLog[]>([])
-  const [savingPromo, setSavingPromo] = useState(false)
-  const [savingOta, setSavingOta] = useState(false)
-  const [savingLicense, setSavingLicense] = useState(false)
+  const [crashGroups, setCrashGroups] = useState<AdminCrashGroup[]>([])
+  const [auditLog, setAuditLog] = useState<AdminAuditLogItem[]>([])
+  const [remoteControls, setRemoteControls] = useState<AdminRemoteControls>({})
+  const [remoteChannel, setRemoteChannel] = useState('beta')
+
+  const [subscriptionSearch, setSubscriptionSearch] = useState('')
+  const [crashSearch, setCrashSearch] = useState('')
+  const [subscriptionPage, setSubscriptionPage] = useState(1)
+  const [crashPage, setCrashPage] = useState(1)
+  const [expandedCrashId, setExpandedCrashId] = useState<string | null>(null)
+  const [selectedUser, setSelectedUser] = useState<AdminUserDetail | null>(null)
+  const [selectedUserLoading, setSelectedUserLoading] = useState(false)
+
+  const [newSubscriptionEmail, setNewSubscriptionEmail] = useState('')
+  const [newSubscriptionPlan, setNewSubscriptionPlan] = useState<'monthly' | 'yearly'>('monthly')
+  const [newSubscriptionTier, setNewSubscriptionTier] = useState<'public' | 'private'>('public')
+  const [newSubscriptionExpiry, setNewSubscriptionExpiry] = useState('')
   const [newPromoCode, setNewPromoCode] = useState('')
   const [newPromoType, setNewPromoType] = useState<'percent' | 'fixed'>('percent')
   const [newPromoValue, setNewPromoValue] = useState('10')
   const [newPromoPrivate, setNewPromoPrivate] = useState(false)
   const [newPromoMaxUses, setNewPromoMaxUses] = useState('')
-  const [newLicenseEmail, setNewLicenseEmail] = useState('')
-  const [newLicensePlan, setNewLicensePlan] = useState<'monthly' | 'yearly'>('monthly')
-  const [newLicenseTier, setNewLicenseTier] = useState<'public' | 'private'>('public')
-  const [newLicenseExpiry, setNewLicenseExpiry] = useState('')
-  const [newOtaVersion, setNewOtaVersion] = useState('1.0.0-beta')
-  const [newOtaChannel, setNewOtaChannel] = useState('beta')
-  const [newOtaNotes, setNewOtaNotes] = useState('')
-  const [newOtaMandatory, setNewOtaMandatory] = useState(false)
-  const [newOtaMode, setNewOtaMode] = useState<'optional' | 'force' | 'required' | 'silent'>('optional')
-  const [newOtaFile, setNewOtaFile] = useState<File | null>(null)
-  const [otaPublishMessage, setOtaPublishMessage] = useState<string | null>(null)
+
+  const [otaVersion, setOtaVersion] = useState('1.0.0-beta')
+  const [otaChannel, setOtaChannel] = useState('beta')
+  const [otaNotes, setOtaNotes] = useState('')
+  const [otaMandatory, setOtaMandatory] = useState(false)
+  const [otaMode, setOtaMode] = useState<'optional' | 'force' | 'required' | 'silent'>('optional')
+  const [otaRollout, setOtaRollout] = useState('100')
+  const [otaMinimumVersion, setOtaMinimumVersion] = useState('')
+  const [otaForceDeadline, setOtaForceDeadline] = useState('')
+  const [otaFile, setOtaFile] = useState<File | null>(null)
+  const [rollbackVersion, setRollbackVersion] = useState('')
+  const [disableReason, setDisableReason] = useState('')
+
+  const [killSwitchEnabled, setKillSwitchEnabled] = useState(false)
+  const [killSwitchMessage, setKillSwitchMessage] = useState('')
+  const [featureFlagsText, setFeatureFlagsText] = useState('{}')
+  const [announcementsText, setAnnouncementsText] = useState('[]')
+  const [saving, setSaving] = useState(false)
 
   const t = useMemo(
-    () =>
-      isAr
-        ? {
-            title: 'لوحة إدارة Saturn Workspace',
-            subtitle: 'إدارة التراخيص، أكواد الخصم، التحديثات الهوائية، وسجلات الأعطال.',
-            publish: 'نشر تحديث',
-            save: 'حفظ',
-            revoke: 'سحب',
-            suspend: 'تعليق',
-            overview: 'نظرة عامة',
-            activity: 'آخر النشاطات',
-            licenses: 'إدارة الاشتراكات',
-            promos: 'إدارة أكواد الخصم',
-            ota: 'التحديثات الهوائية OTA',
-            crashes: 'Crash Logs & Telemetry',
-            users: 'دليل المستخدمين',
-            security: 'الأمان ومكافحة العبث',
-          }
-        : {
-            title: 'Saturn Workspace Admin Dashboard',
-            subtitle: 'Manage account subscriptions, promo codes, OTA releases, crash telemetry, and security actions.',
-            publish: 'Publish Update',
-            save: 'Save',
-            revoke: 'Revoke',
-            suspend: 'Suspend',
-            overview: 'Overview',
-            activity: 'Recent Activity',
-            licenses: 'Subscription Management',
-            promos: 'Promo Codes',
-            ota: 'OTA Updates',
-            crashes: 'Crash Logs & Telemetry',
-            users: 'Users Directory',
-            security: 'Security & Anti-Tamper',
-          },
+    () => ({
+      title: isAr ? 'Saturn Workspace Admin' : 'Saturn Workspace Admin',
+      subtitle: isAr
+        ? 'إدارة الاشتراكات، التحديثات الهوائية، الأخطاء، والتحكمات البعيدة.'
+        : 'Manage subscriptions, OTA releases, crash telemetry, and remote controls.',
+    }),
     [isAr],
   )
 
+  const loadAll = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const [dashboard, subs, promos, ota, crash, groups, audit, controls] = await Promise.all([
+        fetchAdminDashboard(),
+        fetchSubscriptions({ limit: 200 }),
+        fetchPromoCodes(),
+        fetchOtaUpdates(),
+        fetchCrashLogs({ limit: 200 }),
+        fetchCrashGroups(),
+        fetchAuditLog(),
+        fetchRemoteControls(remoteChannel),
+      ])
+      setKpis(dashboard.kpis || {})
+      setRecentActivity(dashboard.recent_activity || [])
+      setSubscriptions(subs.items || [])
+      setPromoCodes(promos.items || [])
+      setOtaUpdates(ota.items || [])
+      setCrashes(crash.items || [])
+      setCrashGroups(groups.items || [])
+      setAuditLog(audit.items || [])
+      applyRemoteControlState(controls.controls || {})
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'failed_to_load_admin_data')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
-    let alive = true
-    const load = async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        const [dashboard, lic, promo, ota, crash] = await Promise.all([
-          fetchAdminDashboard(),
-          fetchLicenses(),
-          fetchPromoCodes(),
-          fetchOtaUpdates(),
-          fetchCrashLogs(),
-        ])
-        if (!alive) return
-        setKpis(dashboard.kpis || {})
-        setRecentActivity(dashboard.recent_activity || [])
-        setLicenses(lic.items || [])
-        setPromoCodes(promo.items || [])
-        setOtaUpdates(ota.items || [])
-        setCrashes(crash.items || [])
-      } catch (err) {
-        if (!alive) return
-        setError(err instanceof Error ? err.message : 'failed_to_load_admin_data')
-      } finally {
-        if (alive) setLoading(false)
-      }
-    }
-    void load()
-    return () => {
-      alive = false
-    }
-  }, [])
+    void loadAll()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [remoteChannel])
 
-  const kpiCards = [
-    {
-      key: 'active-users',
-      label: isAr ? 'إجمالي المستخدمين النشطين' : 'Total Active Users',
-      value: String(kpis.total_active_users ?? 0),
-    },
-    {
-      key: 'revenue',
-      label: isAr ? 'إجمالي الإيرادات' : 'Total Revenue',
-      value: kpis.total_revenue != null ? `$${kpis.total_revenue}` : '--',
-    },
-    {
-      key: 'churned',
-      label: isAr ? 'المستخدمون غير المجددين' : 'Churned Users',
-      value: String(kpis.churned_users ?? 0),
-    },
-    {
-      key: 'tamper',
-      label: isAr ? 'تنبيهات العبث النشطة' : 'Active Tampering Alerts',
-      value: String(kpis.active_tampering_alerts ?? 0),
-    },
-  ]
+  const applyRemoteControlState = (controls: AdminRemoteControls) => {
+    setRemoteControls(controls)
+    setOtaRollout(String(controls.rollout_percent ?? 100))
+    setOtaMinimumVersion(controls.minimum_supported_version || '')
+    setOtaForceDeadline(controls.force_update_deadline ? controls.force_update_deadline.slice(0, 16) : '')
+    setKillSwitchEnabled(Boolean(controls.remote_config?.kill_switch_enabled))
+    setKillSwitchMessage(controls.remote_config?.kill_switch_message || '')
+    setFeatureFlagsText(JSON.stringify(controls.remote_config?.feature_flags || {}, null, 2))
+    setAnnouncementsText(JSON.stringify(controls.remote_config?.announcements || [], null, 2))
+  }
 
-  const adminPages: Array<{ id: AdminPage; label: string; hint: string }> = [
-    { id: 'overview', label: t.overview, hint: isAr ? 'KPI + activity' : 'KPI and activity' },
-    { id: 'subscriptions', label: t.licenses, hint: isAr ? 'الحسابات والاشتراكات' : 'Accounts and plans' },
-    { id: 'promos', label: t.promos, hint: isAr ? 'خصومات وباقات' : 'Discount controls' },
-    { id: 'ota', label: t.ota, hint: isAr ? 'نشر الإصدارات' : 'Release publishing' },
-    { id: 'crashes', label: t.crashes, hint: isAr ? 'الأخطاء والأجهزة' : 'Errors and devices' },
-    { id: 'security', label: t.security, hint: isAr ? 'HWID والتنبيهات' : 'HWID and alerts' },
-    { id: 'users', label: t.users, hint: isAr ? 'دليل المستخدمين' : 'User directory' },
-  ]
+  const filteredSubscriptions = useMemo(() => {
+    const term = subscriptionSearch.trim().toLowerCase()
+    if (!term) return subscriptions
+    return subscriptions.filter((item) =>
+      [item.user_email, item.firebase_user_id, item.hwid, item.status, item.tier, item.plan]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(term)),
+    )
+  }, [subscriptions, subscriptionSearch])
+
+  const filteredCrashes = useMemo(() => {
+    const term = crashSearch.trim().toLowerCase()
+    if (!term) return crashes
+    return crashes.filter((item) =>
+      [item.error_type, item.message, item.hwid, item.device_name, item.windows_version, item.app_version]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(term)),
+    )
+  }, [crashes, crashSearch])
+
+  const handleCreateSubscription = async () => {
+    if (!newSubscriptionEmail.trim() || !newSubscriptionExpiry) return
+    setSaving(true)
+    try {
+      const res = await createSubscription({
+        user_email: newSubscriptionEmail.trim(),
+        plan: newSubscriptionPlan,
+        tier: newSubscriptionTier,
+        expires_at: new Date(newSubscriptionExpiry).toISOString(),
+      })
+      setSubscriptions((prev) => [res.item, ...prev])
+      setNewSubscriptionEmail('')
+      setNewSubscriptionExpiry('')
+      setNotice('Subscription created.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'subscription_create_failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handlePatchSubscription = async (id: string, status: AdminSubscription['status']) => {
+    const res = await patchSubscriptionStatus(id, status)
+    setSubscriptions((prev) => prev.map((item) => (item.id === id ? res.item : item)))
+  }
+
+  const handleResetHwid = async (id: string) => {
+    const res = await resetSubscriptionHwid(id, true)
+    setSubscriptions((prev) => prev.map((item) => (item.id === id ? res.item : item)))
+    setNotice('HWID reset and active app sessions revoked.')
+    if (selectedUser?.item?.id === id) await handleOpenUser(id)
+  }
 
   const handleCreatePromo = async () => {
     if (!newPromoCode.trim()) return
-    setSavingPromo(true)
+    setSaving(true)
     try {
       const res = await createPromoCode({
         code: newPromoCode.trim(),
@@ -171,56 +250,31 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
       })
       setPromoCodes((prev) => [res.item, ...prev])
       setNewPromoCode('')
-      setNewPromoValue('10')
-      setNewPromoPrivate(false)
-      setNewPromoMaxUses('')
+      setNotice('Promo code created.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'promo_create_failed')
     } finally {
-      setSavingPromo(false)
+      setSaving(false)
     }
   }
 
-  const handleCreateLicense = async () => {
-    if (!newLicenseEmail.trim() || !newLicenseExpiry) return
-    setSavingLicense(true)
-    try {
-      const res = await createLicense({
-        user_email: newLicenseEmail.trim(),
-        plan: newLicensePlan,
-        tier: newLicenseTier,
-        expires_at: new Date(newLicenseExpiry).toISOString(),
-      })
-      setLicenses((prev) => [res.item, ...prev])
-      setNewLicenseEmail('')
-      setNewLicenseExpiry('')
-    } finally {
-      setSavingLicense(false)
-    }
-  }
-
-  const handlePatchLicense = async (id: string, status: AdminLicense['status']) => {
-    const res = await patchLicenseStatus(id, status)
-    setLicenses((prev) => prev.map((x) => (x.id === id ? res.item : x)))
-  }
-
-  const handleCreateOta = async () => {
-    if (!newOtaVersion.trim() || !newOtaFile) return
-    setSavingOta(true)
+  const handlePublishOta = async () => {
+    if (!otaVersion.trim() || !otaFile) return
+    setSaving(true)
     setError(null)
-    setOtaPublishMessage(null)
     try {
-      const channel = newOtaChannel.trim() || 'beta'
-      const version = newOtaVersion.trim()
-      const upload = await uploadReleaseBinary({
-        file: newOtaFile,
-        version,
-        channel,
-      })
+      const channel = otaChannel.trim() || 'beta'
+      const version = otaVersion.trim()
+      const upload = await uploadReleaseBinary({ file: otaFile, version, channel })
       const publish = await publishRelease({
         version,
         channel,
-        notes: newOtaNotes.trim(),
-        mandatory: newOtaMandatory,
-        update_mode: newOtaMandatory ? 'force' : newOtaMode,
+        notes: otaNotes.trim(),
+        mandatory: otaMandatory,
+        update_mode: otaMandatory ? 'force' : otaMode,
+        rollout_percent: Number(otaRollout || 100),
+        minimum_supported_version: otaMinimumVersion.trim(),
+        force_update_deadline: otaForceDeadline ? new Date(otaForceDeadline).toISOString() : '',
       })
       const channelManifest = publish.manifest.channels?.[channel]
       setOtaUpdates((prev) => [
@@ -228,392 +282,499 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
           id: `published-${Date.now()}`,
           version,
           channel,
-          release_notes: newOtaNotes.trim(),
+          release_notes: otaNotes.trim(),
           download_url: channelManifest?.download_url || publish.manifest.download_url || '',
           is_mandatory: Boolean(channelManifest?.mandatory ?? publish.manifest.mandatory),
           is_published: true,
+          rollout_percent: Number(otaRollout || 100),
+          minimum_supported_version: otaMinimumVersion.trim(),
+          force_update_deadline: otaForceDeadline || null,
           created_at: new Date().toISOString(),
         },
         ...prev,
       ])
-      setOtaPublishMessage(`Published ${version} (${channel}) - SHA-256 ${upload.release.sha256}`)
-      setNewOtaVersion('1.0.0-beta')
-      setNewOtaNotes('')
-      setNewOtaMandatory(false)
-      setNewOtaMode('optional')
-      setNewOtaFile(null)
+      setNotice(`Published ${version}. SHA-256 ${upload.release.sha256}`)
+      setOtaFile(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'ota_publish_failed')
     } finally {
-      setSavingOta(false)
+      setSaving(false)
     }
   }
 
+  const handleRollback = async () => {
+    if (!rollbackVersion.trim()) return
+    setSaving(true)
+    try {
+      await rollbackRelease({ version: rollbackVersion.trim(), channel: otaChannel.trim() || 'beta' })
+      setNotice(`Rolled back ${otaChannel} to ${rollbackVersion}.`)
+      await loadAll()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'rollback_failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDisableRelease = async () => {
+    setSaving(true)
+    try {
+      await disableRelease({ channel: otaChannel.trim() || 'beta', reason: disableReason.trim() })
+      setNotice(`Disabled current ${otaChannel} release.`)
+      await loadAll()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'disable_release_failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleSaveControls = async () => {
+    setSaving(true)
+    try {
+      const featureFlags = JSON.parse(featureFlagsText || '{}') as Record<string, unknown>
+      const announcements = JSON.parse(announcementsText || '[]') as NonNullable<AdminRemoteControls['remote_config']>['announcements']
+      const res = await updateRemoteControls({
+        channel: remoteChannel,
+        rollout_percent: Number(otaRollout || 100),
+        minimum_supported_version: otaMinimumVersion.trim(),
+        force_update_deadline: otaForceDeadline ? new Date(otaForceDeadline).toISOString() : '',
+        remote_config: {
+          ...(remoteControls.remote_config || {}),
+          update_mode: otaMode,
+          kill_switch_enabled: killSwitchEnabled,
+          kill_switch_message: killSwitchMessage.trim(),
+          feature_flags: featureFlags,
+          announcements,
+        },
+      })
+      applyRemoteControlState(res.controls || {})
+      setNotice('Remote controls saved.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'remote_controls_save_failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleOpenUser = async (userKey: string) => {
+    if (!userKey) return
+    setSelectedUserLoading(true)
+    try {
+      setSelectedUser(await fetchUserDetail(userKey))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'user_detail_failed')
+    } finally {
+      setSelectedUserLoading(false)
+    }
+  }
+
+  const pages: Array<{ id: AdminPage; label: string; hint: string }> = [
+    { id: 'overview', label: 'Overview', hint: 'KPIs and recent events' },
+    { id: 'users', label: 'Users', hint: 'Accounts, devices, HWID' },
+    { id: 'subscriptions', label: 'Subscriptions', hint: 'Status and manual actions' },
+    { id: 'promos', label: 'Promo Codes', hint: 'Discount and tier triggers' },
+    { id: 'ota', label: 'OTA Updates', hint: 'Publish, rollback, disable' },
+    { id: 'controls', label: 'Remote Controls', hint: 'Flags, rollout, kill switch' },
+    { id: 'crashes', label: 'Crash Telemetry', hint: 'Groups and raw logs' },
+    { id: 'audit', label: 'Audit Log', hint: 'Admin actions' },
+  ]
+
+  const kpiCards = [
+    { label: 'Total Active Users', value: String(kpis.total_active_users ?? 0) },
+    { label: 'Total Revenue', value: kpis.total_revenue != null ? `$${kpis.total_revenue}` : '--' },
+    { label: 'Churned Users', value: String(kpis.churned_users ?? 0) },
+    { label: 'Active Tampering Alerts', value: String(kpis.active_tampering_alerts ?? 0) },
+  ]
+
   return (
-    <main className="mx-auto w-full max-w-6xl px-5 py-8">
+    <main className="mx-auto w-full max-w-7xl px-5 py-8">
       <section className="surface-card mb-6 p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold text-white">{t.title}</h1>
             <p className="mt-1 text-sm text-white/65">{t.subtitle}</p>
           </div>
-          <button
-            className="btn-primary rounded-xl px-4 py-2 text-sm font-semibold"
-            onClick={handleCreateOta}
-            disabled={savingOta || !newOtaVersion.trim() || !newOtaFile}
-          >
-            {savingOta ? 'Publishing...' : t.publish}
+          <button className="btn-primary rounded-xl px-4 py-2 text-sm font-semibold" onClick={() => void loadAll()} disabled={loading}>
+            {loading ? 'Refreshing...' : 'Refresh'}
           </button>
         </div>
       </section>
-      {error ? <section className="mb-6 rounded-xl border border-rose-300/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">{error}</section> : null}
-      {loading ? <section className="mb-6 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/70">Loading admin data...</section> : null}
 
-      <div className="grid gap-4 lg:grid-cols-[230px_minmax(0,1fr)]">
+      {error ? <section className="mb-4 rounded-xl border border-rose-300/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">{error}</section> : null}
+      {notice ? (
+        <section className="mb-4 rounded-xl border border-emerald-300/35 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">
+          {notice}
+        </section>
+      ) : null}
+      {loading ? <section className="mb-4 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/70">Loading admin data...</section> : null}
+
+      <div className="grid gap-4 lg:grid-cols-[245px_minmax(0,1fr)]">
         <aside className="surface-card h-fit p-2 lg:sticky lg:top-24">
           <nav className="grid gap-1" aria-label="Admin pages">
-            {adminPages.map((page) => {
-              const selected = activePage === page.id
-              return (
-                <button
-                  key={page.id}
-                  type="button"
-                  onClick={() => setActivePage(page.id)}
-                  className={`rounded-xl px-3 py-3 text-start transition ${
-                    selected
-                      ? 'border border-sky-300/35 bg-sky-400/15 text-white'
-                      : 'border border-transparent text-white/68 hover:border-white/12 hover:bg-white/[0.04] hover:text-white'
-                  }`}
-                >
-                  <span className="block text-sm font-semibold">{page.label}</span>
-                  <span className="mt-1 block text-xs text-white/45">{page.hint}</span>
-                </button>
-              )
-            })}
+            {pages.map((page) => (
+              <button
+                key={page.id}
+                type="button"
+                onClick={() => setActivePage(page.id)}
+                className={`rounded-xl px-3 py-3 text-start transition ${
+                  activePage === page.id
+                    ? 'border border-sky-300/35 bg-sky-400/15 text-white'
+                    : 'border border-transparent text-white/68 hover:border-white/12 hover:bg-white/[0.04] hover:text-white'
+                }`}
+              >
+                <span className="block text-sm font-semibold">{page.label}</span>
+                <span className="mt-1 block text-xs text-white/45">{page.hint}</span>
+              </button>
+            ))}
           </nav>
         </aside>
 
         <div className="min-w-0">
-      {activePage === 'overview' ? (
-      <section className="mb-6">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-white/70">{t.overview}</h2>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          {kpiCards.map((card) => (
-            <article key={card.key} className="surface-card p-4">
-              <div className="text-xs text-white/60">{card.label}</div>
-              <div className="mt-2 text-2xl font-semibold text-white">{card.value}</div>
-            </article>
-          ))}
-        </div>
-        <article className="surface-card mt-4 p-5">
-          <h3 className="mb-3 text-sm font-semibold text-white/85">{t.activity}</h3>
-          <ul className="space-y-2 text-sm text-white/75">
-            {recentActivity.map((item, idx) => (
-              <li key={`${idx}-${JSON.stringify(item)}`} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
-                {typeof item === 'string' ? item : JSON.stringify(item)}
-              </li>
-            ))}
-          </ul>
-        </article>
-      </section>
-      ) : null}
-
-      {activePage === 'subscriptions' ? (
-      <section className="mb-6 grid gap-4 lg:grid-cols-3">
-        <article className="surface-card p-5 lg:col-span-2">
-          <h3 className="mb-3 text-sm font-semibold text-white/85">{t.licenses}</h3>
-          <div className="overflow-x-auto rounded-xl border border-white/10">
-            <table className="w-full min-w-[640px] text-sm">
-              <thead className="bg-white/5 text-white/60">
-                <tr>
-                  <th className="px-3 py-2 text-start">Account</th>
-                  <th className="px-3 py-2 text-start">Plan</th>
-                  <th className="px-3 py-2 text-start">Tier</th>
-                  <th className="px-3 py-2 text-start">Status</th>
-                  <th className="px-3 py-2 text-start">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {licenses.map((row) => (
-                  <tr key={row.id} className="border-t border-white/10 text-white/80">
-                    <td className="px-3 py-2">{row.user_email || row.firebase_user_id || row.id}</td>
-                    <td className="px-3 py-2">{row.plan}</td>
-                    <td className="px-3 py-2">{row.tier}</td>
-                    <td className="px-3 py-2">{row.status}</td>
-                    <td className="px-3 py-2">
-                      <div className="flex flex-wrap gap-2">
-                        <button className="rounded-lg border border-white/20 bg-white/5 px-2.5 py-1" onClick={() => void handlePatchLicense(row.id, 'suspended')}>
-                          {t.suspend}
-                        </button>
-                        <button
-                          className="rounded-lg border border-rose-300/40 bg-rose-500/10 px-2.5 py-1 text-rose-200"
-                          onClick={() => void handlePatchLicense(row.id, 'canceled')}
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+          {activePage === 'overview' ? (
+            <section className="grid gap-4">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                {kpiCards.map((card) => (
+                  <article key={card.label} className="surface-card p-4">
+                    <div className="text-xs text-white/60">{card.label}</div>
+                    <div className="mt-2 text-2xl font-semibold text-white">{card.value}</div>
+                  </article>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        </article>
-
-        <article className="surface-card p-5">
-          <h3 className="mb-3 text-sm font-semibold text-white/85">{t.activity}</h3>
-          <ul className="space-y-2 text-sm text-white/75">
-            {recentActivity.map((item, idx) => (
-              <li key={`${idx}-${JSON.stringify(item)}`} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
-                {typeof item === 'string' ? item : JSON.stringify(item)}
-              </li>
-            ))}
-          </ul>
-        </article>
-      </section>
-      ) : null}
-
-      {activePage === 'promos' || activePage === 'ota' ? (
-      <section className="mb-6 grid gap-4 lg:grid-cols-2">
-        {activePage === 'promos' ? (
-        <article className="surface-card p-5">
-          <h3 className="mb-3 text-sm font-semibold text-white/85">{t.promos}</h3>
-          <div className="grid gap-3">
-            <input
-              className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none"
-              placeholder="Code (e.g. PRIVATE-GROUP-2026)"
-              value={newPromoCode}
-              onChange={(e) => setNewPromoCode(e.target.value)}
-            />
-            <div className="grid gap-3 sm:grid-cols-2">
-              <select
-                className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none"
-                value={newPromoType}
-                onChange={(e) => setNewPromoType(e.target.value as 'percent' | 'fixed')}
-              >
-                <option value="percent">Percent</option>
-                <option value="fixed">Fixed</option>
-              </select>
-              <input
-                className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none"
-                placeholder="Value"
-                value={newPromoValue}
-                onChange={(e) => setNewPromoValue(e.target.value)}
-              />
-            </div>
-            <input
-              className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none"
-              placeholder="Usage limit (optional)"
-              value={newPromoMaxUses}
-              onChange={(e) => setNewPromoMaxUses(e.target.value)}
-            />
-            <label className="flex items-center gap-2 text-sm text-white/75">
-              <input type="checkbox" checked={newPromoPrivate} onChange={(e) => setNewPromoPrivate(e.target.checked)} />
-              Tier 1 (Private) trigger
-            </label>
-            <button className="btn-primary rounded-xl px-4 py-2 text-sm font-semibold" onClick={handleCreatePromo} disabled={savingPromo}>
-              {t.save}
-            </button>
-            {promoCodes.length ? (
-              <div className="rounded-xl border border-white/10 bg-white/[0.02] p-2 text-xs text-white/70">{promoCodes.length} promo codes loaded</div>
-            ) : null}
-          </div>
-        </article>
-        ) : null}
-
-        {activePage === 'ota' ? (
-        <article className="surface-card p-5">
-          <h3 className="mb-3 text-sm font-semibold text-white/85">{t.ota}</h3>
-          <div className="grid gap-3">
-            <input
-              className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none"
-              placeholder="Version (e.g. 2.5.0)"
-              value={newOtaVersion}
-              onChange={(e) => setNewOtaVersion(e.target.value)}
-            />
-            <input
-              className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none"
-              placeholder="Channel (stable/beta)"
-              value={newOtaChannel}
-              onChange={(e) => setNewOtaChannel(e.target.value)}
-            />
-            <input
-              className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none"
-              type="file"
-              accept=".exe,application/vnd.microsoft.portable-executable,application/octet-stream"
-              onChange={(e) => setNewOtaFile(e.currentTarget.files?.[0] || null)}
-            />
-            <select
-              className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none"
-              value={newOtaMode}
-              onChange={(e) => setNewOtaMode(e.target.value as 'optional' | 'force' | 'required' | 'silent')}
-              disabled={newOtaMandatory}
-            >
-              <option value="optional">Optional</option>
-              <option value="force">Force</option>
-              <option value="required">Required</option>
-              <option value="silent">Silent</option>
-            </select>
-            {newOtaFile ? (
-              <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-white/65">
-                {newOtaFile.name} - {(newOtaFile.size / 1024 / 1024).toFixed(2)} MB
               </div>
-            ) : null}
-            {otaPublishMessage ? (
-              <div className="rounded-xl border border-emerald-300/35 bg-emerald-400/10 px-3 py-2 text-xs text-emerald-100">
-                {otaPublishMessage}
-              </div>
-            ) : null}
-            <textarea
-              className="min-h-24 rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none"
-              placeholder="Release Notes"
-              value={newOtaNotes}
-              onChange={(e) => setNewOtaNotes(e.target.value)}
-            />
-            <label className="flex items-center gap-2 text-sm text-white/75">
-              <input type="checkbox" checked={newOtaMandatory} onChange={(e) => setNewOtaMandatory(e.target.checked)} />
-              Mandatory update
-            </label>
-            <button
-              className="btn-primary rounded-xl px-4 py-2 text-sm font-semibold"
-              onClick={handleCreateOta}
-              disabled={savingOta || !newOtaVersion.trim() || !newOtaFile}
-            >
-              {savingOta ? 'Publishing...' : t.publish}
-            </button>
-            {otaUpdates.length ? (
-              <div className="rounded-xl border border-white/10 bg-white/[0.02] p-2 text-xs text-white/70">{otaUpdates.length} OTA records loaded</div>
-            ) : null}
-          </div>
-        </article>
-        ) : null}
-      </section>
-      ) : null}
+              <article className="surface-card p-5">
+                <h3 className="mb-3 text-sm font-semibold text-white/85">Recent Activity</h3>
+                <ul className="space-y-2 text-sm text-white/75">
+                  {recentActivity.slice(0, 20).map((item, idx) => (
+                    <li key={`${idx}-${JSON.stringify(item)}`} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+                      {typeof item === 'string' ? item : JSON.stringify(item)}
+                    </li>
+                  ))}
+                </ul>
+              </article>
+            </section>
+          ) : null}
 
-      {activePage === 'crashes' || activePage === 'security' ? (
-      <section className="mb-6 grid gap-4 lg:grid-cols-2">
-        {activePage === 'crashes' ? (
-        <article className="surface-card p-5">
-          <h3 className="mb-3 text-sm font-semibold text-white/85">{t.crashes}</h3>
-          {crashes.map((crash) => {
-            const expanded = expandedCrashId === crash.id
-            return (
-              <div key={crash.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white/80">
-                <div className="grid gap-1">
-                  <div>{crash.happened_at}</div>
-                  <div>{crash.device_name || '--'} / {crash.hwid || 'no-hwid'}</div>
-                  <div>{crash.user_id || crash.subscription_id || '--'}</div>
-                  <div>{crash.app_version || '--'} / {crash.tool_channel || 'stable'}</div>
-                  <div>{crash.windows_version || '--'}</div>
-                  <div>{[crash.cpu, crash.ram_gb ? `${crash.ram_gb}GB` : null, crash.gpu].filter(Boolean).join(' / ') || '--'}</div>
-                  {crash.message ? <div className="text-white/60">{crash.message}</div> : null}
-                  <div className="text-rose-200">{crash.error_type}</div>
+          {activePage === 'users' || activePage === 'subscriptions' ? (
+            <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+              <article className="surface-card p-5">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                  <h3 className="text-sm font-semibold text-white/85">{activePage === 'users' ? 'Users Directory' : 'Subscriptions'}</h3>
+                  <input
+                    className="w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none sm:w-72"
+                    placeholder="Search email, HWID, status..."
+                    value={subscriptionSearch}
+                    onChange={(e) => {
+                      setSubscriptionSearch(e.target.value)
+                      setSubscriptionPage(1)
+                    }}
+                  />
                 </div>
-                <button
-                  className="mt-2 rounded-lg border border-white/20 bg-white/5 px-2.5 py-1 text-xs"
-                  onClick={() => setExpandedCrashId(expanded ? null : crash.id)}
-                >
-                  {expanded ? 'Hide Stack' : 'Show Stack'}
-                </button>
-                {expanded ? (
-                  <pre className="mt-2 overflow-x-auto rounded-lg border border-white/10 bg-[#030712] p-3 text-xs leading-5 text-white/75">
-                    {crash.stack_trace}
-                  </pre>
+                <div className="overflow-x-auto rounded-xl border border-white/10">
+                  <table className="w-full min-w-[860px] text-sm">
+                    <thead className="bg-white/5 text-white/60">
+                      <tr>
+                        <th className="px-3 py-2 text-start">Account</th>
+                        <th className="px-3 py-2 text-start">Plan</th>
+                        <th className="px-3 py-2 text-start">Tier</th>
+                        <th className="px-3 py-2 text-start">Status</th>
+                        <th className="px-3 py-2 text-start">HWID</th>
+                        <th className="px-3 py-2 text-start">Remaining</th>
+                        <th className="px-3 py-2 text-start">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {visiblePage(filteredSubscriptions, subscriptionPage).map((row) => (
+                        <tr key={row.id} className="border-t border-white/10 text-white/80">
+                          <td className="px-3 py-2">{row.user_email || row.firebase_user_id || row.id}</td>
+                          <td className="px-3 py-2">{row.plan}</td>
+                          <td className="px-3 py-2">{row.tier}</td>
+                          <td className="px-3 py-2">{row.status}</td>
+                          <td className="max-w-40 truncate px-3 py-2">{row.hwid || '--'}</td>
+                          <td className="px-3 py-2">{daysRemaining(row.expires_at)}</td>
+                          <td className="px-3 py-2">
+                            <div className="flex flex-wrap gap-2">
+                              <button className="rounded-lg border border-white/20 bg-white/5 px-2.5 py-1" onClick={() => void handleOpenUser(row.id)}>
+                                Details
+                              </button>
+                              <button
+                                className="rounded-lg border border-amber-300/35 bg-amber-400/10 px-2.5 py-1 text-amber-100"
+                                onClick={() => void handlePatchSubscription(row.id, 'suspended')}
+                              >
+                                Suspend
+                              </button>
+                              <button
+                                className="rounded-lg border border-rose-300/40 bg-rose-500/10 px-2.5 py-1 text-rose-200"
+                                onClick={() => void handlePatchSubscription(row.id, 'canceled')}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <Pager page={subscriptionPage} total={filteredSubscriptions.length} onPage={setSubscriptionPage} />
+              </article>
+
+              <aside className="grid gap-4">
+                <article className="surface-card p-5">
+                  <h3 className="mb-3 text-sm font-semibold text-white/85">Create Subscription</h3>
+                  <div className="grid gap-3">
+                    <input className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" placeholder="User email" value={newSubscriptionEmail} onChange={(e) => setNewSubscriptionEmail(e.target.value)} />
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <select className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" value={newSubscriptionPlan} onChange={(e) => setNewSubscriptionPlan(e.target.value as 'monthly' | 'yearly')}>
+                        <option value="monthly">Monthly</option>
+                        <option value="yearly">Yearly</option>
+                      </select>
+                      <select className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" value={newSubscriptionTier} onChange={(e) => setNewSubscriptionTier(e.target.value as 'public' | 'private')}>
+                        <option value="public">Public</option>
+                        <option value="private">Private</option>
+                      </select>
+                    </div>
+                    <input className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" type="datetime-local" value={newSubscriptionExpiry} onChange={(e) => setNewSubscriptionExpiry(e.target.value)} />
+                    <button className="btn-primary rounded-xl px-4 py-2 text-sm font-semibold" disabled={saving} onClick={() => void handleCreateSubscription()}>
+                      Create
+                    </button>
+                  </div>
+                </article>
+
+                {selectedUser ? (
+                  <article className="surface-card p-5">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <h3 className="text-sm font-semibold text-white/85">User Detail</h3>
+                      {selectedUser.item ? (
+                        <button className="rounded-lg border border-amber-300/35 bg-amber-400/10 px-2.5 py-1 text-xs text-amber-100" onClick={() => void handleResetHwid(selectedUser.item!.id)}>
+                          Reset HWID
+                        </button>
+                      ) : null}
+                    </div>
+                    {selectedUserLoading ? <div className="text-sm text-white/60">Loading...</div> : null}
+                    <div className="space-y-2 text-sm text-white/75">
+                      <div>Email: {selectedUser.item?.user_email || '--'}</div>
+                      <div>HWID: {selectedUser.item?.hwid || '--'}</div>
+                      <div>Last login: {selectedUser.item?.last_seen_at || '--'}</div>
+                      <div>Last crash: {selectedUser.last_crash?.happened_at || '--'}</div>
+                      <div>Devices: {selectedUser.devices.length}</div>
+                      <div>Sessions: {selectedUser.sessions.length}</div>
+                      <div>Crashes: {selectedUser.crashes.length}</div>
+                    </div>
+                  </article>
                 ) : null}
+              </aside>
+            </section>
+          ) : null}
+
+          {activePage === 'promos' ? (
+            <section className="grid gap-4 lg:grid-cols-[360px_minmax(0,1fr)]">
+              <article className="surface-card p-5">
+                <h3 className="mb-3 text-sm font-semibold text-white/85">Create Promo Code</h3>
+                <div className="grid gap-3">
+                  <input className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" placeholder="Code" value={newPromoCode} onChange={(e) => setNewPromoCode(e.target.value)} />
+                  <select className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" value={newPromoType} onChange={(e) => setNewPromoType(e.target.value as 'percent' | 'fixed')}>
+                    <option value="percent">Percent</option>
+                    <option value="fixed">Fixed amount</option>
+                  </select>
+                  <input className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" placeholder="Discount value" value={newPromoValue} onChange={(e) => setNewPromoValue(e.target.value)} />
+                  <input className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" placeholder="Usage limit" value={newPromoMaxUses} onChange={(e) => setNewPromoMaxUses(e.target.value)} />
+                  <label className="flex items-center gap-2 text-sm text-white/75">
+                    <input type="checkbox" checked={newPromoPrivate} onChange={(e) => setNewPromoPrivate(e.target.checked)} />
+                    Private tier trigger
+                  </label>
+                  <button className="btn-primary rounded-xl px-4 py-2 text-sm font-semibold" disabled={saving} onClick={() => void handleCreatePromo()}>
+                    Save
+                  </button>
+                </div>
+              </article>
+              <article className="surface-card p-5">
+                <h3 className="mb-3 text-sm font-semibold text-white/85">Promo Codes</h3>
+                <div className="grid gap-2">
+                  {promoCodes.map((promo) => (
+                    <div key={promo.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white/75">
+                      <div className="font-semibold text-white">{promo.code}</div>
+                      <div>{promo.discount_type} / {promo.discount_value} / {promo.is_private_tier_trigger ? 'Private tier' : 'Public tier'}</div>
+                      <div>Status: {promo.is_active ? 'active' : 'inactive'} / Used {promo.used_count ?? 0}{promo.max_uses ? ` of ${promo.max_uses}` : ''}</div>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            </section>
+          ) : null}
+
+          {activePage === 'ota' ? (
+            <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+              <article className="surface-card p-5">
+                <h3 className="mb-3 text-sm font-semibold text-white/85">Publish OTA Update</h3>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <input className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" placeholder="Version" value={otaVersion} onChange={(e) => setOtaVersion(e.target.value)} />
+                  <select className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" value={otaChannel} onChange={(e) => setOtaChannel(e.target.value)}>
+                    <option value="beta">Beta</option>
+                    <option value="stable">Stable</option>
+                  </select>
+                  <input className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" type="file" accept=".exe,application/vnd.microsoft.portable-executable,application/octet-stream" onChange={(e) => setOtaFile(e.currentTarget.files?.[0] || null)} />
+                  <select className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" value={otaMode} onChange={(e) => setOtaMode(e.target.value as 'optional' | 'force' | 'required' | 'silent')} disabled={otaMandatory}>
+                    <option value="optional">Optional</option>
+                    <option value="silent">Silent</option>
+                    <option value="required">Required</option>
+                    <option value="force">Force</option>
+                  </select>
+                  <select className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" value={otaRollout} onChange={(e) => setOtaRollout(e.target.value)}>
+                    <option value="5">Staged 5%</option>
+                    <option value="25">Staged 25%</option>
+                    <option value="100">Rollout 100%</option>
+                  </select>
+                  <input className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" placeholder="Minimum supported version" value={otaMinimumVersion} onChange={(e) => setOtaMinimumVersion(e.target.value)} />
+                  <input className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" type="datetime-local" value={otaForceDeadline} onChange={(e) => setOtaForceDeadline(e.target.value)} />
+                  <label className="flex items-center gap-2 text-sm text-white/75">
+                    <input type="checkbox" checked={otaMandatory} onChange={(e) => setOtaMandatory(e.target.checked)} />
+                    Mandatory update
+                  </label>
+                </div>
+                <textarea className="mt-3 min-h-28 w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" placeholder="Release notes" value={otaNotes} onChange={(e) => setOtaNotes(e.target.value)} />
+                {otaFile ? <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-white/65">{otaFile.name} - {(otaFile.size / 1024 / 1024).toFixed(2)} MB</div> : null}
+                <button className="btn-primary mt-3 rounded-xl px-4 py-2 text-sm font-semibold" onClick={() => void handlePublishOta()} disabled={saving || !otaVersion.trim() || !otaFile}>
+                  {saving ? 'Working...' : 'Publish Update'}
+                </button>
+              </article>
+              <aside className="grid gap-4">
+                <article className="surface-card p-5">
+                  <h3 className="mb-3 text-sm font-semibold text-white/85">Rollback / Disable</h3>
+                  <div className="grid gap-3">
+                    <input className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" placeholder="Rollback version" value={rollbackVersion} onChange={(e) => setRollbackVersion(e.target.value)} />
+                    <button className="rounded-xl border border-sky-300/35 bg-sky-400/10 px-4 py-2 text-sm font-semibold text-sky-100" disabled={saving || !rollbackVersion.trim()} onClick={() => void handleRollback()}>
+                      Rollback Channel
+                    </button>
+                    <input className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" placeholder="Disable reason" value={disableReason} onChange={(e) => setDisableReason(e.target.value)} />
+                    <button className="rounded-xl border border-rose-300/45 bg-rose-500/12 px-4 py-2 text-sm font-semibold text-rose-100" disabled={saving} onClick={() => void handleDisableRelease()}>
+                      Disable Current Release
+                    </button>
+                  </div>
+                </article>
+                <article className="surface-card p-5">
+                  <h3 className="mb-3 text-sm font-semibold text-white/85">OTA Records</h3>
+                  <div className="grid gap-2 text-sm text-white/75">
+                    {otaUpdates.slice(0, 8).map((item) => (
+                      <div key={item.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                        <div className="font-semibold text-white">{item.version} / {item.channel}</div>
+                        <div>{item.is_mandatory ? 'mandatory' : 'optional'} / {item.is_published ? 'published' : 'draft'}</div>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              </aside>
+            </section>
+          ) : null}
+
+          {activePage === 'controls' ? (
+            <section className="surface-card p-5">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <h3 className="text-sm font-semibold text-white/85">Remote Controls</h3>
+                <select className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" value={remoteChannel} onChange={(e) => setRemoteChannel(e.target.value)}>
+                  <option value="beta">Beta</option>
+                  <option value="stable">Stable</option>
+                </select>
               </div>
-            )
-          })}
-        </article>
-        ) : null}
+              <div className="grid gap-3 md:grid-cols-2">
+                <select className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" value={otaRollout} onChange={(e) => setOtaRollout(e.target.value)}>
+                  <option value="5">5% rollout</option>
+                  <option value="25">25% rollout</option>
+                  <option value="100">100% rollout</option>
+                </select>
+                <select className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" value={otaMode} onChange={(e) => setOtaMode(e.target.value as 'optional' | 'force' | 'required' | 'silent')}>
+                  <option value="optional">Optional update</option>
+                  <option value="silent">Silent download</option>
+                  <option value="required">Required update</option>
+                  <option value="force">Force update</option>
+                </select>
+                <input className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" placeholder="Minimum supported version" value={otaMinimumVersion} onChange={(e) => setOtaMinimumVersion(e.target.value)} />
+                <input className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" type="datetime-local" value={otaForceDeadline} onChange={(e) => setOtaForceDeadline(e.target.value)} />
+              </div>
+              <label className="mt-4 flex items-center gap-2 text-sm text-white/75">
+                <input type="checkbox" checked={killSwitchEnabled} onChange={(e) => setKillSwitchEnabled(e.target.checked)} />
+                Enable kill switch
+              </label>
+              <input className="mt-3 w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" placeholder="Kill switch message" value={killSwitchMessage} onChange={(e) => setKillSwitchMessage(e.target.value)} />
+              <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                <label className="grid gap-2 text-xs text-white/60">
+                  Feature flags JSON
+                  <textarea className="min-h-48 rounded-xl border border-white/15 bg-white/5 px-3 py-2 font-mono text-xs text-white outline-none" value={featureFlagsText} onChange={(e) => setFeatureFlagsText(e.target.value)} />
+                </label>
+                <label className="grid gap-2 text-xs text-white/60">
+                  In-app announcements JSON
+                  <textarea className="min-h-48 rounded-xl border border-white/15 bg-white/5 px-3 py-2 font-mono text-xs text-white outline-none" value={announcementsText} onChange={(e) => setAnnouncementsText(e.target.value)} />
+                </label>
+              </div>
+              <button className="btn-primary mt-4 rounded-xl px-4 py-2 text-sm font-semibold" disabled={saving} onClick={() => void handleSaveControls()}>
+                Save Remote Controls
+              </button>
+            </section>
+          ) : null}
 
-        {activePage === 'security' ? (
-        <article className="surface-card p-5">
-          <h3 className="mb-3 text-sm font-semibold text-white/85">{t.security}</h3>
-          <div className="rounded-xl border border-amber-300/35 bg-amber-400/10 p-3 text-sm text-amber-100">
-            HWID mismatch detected for an account subscription
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button className="rounded-xl border border-rose-300/45 bg-rose-500/12 px-3 py-2 text-sm font-semibold text-rose-100">
-              Disable Subscription
-            </button>
-            <button className="rounded-xl border border-rose-300/45 bg-rose-500/12 px-3 py-2 text-sm font-semibold text-rose-100">
-              Ban HWID
-            </button>
-          </div>
-        </article>
-        ) : null}
-      </section>
-      ) : null}
+          {activePage === 'crashes' ? (
+            <section className="grid gap-4 xl:grid-cols-[380px_minmax(0,1fr)]">
+              <article className="surface-card p-5">
+                <h3 className="mb-3 text-sm font-semibold text-white/85">Crash Groups</h3>
+                <div className="grid gap-2">
+                  {crashGroups.map((group) => (
+                    <button key={group.fingerprint} className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-start text-sm text-white/75 hover:border-sky-300/35" onClick={() => setCrashSearch(group.error_type)}>
+                      <div className="font-semibold text-white">{group.error_type}</div>
+                      <div>{group.count} crashes / {group.affected_hwids.length} devices</div>
+                      <div className="truncate text-white/50">{group.message || group.fingerprint}</div>
+                    </button>
+                  ))}
+                </div>
+              </article>
+              <article className="surface-card p-5">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                  <h3 className="text-sm font-semibold text-white/85">Raw Crash Logs</h3>
+                  <input className="w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none sm:w-72" placeholder="Search crashes..." value={crashSearch} onChange={(e) => { setCrashSearch(e.target.value); setCrashPage(1) }} />
+                </div>
+                <div className="grid gap-3">
+                  {visiblePage(filteredCrashes, crashPage).map((crash) => {
+                    const expanded = expandedCrashId === crash.id
+                    return (
+                      <div key={crash.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white/80">
+                        <div className="grid gap-1">
+                          <div className="text-rose-200">{crash.error_type}</div>
+                          <div>{crash.happened_at} / {crash.app_version || '--'}</div>
+                          <div>{crash.device_name || '--'} / {crash.hwid || 'no-hwid'}</div>
+                          <div>{[crash.windows_version, crash.cpu, crash.ram_gb ? `${crash.ram_gb}GB` : null, crash.gpu].filter(Boolean).join(' / ') || '--'}</div>
+                          {crash.message ? <div className="text-white/60">{crash.message}</div> : null}
+                        </div>
+                        <button className="mt-2 rounded-lg border border-white/20 bg-white/5 px-2.5 py-1 text-xs" onClick={() => setExpandedCrashId(expanded ? null : crash.id)}>
+                          {expanded ? 'Hide Stack' : 'Show Stack'}
+                        </button>
+                        {expanded ? <pre className="mt-2 overflow-x-auto rounded-lg border border-white/10 bg-[#030712] p-3 text-xs leading-5 text-white/75">{crash.stack_trace}</pre> : null}
+                      </div>
+                    )
+                  })}
+                </div>
+                <Pager page={crashPage} total={filteredCrashes.length} onPage={setCrashPage} />
+              </article>
+            </section>
+          ) : null}
 
-      {activePage === 'users' ? (
-      <section className="surface-card p-5">
-        <h3 className="mb-3 text-sm font-semibold text-white/85">{t.users}</h3>
-        <div className="mb-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <input
-            className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none"
-            placeholder="User email"
-            value={newLicenseEmail}
-            onChange={(e) => setNewLicenseEmail(e.target.value)}
-          />
-          <select
-            className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none"
-            value={newLicensePlan}
-            onChange={(e) => setNewLicensePlan(e.target.value as 'monthly' | 'yearly')}
-          >
-            <option value="monthly">Monthly</option>
-            <option value="yearly">Yearly</option>
-          </select>
-          <select
-            className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none"
-            value={newLicenseTier}
-            onChange={(e) => setNewLicenseTier(e.target.value as 'public' | 'private')}
-          >
-            <option value="public">Public</option>
-            <option value="private">Private</option>
-          </select>
-          <input
-            className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none"
-            type="datetime-local"
-            value={newLicenseExpiry}
-            onChange={(e) => setNewLicenseExpiry(e.target.value)}
-          />
-        </div>
-        <div className="mb-4">
-          <button className="btn-primary rounded-xl px-4 py-2 text-sm font-semibold" onClick={handleCreateLicense} disabled={savingLicense}>
-            Create Subscription
-          </button>
-        </div>
-        <div className="overflow-x-auto rounded-xl border border-white/10">
-          <table className="w-full min-w-[760px] text-sm">
-            <thead className="bg-white/5 text-white/60">
-              <tr>
-                <th className="px-3 py-2 text-start">Subscription ID</th>
-                <th className="px-3 py-2 text-start">Email</th>
-                <th className="px-3 py-2 text-start">Plan</th>
-                <th className="px-3 py-2 text-start">Tier</th>
-                <th className="px-3 py-2 text-start">Expires</th>
-                <th className="px-3 py-2 text-start">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {licenses.map((row) => (
-                <tr key={row.id} className="border-t border-white/10 text-white/80">
-                  <td className="px-3 py-2">{row.id}</td>
-                  <td className="px-3 py-2">{row.user_email || '--'}</td>
-                  <td className="px-3 py-2">{row.plan}</td>
-                  <td className="px-3 py-2">{row.tier}</td>
-                  <td className="px-3 py-2">{row.expires_at}</td>
-                  <td className="px-3 py-2">{row.status}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-      ) : null}
+          {activePage === 'audit' ? (
+            <section className="surface-card p-5">
+              <h3 className="mb-3 text-sm font-semibold text-white/85">Audit Log</h3>
+              <div className="grid gap-2">
+                {auditLog.map((item, idx) => (
+                  <div key={`${item.id || idx}`} className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white/75">
+                    <div className="font-semibold text-white">{item.action || item.type || 'admin_action'}</div>
+                    <div>{item.admin_email || item.actor || '--'} / {item.happened_at || item.at || '--'}</div>
+                    <pre className="mt-2 max-h-40 overflow-auto rounded-lg border border-white/10 bg-[#030712] p-2 text-xs text-white/65">
+                      {JSON.stringify(item.payload || item, null, 2)}
+                    </pre>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          {activePage === 'controls' ? null : null}
         </div>
       </div>
     </main>
   )
 }
-

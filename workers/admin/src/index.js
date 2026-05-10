@@ -5,10 +5,22 @@ const DEFAULT_MANIFEST = {
   version: "0",
   available: false,
   mandatory: false,
+  disabled: false,
+  disabled_reason: "",
+  rollout_percent: 100,
+  minimum_supported_version: "",
+  force_update_deadline: "",
   download_url: "",
   download_sha256: "",
   filename: "",
   notes: "",
+  remote_config: {
+    update_mode: "optional",
+    kill_switch_enabled: false,
+    kill_switch_message: "",
+    feature_flags: {},
+    announcements: [],
+  },
   channels: {
     stable: {},
     beta: {},
@@ -75,6 +87,18 @@ export default {
         const channel = normalizeChannel(url.searchParams.get("channel"));
         return json(await getReleaseHistory(env, channel), 200, corsHeaders(request, env));
       }
+      if (url.pathname === "/api/admin/remote-config" && request.method === "GET") {
+        await requireAdmin(request, env);
+        return json(await getRemoteControls(url, env), 200, corsHeaders(request, env));
+      }
+      if (url.pathname === "/api/admin/remote-config" && request.method === "POST") {
+        const adminEmail = await requireAdmin(request, env);
+        return json(await updateRemoteControls(request, env, adminEmail), 200, corsHeaders(request, env));
+      }
+      if (url.pathname === "/api/admin/releases/disable" && request.method === "POST") {
+        const adminEmail = await requireAdmin(request, env);
+        return json(await disableRelease(request, env, adminEmail), 200, corsHeaders(request, env));
+      }
       if (url.pathname === "/api/admin/dashboard" && request.method === "GET") {
         await requireAdmin(request, env);
         return json(await getAdminDashboard(env), 200, corsHeaders(request, env));
@@ -87,10 +111,29 @@ export default {
         const adminEmail = await requireAdmin(request, env);
         return json(await createSubscription(request, env, adminEmail), 200, corsHeaders(request, env));
       }
+      if (
+        (url.pathname.startsWith("/api/admin/subscriptions/") || url.pathname.startsWith("/api/admin/licenses/")) &&
+        url.pathname.endsWith("/reset-hwid") &&
+        request.method === "POST"
+      ) {
+        const adminEmail = await requireAdmin(request, env);
+        const subscriptionId = decodeURIComponent(
+          url.pathname
+            .replace("/api/admin/subscriptions/", "")
+            .replace("/api/admin/licenses/", "")
+            .replace("/reset-hwid", ""),
+        ).trim();
+        return json(await resetSubscriptionHwid(subscriptionId, request, env, adminEmail), 200, corsHeaders(request, env));
+      }
       if ((url.pathname.startsWith("/api/admin/subscriptions/") || url.pathname.startsWith("/api/admin/licenses/")) && request.method === "PATCH") {
         const adminEmail = await requireAdmin(request, env);
         const subscriptionId = decodeURIComponent(url.pathname.replace("/api/admin/subscriptions/", "").replace("/api/admin/licenses/", "")).trim();
         return json(await updateSubscription(subscriptionId, request, env, adminEmail), 200, corsHeaders(request, env));
+      }
+      if (url.pathname.startsWith("/api/admin/users/") && request.method === "GET") {
+        await requireAdmin(request, env);
+        const userKey = decodeURIComponent(url.pathname.replace("/api/admin/users/", "")).trim();
+        return json(await getUserDetail(userKey, env), 200, corsHeaders(request, env));
       }
       if (url.pathname === "/api/admin/promo-codes" && request.method === "GET") {
         await requireAdmin(request, env);
@@ -111,6 +154,14 @@ export default {
       if (url.pathname === "/api/admin/crash-logs" && request.method === "GET") {
         await requireAdmin(request, env);
         return json(await listCrashLogs(url, env), 200, corsHeaders(request, env));
+      }
+      if (url.pathname === "/api/admin/crash-groups" && request.method === "GET") {
+        await requireAdmin(request, env);
+        return json(await listCrashGroups(url, env), 200, corsHeaders(request, env));
+      }
+      if (url.pathname === "/api/admin/audit-log" && request.method === "GET") {
+        await requireAdmin(request, env);
+        return json(await listAuditLog(url, env), 200, corsHeaders(request, env));
       }
       if (url.pathname === "/api/crash-logs/ingest" && request.method === "POST") {
         return json(await ingestCrashLog(request, env), 200, corsHeaders(request, env));
@@ -406,6 +457,79 @@ function normalizeUpdateMode(value) {
   return mode;
 }
 
+function clampRolloutPercent(value, fallback = 100) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(0, Math.min(100, Math.round(n)));
+}
+
+function optionalVersion(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  if (!/^[0-9A-Za-z._-]{1,60}$/.test(text)) throw new Error("invalid_version");
+  return text;
+}
+
+function optionalIsoDate(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const timestamp = Date.parse(text);
+  if (!Number.isFinite(timestamp)) throw new Error("invalid_datetime");
+  return new Date(timestamp).toISOString();
+}
+
+function safePlainObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function normalizeAnnouncements(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item) => item && typeof item === "object")
+    .slice(0, 20)
+    .map((item) => ({
+      id: String(item.id || crypto.randomUUID()).trim().slice(0, 80),
+      title: String(item.title || "").trim().slice(0, 160),
+      body: String(item.body || "").trim().slice(0, 1200),
+      severity: ["info", "warning", "critical"].includes(String(item.severity || "").trim().toLowerCase())
+        ? String(item.severity).trim().toLowerCase()
+        : "info",
+      starts_at: item.starts_at ? optionalIsoDate(item.starts_at) : "",
+      ends_at: item.ends_at ? optionalIsoDate(item.ends_at) : "",
+    }))
+    .filter((item) => item.title || item.body);
+}
+
+function mergeChannelControls(existing, body) {
+  const remoteConfig = safePlainObject(existing.remote_config);
+  const nextRemoteConfig = {
+    ...remoteConfig,
+    update_mode: body.update_mode ? normalizeUpdateMode(body.update_mode) : normalizeUpdateMode(remoteConfig.update_mode),
+    kill_switch_enabled:
+      body.kill_switch_enabled !== undefined ? Boolean(body.kill_switch_enabled) : Boolean(remoteConfig.kill_switch_enabled),
+    kill_switch_message:
+      body.kill_switch_message !== undefined
+        ? String(body.kill_switch_message || "").trim().slice(0, 600)
+        : String(remoteConfig.kill_switch_message || ""),
+    feature_flags:
+      body.feature_flags !== undefined ? safePlainObject(body.feature_flags) : safePlainObject(remoteConfig.feature_flags),
+    announcements:
+      body.announcements !== undefined ? normalizeAnnouncements(body.announcements) : normalizeAnnouncements(remoteConfig.announcements),
+  };
+  return {
+    ...existing,
+    rollout_percent:
+      body.rollout_percent !== undefined ? clampRolloutPercent(body.rollout_percent) : clampRolloutPercent(existing.rollout_percent, 100),
+    minimum_supported_version:
+      body.minimum_supported_version !== undefined
+        ? optionalVersion(body.minimum_supported_version)
+        : String(existing.minimum_supported_version || ""),
+    force_update_deadline:
+      body.force_update_deadline !== undefined ? optionalIsoDate(body.force_update_deadline) : String(existing.force_update_deadline || ""),
+    remote_config: nextRemoteConfig,
+  };
+}
+
 function sanitizeFilename(value) {
   const cleaned = String(value || "")
     .trim()
@@ -485,6 +609,9 @@ async function publishRelease(request, env, adminEmail) {
   const updateMode = normalizeUpdateMode(body?.update_mode);
   const notes = String(body?.notes || "").trim();
   const mandatory = Boolean(body?.mandatory) || updateMode === "force" || updateMode === "required";
+  const rolloutPercent = clampRolloutPercent(body?.rollout_percent, 100);
+  const minimumSupportedVersion = optionalVersion(body?.minimum_supported_version);
+  const forceUpdateDeadline = optionalIsoDate(body?.force_update_deadline);
 
   const metaKey = `meta/${channel}/${version}.json`;
   const metaObj = await env.OTA_BUCKET.get(metaKey);
@@ -497,7 +624,12 @@ async function publishRelease(request, env, adminEmail) {
   const channelManifest = {
     version,
     available: true,
+    disabled: false,
+    disabled_reason: "",
     mandatory,
+    rollout_percent: rolloutPercent,
+    minimum_supported_version: minimumSupportedVersion,
+    force_update_deadline: forceUpdateDeadline,
     download_url: downloadUrl,
     download_sha256: release.sha256 || "",
     filename: release.filename || "Saturn Workspace.exe",
@@ -513,10 +645,16 @@ async function publishRelease(request, env, adminEmail) {
     version: channel === "stable" ? version : manifest.version || version,
     available: true,
     mandatory: channel === "stable" ? mandatory : Boolean(manifest.mandatory),
+    disabled: channel === "stable" ? false : Boolean(manifest.disabled),
+    disabled_reason: channel === "stable" ? "" : String(manifest.disabled_reason || ""),
+    rollout_percent: channel === "stable" ? rolloutPercent : clampRolloutPercent(manifest.rollout_percent, 100),
+    minimum_supported_version: channel === "stable" ? minimumSupportedVersion : String(manifest.minimum_supported_version || ""),
+    force_update_deadline: channel === "stable" ? forceUpdateDeadline : String(manifest.force_update_deadline || ""),
     download_url: channel === "stable" ? downloadUrl : manifest.download_url || "",
     download_sha256: channel === "stable" ? release.sha256 || "" : manifest.download_sha256 || "",
     filename: channel === "stable" ? channelManifest.filename : manifest.filename || "",
     notes: channel === "stable" ? notes : manifest.notes || "",
+    remote_config: channel === "stable" ? channelManifest.remote_config : safePlainObject(manifest.remote_config),
     channels: {
       stable: manifest.channels?.stable || {},
       beta: manifest.channels?.beta || {},
@@ -538,11 +676,12 @@ async function publishRelease(request, env, adminEmail) {
   await appendAudit(env, {
     type: "publish",
     channel,
-    version,
-    update_mode: updateMode,
-    actor: adminEmail,
-    at: new Date().toISOString(),
-  });
+      version,
+      update_mode: updateMode,
+      rollout_percent: rolloutPercent,
+      actor: adminEmail,
+      at: new Date().toISOString(),
+    });
   return { success: true, manifest: signedManifest };
 }
 
@@ -564,6 +703,8 @@ async function rollbackRelease(request, env, adminEmail) {
     ...existing,
     version,
     available: true,
+    disabled: false,
+    disabled_reason: "",
     download_url: downloadUrl,
     download_sha256: release.sha256 || existing.download_sha256 || "",
     filename: release.filename || existing.filename || "Saturn Workspace.exe",
@@ -573,6 +714,9 @@ async function rollbackRelease(request, env, adminEmail) {
   const nextManifest = {
     ...manifest,
     version: channel === "stable" ? version : manifest.version,
+    available: channel === "stable" ? true : Boolean(manifest.available),
+    disabled: channel === "stable" ? false : Boolean(manifest.disabled),
+    disabled_reason: channel === "stable" ? "" : String(manifest.disabled_reason || ""),
     download_url: channel === "stable" ? downloadUrl : manifest.download_url,
     download_sha256: channel === "stable" ? release.sha256 || "" : manifest.download_sha256 || "",
     filename: channel === "stable" ? updatedChannel.filename : manifest.filename,
@@ -587,6 +731,112 @@ async function rollbackRelease(request, env, adminEmail) {
     type: "rollback",
     channel,
     version,
+    actor: adminEmail,
+    at: new Date().toISOString(),
+  });
+  return { success: true, manifest: signedManifest };
+}
+
+function applyChannelToRoot(manifest, channel, channelManifest) {
+  if (channel !== "stable") return manifest;
+  return {
+    ...manifest,
+    version: channelManifest.version || manifest.version,
+    available: Boolean(channelManifest.available),
+    mandatory: Boolean(channelManifest.mandatory),
+    disabled: Boolean(channelManifest.disabled),
+    disabled_reason: String(channelManifest.disabled_reason || ""),
+    rollout_percent: clampRolloutPercent(channelManifest.rollout_percent, 100),
+    minimum_supported_version: String(channelManifest.minimum_supported_version || ""),
+    force_update_deadline: String(channelManifest.force_update_deadline || ""),
+    download_url: channelManifest.download_url || "",
+    download_sha256: channelManifest.download_sha256 || "",
+    filename: channelManifest.filename || "",
+    notes: channelManifest.notes || "",
+    remote_config: safePlainObject(channelManifest.remote_config),
+  };
+}
+
+async function getRemoteControls(url, env) {
+  const channel = normalizeChannel(url.searchParams.get("channel"));
+  const manifest = await loadManifest(env);
+  const channelManifest = manifest.channels?.[channel] || {};
+  return {
+    success: true,
+    channel,
+    controls: mergeChannelControls(channelManifest, {}),
+    manifest,
+  };
+}
+
+async function updateRemoteControls(request, env, adminEmail) {
+  if (!hasOtaBucket(env)) throw new Error("r2_not_enabled");
+  const body = await request.json();
+  const channel = normalizeChannel(body?.channel);
+  const manifest = await loadManifest(env);
+  const existing = manifest.channels?.[channel] || {};
+  const updatedChannel = mergeChannelControls(existing, body || {});
+  const nextManifest = applyChannelToRoot(
+    {
+      ...manifest,
+      channels: {
+        stable: manifest.channels?.stable || {},
+        beta: manifest.channels?.beta || {},
+        [channel]: updatedChannel,
+      },
+    },
+    channel,
+    updatedChannel,
+  );
+  const signedManifest = await saveManifest(env, nextManifest);
+  await appendAudit(env, {
+    type: "remote_config_update",
+    channel,
+    actor: adminEmail,
+    payload: {
+      rollout_percent: updatedChannel.rollout_percent,
+      minimum_supported_version: updatedChannel.minimum_supported_version,
+      force_update_deadline: updatedChannel.force_update_deadline,
+      remote_config: updatedChannel.remote_config,
+    },
+    at: new Date().toISOString(),
+  });
+  return { success: true, manifest: signedManifest, controls: updatedChannel };
+}
+
+async function disableRelease(request, env, adminEmail) {
+  if (!hasOtaBucket(env)) throw new Error("r2_not_enabled");
+  const body = await request.json();
+  const channel = normalizeChannel(body?.channel);
+  const manifest = await loadManifest(env);
+  const existing = manifest.channels?.[channel] || {};
+  const reason = String(body?.reason || "disabled_by_admin").trim().slice(0, 600);
+  const updatedChannel = {
+    ...existing,
+    available: false,
+    disabled: true,
+    disabled_reason: reason,
+    disabled_at: new Date().toISOString(),
+    disabled_by: adminEmail,
+  };
+  const nextManifest = applyChannelToRoot(
+    {
+      ...manifest,
+      channels: {
+        stable: manifest.channels?.stable || {},
+        beta: manifest.channels?.beta || {},
+        [channel]: updatedChannel,
+      },
+    },
+    channel,
+    updatedChannel,
+  );
+  const signedManifest = await saveManifest(env, nextManifest);
+  await appendAudit(env, {
+    type: "release_disable",
+    channel,
+    version: existing.version || body?.version || "",
+    reason,
     actor: adminEmail,
     at: new Date().toISOString(),
   });
@@ -737,13 +987,32 @@ async function loadAudit(env) {
 }
 
 async function appendAudit(env, event) {
-  if (!hasOtaBucket(env)) return;
-  const list = await loadAudit(env);
-  list.push(event);
-  const next = list.slice(-5000);
-  await env.OTA_BUCKET.put("updates/audit.json", JSON.stringify(next, null, 2), {
-    httpMetadata: { contentType: "application/json; charset=utf-8" },
-  });
+  const enriched = {
+    ...event,
+    at: event?.at || new Date().toISOString(),
+  };
+  if (hasOtaBucket(env)) {
+    const list = await loadAudit(env);
+    list.push(enriched);
+    const next = list.slice(-5000);
+    await env.OTA_BUCKET.put("updates/audit.json", JSON.stringify(next, null, 2), {
+      httpMetadata: { contentType: "application/json; charset=utf-8" },
+    });
+  }
+  try {
+    await supabaseRequest(env, "admin_activity", "POST", {
+      body: {
+        action: String(enriched.type || "admin_action").trim(),
+        entity: String(enriched.entity || enriched.channel || "admin").trim(),
+        entity_id: enriched.entity_id || enriched.version || enriched.key || null,
+        payload: enriched,
+        admin_email: enriched.actor || null,
+      },
+      prefer: "return=minimal",
+    });
+  } catch {
+    // R2 audit is the durable fallback when the admin_activity table is not migrated yet.
+  }
 }
 
 async function serveLatestManifest(env) {
@@ -816,6 +1085,14 @@ function safeInt(value, fallback = 25, max = 200) {
   return Math.min(Math.floor(n), max);
 }
 
+function safeSearchTerm(value) {
+  return String(value || "")
+    .replace(/[,%()*]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 100);
+}
+
 async function getAdminDashboard(env) {
   const [subscriptions, crashes, alerts, updates] = await Promise.all([
     safeSupabaseRead(env, "account_subscriptions", "select=id,status,tier,created_at&limit=200"),
@@ -843,14 +1120,21 @@ async function getAdminDashboard(env) {
 
 async function listSubscriptions(url, env) {
   const limit = safeInt(url.searchParams.get("limit"), 50);
+  const page = safeInt(url.searchParams.get("page"), 1, 5000);
+  const offset = (page - 1) * limit;
   const status = String(url.searchParams.get("status") || "").trim();
   const tier = String(url.searchParams.get("tier") || "").trim();
+  const search = safeSearchTerm(url.searchParams.get("search"));
   const filters = [];
   if (status) filters.push(`status.eq.${encodeURIComponent(status)}`);
   if (tier) filters.push(`tier.eq.${encodeURIComponent(tier)}`);
-  const query = `select=*&order=created_at.desc&limit=${limit}${filters.length ? `&${filters.join("&")}` : ""}`;
+  if (search) {
+    const term = encodeURIComponent(`*${search}*`);
+    filters.push(`or=(user_email.ilike.${term},firebase_user_id.ilike.${term},hwid.ilike.${term})`);
+  }
+  const query = `select=*&order=created_at.desc&limit=${limit}&offset=${offset}${filters.length ? `&${filters.join("&")}` : ""}`;
   const data = await supabaseRequest(env, "account_subscriptions", "GET", { query });
-  return { success: true, items: data || [] };
+  return { success: true, items: data || [], page, limit };
 }
 
 async function createSubscription(request, env, adminEmail) {
@@ -878,7 +1162,16 @@ async function createSubscription(request, env, adminEmail) {
     body: payload,
     prefer: "return=representation",
   });
-  return { success: true, item: Array.isArray(created) ? created[0] : created };
+  const item = Array.isArray(created) ? created[0] : created;
+  await appendAudit(env, {
+    type: "subscription_create",
+    entity: "account_subscriptions",
+    entity_id: item?.id || null,
+    actor: adminEmail,
+    payload: { user_email: userEmail, plan, tier, expires_at: expiresAt },
+    at: new Date().toISOString(),
+  });
+  return { success: true, item };
 }
 
 async function updateSubscription(subscriptionId, request, env, adminEmail) {
@@ -897,7 +1190,48 @@ async function updateSubscription(subscriptionId, request, env, adminEmail) {
     body: patch,
     prefer: "return=representation",
   });
-  return { success: true, item: Array.isArray(updated) ? updated[0] : updated };
+  const item = Array.isArray(updated) ? updated[0] : updated;
+  await appendAudit(env, {
+    type: "subscription_update",
+    entity: "account_subscriptions",
+    entity_id: subscriptionId,
+    actor: adminEmail,
+    payload: patch,
+    at: new Date().toISOString(),
+  });
+  return { success: true, item };
+}
+
+async function resetSubscriptionHwid(subscriptionId, request, env, adminEmail) {
+  if (!subscriptionId) throw new Error("missing_subscription_id");
+  const body = await request.json().catch(() => ({}));
+  const revokeSessions = body?.revoke_sessions !== false;
+  const updated = await supabaseRequest(env, "account_subscriptions", "PATCH", {
+    query: `id=eq.${encodeURIComponent(subscriptionId)}&select=*`,
+    body: {
+      hwid: null,
+      bound_at: null,
+      metadata: { reset_hwid_by: adminEmail, reset_hwid_at: new Date().toISOString() },
+    },
+    prefer: "return=representation",
+  });
+  if (revokeSessions) {
+    await supabaseRequest(env, "app_sessions", "PATCH", {
+      query: `subscription_id=eq.${encodeURIComponent(subscriptionId)}`,
+      body: { revoked_at: new Date().toISOString() },
+      prefer: "return=minimal",
+    }).catch(() => null);
+  }
+  const item = Array.isArray(updated) ? updated[0] : updated;
+  await appendAudit(env, {
+    type: "subscription_reset_hwid",
+    entity: "account_subscriptions",
+    entity_id: subscriptionId,
+    actor: adminEmail,
+    payload: { revoke_sessions: revokeSessions },
+    at: new Date().toISOString(),
+  });
+  return { success: true, item };
 }
 
 async function listPromoCodes(url, env) {
@@ -928,7 +1262,16 @@ async function createPromoCode(request, env, adminEmail) {
     body: payload,
     prefer: "return=representation",
   });
-  return { success: true, item: Array.isArray(created) ? created[0] : created };
+  const item = Array.isArray(created) ? created[0] : created;
+  await appendAudit(env, {
+    type: "promo_code_create",
+    entity: "promo_codes",
+    entity_id: item?.id || payload.code,
+    actor: adminEmail,
+    payload: { code: payload.code, discount_type: payload.discount_type, private_tier: payload.is_private_tier_trigger },
+    at: new Date().toISOString(),
+  });
+  return { success: true, item };
 }
 
 async function listOtaUpdates(url, env) {
@@ -968,8 +1311,138 @@ async function createOtaUpdate(request, env, adminEmail) {
 
 async function listCrashLogs(url, env) {
   const limit = safeInt(url.searchParams.get("limit"), 50);
+  const page = safeInt(url.searchParams.get("page"), 1, 5000);
+  const offset = (page - 1) * limit;
+  const search = safeSearchTerm(url.searchParams.get("search"));
+  const filters = [];
+  if (search) {
+    const term = encodeURIComponent(`*${search}*`);
+    filters.push(`or=(error_type.ilike.${term},message.ilike.${term},hwid.ilike.${term},device_name.ilike.${term})`);
+  }
+  const data = await safeSupabaseRead(
+    env,
+    "crash_logs",
+    `select=*&order=happened_at.desc&limit=${limit}&offset=${offset}${filters.length ? `&${filters.join("&")}` : ""}`,
+  );
+  return { success: true, items: data || [], page, limit };
+}
+
+function crashSignatureSource(row) {
+  const stackLine = String(row?.stack_trace || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean);
+  return [
+    String(row?.error_type || "unknown").trim().toLowerCase(),
+    String(row?.message || "").trim().toLowerCase().slice(0, 240),
+    String(stackLine || "").trim().toLowerCase().slice(0, 240),
+  ].join("|");
+}
+
+async function crashFingerprint(row) {
+  if (row?.fingerprint) return String(row.fingerprint);
+  return sha256Hex(crashSignatureSource(row));
+}
+
+async function listCrashGroups(url, env) {
+  const limit = safeInt(url.searchParams.get("limit"), 500, 1000);
   const data = await safeSupabaseRead(env, "crash_logs", `select=*&order=happened_at.desc&limit=${limit}`);
-  return { success: true, items: data || [] };
+  const groups = new Map();
+  for (const row of Array.isArray(data) ? data : []) {
+    const fingerprint = await crashFingerprint(row);
+    const existing = groups.get(fingerprint);
+    if (!existing) {
+      groups.set(fingerprint, {
+        fingerprint,
+        count: 1,
+        first_seen_at: row.happened_at,
+        last_seen_at: row.happened_at,
+        error_type: row.error_type,
+        message: row.message,
+        latest: row,
+        affected_hwids: row.hwid ? [row.hwid] : [],
+        affected_users: row.user_id || row.subscription_id ? [row.user_id || row.subscription_id] : [],
+      });
+      continue;
+    }
+    existing.count += 1;
+    if (String(row.happened_at || "") > String(existing.last_seen_at || "")) {
+      existing.last_seen_at = row.happened_at;
+      existing.latest = row;
+    }
+    if (String(row.happened_at || "") < String(existing.first_seen_at || "")) existing.first_seen_at = row.happened_at;
+    if (row.hwid && !existing.affected_hwids.includes(row.hwid)) existing.affected_hwids.push(row.hwid);
+    const userKey = row.user_id || row.subscription_id;
+    if (userKey && !existing.affected_users.includes(userKey)) existing.affected_users.push(userKey);
+  }
+  return {
+    success: true,
+    items: [...groups.values()]
+      .sort((a, b) => String(b.last_seen_at || "").localeCompare(String(a.last_seen_at || "")))
+      .slice(0, safeInt(url.searchParams.get("groups"), 50, 200)),
+  };
+}
+
+async function listAuditLog(url, env) {
+  const limit = safeInt(url.searchParams.get("limit"), 100, 500);
+  const rows = await safeSupabaseRead(env, "admin_activity", `select=*&order=happened_at.desc&limit=${limit}`);
+  if (Array.isArray(rows) && rows.length) return { success: true, items: rows };
+  const audit = await loadAudit(env);
+  return {
+    success: true,
+    items: audit
+      .sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")))
+      .slice(0, limit),
+  };
+}
+
+async function getUserDetail(userKey, env) {
+  if (!userKey) throw new Error("missing_user");
+  const key = safeSearchTerm(userKey);
+  const subscriptionQuery = isUuid(key)
+    ? `select=*&id=eq.${encodeURIComponent(key)}&limit=1`
+    : `select=*&or=(user_email.ilike.${encodeURIComponent(key)},firebase_user_id.eq.${encodeURIComponent(key)})&limit=1`;
+  const subscriptionRows = await safeSupabaseRead(env, "account_subscriptions", subscriptionQuery);
+  const subscription = Array.isArray(subscriptionRows) && subscriptionRows.length ? subscriptionRows[0] : null;
+  const subscriptionId = subscription?.id || "";
+  const userId = subscription?.firebase_user_id || (!isUuid(key) ? key : "");
+  const sessionFilters = subscriptionId
+    ? `subscription_id=eq.${encodeURIComponent(subscriptionId)}`
+    : `or=(user_email.ilike.${encodeURIComponent(key)},user_id.eq.${encodeURIComponent(userId)})`;
+  const crashFilters = subscriptionId
+    ? `subscription_id=eq.${encodeURIComponent(subscriptionId)}`
+    : subscription?.hwid
+      ? `hwid=eq.${encodeURIComponent(subscription.hwid)}`
+      : `hwid=eq.__none__`;
+  const [sessions, crashes] = await Promise.all([
+    safeSupabaseRead(env, "app_sessions", `select=*&${sessionFilters}&order=last_seen_at.desc&limit=50`),
+    safeSupabaseRead(env, "crash_logs", `select=*&${crashFilters}&order=happened_at.desc&limit=25`),
+  ]);
+  const deviceMap = new Map();
+  for (const session of Array.isArray(sessions) ? sessions : []) {
+    const hwid = session.hwid || "unknown";
+    const current = deviceMap.get(hwid) || {
+      hwid,
+      sessions: 0,
+      last_seen_at: "",
+      revoked: 0,
+      expires_at: session.expires_at || "",
+    };
+    current.sessions += 1;
+    if (session.revoked_at) current.revoked += 1;
+    if (String(session.last_seen_at || session.created_at || "") > String(current.last_seen_at || "")) {
+      current.last_seen_at = session.last_seen_at || session.created_at || "";
+    }
+    deviceMap.set(hwid, current);
+  }
+  return {
+    success: true,
+    item: subscription,
+    sessions: Array.isArray(sessions) ? sessions : [],
+    crashes: Array.isArray(crashes) ? crashes : [],
+    devices: [...deviceMap.values()],
+    last_crash: Array.isArray(crashes) && crashes.length ? crashes[0] : null,
+  };
 }
 
 async function safeSupabaseRead(env, table, query) {
@@ -1060,11 +1533,27 @@ async function ingestCrashLog(request, env) {
     raw_payload: rawPayload,
   };
   if (!payload.stack_trace) throw new Error("missing_stack_trace");
-  const created = await supabaseRequest(env, "crash_logs", "POST", {
-    body: payload,
-    prefer: "return=representation",
-  });
+  payload.fingerprint = await crashFingerprint(payload);
+  const created = await insertCrashLogPayload(env, payload);
   return { success: true, item: Array.isArray(created) ? created[0] : created };
+}
+
+async function insertCrashLogPayload(env, payload) {
+  try {
+    return await supabaseRequest(env, "crash_logs", "POST", {
+      body: payload,
+      prefer: "return=representation",
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error || "");
+    if (!message.toLowerCase().includes("fingerprint") && !message.toLowerCase().includes("schema cache")) throw error;
+    const fallback = { ...payload };
+    delete fallback.fingerprint;
+    return supabaseRequest(env, "crash_logs", "POST", {
+      body: fallback,
+      prefer: "return=representation",
+    });
+  }
 }
 
 function addPlanDuration(startIso, plan) {

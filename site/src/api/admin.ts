@@ -12,6 +12,8 @@ export type AdminSubscription = {
   tier: 'public' | 'private'
   status: 'active' | 'past_due' | 'canceled' | 'expired' | 'suspended'
   hwid?: string | null
+  bound_at?: string | null
+  last_seen_at?: string | null
   expires_at: string
   created_at: string
 }
@@ -36,6 +38,9 @@ export type AdminOtaUpdate = {
   download_url: string
   is_mandatory: boolean
   is_published: boolean
+  rollout_percent?: number
+  minimum_supported_version?: string | null
+  force_update_deadline?: string | null
   created_at: string
 }
 
@@ -56,6 +61,61 @@ export type AdminCrashLog = {
   stack_trace: string
   app_version?: string | null
   tool_channel?: string | null
+  fingerprint?: string | null
+}
+
+export type AdminCrashGroup = {
+  fingerprint: string
+  count: number
+  first_seen_at: string
+  last_seen_at: string
+  error_type: string
+  message?: string | null
+  affected_hwids: string[]
+  affected_users: string[]
+  latest: AdminCrashLog
+}
+
+export type AdminAuditLogItem = {
+  id?: string
+  action?: string
+  type?: string
+  entity?: string
+  entity_id?: string | null
+  admin_email?: string | null
+  actor?: string | null
+  payload?: unknown
+  happened_at?: string
+  at?: string
+}
+
+export type AdminRemoteControls = {
+  rollout_percent?: number
+  minimum_supported_version?: string
+  force_update_deadline?: string
+  remote_config?: {
+    update_mode?: 'optional' | 'force' | 'required' | 'silent'
+    kill_switch_enabled?: boolean
+    kill_switch_message?: string
+    feature_flags?: Record<string, unknown>
+    announcements?: Array<{
+      id?: string
+      title?: string
+      body?: string
+      severity?: 'info' | 'warning' | 'critical'
+      starts_at?: string
+      ends_at?: string
+    }>
+  }
+}
+
+export type AdminUserDetail = {
+  success: boolean
+  item: AdminSubscription | null
+  sessions: Array<Record<string, unknown>>
+  crashes: AdminCrashLog[]
+  devices: Array<Record<string, unknown>>
+  last_crash?: AdminCrashLog | null
 }
 
 function getAdminToken() {
@@ -121,8 +181,12 @@ export async function fetchAdminDashboard() {
   return adminFetch<{ success: boolean; kpis?: Record<string, number | null>; recent_activity?: unknown[] }>('/dashboard')
 }
 
-export async function fetchSubscriptions() {
-  return adminFetch<{ success: boolean; items: AdminSubscription[] }>('/subscriptions?limit=100')
+export async function fetchSubscriptions(params: { search?: string; page?: number; limit?: number } = {}) {
+  const query = new URLSearchParams()
+  query.set('limit', String(params.limit ?? 100))
+  if (params.page) query.set('page', String(params.page))
+  if (params.search) query.set('search', params.search)
+  return adminFetch<{ success: boolean; items: AdminSubscription[]; page?: number; limit?: number }>(`/subscriptions?${query}`)
 }
 
 export async function createSubscription(payload: {
@@ -141,6 +205,13 @@ export async function patchSubscriptionStatus(id: string, status: AdminSubscript
   return adminFetch<{ success: boolean; item: AdminSubscription }>(`/subscriptions/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     body: JSON.stringify({ status }),
+  })
+}
+
+export async function resetSubscriptionHwid(id: string, revokeSessions = true) {
+  return adminFetch<{ success: boolean; item: AdminSubscription }>(`/subscriptions/${encodeURIComponent(id)}/reset-hwid`, {
+    method: 'POST',
+    body: JSON.stringify({ revoke_sessions: revokeSessions }),
   })
 }
 
@@ -220,6 +291,9 @@ export async function publishRelease(payload: {
   notes: string
   mandatory: boolean
   update_mode: 'optional' | 'force' | 'required' | 'silent'
+  rollout_percent?: number
+  minimum_supported_version?: string
+  force_update_deadline?: string
 }) {
   return adminFetch<{ success: boolean; manifest: AdminReleaseManifest }>('/publish', {
     method: 'POST',
@@ -227,7 +301,50 @@ export async function publishRelease(payload: {
   })
 }
 
-export async function fetchCrashLogs() {
-  return adminFetch<{ success: boolean; items: AdminCrashLog[] }>('/crash-logs?limit=100')
+export async function rollbackRelease(payload: { version: string; channel: string }) {
+  return adminFetch<{ success: boolean; manifest: AdminReleaseManifest }>('/rollback', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function disableRelease(payload: { channel: string; reason?: string }) {
+  return adminFetch<{ success: boolean; manifest: AdminReleaseManifest }>('/releases/disable', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function fetchRemoteControls(channel = 'beta') {
+  return adminFetch<{ success: boolean; channel: string; controls: AdminRemoteControls; manifest: AdminReleaseManifest }>(
+    `/remote-config?channel=${encodeURIComponent(channel)}`,
+  )
+}
+
+export async function updateRemoteControls(payload: AdminRemoteControls & { channel: string }) {
+  return adminFetch<{ success: boolean; controls: AdminRemoteControls; manifest: AdminReleaseManifest }>('/remote-config', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function fetchCrashLogs(params: { search?: string; page?: number; limit?: number } = {}) {
+  const query = new URLSearchParams()
+  query.set('limit', String(params.limit ?? 100))
+  if (params.page) query.set('page', String(params.page))
+  if (params.search) query.set('search', params.search)
+  return adminFetch<{ success: boolean; items: AdminCrashLog[]; page?: number; limit?: number }>(`/crash-logs?${query}`)
+}
+
+export async function fetchCrashGroups() {
+  return adminFetch<{ success: boolean; items: AdminCrashGroup[] }>('/crash-groups?groups=100')
+}
+
+export async function fetchAuditLog() {
+  return adminFetch<{ success: boolean; items: AdminAuditLogItem[] }>('/audit-log?limit=100')
+}
+
+export async function fetchUserDetail(userKey: string) {
+  return adminFetch<AdminUserDetail>(`/users/${encodeURIComponent(userKey)}`)
 }
 
