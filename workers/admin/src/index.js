@@ -956,7 +956,7 @@ async function recordPublishedOtaUpdate(env, payload) {
     is_mandatory: Boolean(payload.is_mandatory),
     is_published: true,
     published_at: new Date().toISOString(),
-    created_by: payload.created_by || null,
+    created_by: isUuid(payload.created_by) ? payload.created_by : null,
   };
   try {
     await supabaseRequest(env, "ota_updates", "POST", {
@@ -1292,7 +1292,7 @@ async function createOtaUpdate(request, env, adminEmail) {
     is_mandatory: Boolean(body?.is_mandatory),
     is_published: Boolean(body?.is_published),
     published_at: body?.is_published ? new Date().toISOString() : null,
-    created_by: body?.created_by || null,
+    created_by: isUuid(body?.created_by) ? body.created_by : null,
   };
   if (!payload.version || !payload.download_url) throw new Error("missing_ota_fields");
   const created = await supabaseRequest(env, "ota_updates", "POST", {
