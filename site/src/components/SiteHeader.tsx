@@ -49,7 +49,7 @@ export function SiteHeader({ lang, onToggleLang }: SiteHeaderProps) {
             className="site-logo h-8 w-8 shrink-0 object-contain"
           />
           <span className="text-sm font-semibold tracking-wide text-white">
-            SATAN <span className="text-white/70">Toolkit</span>
+            Saturn <span className="text-white/70">Workspace</span>
           </span>
         </a>
 

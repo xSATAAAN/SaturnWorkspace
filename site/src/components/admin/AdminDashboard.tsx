@@ -20,9 +20,12 @@ type AdminDashboardProps = {
   lang: 'en' | 'ar'
 }
 
+type AdminPage = 'overview' | 'subscriptions' | 'promos' | 'ota' | 'crashes' | 'security' | 'users'
+
 export function AdminDashboard({ lang }: AdminDashboardProps) {
   const isAr = lang === 'ar'
   const [expandedCrashId, setExpandedCrashId] = useState<string | null>(null)
+  const [activePage, setActivePage] = useState<AdminPage>('overview')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [kpis, setKpis] = useState<Record<string, number | null>>({})
@@ -145,6 +148,16 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
     },
   ]
 
+  const adminPages: Array<{ id: AdminPage; label: string; hint: string }> = [
+    { id: 'overview', label: t.overview, hint: isAr ? 'KPI + activity' : 'KPI and activity' },
+    { id: 'subscriptions', label: t.licenses, hint: isAr ? 'الحسابات والاشتراكات' : 'Accounts and plans' },
+    { id: 'promos', label: t.promos, hint: isAr ? 'خصومات وباقات' : 'Discount controls' },
+    { id: 'ota', label: t.ota, hint: isAr ? 'نشر الإصدارات' : 'Release publishing' },
+    { id: 'crashes', label: t.crashes, hint: isAr ? 'الأخطاء والأجهزة' : 'Errors and devices' },
+    { id: 'security', label: t.security, hint: isAr ? 'HWID والتنبيهات' : 'HWID and alerts' },
+    { id: 'users', label: t.users, hint: isAr ? 'دليل المستخدمين' : 'User directory' },
+  ]
+
   const handleCreatePromo = async () => {
     if (!newPromoCode.trim()) return
     setSavingPromo(true)
@@ -256,6 +269,32 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
       {error ? <section className="mb-6 rounded-xl border border-rose-300/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">{error}</section> : null}
       {loading ? <section className="mb-6 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/70">Loading admin data...</section> : null}
 
+      <div className="grid gap-4 lg:grid-cols-[230px_minmax(0,1fr)]">
+        <aside className="surface-card h-fit p-2 lg:sticky lg:top-24">
+          <nav className="grid gap-1" aria-label="Admin pages">
+            {adminPages.map((page) => {
+              const selected = activePage === page.id
+              return (
+                <button
+                  key={page.id}
+                  type="button"
+                  onClick={() => setActivePage(page.id)}
+                  className={`rounded-xl px-3 py-3 text-start transition ${
+                    selected
+                      ? 'border border-sky-300/35 bg-sky-400/15 text-white'
+                      : 'border border-transparent text-white/68 hover:border-white/12 hover:bg-white/[0.04] hover:text-white'
+                  }`}
+                >
+                  <span className="block text-sm font-semibold">{page.label}</span>
+                  <span className="mt-1 block text-xs text-white/45">{page.hint}</span>
+                </button>
+              )
+            })}
+          </nav>
+        </aside>
+
+        <div className="min-w-0">
+      {activePage === 'overview' ? (
       <section className="mb-6">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-white/70">{t.overview}</h2>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -266,8 +305,20 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
             </article>
           ))}
         </div>
+        <article className="surface-card mt-4 p-5">
+          <h3 className="mb-3 text-sm font-semibold text-white/85">{t.activity}</h3>
+          <ul className="space-y-2 text-sm text-white/75">
+            {recentActivity.map((item, idx) => (
+              <li key={`${idx}-${JSON.stringify(item)}`} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+                {typeof item === 'string' ? item : JSON.stringify(item)}
+              </li>
+            ))}
+          </ul>
+        </article>
       </section>
+      ) : null}
 
+      {activePage === 'subscriptions' ? (
       <section className="mb-6 grid gap-4 lg:grid-cols-3">
         <article className="surface-card p-5 lg:col-span-2">
           <h3 className="mb-3 text-sm font-semibold text-white/85">{t.licenses}</h3>
@@ -320,8 +371,11 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
           </ul>
         </article>
       </section>
+      ) : null}
 
+      {activePage === 'promos' || activePage === 'ota' ? (
       <section className="mb-6 grid gap-4 lg:grid-cols-2">
+        {activePage === 'promos' ? (
         <article className="surface-card p-5">
           <h3 className="mb-3 text-sm font-semibold text-white/85">{t.promos}</h3>
           <div className="grid gap-3">
@@ -365,7 +419,9 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
             ) : null}
           </div>
         </article>
+        ) : null}
 
+        {activePage === 'ota' ? (
         <article className="surface-card p-5">
           <h3 className="mb-3 text-sm font-semibold text-white/85">{t.ota}</h3>
           <div className="grid gap-3">
@@ -430,9 +486,13 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
             ) : null}
           </div>
         </article>
+        ) : null}
       </section>
+      ) : null}
 
+      {activePage === 'crashes' || activePage === 'security' ? (
       <section className="mb-6 grid gap-4 lg:grid-cols-2">
+        {activePage === 'crashes' ? (
         <article className="surface-card p-5">
           <h3 className="mb-3 text-sm font-semibold text-white/85">{t.crashes}</h3>
           {crashes.map((crash) => {
@@ -464,7 +524,9 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
             )
           })}
         </article>
+        ) : null}
 
+        {activePage === 'security' ? (
         <article className="surface-card p-5">
           <h3 className="mb-3 text-sm font-semibold text-white/85">{t.security}</h3>
           <div className="rounded-xl border border-amber-300/35 bg-amber-400/10 p-3 text-sm text-amber-100">
@@ -479,8 +541,11 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
             </button>
           </div>
         </article>
+        ) : null}
       </section>
+      ) : null}
 
+      {activePage === 'users' ? (
       <section className="surface-card p-5">
         <h3 className="mb-3 text-sm font-semibold text-white/85">{t.users}</h3>
         <div className="mb-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -545,6 +610,9 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
           </table>
         </div>
       </section>
+      ) : null}
+        </div>
+      </div>
     </main>
   )
 }
