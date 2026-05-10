@@ -9,6 +9,7 @@ import { Pricing } from './components/sections/Pricing'
 import { SiteFooter } from './components/sections/SiteFooter'
 import { AdminDashboard } from './components/admin/AdminDashboard'
 import { AdminAuthGate } from './components/admin/AdminAuthGate'
+import { AccountPage } from './components/AccountPage'
 import { DeviceActivation } from './components/DeviceActivation'
 import { TELEGRAM_USERNAME, getSiteCopy } from './constants/siteCopy'
 
@@ -24,6 +25,7 @@ export default function App() {
   const copy = getSiteCopy(lang)
   const currentPath = typeof window !== 'undefined' ? window.location.pathname : ''
   const isActivationRoute = currentPath.startsWith('/activate')
+  const isAccountRoute = currentPath.startsWith('/account') || currentPath.startsWith('/login')
   const isAdminRoute =
     typeof window !== 'undefined' &&
     (currentPath.startsWith('/admin') || window.location.hostname.toLowerCase().startsWith('admin.'))
@@ -33,6 +35,8 @@ export default function App() {
       <div className="noise" aria-hidden="true" />
       {isActivationRoute ? (
         <DeviceActivation lang={lang} />
+      ) : isAccountRoute ? (
+        <AccountPage lang={lang} />
       ) : isAdminRoute ? (
         <AdminAuthGate lang={lang}>
           <AdminDashboard lang={lang} />

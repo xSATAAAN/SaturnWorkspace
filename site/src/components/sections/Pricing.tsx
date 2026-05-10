@@ -1,5 +1,3 @@
-import { useState } from 'react'
-import { CheckoutModal, type PlanId } from '../CheckoutModal'
 import { Reveal } from '../Reveal'
 
 type PricingProps = {
@@ -23,6 +21,10 @@ const FULL_FEATURES_AR = [
 const SUPPORT_EMAIL = 'support@saturnws.com'
 const DEV_TELEGRAM = 'https://t.me/v1u_0'
 
+function openAccountForPlan(plan: 'monthly' | 'yearly') {
+  window.location.assign(`/account?plan=${plan}`)
+}
+
 export function Pricing({ lang }: PricingProps) {
   const isAr = lang === 'ar'
   const fullFeatures = isAr ? FULL_FEATURES_AR : FULL_FEATURES_EN
@@ -41,7 +43,7 @@ export function Pricing({ lang }: PricingProps) {
         compareAt: 'بدلًا من $240 لو دفعت شهريًا لمدة سنة',
         yearlyEquiv: '≈ $10/شهر خلال العرض',
         perYear: '/سنة',
-        order: 'تنفيذ الطلب',
+        order: 'تسجيل الدخول والاشتراك',
         supportHint: 'للدعم:',
         supportEmail: SUPPORT_EMAIL,
         supportTele: 'تيليجرام المطوّر',
@@ -60,16 +62,12 @@ export function Pricing({ lang }: PricingProps) {
         compareAt: 'vs. $240 if billed monthly for 12 months',
         yearlyEquiv: '≈ $10/mo during promo',
         perYear: '/yr',
-        order: 'Place order',
+        order: 'Sign in and subscribe',
         supportHint: 'Support:',
         supportEmail: SUPPORT_EMAIL,
         supportTele: 'Developer on Telegram',
         note: 'Payments are completed through secure payment gateways after you place your order. We do not take payments via Telegram.',
       }
-
-  const telegramUsername = 'v1u_0'
-  const [open, setOpen] = useState(false)
-  const [initialPlan, setInitialPlan] = useState<PlanId>('yearly')
 
   return (
     <section id="pricing" className="bg-transparent">
@@ -110,10 +108,7 @@ export function Pricing({ lang }: PricingProps) {
               <div className="mt-7">
                 <button
                   type="button"
-                  onClick={() => {
-                    setInitialPlan('monthly')
-                    setOpen(true)
-                  }}
+                  onClick={() => openAccountForPlan('monthly')}
                   className="btn-primary inline-flex w-full items-center justify-center rounded-xl px-5 py-3 text-sm font-semibold transition focus:outline-none"
                 >
                   {t.order}
@@ -171,10 +166,7 @@ export function Pricing({ lang }: PricingProps) {
               <div className="mt-7">
                 <button
                   type="button"
-                  onClick={() => {
-                    setInitialPlan('yearly')
-                    setOpen(true)
-                  }}
+                  onClick={() => openAccountForPlan('yearly')}
                   className="btn-primary inline-flex w-full items-center justify-center rounded-xl px-5 py-3 text-sm font-semibold transition focus:outline-none"
                 >
                   {t.order}
@@ -200,14 +192,6 @@ export function Pricing({ lang }: PricingProps) {
           </div>
         </Reveal>
       </div>
-
-      <CheckoutModal
-        open={open}
-        onClose={() => setOpen(false)}
-        telegramUsername={telegramUsername}
-        initialPlan={initialPlan}
-        lang={lang}
-      />
     </section>
   )
 }

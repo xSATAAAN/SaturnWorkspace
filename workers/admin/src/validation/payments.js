@@ -29,9 +29,11 @@ export async function parseCreatePaymentRequest(request) {
   const phone = cleanText(customer.phone, 40)
   const contact = cleanText(customer.contact, 120)
   const notes = cleanText(payload.notes, 500)
+  const idToken = String(payload.id_token || '').trim().slice(0, 6000)
 
   return {
     plan,
+    id_token: idToken,
     locale: safeLocale,
     customer: {
       email,

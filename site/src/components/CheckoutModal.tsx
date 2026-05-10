@@ -9,6 +9,8 @@ type CheckoutModalProps = {
   onClose: () => void
   telegramUsername: string
   initialPlan?: PlanId
+  initialEmail?: string
+  idToken?: string
   lang: 'en' | 'ar'
 }
 
@@ -21,6 +23,8 @@ export function CheckoutModal({
   onClose,
   telegramUsername,
   initialPlan = 'yearly',
+  initialEmail = '',
+  idToken = '',
   lang,
 }: CheckoutModalProps) {
   const isAr = lang === 'ar'
@@ -75,7 +79,8 @@ export function CheckoutModal({
   useEffect(() => {
     if (!open) return
     setPlan(initialPlan)
-  }, [open, initialPlan])
+    if (initialEmail) setEmail(initialEmail)
+  }, [open, initialPlan, initialEmail])
 
   useEffect(() => {
     if (!open) return
@@ -123,6 +128,7 @@ export function CheckoutModal({
     try {
       const response = await createPaymentIntent({
         plan,
+        id_token: idToken || undefined,
         customer: {
           email: normalizeField(email, 120) || undefined,
           phone: normalizeField(phone, 40) || undefined,

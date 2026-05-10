@@ -334,6 +334,35 @@ async function handleSessionLogout(request: Request, env: Env): Promise<Response
   return json({ success: true })
 }
 
+async function handleAccountSubscription(request: Request, env: Env): Promise<Response> {
+  const body = await request.json<any>().catch(() => null)
+  const idToken = String(body?.id_token || "").trim()
+  if (!idToken) return json({ success: false, error: "missing_id_token" }, 400)
+  const firebaseUser = await verifyFirebaseUser(idToken, env)
+  const subscription = await getActiveSubscriptionForUser(env, firebaseUser.userId, firebaseUser.email)
+  const subscriptionError = isActiveUsableSubscription(subscription)
+  if (!subscription || subscriptionError) {
+    return json({
+      success: true,
+      user: {
+        id: firebaseUser.userId,
+        email: firebaseUser.email,
+      },
+      subscription: null,
+      status: subscriptionError === "subscription_not_found" ? "subscription_required" : subscriptionError,
+    })
+  }
+  return json({
+    success: true,
+    user: {
+      id: firebaseUser.userId,
+      email: firebaseUser.email,
+    },
+    subscription: buildSubscriptionRuntime(subscription, "verified"),
+    status: "active",
+  })
+}
+
 export default {
   async fetch(request, env): Promise<Response> {
     const url = new URL(request.url)
@@ -366,6 +395,10 @@ export default {
       }
       if (request.method === "POST" && url.pathname === "/session/logout") {
         const res = await handleSessionLogout(request, env)
+        return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
+      }
+      if (request.method === "POST" && url.pathname === "/account/subscription") {
+        const res = await handleAccountSubscription(request, env)
         return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
       }
       if (request.method === "GET" && url.pathname === "/oauth/google-drive-config") {

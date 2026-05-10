@@ -41,6 +41,8 @@ export async function createOrder(env, payload) {
     expires_at: new Date(now + ORDER_TTL_MS).toISOString(),
     plan: payload.plan,
     locale: payload.locale || 'en',
+    firebase_user_id: payload.firebase_user_id || '',
+    user_email: payload.customer?.email || '',
     customer: {
       email: payload.customer?.email || '',
       phone: payload.customer?.phone || '',
