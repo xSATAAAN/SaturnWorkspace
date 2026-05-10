@@ -171,4 +171,3 @@ export function SiteHeader({ lang, onToggleLang }: SiteHeaderProps) {
     </header>
   )
 }
-

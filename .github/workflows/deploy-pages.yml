@@ -44,16 +44,8 @@ jobs:
         working-directory: site
         run: npm run build
 
-      - name: Add SPA fallback
-        run: |
-          cp index.html 404.html
-          mkdir -p account activate privacy terms refund release-notes
-          cp index.html account/index.html
-          cp index.html activate/index.html
-          cp privacy.html privacy/index.html
-          cp terms.html terms/index.html
-          cp refund.html refund/index.html
-          cp updates.html release-notes/index.html
+      - name: Publish static pages and SPA path fallbacks
+        run: node tools/publish-static-pages.mjs
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -61,7 +53,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: site/dist
 
   deploy:
     needs: build
