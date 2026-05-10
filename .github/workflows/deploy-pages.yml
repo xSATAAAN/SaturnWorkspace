@@ -44,6 +44,9 @@ jobs:
         working-directory: site
         run: npm run build
 
+      - name: Add SPA fallback
+        run: cp index.html 404.html
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
