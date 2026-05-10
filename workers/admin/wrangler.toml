@@ -10,11 +10,9 @@ routes = [
   { pattern = "admin-api.saturnws.com/api/*", zone_name = "saturnws.com" }
 ]
 
-# Enable after R2 is activated on the Cloudflare account and the
-# saturnws-ota bucket is created.
-# [[r2_buckets]]
-# binding = "OTA_BUCKET"
-# bucket_name = "saturnws-ota"
+[[r2_buckets]]
+binding = "OTA_BUCKET"
+bucket_name = "saturnws-ota"
 
 [vars]
 ADMIN_ORIGIN = "https://admin.saturnws.com"
