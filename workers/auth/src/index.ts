@@ -229,18 +229,42 @@ async function handleDeviceComplete(request: Request, env: Env): Promise<Respons
   const subscription = await getActiveSubscriptionForUser(env, firebaseUser.userId, firebaseUser.email)
   const subscriptionError = isActiveUsableSubscription(subscription)
   if (subscriptionError || !subscription) {
-    return json({ success: false, error: subscriptionError === "subscription_not_found" ? "subscription_required" : subscriptionError }, 403)
+    const error = subscriptionError === "subscription_not_found" ? "subscription_required" : subscriptionError
+    await updateDeviceLogin(env, pending.id, {
+      status: error,
+      user_id: firebaseUser.userId,
+      user_email: firebaseUser.email,
+    })
+    return json({ success: false, error }, 403)
   }
 
   const subscriptionUserId = String(subscription.firebase_user_id || "").trim()
   const subscriptionEmail = String(subscription.user_email || "").trim().toLowerCase()
   if (subscriptionUserId && subscriptionUserId !== firebaseUser.userId) {
+    await updateDeviceLogin(env, pending.id, {
+      status: "subscription_user_mismatch",
+      user_id: firebaseUser.userId,
+      user_email: firebaseUser.email,
+      subscription_id: subscription.id,
+    })
     return json({ success: false, error: "subscription_user_mismatch" }, 403)
   }
   if (subscriptionEmail && subscriptionEmail !== firebaseUser.email) {
+    await updateDeviceLogin(env, pending.id, {
+      status: "subscription_email_mismatch",
+      user_id: firebaseUser.userId,
+      user_email: firebaseUser.email,
+      subscription_id: subscription.id,
+    })
     return json({ success: false, error: "subscription_email_mismatch" }, 403)
   }
   if (subscription.hwid && subscription.hwid !== pending.hwid) {
+    await updateDeviceLogin(env, pending.id, {
+      status: "subscription_hwid_mismatch",
+      user_id: firebaseUser.userId,
+      user_email: firebaseUser.email,
+      subscription_id: subscription.id,
+    })
     return json({ success: false, error: "subscription_hwid_mismatch" }, 403)
   }
 
@@ -280,7 +304,22 @@ async function handleDevicePoll(request: Request, env: Env): Promise<Response> {
     return json({ success: false, error: "device_code_expired" }, 410)
   }
   if (row.status === "pending") return json({ success: true, status: "pending" })
-  if (row.status !== "authorized") return json({ success: false, status: row.status, error: `device_${row.status}` }, 409)
+  if (row.status !== "authorized") {
+    const authFailureStatuses = new Set([
+      "subscription_required",
+      "subscription_expired",
+      "subscription_inactive",
+      "subscription_missing",
+      "subscription_hwid_mismatch",
+      "subscription_user_mismatch",
+      "subscription_email_mismatch",
+    ])
+    const status = String(row.status || "")
+    return json(
+      { success: false, status, error: authFailureStatuses.has(status) ? status : `device_${status}` },
+      authFailureStatuses.has(status) ? 403 : 409,
+    )
+  }
   if (!row.subscription_id || !row.user_id) return json({ success: false, error: "device_authorization_incomplete" }, 409)
 
   const subscription = await getSubscriptionById(env, row.subscription_id)

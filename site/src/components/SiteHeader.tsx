@@ -17,7 +17,7 @@ export function SiteHeader({ lang, onToggleLang }: SiteHeaderProps) {
           feedback: 'المقترحات',
           updates: 'التحديثات',
           login: 'دخول',
-          buy: 'اشتراك الآن',
+          buy: 'تفعيل البيتا',
           switchLabel: 'EN',
         }
       : {
@@ -28,7 +28,7 @@ export function SiteHeader({ lang, onToggleLang }: SiteHeaderProps) {
           feedback: 'Feedback',
           updates: 'Updates',
           login: 'Login',
-          buy: 'Subscribe',
+          buy: 'Beta access',
           switchLabel: 'AR',
         }
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -69,7 +69,7 @@ export function SiteHeader({ lang, onToggleLang }: SiteHeaderProps) {
           <a className="text-white/70 hover:text-white" href="#feedback">
             {t.feedback}
           </a>
-          <a className="text-white/70 hover:text-white" href="/updates.html">
+          <a className="text-white/70 hover:text-white" href="/release-notes/">
             {t.updates}
           </a>
         </nav>
@@ -105,7 +105,7 @@ export function SiteHeader({ lang, onToggleLang }: SiteHeaderProps) {
             </button>
           ) : null}
           <a
-            href="#pricing"
+            href="/account"
             onClick={closeMobile}
             className="btn-primary inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold transition focus:outline-none"
           >
@@ -142,7 +142,7 @@ export function SiteHeader({ lang, onToggleLang }: SiteHeaderProps) {
               <a className="rounded-lg px-3 py-2 text-white/80 hover:bg-white/5 hover:text-white" href="#feedback" onClick={closeMobile}>
                 {t.feedback}
               </a>
-              <a className="rounded-lg px-3 py-2 text-white/80 hover:bg-white/5 hover:text-white" href="/updates.html" onClick={closeMobile}>
+              <a className="rounded-lg px-3 py-2 text-white/80 hover:bg-white/5 hover:text-white" href="/release-notes/" onClick={closeMobile}>
                 {t.updates}
               </a>
               <div className="mt-1 grid grid-cols-1 gap-2">

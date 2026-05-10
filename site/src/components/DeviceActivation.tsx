@@ -26,25 +26,27 @@ export function DeviceActivation({ lang }: DeviceActivationProps) {
       isAr
         ? {
             title: 'ربط الأداة بالحساب',
-            subtitle: 'سجل دخولك بنفس حساب Google الذي عليه اشتراك Saturn Workspace النشط، ثم اربط الجهاز.',
-            login: 'تسجيل الدخول عبر Google',
+            subtitle: 'سجل دخولك أو أنشئ حسابًا بنفس Google الذي سيتم منحه اشتراك Saturn Workspace التجريبي.',
+            login: 'تسجيل الدخول / إنشاء حساب Google',
             logout: 'تسجيل الخروج',
             userCode: 'كود الجهاز',
             submit: 'ربط الجهاز',
             working: 'جارٍ الربط...',
             success: 'تم ربط الجهاز بالاشتراك. ارجع إلى الأداة وسيتم فتحها تلقائيًا.',
             failed: 'فشل ربط الجهاز.',
+            noSubscription: 'لا يوجد اشتراك نشط لهذا الحساب. سيتم فتح الأداة برسالة توضح أن الحساب يحتاج اشتراكًا تجريبيًا من لوحة الأدمن.',
           }
         : {
             title: 'Link Tool To Account',
-            subtitle: 'Sign in with the Google account that has an active Saturn Workspace subscription, then link this device.',
-            login: 'Sign in with Google',
+            subtitle: 'Sign in or create an account with the Google account that will receive the Saturn Workspace beta subscription.',
+            login: 'Sign in / create account with Google',
             logout: 'Sign out',
             userCode: 'Device code',
             submit: 'Link device',
             working: 'Linking...',
             success: 'Device linked to your subscription. Return to the tool; it will open automatically.',
             failed: 'Could not link this device.',
+            noSubscription: 'No active subscription is linked to this account. The tool will show that this account needs a beta subscription from the admin dashboard.',
           },
     [isAr],
   )
@@ -53,6 +55,9 @@ export function DeviceActivation({ lang }: DeviceActivationProps) {
     setError('')
     const result = await signInWithPopup(firebaseAuth, new GoogleAuthProvider())
     setUser(result.user)
+    if (userCode.trim()) {
+      await completeDeviceLink(result.user)
+    }
   }
 
   async function handleLogout() {
@@ -60,14 +65,13 @@ export function DeviceActivation({ lang }: DeviceActivationProps) {
     await signOut(firebaseAuth).catch(() => undefined)
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!user || busy) return
+  async function completeDeviceLink(nextUser: User) {
+    if (!nextUser || busy) return
     setBusy(true)
     setError('')
     setDone(false)
     try {
-      const idToken = await user.getIdToken(true)
+      const idToken = await nextUser.getIdToken(true)
       const response = await fetch(`${AUTH_BASE}/device/complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -78,7 +82,18 @@ export function DeviceActivation({ lang }: DeviceActivationProps) {
       })
       const payload = await response.json().catch(() => null)
       if (!response.ok || !payload?.success) {
-        throw new Error(payload?.error || `request_failed_${response.status}`)
+        const errorCode = payload?.error || `request_failed_${response.status}`
+        const subscriptionErrors = new Set([
+          'subscription_required',
+          'subscription_not_found',
+          'subscription_expired',
+          'subscription_inactive',
+          'subscription_missing',
+          'subscription_hwid_mismatch',
+          'subscription_user_mismatch',
+          'subscription_email_mismatch',
+        ])
+        throw new Error(subscriptionErrors.has(errorCode) ? t.noSubscription : errorCode)
       }
       setDone(true)
     } catch (err) {
@@ -86,6 +101,12 @@ export function DeviceActivation({ lang }: DeviceActivationProps) {
     } finally {
       setBusy(false)
     }
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!user || busy) return
+    await completeDeviceLink(user)
   }
 
   return (

@@ -15,16 +15,16 @@ export function SiteFooter({ copy, isAr }: SiteFooterProps) {
             <div className="mt-1 text-sm text-white/60">{copy.footerDesc}</div>
           </div>
           <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-            <a className="text-white/70 hover:text-white" href="/privacy.html">
+            <a className="text-white/70 hover:text-white" href="/privacy/">
               {copy.footerPrivacy}
             </a>
-            <a className="text-white/70 hover:text-white" href="/terms.html">
+            <a className="text-white/70 hover:text-white" href="/terms/">
               {copy.footerTerms}
             </a>
-            <a className="text-white/70 hover:text-white" href="/refund.html">
+            <a className="text-white/70 hover:text-white" href="/refund/">
               {copy.footerRefund}
             </a>
-            <a className="text-white/70 hover:text-white" href="/updates.html">
+            <a className="text-white/70 hover:text-white" href="/release-notes/">
               {copy.footerUpdates}
             </a>
             <a className="text-white/70 hover:text-white" href="/account">

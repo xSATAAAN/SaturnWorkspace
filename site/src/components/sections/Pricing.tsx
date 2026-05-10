@@ -32,8 +32,8 @@ export function Pricing({ lang }: PricingProps) {
   const t = isAr
     ? {
         tag: 'الأسعار',
-        title: 'خطط ترخيص Saturn Workspace',
-        desc: 'نفس المزايا الكاملة في الخطتين — الفرق في مدة الفوترة والعرض السنوي.',
+        title: 'وصول Saturn Workspace التجريبي',
+        desc: 'مرحلة البيتا تعمل باشتراكات مجانية يمنحها الأدمن للحسابات المصرح لها. الأسعار هنا مرجعية فقط لما بعد البيتا.',
         monthly: 'شهري',
         starter: 'مرن',
         yearly: 'سنوي',
@@ -43,16 +43,16 @@ export function Pricing({ lang }: PricingProps) {
         compareAt: 'بدلًا من $240 لو دفعت شهريًا لمدة سنة',
         yearlyEquiv: '≈ $10/شهر خلال العرض',
         perYear: '/سنة',
-        order: 'تسجيل الدخول والاشتراك',
+        order: 'إنشاء حساب البيتا',
         supportHint: 'للدعم:',
         supportEmail: SUPPORT_EMAIL,
         supportTele: 'تيليجرام المطوّر',
-        note: 'الدفع يتم عبر بوابات دفع آمنة بعد تنفيذ الطلب. لا نستقبل مدفوعات عبر تيليجرام.',
+        note: 'الدفع غير مفعل أثناء البيتا. سجل بحساب Google ثم اطلب تفعيلًا تجريبيًا، وسيتم منح الاشتراك من لوحة الأدمن.',
       }
     : {
         tag: 'PRICING',
-        title: 'Subscription plans for Saturn Workspace',
-        desc: 'Both plans include the complete workspace — billing cadence and the yearly promo differ.',
+        title: 'Saturn Workspace beta access',
+        desc: 'Beta access is granted manually from the admin dashboard. Prices are reference-only for the post-beta release.',
         monthly: 'Monthly',
         starter: 'Flexible',
         yearly: 'Yearly',
@@ -62,11 +62,11 @@ export function Pricing({ lang }: PricingProps) {
         compareAt: 'vs. $240 if billed monthly for 12 months',
         yearlyEquiv: '≈ $10/mo during promo',
         perYear: '/yr',
-        order: 'Sign in and subscribe',
+        order: 'Create beta account',
         supportHint: 'Support:',
         supportEmail: SUPPORT_EMAIL,
         supportTele: 'Developer on Telegram',
-        note: 'Payments are completed through secure payment gateways after you place your order. We do not take payments via Telegram.',
+        note: 'Payments are disabled during beta. Sign in with Google, request beta access, and the admin dashboard will grant the free subscription.',
       }
 
   return (

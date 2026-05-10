@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut, type User } from 'firebase/auth'
 import { fetchAccountSubscription, type AccountSubscription } from '../api/account'
 import { firebaseAuth } from '../lib/firebase'
-import { CheckoutModal, type PlanId } from './CheckoutModal'
 
 type AccountPageProps = {
   lang: 'en' | 'ar'
@@ -18,37 +17,28 @@ function formatRemaining(expiresAt?: string) {
   return days > 0 ? `${days} days${hours > 0 ? `, ${hours} hours` : ''}` : `${Math.max(1, hours)} hours`
 }
 
-function getRequestedPlan(): PlanId {
-  if (typeof window === 'undefined') return 'yearly'
-  return new URLSearchParams(window.location.search).get('plan') === 'monthly' ? 'monthly' : 'yearly'
-}
-
 export function AccountPage({ lang }: AccountPageProps) {
   const isAr = lang === 'ar'
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [checking, setChecking] = useState(false)
-  const [idToken, setIdToken] = useState('')
   const [account, setAccount] = useState<AccountSubscription | null>(null)
   const [error, setError] = useState('')
-  const [checkoutOpen, setCheckoutOpen] = useState(false)
-  const [checkoutPlan, setCheckoutPlan] = useState<PlanId>(() => getRequestedPlan())
 
   const t = useMemo(
     () =>
       isAr
         ? {
             title: 'حساب Saturn Workspace',
-            subtitle: 'سجل دخولك أو أنشئ حسابًا باستخدام Google، ثم اشترك بنفس الحساب وافتح الأداة به.',
+            subtitle: 'سجل دخولك أو أنشئ حسابًا باستخدام Google. في مرحلة البيتا يتم منح الاشتراك التجريبي من لوحة الأدمن.',
             signIn: 'تسجيل دخول / إنشاء حساب Google',
             signOut: 'تسجيل الخروج',
             signedIn: 'الحساب الحالي',
             subscription: 'الاشتراك',
             active: 'نشط',
-            noSubscription: 'لا يوجد اشتراك نشط على هذا الحساب.',
-            subscribeMonthly: 'اشتراك شهري',
-            subscribeYearly: 'اشتراك سنوي',
-            openTool: 'بعد الاشتراك افتح الأداة وسجل بنفس حساب Google.',
+            noSubscription: 'لا يوجد اشتراك نشط على هذا الحساب. أرسل بريد الحساب للدعم أو انتظر منحه اشتراكًا تجريبيًا من لوحة الأدمن.',
+            requestBeta: 'طلب تفعيل تجريبي',
+            openTool: 'بعد منح التفعيل التجريبي افتح الأداة وسجل بنفس حساب Google.',
             refresh: 'تحديث الحالة',
             plan: 'الخطة',
             tier: 'الباقة',
@@ -56,16 +46,15 @@ export function AccountPage({ lang }: AccountPageProps) {
           }
         : {
             title: 'Saturn Workspace Account',
-            subtitle: 'Sign in or create an account with Google, then subscribe on the same account and use it in the desktop app.',
+            subtitle: 'Sign in or create an account with Google. During beta, subscriptions are granted manually from the admin dashboard.',
             signIn: 'Sign in / create account with Google',
             signOut: 'Sign out',
             signedIn: 'Current account',
             subscription: 'Subscription',
             active: 'Active',
-            noSubscription: 'No active subscription is linked to this account.',
-            subscribeMonthly: 'Subscribe monthly',
-            subscribeYearly: 'Subscribe yearly',
-            openTool: 'After subscribing, open the desktop app and sign in with the same Google account.',
+            noSubscription: 'No active subscription is linked to this account. Send this account email to support or wait for a beta subscription to be granted from the admin dashboard.',
+            requestBeta: 'Request beta access',
+            openTool: 'After beta access is granted, open the desktop app and sign in with the same Google account.',
             refresh: 'Refresh status',
             plan: 'Plan',
             tier: 'Tier',
@@ -77,14 +66,12 @@ export function AccountPage({ lang }: AccountPageProps) {
   async function refreshAccount(nextUser = user) {
     if (!nextUser) {
       setAccount(null)
-      setIdToken('')
       return
     }
     setChecking(true)
     setError('')
     try {
       const token = await nextUser.getIdToken(true)
-      setIdToken(token)
       setAccount(await fetchAccountSubscription(token))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'account_check_failed')
@@ -118,7 +105,6 @@ export function AccountPage({ lang }: AccountPageProps) {
     await signOut(firebaseAuth)
     setUser(null)
     setAccount(null)
-    setIdToken('')
   }
 
   const subscription = account?.subscription
@@ -175,23 +161,14 @@ export function AccountPage({ lang }: AccountPageProps) {
                 <div className="mt-3">
                   <p className="text-sm leading-6 text-white/70">{t.noSubscription}</p>
                   <div className="mt-4 grid gap-2">
-                    <button
-                      className="btn-primary rounded-xl px-4 py-2 text-sm font-semibold"
-                      onClick={() => {
-                        setCheckoutPlan('yearly')
-                        setCheckoutOpen(true)
-                      }}
+                    <a
+                      className="btn-primary rounded-xl px-4 py-2 text-center text-sm font-semibold"
+                      href={`mailto:support@saturnws.com?subject=Saturn%20Workspace%20Beta%20Access&body=${encodeURIComponent(user.email || '')}`}
                     >
-                      {t.subscribeYearly}
-                    </button>
-                    <button
-                      className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white/85"
-                      onClick={() => {
-                        setCheckoutPlan('monthly')
-                        setCheckoutOpen(true)
-                      }}
-                    >
-                      {t.subscribeMonthly}
+                      {t.requestBeta}
+                    </a>
+                    <button className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white/85" onClick={() => void refreshAccount()}>
+                      {checking ? 'Checking...' : t.refresh}
                     </button>
                   </div>
                 </div>
@@ -200,16 +177,6 @@ export function AccountPage({ lang }: AccountPageProps) {
           </div>
         )}
       </section>
-
-      <CheckoutModal
-        open={checkoutOpen}
-        onClose={() => setCheckoutOpen(false)}
-        telegramUsername="v1u_0"
-        initialPlan={checkoutPlan}
-        initialEmail={user?.email || ''}
-        idToken={idToken}
-        lang={lang}
-      />
     </main>
   )
 }

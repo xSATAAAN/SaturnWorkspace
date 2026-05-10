@@ -56,4 +56,4 @@ For a clean database, run:
 - `migrations/004_device_login_sessions.sql`
 - `migrations/005_account_subscriptions.sql`
 
-The important production table for the new model is `account_subscriptions`. The website/payment flow should create or update a row for the user's Firebase account email, and the desktop app will only open when that row is active, not expired, and bound to the current HWID.
+The important production table for the beta model is `account_subscriptions`. The admin dashboard creates or updates a row for the user's Firebase account email, and the desktop app will only open when that row is active, not expired, and bound to the current HWID.

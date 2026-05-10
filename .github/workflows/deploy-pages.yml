@@ -45,7 +45,13 @@ jobs:
         run: npm run build
 
       - name: Add SPA fallback
-        run: cp index.html 404.html
+        run: |
+          cp index.html 404.html
+          mkdir -p privacy terms refund release-notes
+          cp privacy.html privacy/index.html
+          cp terms.html terms/index.html
+          cp refund.html refund/index.html
+          cp updates.html release-notes/index.html
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
