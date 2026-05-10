@@ -43,12 +43,19 @@ export type AdminCrashLog = {
   id: string
   happened_at: string
   user_id?: string | null
+  subscription_id?: string | null
+  license_id?: string | null
+  hwid?: string | null
+  device_name?: string | null
   windows_version?: string | null
   cpu?: string | null
   gpu?: string | null
   ram_gb?: number | null
   error_type: string
+  message?: string | null
   stack_trace: string
+  app_version?: string | null
+  tool_channel?: string | null
 }
 
 function getAdminToken() {

@@ -441,9 +441,12 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
               <div key={crash.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white/80">
                 <div className="grid gap-1">
                   <div>{crash.happened_at}</div>
-                  <div>{crash.user_id || '--'}</div>
+                  <div>{crash.device_name || '--'} / {crash.hwid || 'no-hwid'}</div>
+                  <div>{crash.user_id || crash.subscription_id || '--'}</div>
+                  <div>{crash.app_version || '--'} / {crash.tool_channel || 'stable'}</div>
                   <div>{crash.windows_version || '--'}</div>
                   <div>{[crash.cpu, crash.ram_gb ? `${crash.ram_gb}GB` : null, crash.gpu].filter(Boolean).join(' / ') || '--'}</div>
+                  {crash.message ? <div className="text-white/60">{crash.message}</div> : null}
                   <div className="text-rose-200">{crash.error_type}</div>
                 </div>
                 <button
