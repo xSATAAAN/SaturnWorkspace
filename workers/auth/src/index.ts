@@ -127,10 +127,10 @@ function buildSubscriptionRuntime(row: { [key: string]: any }, status: string): 
   }
 }
 
-function verificationUrl(env: Env, userCode: string): string {
+function verificationUrl(env: Env, deviceCode: string): string {
   const base = String(env.DEVICE_LOGIN_URL || "https://saturnws.com/activate").trim()
   const url = new URL(base)
-  url.searchParams.set("code", userCode)
+  url.searchParams.set("ticket", deviceCode)
   return url.toString()
 }
 
@@ -217,7 +217,7 @@ async function handleDeviceStart(request: Request, env: Env): Promise<Response> 
     success: true,
     device_code: row.device_code,
     user_code: row.user_code,
-    verification_url: verificationUrl(env, row.user_code),
+    verification_url: verificationUrl(env, row.device_code),
     expires_at: row.expires_at,
     expires_in: 600,
     interval: 3,
@@ -226,12 +226,13 @@ async function handleDeviceStart(request: Request, env: Env): Promise<Response> 
 
 async function handleDeviceComplete(request: Request, env: Env): Promise<Response> {
   const body = await request.json<any>().catch(() => null)
+  const ticket = String(body?.ticket || body?.device_code || "").trim()
   const userCode = String(body?.user_code || body?.code || "").trim().toUpperCase()
   const idToken = String(body?.id_token || "").trim()
-  if (!userCode || !idToken) return json({ success: false, error: "missing_device_login_fields" }, 400)
+  if ((!ticket && !userCode) || !idToken) return json({ success: false, error: "missing_device_login_fields" }, 400)
 
   const firebaseUser = await verifyFirebaseUser(idToken, env)
-  const pending = await getPendingDeviceLoginByUserCode(env, userCode)
+  const pending = ticket ? await getDeviceLoginByCode(env, ticket) : await getPendingDeviceLoginByUserCode(env, userCode)
   if (!pending) return json({ success: false, error: "device_code_not_found" }, 404)
   if (isIsoExpired(pending.expires_at)) {
     await updateDeviceLogin(env, pending.id, { status: "expired" })
