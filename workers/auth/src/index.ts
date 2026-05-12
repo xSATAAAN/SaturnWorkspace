@@ -419,13 +419,14 @@ export default {
   async fetch(request, env): Promise<Response> {
     const url = new URL(request.url)
     const cors = corsHeaders(env, request)
+    const isFirebaseHelperPath = url.pathname === "/__/firebase/init.json" || url.pathname.startsWith("/__/")
 
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: cors })
     }
 
     try {
-      if (request.method === "GET" && (url.pathname === "/__/firebase/init.json" || url.pathname.startsWith("/__/auth/"))) {
+      if (isFirebaseHelperPath) {
         return await proxyFirebaseAuthHelper(request, env)
       }
       if (request.method === "POST" && url.pathname === "/verify") {
