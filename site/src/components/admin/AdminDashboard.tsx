@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
+  fetchAccessRequests,
   createPromoCode,
   createSubscription,
   disableRelease,
@@ -18,6 +19,7 @@ import {
   rollbackRelease,
   updateRemoteControls,
   uploadReleaseBinary,
+  type AdminAccessRequest,
   type AdminAuditLogItem,
   type AdminCrashGroup,
   type AdminCrashLog,
@@ -83,6 +85,7 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
   const [notice, setNotice] = useState<string | null>(null)
   const [kpis, setKpis] = useState<Record<string, number | null>>({})
   const [recentActivity, setRecentActivity] = useState<unknown[]>([])
+  const [accessRequests, setAccessRequests] = useState<AdminAccessRequest[]>([])
   const [subscriptions, setSubscriptions] = useState<AdminSubscription[]>([])
   const [promoCodes, setPromoCodes] = useState<AdminPromoCode[]>([])
   const [otaUpdates, setOtaUpdates] = useState<AdminOtaUpdate[]>([])
@@ -94,6 +97,7 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
 
   const [subscriptionSearch, setSubscriptionSearch] = useState('')
   const [crashSearch, setCrashSearch] = useState('')
+  const [accessRequestPage, setAccessRequestPage] = useState(1)
   const [subscriptionPage, setSubscriptionPage] = useState(1)
   const [crashPage, setCrashPage] = useState(1)
   const [expandedCrashId, setExpandedCrashId] = useState<string | null>(null)
@@ -101,6 +105,8 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
   const [selectedUserLoading, setSelectedUserLoading] = useState(false)
 
   const [newSubscriptionEmail, setNewSubscriptionEmail] = useState('')
+  const [newSubscriptionUserId, setNewSubscriptionUserId] = useState('')
+  const [newSubscriptionHwid, setNewSubscriptionHwid] = useState('')
   const [newSubscriptionPlan, setNewSubscriptionPlan] = useState<'monthly' | 'yearly'>('monthly')
   const [newSubscriptionTier, setNewSubscriptionTier] = useState<'public' | 'private'>('public')
   const [newSubscriptionExpiry, setNewSubscriptionExpiry] = useState('')
@@ -142,8 +148,9 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
     setLoading(true)
     setError(null)
     try {
-      const [dashboard, subs, promos, ota, crash, groups, audit, controls] = await Promise.all([
+      const [dashboard, access, subs, promos, ota, crash, groups, audit, controls] = await Promise.all([
         fetchAdminDashboard(),
+        fetchAccessRequests({ limit: 200 }),
         fetchSubscriptions({ limit: 200 }),
         fetchPromoCodes(),
         fetchOtaUpdates(),
@@ -154,6 +161,7 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
       ])
       setKpis(dashboard.kpis || {})
       setRecentActivity(dashboard.recent_activity || [])
+      setAccessRequests(access.items || [])
       setSubscriptions(subs.items || [])
       setPromoCodes(promos.items || [])
       setOtaUpdates(ota.items || [])
@@ -194,6 +202,16 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
     )
   }, [subscriptions, subscriptionSearch])
 
+  const filteredAccessRequests = useMemo(() => {
+    const term = subscriptionSearch.trim().toLowerCase()
+    if (!term) return accessRequests
+    return accessRequests.filter((item) =>
+      [item.user_email, item.user_id, item.hwid, item.status, item.subscription_status]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(term)),
+    )
+  }, [accessRequests, subscriptionSearch])
+
   const filteredCrashes = useMemo(() => {
     const term = crashSearch.trim().toLowerCase()
     if (!term) return crashes
@@ -210,14 +228,18 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
     try {
       const res = await createSubscription({
         user_email: newSubscriptionEmail.trim(),
+        firebase_user_id: newSubscriptionUserId.trim() || undefined,
+        hwid: newSubscriptionHwid.trim() || undefined,
         plan: newSubscriptionPlan,
         tier: newSubscriptionTier,
         expires_at: new Date(newSubscriptionExpiry).toISOString(),
       })
-      setSubscriptions((prev) => [res.item, ...prev])
+      await loadAll()
       setNewSubscriptionEmail('')
+      setNewSubscriptionUserId('')
+      setNewSubscriptionHwid('')
       setNewSubscriptionExpiry('')
-      setNotice('Subscription created.')
+      setNotice(res.auto_authorized_requests ? `Subscription created and ${res.auto_authorized_requests} waiting device request(s) were unlocked.` : 'Subscription created.')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'subscription_create_failed')
     } finally {
@@ -369,6 +391,42 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
     }
   }
 
+  const applyAccessRequestToForm = (request: AdminAccessRequest) => {
+    setNewSubscriptionEmail(request.user_email || '')
+    setNewSubscriptionUserId(request.user_id || '')
+    setNewSubscriptionHwid(request.hwid || '')
+    setNewSubscriptionPlan('monthly')
+    setNewSubscriptionTier('public')
+    setNewSubscriptionExpiry(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16))
+    setNotice('Access request copied into the subscription form.')
+  }
+
+  const handleGrantBeta = async (request: AdminAccessRequest) => {
+    if (!request.user_email) return
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await createSubscription({
+        user_email: request.user_email,
+        firebase_user_id: request.user_id || undefined,
+        hwid: request.hwid || undefined,
+        plan: 'monthly',
+        tier: 'public',
+        expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      })
+      setNotice(
+        res.auto_authorized_requests
+          ? `Granted 30-day beta access to ${request.user_email} and unlocked ${res.auto_authorized_requests} device request(s).`
+          : `Granted 30-day beta access to ${request.user_email}.`,
+      )
+      await loadAll()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'subscription_create_failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const pages: Array<{ id: AdminPage; label: string; hint: string }> = [
     { id: 'overview', label: 'Overview', hint: 'KPIs and recent events' },
     { id: 'users', label: 'Users', hint: 'Accounts, devices, HWID' },
@@ -456,73 +514,155 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
 
           {activePage === 'users' || activePage === 'subscriptions' ? (
             <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-              <article className="surface-card p-5">
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                  <h3 className="text-sm font-semibold text-white/85">{activePage === 'users' ? 'Users Directory' : 'Subscriptions'}</h3>
-                  <input
-                    className="w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none sm:w-72"
-                    placeholder="Search email, HWID, status..."
-                    value={subscriptionSearch}
-                    onChange={(e) => {
-                      setSubscriptionSearch(e.target.value)
-                      setSubscriptionPage(1)
-                    }}
-                  />
-                </div>
-                <div className="overflow-x-auto rounded-xl border border-white/10">
-                  <table className="w-full min-w-[860px] text-sm">
-                    <thead className="bg-white/5 text-white/60">
-                      <tr>
-                        <th className="px-3 py-2 text-start">Account</th>
-                        <th className="px-3 py-2 text-start">Plan</th>
-                        <th className="px-3 py-2 text-start">Tier</th>
-                        <th className="px-3 py-2 text-start">Status</th>
-                        <th className="px-3 py-2 text-start">HWID</th>
-                        <th className="px-3 py-2 text-start">Remaining</th>
-                        <th className="px-3 py-2 text-start">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {visiblePage(filteredSubscriptions, subscriptionPage).map((row) => (
-                        <tr key={row.id} className="border-t border-white/10 text-white/80">
-                          <td className="px-3 py-2">{row.user_email || row.firebase_user_id || row.id}</td>
-                          <td className="px-3 py-2">{row.plan}</td>
-                          <td className="px-3 py-2">{row.tier}</td>
-                          <td className="px-3 py-2">{row.status}</td>
-                          <td className="max-w-40 truncate px-3 py-2">{row.hwid || '--'}</td>
-                          <td className="px-3 py-2">{daysRemaining(row.expires_at)}</td>
-                          <td className="px-3 py-2">
-                            <div className="flex flex-wrap gap-2">
-                              <button className="rounded-lg border border-white/20 bg-white/5 px-2.5 py-1" onClick={() => void handleOpenUser(row.id)}>
-                                Details
-                              </button>
-                              <button
-                                className="rounded-lg border border-amber-300/35 bg-amber-400/10 px-2.5 py-1 text-amber-100"
-                                onClick={() => void handlePatchSubscription(row.id, 'suspended')}
-                              >
-                                Suspend
-                              </button>
-                              <button
-                                className="rounded-lg border border-rose-300/40 bg-rose-500/10 px-2.5 py-1 text-rose-200"
-                                onClick={() => void handlePatchSubscription(row.id, 'canceled')}
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          </td>
+              <div className="grid gap-4">
+                {activePage === 'users' ? (
+                  <article className="surface-card p-5">
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-semibold text-white/85">Beta Access Requests</h3>
+                        <p className="mt-1 text-xs text-white/50">Any account that finished Google sign-in but still needs a manual beta subscription.</p>
+                      </div>
+                      <input
+                        className="w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none sm:w-72"
+                        placeholder="Search email, HWID, status..."
+                        value={subscriptionSearch}
+                        onChange={(e) => {
+                          setSubscriptionSearch(e.target.value)
+                          setAccessRequestPage(1)
+                          setSubscriptionPage(1)
+                        }}
+                      />
+                    </div>
+                    {filteredAccessRequests.length ? (
+                      <>
+                        <div className="overflow-x-auto rounded-xl border border-white/10">
+                          <table className="w-full min-w-[860px] text-sm">
+                            <thead className="bg-white/5 text-white/60">
+                              <tr>
+                                <th className="px-3 py-2 text-start">Account</th>
+                                <th className="px-3 py-2 text-start">Status</th>
+                                <th className="px-3 py-2 text-start">HWID</th>
+                                <th className="px-3 py-2 text-start">Subscription</th>
+                                <th className="px-3 py-2 text-start">Last event</th>
+                                <th className="px-3 py-2 text-start">Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {visiblePage(filteredAccessRequests, accessRequestPage).map((request) => (
+                                <tr key={request.id} className="border-t border-white/10 text-white/80">
+                                  <td className="px-3 py-2">{request.user_email || request.user_id || request.id}</td>
+                                  <td className="px-3 py-2">{request.status}</td>
+                                  <td className="max-w-40 truncate px-3 py-2">{request.hwid || '--'}</td>
+                                  <td className="px-3 py-2">
+                                    {request.has_subscription
+                                      ? `${request.subscription_status || 'linked'}${request.subscription_expires_at ? ` / ${daysRemaining(request.subscription_expires_at)}` : ''}`
+                                      : 'missing'}
+                                  </td>
+                                  <td className="px-3 py-2">{request.last_event_at || request.created_at || '--'}</td>
+                                  <td className="px-3 py-2">
+                                    <div className="flex flex-wrap gap-2">
+                                      <button className="rounded-lg border border-emerald-300/35 bg-emerald-400/10 px-2.5 py-1 text-emerald-100" onClick={() => void handleGrantBeta(request)} disabled={saving || !request.user_email}>
+                                        Grant 30d
+                                      </button>
+                                      <button className="rounded-lg border border-white/20 bg-white/5 px-2.5 py-1" onClick={() => applyAccessRequestToForm(request)}>
+                                        Fill form
+                                      </button>
+                                      <button className="rounded-lg border border-white/20 bg-white/5 px-2.5 py-1" onClick={() => void handleOpenUser(request.user_email || request.user_id || request.id)}>
+                                        Details
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        <Pager page={accessRequestPage} total={filteredAccessRequests.length} onPage={setAccessRequestPage} />
+                      </>
+                    ) : (
+                      <div className="rounded-xl border border-dashed border-white/12 bg-white/[0.03] px-4 py-6 text-sm text-white/55">
+                        No pending access requests right now.
+                      </div>
+                    )}
+                  </article>
+                ) : null}
+
+                <article className="surface-card p-5">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                    <h3 className="text-sm font-semibold text-white/85">{activePage === 'users' ? 'Subscriptions' : 'Subscriptions'}</h3>
+                    {activePage === 'subscriptions' ? (
+                      <input
+                        className="w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none sm:w-72"
+                        placeholder="Search email, HWID, status..."
+                        value={subscriptionSearch}
+                        onChange={(e) => {
+                          setSubscriptionSearch(e.target.value)
+                          setSubscriptionPage(1)
+                        }}
+                      />
+                    ) : null}
+                  </div>
+                  <div className="overflow-x-auto rounded-xl border border-white/10">
+                    <table className="w-full min-w-[860px] text-sm">
+                      <thead className="bg-white/5 text-white/60">
+                        <tr>
+                          <th className="px-3 py-2 text-start">Account</th>
+                          <th className="px-3 py-2 text-start">Plan</th>
+                          <th className="px-3 py-2 text-start">Tier</th>
+                          <th className="px-3 py-2 text-start">Status</th>
+                          <th className="px-3 py-2 text-start">HWID</th>
+                          <th className="px-3 py-2 text-start">Remaining</th>
+                          <th className="px-3 py-2 text-start">Actions</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <Pager page={subscriptionPage} total={filteredSubscriptions.length} onPage={setSubscriptionPage} />
-              </article>
+                      </thead>
+                      <tbody>
+                        {visiblePage(filteredSubscriptions, subscriptionPage).map((row) => (
+                          <tr key={row.id} className="border-t border-white/10 text-white/80">
+                            <td className="px-3 py-2">{row.user_email || row.firebase_user_id || row.id}</td>
+                            <td className="px-3 py-2">{row.plan}</td>
+                            <td className="px-3 py-2">{row.tier}</td>
+                            <td className="px-3 py-2">{row.status}</td>
+                            <td className="max-w-40 truncate px-3 py-2">{row.hwid || '--'}</td>
+                            <td className="px-3 py-2">{daysRemaining(row.expires_at)}</td>
+                            <td className="px-3 py-2">
+                              <div className="flex flex-wrap gap-2">
+                                <button className="rounded-lg border border-white/20 bg-white/5 px-2.5 py-1" onClick={() => void handleOpenUser(row.id)}>
+                                  Details
+                                </button>
+                                <button
+                                  className="rounded-lg border border-amber-300/35 bg-amber-400/10 px-2.5 py-1 text-amber-100"
+                                  onClick={() => void handlePatchSubscription(row.id, 'suspended')}
+                                >
+                                  Suspend
+                                </button>
+                                <button
+                                  className="rounded-lg border border-rose-300/40 bg-rose-500/10 px-2.5 py-1 text-rose-200"
+                                  onClick={() => void handlePatchSubscription(row.id, 'canceled')}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <Pager page={subscriptionPage} total={filteredSubscriptions.length} onPage={setSubscriptionPage} />
+                </article>
+              </div>
 
               <aside className="grid gap-4">
                 <article className="surface-card p-5">
                   <h3 className="mb-3 text-sm font-semibold text-white/85">Create Subscription</h3>
                   <div className="grid gap-3">
                     <input className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" placeholder="User email" value={newSubscriptionEmail} onChange={(e) => setNewSubscriptionEmail(e.target.value)} />
+                    {newSubscriptionUserId || newSubscriptionHwid ? (
+                      <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-white/60">
+                        {newSubscriptionUserId ? <div>Firebase user: {newSubscriptionUserId}</div> : null}
+                        {newSubscriptionHwid ? <div>HWID: {newSubscriptionHwid}</div> : null}
+                      </div>
+                    ) : null}
                     <div className="grid gap-3 sm:grid-cols-2">
                       <select className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" value={newSubscriptionPlan} onChange={(e) => setNewSubscriptionPlan(e.target.value as 'monthly' | 'yearly')}>
                         <option value="monthly">Monthly</option>
@@ -552,12 +692,14 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
                     </div>
                     {selectedUserLoading ? <div className="text-sm text-white/60">Loading...</div> : null}
                     <div className="space-y-2 text-sm text-white/75">
-                      <div>Email: {selectedUser.item?.user_email || '--'}</div>
-                      <div>HWID: {selectedUser.item?.hwid || '--'}</div>
-                      <div>Last login: {selectedUser.item?.last_seen_at || '--'}</div>
+                      <div>Email: {selectedUser.item?.user_email || selectedUser.request?.user_email || '--'}</div>
+                      <div>HWID: {selectedUser.item?.hwid || selectedUser.request?.hwid || '--'}</div>
+                      <div>Last login: {selectedUser.item?.last_seen_at || selectedUser.request?.last_event_at || '--'}</div>
+                      <div>Request status: {selectedUser.request?.status || '--'}</div>
                       <div>Last crash: {selectedUser.last_crash?.happened_at || '--'}</div>
                       <div>Devices: {selectedUser.devices.length}</div>
                       <div>Sessions: {selectedUser.sessions.length}</div>
+                      <div>Login requests: {selectedUser.login_requests.length}</div>
                       <div>Crashes: {selectedUser.crashes.length}</div>
                     </div>
                   </article>

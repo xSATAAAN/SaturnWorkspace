@@ -107,6 +107,10 @@ export default {
         await requireAdmin(request, env);
         return json(await listSubscriptions(url, env), 200, corsHeaders(request, env));
       }
+      if (url.pathname === "/api/admin/access-requests" && request.method === "GET") {
+        await requireAdmin(request, env);
+        return json(await listAccessRequests(url, env), 200, corsHeaders(request, env));
+      }
       if ((url.pathname === "/api/admin/subscriptions" || url.pathname === "/api/admin/licenses") && request.method === "POST") {
         const adminEmail = await requireAdmin(request, env);
         return json(await createSubscription(request, env, adminEmail), 200, corsHeaders(request, env));
@@ -1150,18 +1154,22 @@ async function listSubscriptions(url, env) {
 async function createSubscription(request, env, adminEmail) {
   const body = await request.json();
   const userEmail = String(body?.user_email || body?.email || "").trim().toLowerCase();
+  const firebaseUserId = String(body?.firebase_user_id || "").trim() || null;
+  const hwid = String(body?.hwid || "").trim() || null;
   const plan = String(body?.plan || "monthly").trim().toLowerCase();
   const tier = String(body?.tier || "public").trim().toLowerCase();
   const expiresAt = String(body?.expires_at || "").trim();
   if (!userEmail || !expiresAt) throw new Error("missing_subscription_fields");
   const payload = {
-    firebase_user_id: String(body?.firebase_user_id || "").trim() || null,
+    firebase_user_id: firebaseUserId,
     user_email: userEmail,
     plan,
     tier,
     status: "active",
     starts_at: body?.starts_at ? String(body.starts_at).trim() : new Date().toISOString(),
     expires_at: expiresAt,
+    hwid,
+    bound_at: hwid ? new Date().toISOString() : null,
     provider: String(body?.provider || "manual").trim().toLowerCase(),
     provider_customer_id: String(body?.provider_customer_id || "").trim() || null,
     provider_subscription_id: String(body?.provider_subscription_id || "").trim() || null,
@@ -1173,15 +1181,16 @@ async function createSubscription(request, env, adminEmail) {
     prefer: "return=representation",
   });
   const item = Array.isArray(created) ? created[0] : created;
+  const autoAuthorized = await authorizeMatchingAccessRequests(env, item).catch(() => 0);
   await appendAudit(env, {
     type: "subscription_create",
     entity: "account_subscriptions",
     entity_id: item?.id || null,
     actor: adminEmail,
-    payload: { user_email: userEmail, plan, tier, expires_at: expiresAt },
+    payload: { user_email: userEmail, firebase_user_id: firebaseUserId, hwid, plan, tier, expires_at: expiresAt, auto_authorized_requests: autoAuthorized },
     at: new Date().toISOString(),
   });
-  return { success: true, item };
+  return { success: true, item, auto_authorized_requests: autoAuthorized };
 }
 
 async function updateSubscription(subscriptionId, request, env, adminEmail) {
@@ -1337,6 +1346,126 @@ async function listCrashLogs(url, env) {
   return { success: true, items: data || [], page, limit };
 }
 
+function normalizeEmail(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function isExpiredIso(value) {
+  const ts = Date.parse(String(value || ""));
+  return Number.isFinite(ts) ? ts <= Date.now() : false;
+}
+
+function accessRequestLastEventAt(row) {
+  return String(row?.consumed_at || row?.authorized_at || row?.created_at || row?.expires_at || "");
+}
+
+function subscriptionSortScore(row) {
+  const active = String(row?.status || "").toLowerCase() === "active" && !isExpiredIso(row?.expires_at);
+  return `${active ? "1" : "0"}|${String(row?.expires_at || "")}|${String(row?.created_at || "")}`;
+}
+
+function pickMatchingSubscription(row, subscriptions) {
+  if (!Array.isArray(subscriptions) || !subscriptions.length) return null;
+  const userId = String(row?.user_id || "").trim();
+  const userEmail = normalizeEmail(row?.user_email);
+  return subscriptions.find((item) => userId && String(item?.firebase_user_id || "").trim() === userId)
+    || subscriptions.find((item) => userEmail && normalizeEmail(item?.user_email) === userEmail)
+    || null;
+}
+
+function accessRequestNeedsAttention(row, subscription) {
+  const status = String(row?.status || "").trim().toLowerCase();
+  const activeSubscription = subscription && String(subscription.status || "").toLowerCase() === "active" && !isExpiredIso(subscription.expires_at);
+  if (!activeSubscription) return true;
+  return !["authorized", "consumed"].includes(status);
+}
+
+async function listAccessRequests(url, env) {
+  const limit = safeInt(url.searchParams.get("limit"), 100, 500);
+  const search = safeSearchTerm(url.searchParams.get("search"));
+  const [requestRows, subscriptionRows] = await Promise.all([
+    safeSupabaseRead(
+      env,
+      "device_login_sessions",
+      `select=id,user_id,user_email,hwid,status,subscription_id,created_at,authorized_at,consumed_at,expires_at&order=created_at.desc&limit=${Math.max(limit * 4, 200)}`,
+    ),
+    safeSupabaseRead(
+      env,
+      "account_subscriptions",
+      "select=id,firebase_user_id,user_email,status,expires_at,plan,tier,hwid,created_at&order=created_at.desc&limit=500",
+    ),
+  ]);
+
+  const orderedSubscriptions = [...(Array.isArray(subscriptionRows) ? subscriptionRows : [])].sort((a, b) =>
+    subscriptionSortScore(b).localeCompare(subscriptionSortScore(a)),
+  );
+
+  const grouped = new Map();
+  for (const row of Array.isArray(requestRows) ? requestRows : []) {
+    const userId = String(row?.user_id || "").trim();
+    const userEmail = normalizeEmail(row?.user_email);
+    if (!userId && !userEmail) continue;
+    const key = userId || userEmail || String(row?.hwid || "").trim() || String(row?.id || "");
+    const matchedSubscription = pickMatchingSubscription(row, orderedSubscriptions);
+    if (!accessRequestNeedsAttention(row, matchedSubscription)) continue;
+
+    const entry = grouped.get(key);
+    const lastEventAt = accessRequestLastEventAt(row);
+    if (!entry) {
+      grouped.set(key, {
+        id: String(row?.id || key),
+        user_id: userId || null,
+        user_email: userEmail || null,
+        hwid: String(row?.hwid || "").trim() || null,
+        status: String(row?.status || "").trim() || "unknown",
+        created_at: row?.created_at || null,
+        authorized_at: row?.authorized_at || null,
+        consumed_at: row?.consumed_at || null,
+        expires_at: row?.expires_at || null,
+        request_count: 1,
+        last_event_at: lastEventAt,
+        has_subscription: Boolean(matchedSubscription),
+        subscription_status: matchedSubscription?.status || null,
+        subscription_expires_at: matchedSubscription?.expires_at || null,
+        subscription_id: matchedSubscription?.id || row?.subscription_id || null,
+      });
+      continue;
+    }
+
+    entry.request_count += 1;
+    if (lastEventAt > String(entry.last_event_at || "")) {
+      entry.id = String(row?.id || entry.id);
+      entry.user_id = userId || entry.user_id;
+      entry.user_email = userEmail || entry.user_email;
+      entry.hwid = String(row?.hwid || "").trim() || entry.hwid;
+      entry.status = String(row?.status || "").trim() || entry.status;
+      entry.created_at = row?.created_at || entry.created_at;
+      entry.authorized_at = row?.authorized_at || entry.authorized_at;
+      entry.consumed_at = row?.consumed_at || entry.consumed_at;
+      entry.expires_at = row?.expires_at || entry.expires_at;
+      entry.last_event_at = lastEventAt;
+    }
+    if (matchedSubscription) {
+      entry.has_subscription = true;
+      entry.subscription_status = matchedSubscription.status || entry.subscription_status;
+      entry.subscription_expires_at = matchedSubscription.expires_at || entry.subscription_expires_at;
+      entry.subscription_id = matchedSubscription.id || entry.subscription_id;
+    }
+  }
+
+  const items = [...grouped.values()]
+    .filter((item) => {
+      if (!search) return true;
+      return [item.user_email, item.user_id, item.hwid, item.status, item.subscription_status]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(search));
+    })
+    .sort((a, b) => String(b.last_event_at || "").localeCompare(String(a.last_event_at || "")))
+    .slice(0, limit);
+
+  return { success: true, items };
+}
+
 function crashSignatureSource(row) {
   const stackLine = String(row?.stack_trace || "")
     .split(/\r?\n/)
@@ -1415,18 +1544,32 @@ async function getUserDetail(userKey, env) {
   const subscriptionRows = await safeSupabaseRead(env, "account_subscriptions", subscriptionQuery);
   const subscription = Array.isArray(subscriptionRows) && subscriptionRows.length ? subscriptionRows[0] : null;
   const subscriptionId = subscription?.id || "";
-  const userId = subscription?.firebase_user_id || (!isUuid(key) ? key : "");
+  const requestedEmail = key.includes("@") ? key : "";
+  const userId = subscription?.firebase_user_id || (!isUuid(key) && !requestedEmail ? key : "");
+  const userEmail = normalizeEmail(subscription?.user_email || requestedEmail);
   const sessionFilters = subscriptionId
     ? `subscription_id=eq.${encodeURIComponent(subscriptionId)}`
-    : `or=(user_email.ilike.${encodeURIComponent(key)},user_id.eq.${encodeURIComponent(userId)})`;
+    : requestedEmail
+      ? `user_email.ilike.${encodeURIComponent(requestedEmail)}`
+      : userId
+        ? `or=(user_email.ilike.${encodeURIComponent(key)},user_id.eq.${encodeURIComponent(userId)})`
+        : `user_email.ilike.${encodeURIComponent(key)}`;
+  const loginFilters = subscriptionId
+    ? `subscription_id=eq.${encodeURIComponent(subscriptionId)}`
+    : requestedEmail
+      ? `user_email.ilike.${encodeURIComponent(requestedEmail)}`
+      : userId
+        ? `or=(user_email.ilike.${encodeURIComponent(key)},user_id.eq.${encodeURIComponent(userId)})`
+        : `user_email.ilike.${encodeURIComponent(key)}`;
   const crashFilters = subscriptionId
     ? `subscription_id=eq.${encodeURIComponent(subscriptionId)}`
     : subscription?.hwid
       ? `hwid=eq.${encodeURIComponent(subscription.hwid)}`
       : `hwid=eq.__none__`;
-  const [sessions, crashes] = await Promise.all([
+  const [sessions, crashes, loginRequests] = await Promise.all([
     safeSupabaseRead(env, "app_sessions", `select=*&${sessionFilters}&order=last_seen_at.desc&limit=50`),
     safeSupabaseRead(env, "crash_logs", `select=*&${crashFilters}&order=happened_at.desc&limit=25`),
+    safeSupabaseRead(env, "device_login_sessions", `select=*&${loginFilters}&order=created_at.desc&limit=25`),
   ]);
   const deviceMap = new Map();
   for (const session of Array.isArray(sessions) ? sessions : []) {
@@ -1434,6 +1577,7 @@ async function getUserDetail(userKey, env) {
     const current = deviceMap.get(hwid) || {
       hwid,
       sessions: 0,
+      login_requests: 0,
       last_seen_at: "",
       revoked: 0,
       expires_at: session.expires_at || "",
@@ -1445,14 +1589,94 @@ async function getUserDetail(userKey, env) {
     }
     deviceMap.set(hwid, current);
   }
+  for (const request of Array.isArray(loginRequests) ? loginRequests : []) {
+    const hwid = request.hwid || "unknown";
+    const current = deviceMap.get(hwid) || {
+      hwid,
+      sessions: 0,
+      login_requests: 0,
+      last_seen_at: "",
+      revoked: 0,
+      expires_at: request.expires_at || "",
+    };
+    current.login_requests += 1;
+    if (String(accessRequestLastEventAt(request) || "") > String(current.last_seen_at || "")) {
+      current.last_seen_at = accessRequestLastEventAt(request);
+    }
+    deviceMap.set(hwid, current);
+  }
+  const latestLoginRequest = Array.isArray(loginRequests) && loginRequests.length ? loginRequests[0] : null;
   return {
     success: true,
     item: subscription,
     sessions: Array.isArray(sessions) ? sessions : [],
     crashes: Array.isArray(crashes) ? crashes : [],
+    login_requests: Array.isArray(loginRequests) ? loginRequests : [],
     devices: [...deviceMap.values()],
     last_crash: Array.isArray(crashes) && crashes.length ? crashes[0] : null,
+    request: latestLoginRequest
+      ? {
+          user_id: latestLoginRequest.user_id || userId || null,
+          user_email: normalizeEmail(latestLoginRequest.user_email) || userEmail || null,
+          hwid: latestLoginRequest.hwid || null,
+          status: latestLoginRequest.status || null,
+          last_event_at: accessRequestLastEventAt(latestLoginRequest),
+          expires_at: latestLoginRequest.expires_at || null,
+        }
+      : null,
   };
+}
+
+async function authorizeMatchingAccessRequests(env, subscription) {
+  if (!subscription?.id) return 0;
+  const userId = String(subscription?.firebase_user_id || "").trim();
+  const userEmail = normalizeEmail(subscription?.user_email);
+  if (!userId && !userEmail) return 0;
+
+  const filters = [];
+  if (userId) filters.push(`user_id.eq.${encodeURIComponent(userId)}`);
+  if (userEmail) filters.push(`user_email.ilike.${encodeURIComponent(userEmail)}`);
+  const rows = await safeSupabaseRead(
+    env,
+    "device_login_sessions",
+    `select=*&or=(${filters.join(",")})&order=created_at.desc&limit=20`,
+  );
+
+  let authorizedCount = 0;
+  let resolvedHwid = String(subscription?.hwid || "").trim() || null;
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const status = String(row?.status || "").trim().toLowerCase();
+    if (["consumed", "expired"].includes(status)) continue;
+    if (isExpiredIso(row?.expires_at)) continue;
+    const rowUserId = String(row?.user_id || "").trim();
+    const rowUserEmail = normalizeEmail(row?.user_email);
+    if (userId && rowUserId && rowUserId !== userId) continue;
+    if (userEmail && rowUserEmail && rowUserEmail !== userEmail) continue;
+
+    const patch = {
+      status: "authorized",
+      subscription_id: subscription.id,
+      user_id: userId || rowUserId || null,
+      user_email: userEmail || rowUserEmail || null,
+      authorized_at: new Date().toISOString(),
+      license_id: null,
+    };
+    await supabaseRequest(env, "device_login_sessions", "PATCH", {
+      query: `id=eq.${encodeURIComponent(row.id)}&select=id`,
+      body: patch,
+      prefer: "return=minimal",
+    });
+    if (!resolvedHwid && row?.hwid) {
+      await supabaseRequest(env, "account_subscriptions", "PATCH", {
+        query: `id=eq.${encodeURIComponent(subscription.id)}&select=id`,
+        body: { hwid: String(row.hwid).trim(), bound_at: new Date().toISOString() },
+        prefer: "return=minimal",
+      }).catch(() => null);
+      resolvedHwid = String(row.hwid).trim();
+    }
+    authorizedCount += 1;
+  }
+  return authorizedCount;
 }
 
 async function safeSupabaseRead(env, table, query) {

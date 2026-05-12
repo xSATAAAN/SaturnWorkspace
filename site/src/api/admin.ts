@@ -18,6 +18,24 @@ export type AdminSubscription = {
   created_at: string
 }
 
+export type AdminAccessRequest = {
+  id: string
+  user_id?: string | null
+  user_email?: string | null
+  hwid?: string | null
+  status: string
+  created_at?: string | null
+  authorized_at?: string | null
+  consumed_at?: string | null
+  expires_at?: string | null
+  request_count: number
+  last_event_at?: string | null
+  has_subscription: boolean
+  subscription_status?: string | null
+  subscription_expires_at?: string | null
+  subscription_id?: string | null
+}
+
 export type AdminPromoCode = {
   id: string
   code: string
@@ -114,8 +132,17 @@ export type AdminUserDetail = {
   item: AdminSubscription | null
   sessions: Array<Record<string, unknown>>
   crashes: AdminCrashLog[]
+  login_requests: Array<Record<string, unknown>>
   devices: Array<Record<string, unknown>>
   last_crash?: AdminCrashLog | null
+  request?: {
+    user_id?: string | null
+    user_email?: string | null
+    hwid?: string | null
+    status?: string | null
+    last_event_at?: string | null
+    expires_at?: string | null
+  } | null
 }
 
 function getAdminToken() {
@@ -191,14 +218,23 @@ export async function fetchSubscriptions(params: { search?: string; page?: numbe
 
 export async function createSubscription(payload: {
   user_email: string
+  firebase_user_id?: string
+  hwid?: string
   plan: 'monthly' | 'yearly'
   tier: 'public' | 'private'
   expires_at: string
 }) {
-  return adminFetch<{ success: boolean; item: AdminSubscription }>('/subscriptions', {
+  return adminFetch<{ success: boolean; item: AdminSubscription; auto_authorized_requests?: number }>('/subscriptions', {
     method: 'POST',
     body: JSON.stringify(payload),
   })
+}
+
+export async function fetchAccessRequests(params: { search?: string; limit?: number } = {}) {
+  const query = new URLSearchParams()
+  query.set('limit', String(params.limit ?? 100))
+  if (params.search) query.set('search', params.search)
+  return adminFetch<{ success: boolean; items: AdminAccessRequest[] }>(`/access-requests?${query}`)
 }
 
 export async function patchSubscriptionStatus(id: string, status: AdminSubscription['status']) {
