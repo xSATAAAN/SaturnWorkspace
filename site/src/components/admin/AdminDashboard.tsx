@@ -513,10 +513,10 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
           ) : null}
 
           {activePage === 'users' || activePage === 'subscriptions' ? (
-            <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-              <div className="grid gap-4">
+            <section className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_340px] 2xl:items-start">
+              <div className="grid min-w-0 gap-4">
                 {activePage === 'users' ? (
-                  <article className="surface-card p-5">
+                  <article className="surface-card min-w-0 p-5">
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <h3 className="text-sm font-semibold text-white/85">Beta Access Requests</h3>
@@ -587,7 +587,7 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
                   </article>
                 ) : null}
 
-                <article className="surface-card p-5">
+                <article className="surface-card min-w-0 p-5">
                   <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                     <h3 className="text-sm font-semibold text-white/85">{activePage === 'users' ? 'Subscriptions' : 'Subscriptions'}</h3>
                     {activePage === 'subscriptions' ? (
@@ -652,7 +652,7 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
                 </article>
               </div>
 
-              <aside className="grid gap-4">
+              <aside className="grid gap-4 2xl:sticky 2xl:top-24 2xl:self-start">
                 <article className="surface-card p-5">
                   <h3 className="mb-3 text-sm font-semibold text-white/85">Create Subscription</h3>
                   <div className="grid gap-3">
@@ -674,7 +674,7 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
                       </select>
                     </div>
                     <input className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" type="datetime-local" value={newSubscriptionExpiry} onChange={(e) => setNewSubscriptionExpiry(e.target.value)} />
-                    <button className="btn-primary rounded-xl px-4 py-2 text-sm font-semibold" disabled={saving} onClick={() => void handleCreateSubscription()}>
+                    <button className="btn-primary w-full rounded-xl px-4 py-2 text-sm font-semibold" disabled={saving} onClick={() => void handleCreateSubscription()}>
                       Create
                     </button>
                   </div>
