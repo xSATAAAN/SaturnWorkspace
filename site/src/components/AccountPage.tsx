@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
-import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut, type User } from 'firebase/auth'
+import {
+  GoogleAuthProvider,
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  signOut,
+  type User,
+} from 'firebase/auth'
 import { fetchAccountSubscription, type AccountSubscription } from '../api/account'
 import { firebaseAuth } from '../lib/firebase'
 
@@ -24,6 +32,9 @@ export function AccountPage({ lang }: AccountPageProps) {
   const [checking, setChecking] = useState(false)
   const [account, setAccount] = useState<AccountSubscription | null>(null)
   const [error, setError] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [passwordMode, setPasswordMode] = useState<'login' | 'signup'>('login')
 
   const t = useMemo(
     () =>
@@ -107,6 +118,20 @@ export function AccountPage({ lang }: AccountPageProps) {
     setAccount(null)
   }
 
+  async function handlePasswordAuth() {
+    setError('')
+    try {
+      const result =
+        passwordMode === 'signup'
+          ? await createUserWithEmailAndPassword(firebaseAuth, email.trim(), password)
+          : await signInWithEmailAndPassword(firebaseAuth, email.trim(), password)
+      setUser(result.user)
+      await refreshAccount(result.user)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'password_auth_failed')
+    }
+  }
+
   const subscription = account?.subscription
 
   return (
@@ -126,8 +151,48 @@ export function AccountPage({ lang }: AccountPageProps) {
         {error ? <div className="mt-6 rounded-xl border border-rose-300/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">{error}</div> : null}
 
         {!user ? (
-          <div className="mt-8">
-            <button className="btn-primary rounded-xl px-5 py-3 text-sm font-semibold" onClick={() => void handleSignIn()}>
+          <div className="mt-8 grid gap-4 md:max-w-lg">
+            <div className="inline-flex w-fit rounded-xl border border-white/10 bg-white/5 p-1">
+              <button
+                className={`rounded-lg px-4 py-2 text-sm font-semibold ${passwordMode === 'login' ? 'bg-white/10 text-white' : 'text-white/60'}`}
+                onClick={() => setPasswordMode('login')}
+              >
+                {isAr ? 'تسجيل الدخول' : 'Log in'}
+              </button>
+              <button
+                className={`rounded-lg px-4 py-2 text-sm font-semibold ${passwordMode === 'signup' ? 'bg-white/10 text-white' : 'text-white/60'}`}
+                onClick={() => setPasswordMode('signup')}
+              >
+                {isAr ? 'إنشاء حساب' : 'Sign up'}
+              </button>
+            </div>
+            <div className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+              <input
+                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none"
+                type="email"
+                placeholder={isAr ? 'البريد الإلكتروني' : 'Email'}
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+              />
+              <input
+                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none"
+                type="password"
+                placeholder={isAr ? 'كلمة المرور' : 'Password'}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+              />
+              <button className="btn-primary rounded-xl px-5 py-3 text-sm font-semibold" onClick={() => void handlePasswordAuth()}>
+                {passwordMode === 'signup'
+                  ? isAr
+                    ? 'إنشاء الحساب'
+                    : 'Create account'
+                  : isAr
+                    ? 'تسجيل الدخول'
+                    : 'Log in'}
+              </button>
+            </div>
+            <div className="text-xs text-white/45">{isAr ? 'أو' : 'Or'}</div>
+            <button className="rounded-xl border border-white/12 bg-white/5 px-5 py-3 text-sm font-semibold text-white/90" onClick={() => void handleSignIn()}>
               {t.signIn}
             </button>
           </div>

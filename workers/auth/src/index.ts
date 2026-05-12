@@ -166,9 +166,166 @@ async function verifyFirebaseUser(idToken: string, env: Env): Promise<{ userId: 
   const user = payload?.users?.[0]
   const userId = String(user?.localId || "").trim()
   const email = String(user?.email || "").trim().toLowerCase()
-  const emailVerified = Boolean(user?.emailVerified)
-  if (!userId || !email || !emailVerified) throw new Error("firebase_user_not_verified")
+  if (!userId || !email) throw new Error("firebase_user_not_verified")
   return { userId, email }
+}
+
+function mapFirebasePasswordError(message: string): string {
+  const code = String(message || "").trim().toUpperCase()
+  switch (code) {
+    case "EMAIL_EXISTS":
+      return "email_already_exists"
+    case "EMAIL_NOT_FOUND":
+    case "INVALID_PASSWORD":
+    case "INVALID_LOGIN_CREDENTIALS":
+    case "INVALID_EMAIL":
+      return "invalid_credentials"
+    case "USER_DISABLED":
+      return "account_disabled"
+    case "TOO_MANY_ATTEMPTS_TRY_LATER":
+      return "rate_limited"
+    case "OPERATION_NOT_ALLOWED":
+      return "password_auth_disabled"
+    case "WEAK_PASSWORD : PASSWORD SHOULD BE AT LEAST 6 CHARACTERS":
+    case "WEAK_PASSWORD":
+      return "weak_password"
+    default:
+      return "firebase_password_auth_failed"
+  }
+}
+
+async function authenticateFirebasePassword(
+  env: Env,
+  email: string,
+  password: string,
+  mode: "login" | "signup",
+): Promise<{ userId: string; email: string }> {
+  const apiKey = String(env.FIREBASE_WEB_API_KEY || "").trim()
+  if (!apiKey) throw new Error("firebase_not_configured")
+
+  const endpoint =
+    mode === "signup"
+      ? "https://identitytoolkit.googleapis.com/v1/accounts:signUp"
+      : "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword"
+  const response = await fetch(`${endpoint}?key=${encodeURIComponent(apiKey)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json; charset=utf-8" },
+    body: JSON.stringify({
+      email: String(email || "").trim().toLowerCase(),
+      password: String(password || ""),
+      returnSecureToken: true,
+    }),
+  })
+  const payload = await response.json<any>().catch(() => null)
+  if (!response.ok) {
+    throw new Error(mapFirebasePasswordError(String(payload?.error?.message || "")))
+  }
+  const userId = String(payload?.localId || "").trim()
+  const normalizedEmail = String(payload?.email || email || "").trim().toLowerCase()
+  if (!userId || !normalizedEmail) {
+    throw new Error("firebase_password_auth_failed")
+  }
+  return { userId, email: normalizedEmail }
+}
+
+async function authorizePendingDeviceLogin(
+  env: Env,
+  pending: any,
+  firebaseUser: { userId: string; email: string },
+): Promise<{ success: true; subscription: any; runtime: Record<string, unknown> } | { success: false; error: string; status: number }> {
+  const subscription = await getActiveSubscriptionForUser(env, firebaseUser.userId, firebaseUser.email)
+  const subscriptionError = isActiveUsableSubscription(subscription)
+  if (subscriptionError || !subscription) {
+    const error = subscriptionError === "subscription_not_found" ? "subscription_required" : subscriptionError
+    await updateDeviceLogin(env, pending.id, {
+      status: error,
+      user_id: firebaseUser.userId,
+      user_email: firebaseUser.email,
+    })
+    return { success: false, error, status: 403 }
+  }
+
+  const subscriptionUserId = String(subscription.firebase_user_id || "").trim()
+  const subscriptionEmail = String(subscription.user_email || "").trim().toLowerCase()
+  if (subscriptionUserId && subscriptionUserId !== firebaseUser.userId) {
+    await updateDeviceLogin(env, pending.id, {
+      status: "subscription_user_mismatch",
+      user_id: firebaseUser.userId,
+      user_email: firebaseUser.email,
+      subscription_id: subscription.id,
+    })
+    return { success: false, error: "subscription_user_mismatch", status: 403 }
+  }
+  if (subscriptionEmail && subscriptionEmail !== firebaseUser.email) {
+    await updateDeviceLogin(env, pending.id, {
+      status: "subscription_email_mismatch",
+      user_id: firebaseUser.userId,
+      user_email: firebaseUser.email,
+      subscription_id: subscription.id,
+    })
+    return { success: false, error: "subscription_email_mismatch", status: 403 }
+  }
+  if (subscription.hwid && subscription.hwid !== pending.hwid) {
+    await updateDeviceLogin(env, pending.id, {
+      status: "subscription_hwid_mismatch",
+      user_id: firebaseUser.userId,
+      user_email: firebaseUser.email,
+      subscription_id: subscription.id,
+    })
+    return { success: false, error: "subscription_hwid_mismatch", status: 403 }
+  }
+
+  const attached = await attachSubscriptionToUser(env, subscription.id, {
+    userId: firebaseUser.userId,
+    email: firebaseUser.email,
+    hwid: pending.hwid,
+  })
+  await updateDeviceLogin(env, pending.id, {
+    status: "authorized",
+    user_id: firebaseUser.userId,
+    user_email: firebaseUser.email,
+    subscription_id: attached.id,
+    license_id: null,
+    authorized_at: new Date().toISOString(),
+  })
+  const runtime = buildSubscriptionRuntime(attached, "authorized")
+  return { success: true, subscription: attached, runtime }
+}
+
+async function issueDesktopSession(
+  env: Env,
+  pending: any,
+  subscription: any,
+  userId: string,
+  userEmail: string,
+): Promise<Response> {
+  const sessionToken = `stk_${randomBase64Url(32)}`
+  const tokenHash = await sha256Hex(sessionToken)
+  const sessionExpiresAt = String(subscription.expires_at || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString())
+  await createAppSession(env, {
+    session_token_hash: tokenHash,
+    user_id: userId,
+    user_email: userEmail,
+    subscription_id: subscription.id,
+    hwid: pending.hwid,
+    expires_at: sessionExpiresAt,
+  })
+  await updateDeviceLogin(env, pending.id, {
+    status: "consumed",
+    consumed_at: new Date().toISOString(),
+    subscription_id: subscription.id,
+    user_id: userId,
+    user_email: userEmail,
+  })
+  const runtime = buildSubscriptionRuntime(subscription, "verified")
+  return json({
+    success: true,
+    status: "authorized",
+    session_token: sessionToken,
+    user_email: userEmail,
+    subscription: runtime,
+    license: runtime,
+  })
 }
 
 async function resolveSessionSubscription(
@@ -239,69 +396,52 @@ async function handleDeviceComplete(request: Request, env: Env): Promise<Respons
     return json({ success: false, error: "device_code_expired" }, 410)
   }
 
-  const subscription = await getActiveSubscriptionForUser(env, firebaseUser.userId, firebaseUser.email)
-  const subscriptionError = isActiveUsableSubscription(subscription)
-  if (subscriptionError || !subscription) {
-    const error = subscriptionError === "subscription_not_found" ? "subscription_required" : subscriptionError
-    await updateDeviceLogin(env, pending.id, {
-      status: error,
-      user_id: firebaseUser.userId,
-      user_email: firebaseUser.email,
-    })
-    return json({ success: false, error }, 403)
+  const authorization = await authorizePendingDeviceLogin(env, pending, firebaseUser)
+  if (!authorization.success) {
+    return json({ success: false, error: authorization.error }, authorization.status)
   }
-
-  const subscriptionUserId = String(subscription.firebase_user_id || "").trim()
-  const subscriptionEmail = String(subscription.user_email || "").trim().toLowerCase()
-  if (subscriptionUserId && subscriptionUserId !== firebaseUser.userId) {
-    await updateDeviceLogin(env, pending.id, {
-      status: "subscription_user_mismatch",
-      user_id: firebaseUser.userId,
-      user_email: firebaseUser.email,
-      subscription_id: subscription.id,
-    })
-    return json({ success: false, error: "subscription_user_mismatch" }, 403)
-  }
-  if (subscriptionEmail && subscriptionEmail !== firebaseUser.email) {
-    await updateDeviceLogin(env, pending.id, {
-      status: "subscription_email_mismatch",
-      user_id: firebaseUser.userId,
-      user_email: firebaseUser.email,
-      subscription_id: subscription.id,
-    })
-    return json({ success: false, error: "subscription_email_mismatch" }, 403)
-  }
-  if (subscription.hwid && subscription.hwid !== pending.hwid) {
-    await updateDeviceLogin(env, pending.id, {
-      status: "subscription_hwid_mismatch",
-      user_id: firebaseUser.userId,
-      user_email: firebaseUser.email,
-      subscription_id: subscription.id,
-    })
-    return json({ success: false, error: "subscription_hwid_mismatch" }, 403)
-  }
-
-  const attached = await attachSubscriptionToUser(env, subscription.id, {
-    userId: firebaseUser.userId,
-    email: firebaseUser.email,
-    hwid: pending.hwid,
-  })
-  await updateDeviceLogin(env, pending.id, {
-    status: "authorized",
-    user_id: firebaseUser.userId,
-    user_email: firebaseUser.email,
-    subscription_id: attached.id,
-    license_id: null,
-    authorized_at: new Date().toISOString(),
-  })
-  const runtime = buildSubscriptionRuntime(attached, "authorized")
   return json({
     success: true,
     status: "authorized",
     user_email: firebaseUser.email,
-    subscription: runtime,
-    license: runtime,
+    subscription: authorization.runtime,
+    license: authorization.runtime,
   })
+}
+
+async function handleDevicePasswordComplete(request: Request, env: Env): Promise<Response> {
+  const body = await request.json<any>().catch(() => null)
+  const deviceCode = String(body?.device_code || "").trim()
+  const email = String(body?.email || "").trim().toLowerCase()
+  const password = String(body?.password || "")
+  const mode = String(body?.mode || "login").trim().toLowerCase() === "signup" ? "signup" : "login"
+  if (!deviceCode || !email || !password) {
+    return json({ success: false, error: "missing_password_auth_fields" }, 400)
+  }
+  if (password.length < 6) {
+    return json({ success: false, error: "weak_password" }, 400)
+  }
+
+  const pending = await getDeviceLoginByCode(env, deviceCode)
+  if (!pending) return json({ success: false, error: "device_code_not_found" }, 404)
+  if (isIsoExpired(pending.expires_at)) {
+    await updateDeviceLogin(env, pending.id, { status: "expired" })
+    return json({ success: false, error: "device_code_expired" }, 410)
+  }
+
+  let firebaseUser: { userId: string; email: string }
+  try {
+    firebaseUser = await authenticateFirebasePassword(env, email, password, mode)
+  } catch (error: any) {
+    return json({ success: false, error: String(error?.message || "firebase_password_auth_failed") }, 401)
+  }
+
+  const authorization = await authorizePendingDeviceLogin(env, pending, firebaseUser)
+  if (!authorization.success) {
+    return json({ success: false, error: authorization.error }, authorization.status)
+  }
+
+  return await issueDesktopSession(env, pending, authorization.subscription, firebaseUser.userId, firebaseUser.email)
 }
 
 async function handleDevicePoll(request: Request, env: Env): Promise<Response> {
@@ -338,27 +478,7 @@ async function handleDevicePoll(request: Request, env: Env): Promise<Response> {
   const subscription = await getSubscriptionById(env, row.subscription_id)
   const subscriptionError = isActiveUsableSubscription(subscription)
   if (subscriptionError || !subscription) return json({ success: false, error: subscriptionError || "subscription_not_found" }, 403)
-  const sessionToken = `stk_${randomBase64Url(32)}`
-  const tokenHash = await sha256Hex(sessionToken)
-  const sessionExpiresAt = String(subscription.expires_at || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString())
-  await createAppSession(env, {
-    session_token_hash: tokenHash,
-    user_id: row.user_id,
-    user_email: row.user_email,
-    subscription_id: subscription.id,
-    hwid,
-    expires_at: sessionExpiresAt,
-  })
-  await updateDeviceLogin(env, row.id, { status: "consumed", consumed_at: new Date().toISOString() })
-  const runtime = buildSubscriptionRuntime(subscription, "verified")
-  return json({
-    success: true,
-    status: "authorized",
-    session_token: sessionToken,
-    user_email: row.user_email,
-    subscription: runtime,
-    license: runtime,
-  })
+  return await issueDesktopSession(env, row, subscription, String(row.user_id || ""), String(row.user_email || ""))
 }
 
 async function handleSessionVerify(request: Request, env: Env): Promise<Response> {
@@ -439,6 +559,10 @@ export default {
       }
       if (request.method === "POST" && url.pathname === "/device/complete") {
         const res = await handleDeviceComplete(request, env)
+        return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
+      }
+      if (request.method === "POST" && url.pathname === "/device/password-complete") {
+        const res = await handleDevicePasswordComplete(request, env)
         return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
       }
       if (request.method === "POST" && url.pathname === "/device/poll") {

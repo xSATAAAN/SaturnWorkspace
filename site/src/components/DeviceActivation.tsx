@@ -198,7 +198,12 @@ export function DeviceActivation({ lang }: DeviceActivationProps) {
         ) : null}
 
         {error ? <p className="mt-5 rounded-lg border border-rose-300/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-100">{error}</p> : null}
-        {done ? <p className="mt-5 rounded-lg border border-emerald-300/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">{t.success}</p> : null}
+        {done ? (
+          <div className="mt-5 space-y-3">
+            <p className="rounded-lg border border-emerald-300/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">{t.success}</p>
+            <p className="text-xs text-white/55">{isAr ? 'يمكنك إغلاق هذه الصفحة الآن والعودة إلى الأداة.' : 'You can close this page now and return to the app.'}</p>
+          </div>
+        ) : null}
 
         {!done ? (
           <div className="mt-5">
@@ -212,7 +217,16 @@ export function DeviceActivation({ lang }: DeviceActivationProps) {
               </div>
             )}
           </div>
-        ) : null}
+        ) : (
+          <div className="mt-5">
+            <button
+              className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white/90"
+              onClick={() => window.close()}
+            >
+              {isAr ? 'إغلاق الصفحة' : 'Close page'}
+            </button>
+          </div>
+        )}
       </section>
     </main>
   )
