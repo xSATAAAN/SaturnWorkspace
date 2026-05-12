@@ -6,6 +6,7 @@ export interface Env {
   OAUTH_CONFIG_ACCESS_TOKEN?: string
   OAUTH_CONFIG_ALLOW_PUBLIC?: string
   FIREBASE_WEB_API_KEY?: string
+  FIREBASE_AUTH_HELPER_ORIGIN?: string
   DEVICE_LOGIN_URL?: string
   VERIFY_RATE_LIMIT_PER_MIN?: string
   ALLOW_ORIGIN?: string

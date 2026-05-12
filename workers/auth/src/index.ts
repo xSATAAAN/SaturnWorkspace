@@ -134,6 +134,18 @@ function verificationUrl(env: Env, userCode: string): string {
   return url.toString()
 }
 
+async function proxyFirebaseAuthHelper(request: Request, env: Env): Promise<Response> {
+  const base = String(env.FIREBASE_AUTH_HELPER_ORIGIN || "").trim() || "https://saturnws-1.firebaseapp.com"
+  const url = new URL(request.url)
+  const upstream = new URL(base)
+  upstream.pathname = url.pathname
+  upstream.search = url.search
+  const response = await fetch(new Request(upstream.toString(), request))
+  const headers = new Headers(response.headers)
+  headers.set("Cache-Control", "no-store")
+  return new Response(response.body, { status: response.status, headers })
+}
+
 function isActiveUsableSubscription(row: any): string {
   if (!row) return "subscription_not_found"
   if (String(row.status || "").toLowerCase() !== "active") return "subscription_inactive"
@@ -412,6 +424,9 @@ export default {
     }
 
     try {
+      if (request.method === "GET" && (url.pathname === "/__/firebase/init.json" || url.pathname.startsWith("/__/auth/"))) {
+        return await proxyFirebaseAuthHelper(request, env)
+      }
       if (request.method === "POST" && url.pathname === "/verify") {
         const res = await handleVerify(request, env)
         return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
