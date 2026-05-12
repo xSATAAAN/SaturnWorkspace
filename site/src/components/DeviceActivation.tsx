@@ -27,6 +27,7 @@ function loadActivationPayload(): ActivationPayload | null {
       ticket,
       legacyCode: legacyCode || undefined,
     }
+    window.sessionStorage.removeItem(AUTOLOGIN_STORAGE_KEY)
     window.sessionStorage.setItem(ACTIVATION_STORAGE_KEY, JSON.stringify(payload))
     window.history.replaceState({}, document.title, '/activate')
     return payload
