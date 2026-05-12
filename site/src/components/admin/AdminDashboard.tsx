@@ -875,12 +875,16 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
                 <div className="grid gap-3">
                   {visiblePage(filteredCrashes, crashPage).map((crash) => {
                     const expanded = expandedCrashId === crash.id
+                    const crashIp = crash.raw_payload?.request?.ip || '--'
+                    const crashCountry = crash.raw_payload?.request?.country || ''
+                    const crashAuth = crash.raw_payload?.auth?.source || '--'
                     return (
                       <div key={crash.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white/80">
                         <div className="grid gap-1">
                           <div className="text-rose-200">{crash.error_type}</div>
                           <div>{crash.happened_at} / {crash.app_version || '--'}</div>
                           <div>{crash.device_name || '--'} / {crash.hwid || 'no-hwid'}</div>
+                          <div>IP: {crashIp}{crashCountry ? ` / ${crashCountry}` : ''} / Auth: {crashAuth}</div>
                           <div>{[crash.windows_version, crash.cpu, crash.ram_gb ? `${crash.ram_gb}GB` : null, crash.gpu].filter(Boolean).join(' / ') || '--'}</div>
                           {crash.message ? <div className="text-white/60">{crash.message}</div> : null}
                         </div>

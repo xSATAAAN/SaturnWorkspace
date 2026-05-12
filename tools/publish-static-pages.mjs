@@ -11,7 +11,7 @@ const root = path.join(__dirname, '..')
 const dist = path.join(root, 'site', 'dist')
 
 /** Static HTML from repo root → served at /{name}/ */
-const LEGAL_PAGES = ['privacy', 'terms', 'refund', 'login']
+const LEGAL_PAGES = ['privacy', 'terms', 'refund', 'login', 'cookies', 'acceptable-use', 'contact']
 
 const ROOT_STATIC_FILES = [
   'styles.css',
@@ -31,6 +31,9 @@ function rewriteRootRelative(html) {
   out = out.replace(/href="\.\/privacy\.html"/g, 'href="/privacy/"')
   out = out.replace(/href="\.\/terms\.html"/g, 'href="/terms/"')
   out = out.replace(/href="\.\/refund\.html"/g, 'href="/refund/"')
+  out = out.replace(/href="\.\/cookies\.html"/g, 'href="/cookies/"')
+  out = out.replace(/href="\.\/acceptable-use\.html"/g, 'href="/acceptable-use/"')
+  out = out.replace(/href="\.\/contact\.html"/g, 'href="/contact/"')
   out = out.replace(/href="\.\/updates\.html"/g, 'href="/release-notes/"')
   out = out.replace(/href="\.\/login\.html"/g, 'href="/login/"')
   out = out.replace(/href="\.\/styles\.css"/g, 'href="/styles.css"')

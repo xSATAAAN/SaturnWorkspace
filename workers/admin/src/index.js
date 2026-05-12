@@ -1711,6 +1711,7 @@ function limitString(value, max) {
 
 async function resolveCrashIngestAuth(request, env, body) {
   const configuredToken = String(env.CRASH_INGEST_TOKEN || "").trim();
+  const allowAnonymous = String(env.ALLOW_ANON_CRASH_INGEST || "1").trim() !== "0";
   const auth = String(request.headers.get("Authorization") || "").trim();
   const bearer = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length).trim() : "";
   if (configuredToken && bearer && timingSafeEqual(bearer, configuredToken)) {
@@ -1733,7 +1734,7 @@ async function resolveCrashIngestAuth(request, env, body) {
       warning: requestHwid && sessionHwid && requestHwid !== sessionHwid ? "hwid_mismatch" : "",
     };
   }
-  if (!configuredToken) return { source: "anonymous", session: null };
+  if (!configuredToken || allowAnonymous) return { source: "anonymous", session: null };
   throw new Error("unauthorized");
 }
 
@@ -1747,6 +1748,12 @@ async function ingestCrashLog(request, env) {
     firebase_user_id: session.user_id || rawPayload.firebase_user_id || null,
     user_email: session.user_email || rawPayload.user_email || null,
     warning: auth.warning || null,
+  };
+  rawPayload.request = {
+    ip: String(request.headers.get("CF-Connecting-IP") || "").trim() || null,
+    user_agent: String(request.headers.get("User-Agent") || "").trim() || null,
+    colo: String(request.cf?.colo || "").trim() || null,
+    country: String(request.cf?.country || "").trim() || null,
   };
   const payload = {
     happened_at: body?.happened_at || new Date().toISOString(),

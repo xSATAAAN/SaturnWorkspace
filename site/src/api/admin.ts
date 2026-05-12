@@ -80,6 +80,21 @@ export type AdminCrashLog = {
   app_version?: string | null
   tool_channel?: string | null
   fingerprint?: string | null
+  raw_payload?: {
+    auth?: {
+      source?: string | null
+      firebase_user_id?: string | null
+      user_email?: string | null
+      warning?: string | null
+    } | null
+    request?: {
+      ip?: string | null
+      user_agent?: string | null
+      colo?: string | null
+      country?: string | null
+    } | null
+    [key: string]: unknown
+  } | null
 }
 
 export type AdminCrashGroup = {

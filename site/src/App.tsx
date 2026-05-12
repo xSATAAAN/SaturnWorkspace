@@ -18,6 +18,9 @@ const STATIC_ROUTE_REDIRECTS: Record<string, string> = {
   '/privacy': '/privacy/',
   '/terms': '/terms/',
   '/refund': '/refund/',
+  '/cookies': '/cookies/',
+  '/acceptable-use': '/acceptable-use/',
+  '/contact': '/contact/',
   '/release-notes': '/release-notes/',
 }
 

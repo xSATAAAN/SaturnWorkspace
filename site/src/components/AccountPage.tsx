@@ -35,6 +35,12 @@ function getAccountUrl() {
   return new URL('/account', window.location.origin).toString()
 }
 
+function getRequestedMode() {
+  if (typeof window === 'undefined') return 'login'
+  const mode = String(new URLSearchParams(window.location.search).get('mode') || '').trim().toLowerCase()
+  return mode === 'signup' ? 'signup' : 'login'
+}
+
 function normalizeFirebaseError(input: unknown, isAr: boolean) {
   const message = String(input instanceof Error ? input.message : input || '').trim().toLowerCase()
   const code = message.replace(/^firebase:\s*/i, '').replace(/[().]/g, '')
@@ -106,7 +112,7 @@ export function AccountPage({ lang }: AccountPageProps) {
   const [info, setInfo] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [passwordMode, setPasswordMode] = useState<'login' | 'signup'>('login')
+  const [passwordMode, setPasswordMode] = useState<'login' | 'signup'>(() => getRequestedMode())
   const [completingEmailLink, setCompletingEmailLink] = useState(false)
   const [needsEmailForLink, setNeedsEmailForLink] = useState(false)
 
