@@ -22,7 +22,7 @@ const SUPPORT_EMAIL = 'support@saturnws.com'
 const DEV_TELEGRAM = 'https://t.me/v1u_0'
 
 function openAccountForPlan(plan: 'monthly' | 'yearly') {
-  window.location.assign(`/account?plan=${plan}`)
+  window.location.assign(`/account/signup?plan=${plan}`)
 }
 
 export function Pricing({ lang }: PricingProps) {

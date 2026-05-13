@@ -14,5 +14,5 @@ enabled = true
 APP_ENV = "production"
 VERIFY_RATE_LIMIT_PER_MIN = "40"
 ALLOW_ORIGIN = "https://saturnws.com,https://www.saturnws.com,https://admin.saturnws.com"
-DEVICE_LOGIN_URL = "https://saturnws.com/activate"
+DEVICE_LOGIN_URL = "https://saturnws.com/account/signin"
 FIREBASE_AUTH_HELPER_ORIGIN = "https://saturnws-1.firebaseapp.com"

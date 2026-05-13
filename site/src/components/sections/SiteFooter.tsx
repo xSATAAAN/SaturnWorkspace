@@ -27,7 +27,7 @@ export function SiteFooter({ copy, isAr }: SiteFooterProps) {
             <a className="text-white/70 hover:text-white" href="/release-notes/">
               {copy.footerUpdates}
             </a>
-            <a className="text-white/70 hover:text-white" href="/account">
+            <a className="text-white/70 hover:text-white" href="/account/signin">
               {isAr ? 'تسجيل الدخول' : 'Login'}
             </a>
           </div>

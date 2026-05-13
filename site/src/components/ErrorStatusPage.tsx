@@ -165,7 +165,7 @@ export function ErrorStatusPage({ lang, status, path }: ErrorStatusPageProps) {
             </a>
             <a
               className="inline-flex items-center justify-center rounded-xl border border-white/12 bg-white/5 px-5 py-3 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8"
-              href="/account"
+              href="/account/signin"
             >
               {copy.account}
             </a>

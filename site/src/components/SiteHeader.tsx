@@ -90,7 +90,7 @@ export function SiteHeader({ lang, onToggleLang }: SiteHeaderProps) {
             </svg>
           </button>
           <a
-            href="/account"
+            href="/account/signin"
             className="hidden rounded-xl border border-white/12 bg-white/5 px-4 py-2 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8 md:inline-flex"
           >
             {t.login}
@@ -105,7 +105,7 @@ export function SiteHeader({ lang, onToggleLang }: SiteHeaderProps) {
             </button>
           ) : null}
           <a
-            href="/account"
+            href="/account/signup"
             onClick={closeMobile}
             className="btn-primary inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold transition focus:outline-none"
           >
@@ -147,7 +147,7 @@ export function SiteHeader({ lang, onToggleLang }: SiteHeaderProps) {
               </a>
               <div className="mt-1 grid grid-cols-1 gap-2">
                 <a
-                  href="/account"
+                  href="/account/signin"
                   className="inline-flex items-center justify-center rounded-xl border border-white/12 bg-white/5 px-4 py-2 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/8"
                   onClick={closeMobile}
                 >

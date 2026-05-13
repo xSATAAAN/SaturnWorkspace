@@ -128,7 +128,7 @@ function buildSubscriptionRuntime(row: { [key: string]: any }, status: string): 
 }
 
 function verificationUrl(env: Env, deviceCode: string): string {
-  const base = String(env.DEVICE_LOGIN_URL || "https://saturnws.com/activate").trim()
+  const base = String(env.DEVICE_LOGIN_URL || "https://saturnws.com/account/signin").trim()
   const url = new URL(base)
   url.searchParams.set("ticket", deviceCode)
   return url.toString()

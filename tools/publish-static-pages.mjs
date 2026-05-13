@@ -81,7 +81,7 @@ if (fs.existsSync(updatesSrc)) {
   fs.writeFileSync(path.join(outDir, 'index.html'), html)
 }
 
-for (const segment of ['account', 'activate', '403', '404', '429', '500', '503']) {
+for (const segment of ['account', 'account/signin', 'account/signup', 'activate', '403', '404', '429', '500', '503']) {
   const dir = path.join(dist, segment)
   fs.mkdirSync(dir, { recursive: true })
   fs.copyFileSync(spaIndex, path.join(dir, 'index.html'))
