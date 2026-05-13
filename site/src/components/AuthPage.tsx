@@ -167,6 +167,7 @@ export function AuthPage({ lang, initialMode }: AuthPageProps) {
   const [needsEmailForLink, setNeedsEmailForLink] = useState(false)
   const [linkingDevice, setLinkingDevice] = useState(false)
   const [deviceLinked, setDeviceLinked] = useState(false)
+  const [deviceLinkResult, setDeviceLinkResult] = useState<'linked' | 'already-linked' | null>(null)
   const [error, setError] = useState('')
   const [info, setInfo] = useState('')
   const [slideIndex, setSlideIndex] = useState(0)
@@ -400,6 +401,7 @@ export function AuthPage({ lang, initialMode }: AuthPageProps) {
       const payload = await response.json().catch(() => null)
       if (!response.ok || !payload?.success) {
         const code = String(payload?.error || `request_failed_${response.status}`)
+        const alreadyLinkedErrors = new Set(['already_linked', 'device_already_linked', 'session_already_linked'])
         const subscriptionErrors = new Set([
           'subscription_required',
           'subscription_not_found',
@@ -410,9 +412,17 @@ export function AuthPage({ lang, initialMode }: AuthPageProps) {
           'subscription_user_mismatch',
           'subscription_email_mismatch',
         ])
+        if (alreadyLinkedErrors.has(code)) {
+          clearActivationPayload()
+          setDeviceLinkResult('already-linked')
+          setDeviceLinked(true)
+          setInfo(t.deviceSuccess)
+          return
+        }
         throw new Error(subscriptionErrors.has(code) ? t.noSubscription : code)
       }
       clearActivationPayload()
+      setDeviceLinkResult('linked')
       setDeviceLinked(true)
       setInfo(t.deviceSuccess)
     } catch (err) {
@@ -514,6 +524,7 @@ export function AuthPage({ lang, initialMode }: AuthPageProps) {
     await signOut(firebaseAuth).catch(() => undefined)
     setUser(null)
     setDeviceLinked(false)
+    setDeviceLinkResult(null)
     setError('')
     setInfo('')
     completionStartedRef.current = false
@@ -544,6 +555,170 @@ export function AuthPage({ lang, initialMode }: AuthPageProps) {
     contact: '/contact/',
   }
 
+  const linkCopy = isAr
+    ? {
+        successTitle: 'تم ربط الأداة بالحساب بنجاح',
+        successBody: 'يمكنك الآن العودة إلى تطبيق سطح المكتب ومتابعة استخدام مساحة العمل.',
+        alreadyLinkedTitle: 'الأداة مرتبطة بالفعل بهذا الحساب',
+        alreadyLinkedBody: 'يمكنك العودة إلى تطبيق سطح المكتب ومتابعة الاستخدام.',
+        processingTitle: 'جارٍ ربط الأداة بالحساب...',
+        processingBody: 'لن يستغرق ذلك سوى لحظات.',
+        errorTitle: 'تعذر ربط الأداة بالحساب',
+        errorBody: 'انتهت صلاحية الجلسة أو حدث خطأ أثناء الربط. حاول تسجيل الدخول مرة أخرى من تطبيق سطح المكتب.',
+        linkedBadge: 'مرتبط',
+        returnToApp: 'العودة إلى التطبيق',
+        openAccount: 'فتح صفحة الحساب',
+        retry: 'العودة لتسجيل الدخول',
+        signOut: 'تسجيل الخروج',
+        autoOpenHint: 'إذا لم يتم فتح التطبيق تلقائيًا، يمكنك إغلاق هذه الصفحة والعودة إلى التطبيق يدويًا.',
+      }
+    : {
+        successTitle: 'The desktop tool is now linked to your account.',
+        successBody: 'You can now return to the desktop app and continue using your workspace.',
+        alreadyLinkedTitle: 'This tool is already linked to this account.',
+        alreadyLinkedBody: 'You can return to the desktop app and continue using it.',
+        processingTitle: 'Linking the desktop tool...',
+        processingBody: 'This will only take a moment.',
+        errorTitle: 'Unable to link the desktop tool',
+        errorBody: 'The link session expired or an error occurred while linking the tool. Start the sign-in flow again from the desktop app.',
+        linkedBadge: 'Linked',
+        returnToApp: 'Return to the desktop app',
+        openAccount: 'Open account page',
+        retry: 'Back to sign in',
+        signOut: 'Sign out',
+        autoOpenHint: 'If the app does not open automatically, you can close this page and return to it manually.',
+      }
+
+  const showLinkStatusPage = Boolean(activationPayload && (deviceLinked || linkingDevice || error || (authReady && user)))
+  const linkStatus =
+    deviceLinked
+      ? deviceLinkResult === 'already-linked'
+        ? 'already-linked'
+        : 'success'
+      : error
+        ? 'error'
+        : showLinkStatusPage
+          ? 'processing'
+          : null
+
+  const linkStatusTitle =
+    linkStatus === 'already-linked'
+      ? linkCopy.alreadyLinkedTitle
+      : linkStatus === 'success'
+        ? linkCopy.successTitle
+        : linkStatus === 'error'
+          ? linkCopy.errorTitle
+          : linkCopy.processingTitle
+
+  const linkStatusBody =
+    linkStatus === 'already-linked'
+      ? linkCopy.alreadyLinkedBody
+      : linkStatus === 'success'
+        ? linkCopy.successBody
+        : linkStatus === 'error'
+          ? error === t.noSubscription || error === t.activationMissing
+            ? error
+            : linkCopy.errorBody
+          : linkCopy.processingBody
+
+  function handleReturnToDesktopApp() {
+    if (typeof window === 'undefined') return
+    window.close()
+  }
+
+  if (showLinkStatusPage && linkStatus) {
+    const isSuccessState = linkStatus === 'success' || linkStatus === 'already-linked'
+    const isErrorState = linkStatus === 'error'
+
+    return (
+      <main className="flex min-h-screen items-center justify-center px-4 py-8 sm:px-6">
+        <section className="w-full max-w-[520px] rounded-[28px] border border-white/10 bg-slate-950/84 p-6 text-center shadow-[0_28px_80px_rgba(2,6,23,0.46)] backdrop-blur-2xl sm:p-8">
+          <div className="mx-auto flex w-full max-w-[88px] items-center justify-center gap-3">
+            <img src={appIcon} alt={t.brand} className="h-12 w-12 object-contain drop-shadow-[0_14px_28px_rgba(37,99,235,0.28)]" />
+            <div
+              className={`flex h-12 w-12 items-center justify-center rounded-full border ${
+                isSuccessState
+                  ? 'border-emerald-400/28 bg-emerald-500/12 text-emerald-200'
+                  : isErrorState
+                    ? 'border-rose-400/28 bg-rose-500/12 text-rose-100'
+                    : 'border-sky-400/24 bg-sky-500/12 text-sky-100'
+              }`}
+              aria-hidden="true"
+            >
+              {isSuccessState ? (
+                <svg viewBox="0 0 24 24" className="h-6 w-6 fill-none stroke-current stroke-[2.2]">
+                  <path d="M5 12.5 9.2 16.7 19 7.4" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              ) : isErrorState ? (
+                <svg viewBox="0 0 24 24" className="h-6 w-6 fill-none stroke-current stroke-[2.2]">
+                  <path d="M12 8v5" strokeLinecap="round" />
+                  <path d="M12 16.2h.01" strokeLinecap="round" />
+                  <path
+                    d="M10.3 3.8 2.9 17a2 2 0 0 0 1.7 3h14.8a2 2 0 0 0 1.7-3L13.7 3.8a2 2 0 0 0-3.4 0Z"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" className="h-6 w-6 fill-none stroke-current stroke-[2.2]">
+                  <circle cx="12" cy="12" r="8.2" opacity="0.24" />
+                  <path d="M12 7.8v4.4l2.7 2.2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
+            </div>
+          </div>
+
+          <h1 className="mt-6 text-2xl font-bold text-white sm:text-[30px]">{linkStatusTitle}</h1>
+          <p className="mt-3 text-sm leading-7 text-slate-300/76 sm:text-[15px]">{linkStatusBody}</p>
+
+          {user?.email && isSuccessState ? (
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
+              <span className="text-sm font-semibold text-white ltr">{user.email}</span>
+              <span className="inline-flex min-h-7 items-center justify-center rounded-full border border-emerald-400/28 bg-emerald-500/12 px-3 text-xs font-semibold text-emerald-200">
+                {linkCopy.linkedBadge}
+              </span>
+            </div>
+          ) : null}
+
+          <div className="mt-6 space-y-3">
+            {isSuccessState ? (
+              <button
+                type="button"
+                className="btn-primary flex h-12 w-full items-center justify-center rounded-2xl px-5 text-sm font-semibold"
+                onClick={handleReturnToDesktopApp}
+              >
+                {linkCopy.returnToApp}
+              </button>
+            ) : null}
+
+            {isErrorState ? (
+              <a className="btn-primary flex h-12 w-full items-center justify-center rounded-2xl px-5 text-sm font-semibold" href="/account/signin">
+                {linkCopy.retry}
+              </a>
+            ) : null}
+
+            <a
+              className="flex h-12 w-full items-center justify-center rounded-2xl border border-white/12 bg-white/[0.05] px-5 text-sm font-semibold text-white transition hover:border-white/18 hover:bg-white/[0.08]"
+              href="/account"
+            >
+              {linkCopy.openAccount}
+            </a>
+          </div>
+
+          <div className="mt-4 text-xs leading-6 text-slate-400/70">{linkCopy.autoOpenHint}</div>
+
+          <button
+            type="button"
+            className="mt-6 text-sm font-semibold text-rose-200/86 transition hover:text-rose-100"
+            onClick={() => void handleSignOut()}
+          >
+            {linkCopy.signOut}
+          </button>
+        </section>
+      </main>
+    )
+  }
+
   return (
     <main className="mx-auto min-h-screen w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       <section className="grid min-h-[calc(100vh-3rem)] items-stretch gap-6 lg:grid-cols-[minmax(0,1.08fr)_minmax(420px,480px)]">
@@ -555,7 +730,7 @@ export function AuthPage({ lang, initialMode }: AuthPageProps) {
               <img
                 src={appIcon}
                 alt={t.brand}
-                className="h-12 w-12 rounded-2xl border border-white/12 bg-white/8 p-1.5 shadow-[0_18px_40px_rgba(37,99,235,0.25)]"
+                className="h-12 w-12 object-contain drop-shadow-[0_18px_40px_rgba(37,99,235,0.25)]"
               />
             </div>
             <div className="flex flex-1 items-center">
@@ -596,7 +771,7 @@ export function AuthPage({ lang, initialMode }: AuthPageProps) {
                 <img
                   src={appIcon}
                   alt={t.brand}
-                  className="h-12 w-12 rounded-2xl border border-white/12 bg-white/8 p-1.5 shadow-[0_18px_40px_rgba(37,99,235,0.24)]"
+                  className="h-12 w-12 object-contain drop-shadow-[0_18px_40px_rgba(37,99,235,0.24)]"
                 />
                 <div className="mt-4 text-xl font-bold text-white">{t.brand}</div>
                 <div className="mt-1 text-sm text-slate-300/72">{activeTitle}</div>
