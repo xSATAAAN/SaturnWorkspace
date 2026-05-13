@@ -5,7 +5,6 @@ import {
   isSignInWithEmailLink,
   onAuthStateChanged,
   sendPasswordResetEmail,
-  sendSignInLinkToEmail,
   signInWithEmailAndPassword,
   signInWithEmailLink,
   signInWithPopup,
@@ -13,6 +12,7 @@ import {
   type User,
 } from 'firebase/auth'
 import heroImage from '../assets/hero.png'
+import appIcon from '../assets/saturnws-app-icon.png'
 import { fetchAccountSubscription, type AccountSubscription } from '../api/account'
 import { firebaseAuth } from '../lib/firebase'
 
@@ -32,11 +32,6 @@ function formatRemaining(expiresAt?: string) {
   const days = Math.floor(diff / 86_400_000)
   const hours = Math.floor((diff % 86_400_000) / 3_600_000)
   return days > 0 ? `${days}d${hours > 0 ? ` ${hours}h` : ''}` : `${Math.max(1, hours)}h`
-}
-
-function getAccountUrl() {
-  if (typeof window === 'undefined') return 'https://saturnws.com/account'
-  return new URL('/account', window.location.origin).toString()
 }
 
 function getRequestedMode(): AuthMode {
@@ -140,7 +135,6 @@ export function AccountPage({ lang }: AccountPageProps) {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
-  const [magicLinkLoading, setMagicLinkLoading] = useState(false)
   const [resetLoading, setResetLoading] = useState(false)
   const [slideIndex, setSlideIndex] = useState(0)
 
@@ -171,11 +165,6 @@ export function AccountPage({ lang }: AccountPageProps) {
             show: 'إظهار',
             hide: 'إخفاء',
             or: 'أو',
-            otherOptions: 'خيارات أخرى',
-            magicLink: 'إرسال رابط دخول',
-            magicLinkLoading: 'جار إرسال الرابط...',
-            magicLinkSent:
-              'تم إرسال رابط دخول إلى بريدك. افتح الرسالة واضغط الرابط من نفس المتصفح إن أمكن.',
             magicLinkHeading: 'إكمال تسجيل الدخول بالرابط',
             magicLinkNeedsEmail: 'أدخل نفس البريد الإلكتروني لإكمال تسجيل الدخول بهذا الرابط.',
             completeMagicLink: 'إكمال تسجيل الدخول',
@@ -207,17 +196,14 @@ export function AccountPage({ lang }: AccountPageProps) {
               {
                 title: 'إدارة أسهل لمساحة العمل',
                 body: 'نقطة دخول موحدة للحسابات والجلسات والنسخ الاحتياطي، بدون فوضى تشغيلية.',
-                metric: 'Vault + Gmail + Sync',
               },
               {
                 title: 'تحكم ذكي في البيانات والمهام',
                 body: 'تنظيم أوضح للحسابات، التذكيرات، والنسخ السحابية على حساب المستخدم نفسه.',
-                metric: 'جلسات أسرع وتنظيم أدق',
               },
               {
                 title: 'تجربة أسرع وأكثر تنظيمًا',
                 body: 'واجهة تشغيل واحدة تبقي ما تحتاجه قريبًا من يدك بدل التنقل بين أدوات كثيرة.',
-                metric: 'Beta access on one account',
               },
             ],
           }
@@ -245,10 +231,6 @@ export function AccountPage({ lang }: AccountPageProps) {
             show: 'Show',
             hide: 'Hide',
             or: 'Or',
-            otherOptions: 'Other options',
-            magicLink: 'Send sign-in link',
-            magicLinkLoading: 'Sending link...',
-            magicLinkSent: 'A sign-in link was sent to your email. Open it from the same browser if possible.',
             magicLinkHeading: 'Complete sign-in from email link',
             magicLinkNeedsEmail: 'Enter the same email address to complete this sign-in link.',
             completeMagicLink: 'Complete sign-in',
@@ -280,17 +262,14 @@ export function AccountPage({ lang }: AccountPageProps) {
               {
                 title: 'A calmer way to run your workspace',
                 body: 'One access point for accounts, sessions, and backup without operational clutter.',
-                metric: 'Vault + Gmail + Sync',
               },
               {
                 title: 'Sharper control over data and tasks',
                 body: 'Cleaner structure for accounts, reminders, and private cloud backup on the user account.',
-                metric: 'Faster sessions, tighter organization',
               },
               {
                 title: 'Faster, more structured daily flow',
                 body: 'A single workspace keeps the operating pieces close instead of spread across tools.',
-                metric: 'Beta access on one account',
               },
             ],
           },
@@ -449,31 +428,6 @@ export function AccountPage({ lang }: AccountPageProps) {
     }
   }
 
-  async function handleMagicLink() {
-    const normalizedEmail = email.trim().toLowerCase()
-    if (!normalizedEmail) {
-      setError(normalizeFirebaseError('auth/missing-email', isAr))
-      return
-    }
-    setError('')
-    setInfo('')
-    setMagicLinkLoading(true)
-    try {
-      await sendSignInLinkToEmail(firebaseAuth, normalizedEmail, {
-        url: getAccountUrl(),
-        handleCodeInApp: true,
-      })
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem(EMAIL_LINK_STORAGE_KEY, normalizedEmail)
-      }
-      setInfo(t.magicLinkSent)
-    } catch (err) {
-      setError(normalizeFirebaseError(err, isAr))
-    } finally {
-      setMagicLinkLoading(false)
-    }
-  }
-
   async function handleForgotPassword() {
     const normalizedEmail = email.trim().toLowerCase()
     if (!normalizedEmail) {
@@ -524,12 +478,16 @@ export function AccountPage({ lang }: AccountPageProps) {
             className="absolute inset-0 h-full w-full object-cover opacity-25"
           />
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.22),transparent_45%),linear-gradient(180deg,rgba(2,6,23,0.14),rgba(2,6,23,0.9))]" />
-          <div className="relative flex w-full flex-col justify-between p-8 xl:p-10">
-            <div className="space-y-5">
-              <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-white/12 bg-white/8 text-base font-bold text-white shadow-[0_18px_40px_rgba(37,99,235,0.25)]">
-                SW
-              </div>
-              <div className="relative min-h-[168px]">
+          <div className="relative flex w-full flex-col p-8 xl:p-10">
+            <div className="flex items-start justify-start">
+              <img
+                src={appIcon}
+                alt={t.brand}
+                className="h-12 w-12 rounded-2xl border border-white/12 bg-white/8 p-1.5 shadow-[0_18px_40px_rgba(37,99,235,0.25)]"
+              />
+            </div>
+            <div className="flex flex-1 items-center">
+              <div className="relative min-h-[188px] w-full">
                 {slides.map((slide, index) => (
                   <div
                     key={slide.title}
@@ -539,60 +497,20 @@ export function AccountPage({ lang }: AccountPageProps) {
                       {slide.title}
                     </h2>
                     <p className="mt-4 max-w-lg text-base leading-8 text-slate-200/78">{slide.body}</p>
-                    <div className="mt-5 inline-flex rounded-full border border-sky-400/20 bg-sky-400/10 px-4 py-2 text-sm font-semibold text-sky-100">
-                      {slide.metric}
-                    </div>
                   </div>
-                ))}
-              </div>
-              <div className="flex items-center gap-2">
-                {slides.map((slide, index) => (
-                  <button
-                    key={slide.title}
-                    type="button"
-                    onClick={() => setSlideIndex(index)}
-                    className={`h-2.5 rounded-full transition-all duration-300 ${index === slideIndex ? 'w-8 bg-sky-300' : 'w-2.5 bg-white/25 hover:bg-white/40'}`}
-                    aria-label={`${t.brand} slide ${index + 1}`}
-                  />
                 ))}
               </div>
             </div>
-
-            <div className="grid gap-3">
-              <div className="grid gap-3 xl:grid-cols-[1.15fr_0.85fr]">
-                <div className="rounded-[24px] border border-white/10 bg-slate-950/68 p-5 shadow-[0_18px_44px_rgba(2,6,23,0.34)] backdrop-blur-xl">
-                  <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-300/72">Workspace</div>
-                  <div className="mt-3 grid gap-3">
-                    <div className="rounded-2xl border border-white/8 bg-white/6 p-4">
-                      <div className="text-sm font-semibold text-white">Vault</div>
-                      <div className="mt-1 text-xs leading-6 text-slate-300/72">
-                        {isAr ? 'تنظيم الحسابات مع الملاحظات والحالة.' : 'Account organization with notes and status.'}
-                      </div>
-                    </div>
-                    <div className="rounded-2xl border border-white/8 bg-white/6 p-4">
-                      <div className="text-sm font-semibold text-white">Google Drive</div>
-                      <div className="mt-1 text-xs leading-6 text-slate-300/72">
-                        {isAr ? 'نسخ سحابي خاص على حساب المستخدم نفسه.' : 'Private cloud backup on the user account.'}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-[24px] border border-white/10 bg-white/7 p-5 shadow-[0_18px_44px_rgba(2,6,23,0.34)] backdrop-blur-xl">
-                  <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-300/72">Flow</div>
-                  <div className="mt-4 space-y-3">
-                    <div className="rounded-2xl border border-emerald-400/18 bg-emerald-400/8 px-3 py-3 text-sm text-emerald-100">
-                      {isAr ? 'جلسات أسرع مع رؤية أوضح للحالة.' : 'Faster sessions with clearer state tracking.'}
-                    </div>
-                    <div className="rounded-2xl border border-white/8 bg-slate-950/55 px-3 py-3 text-sm text-slate-200/76">
-                      {isAr ? 'ربط الوصول التجريبي بالحساب نفسه.' : 'Beta access linked to the same account.'}
-                    </div>
-                    <div className="rounded-2xl border border-white/8 bg-slate-950/55 px-3 py-3 text-sm text-slate-200/76">
-                      {isAr ? 'أقل تبديل بين الأدوات وأكثر تركيزًا.' : 'Less tool switching, more focus.'}
-                    </div>
-                  </div>
-                </div>
-              </div>
+            <div className="flex items-center justify-center gap-2">
+              {slides.map((slide, index) => (
+                <button
+                  key={slide.title}
+                  type="button"
+                  onClick={() => setSlideIndex(index)}
+                  className={`h-2.5 rounded-full transition-all duration-300 ${index === slideIndex ? 'w-8 bg-sky-300' : 'w-2.5 bg-white/25 hover:bg-white/40'}`}
+                  aria-label={`${t.brand} slide ${index + 1}`}
+                />
+              ))}
             </div>
           </div>
         </aside>
@@ -601,9 +519,11 @@ export function AccountPage({ lang }: AccountPageProps) {
           <div className="w-full max-w-md rounded-[30px] border border-white/10 bg-slate-950/76 p-5 shadow-[0_24px_60px_rgba(2,6,23,0.42)] backdrop-blur-2xl sm:p-7">
             <div className="mb-6 flex items-start justify-between gap-4">
               <div>
-                <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-white/12 bg-white/8 text-base font-bold text-white shadow-[0_18px_40px_rgba(37,99,235,0.24)]">
-                  SW
-                </div>
+                <img
+                  src={appIcon}
+                  alt={t.brand}
+                  className="h-12 w-12 rounded-2xl border border-white/12 bg-white/8 p-1.5 shadow-[0_18px_40px_rgba(37,99,235,0.24)]"
+                />
                 <div className="mt-4 text-xl font-bold text-white">{t.brand}</div>
                 <div className="mt-1 text-sm text-slate-300/72">{activeHeading}</div>
               </div>
@@ -786,20 +706,6 @@ export function AccountPage({ lang }: AccountPageProps) {
                   >
                     {googleLoading ? t.continueWithGoogleLoading : t.continueWithGoogle}
                   </button>
-
-                  {!needsEmailForLink ? (
-                    <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-3">
-                      <div className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400/62">{t.otherOptions}</div>
-                      <button
-                        type="button"
-                        className="w-full rounded-xl border border-white/10 bg-transparent px-4 py-3 text-sm font-semibold text-slate-100 transition hover:border-white/16 hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-65"
-                        onClick={() => void handleMagicLink()}
-                        disabled={magicLinkLoading}
-                      >
-                        {magicLinkLoading ? t.magicLinkLoading : t.magicLink}
-                      </button>
-                    </div>
-                  ) : null}
 
                   <div className="space-y-3 pt-1 text-center">
                     <div className="flex items-center gap-3">
