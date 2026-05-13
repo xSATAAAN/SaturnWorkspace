@@ -36,30 +36,30 @@ export function AdminAuthGate({ lang, children }: AdminAuthGateProps) {
       isAr
         ? {
             title: 'تسجيل الدخول',
-            subtitle: 'سجل الدخول بحساب Google المصرح له للوصول إلى لوحة الأدمن.',
+            subtitle: 'أكمل التحقق للوصول إلى لوحة الإدارة.',
             layer1Title: 'تسجيل الدخول',
-            layer1Subtitle: 'أدخل البريد وكلمة المرور للمتابعة إلى تسجيل دخول Google.',
+            layer1Subtitle: 'أدخل بيانات الوصول للمتابعة إلى لوحة الإدارة.',
             fakeEmailLabel: 'البريد الإلكتروني',
             fakePassLabel: 'كلمة المرور',
             continueBtn: 'متابعة',
             layer1Invalid: 'بيانات التحقق غير صحيحة.',
-            login: 'تسجيل الدخول عبر Google',
+            login: 'متابعة التحقق',
             logout: 'تسجيل الخروج',
             accessDenied: 'هذا الحساب غير مصرح له بالدخول.',
             authChecking: 'جار التحقق من صلاحية الحساب...',
           }
         : {
             title: 'Sign In',
-            subtitle: 'Use your allowed Google account to access the dashboard.',
+            subtitle: 'Complete verification to access the admin dashboard.',
             layer1Title: 'Sign In',
-            layer1Subtitle: 'Enter email and password to continue to Google sign-in.',
+            layer1Subtitle: 'Enter your access credentials to continue.',
             fakeEmailLabel: 'Email',
             fakePassLabel: 'Password',
             continueBtn: 'Continue',
             layer1Invalid: 'Invalid verification credentials.',
-            login: 'Sign In With Google',
+            login: 'Continue verification',
             logout: 'Sign out',
-            accessDenied: 'This Google account is not allowed.',
+            accessDenied: 'This account is not allowed.',
             authChecking: 'Verifying account access...',
           },
     [isAr],
@@ -176,13 +176,18 @@ export function AdminAuthGate({ lang, children }: AdminAuthGateProps) {
 
   if (!layer1Passed) {
     return (
-      <main className="mx-auto flex min-h-screen w-full max-w-xl items-center justify-center px-4">
-        <section className="surface-card w-full p-6">
-          <h1 className="text-xl font-bold text-white">{labels.layer1Title}</h1>
-          <p className="mt-2 text-sm text-white/70">{labels.layer1Subtitle}</p>
-          <form className="mt-4 grid gap-3" onSubmit={handleLayer1Submit}>
+      <main className="mx-auto flex min-h-screen w-full max-w-lg items-center justify-center px-4 py-10">
+        <section className="w-full rounded-[28px] border border-white/10 bg-slate-950/82 p-6 shadow-[0_28px_80px_rgba(2,6,23,0.48)] backdrop-blur-2xl sm:p-8">
+          <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-sky-300/20 bg-sky-400/10 text-sm font-black text-sky-100">
+            AD
+          </div>
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-white">{labels.layer1Title}</h1>
+            <p className="mt-2 text-sm leading-6 text-white/64">{labels.layer1Subtitle}</p>
+          </div>
+          <form className="mt-6 grid gap-3" onSubmit={handleLayer1Submit}>
             <input
-              className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none"
+              className="h-12 rounded-2xl border border-white/12 bg-white/[0.06] px-4 text-sm text-white outline-none transition placeholder:text-white/34 focus:border-sky-300/50 focus:bg-white/[0.08]"
               type="text"
               autoComplete="off"
               placeholder={labels.fakeEmailLabel}
@@ -190,7 +195,7 @@ export function AdminAuthGate({ lang, children }: AdminAuthGateProps) {
               onChange={(e) => setLayer1UserInput(e.target.value)}
             />
             <input
-              className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none"
+              className="h-12 rounded-2xl border border-white/12 bg-white/[0.06] px-4 text-sm text-white outline-none transition placeholder:text-white/34 focus:border-sky-300/50 focus:bg-white/[0.08]"
               type="password"
               autoComplete="off"
               placeholder={labels.fakePassLabel}
@@ -198,7 +203,7 @@ export function AdminAuthGate({ lang, children }: AdminAuthGateProps) {
               onChange={(e) => setLayer1PassInput(e.target.value)}
             />
             {layer1Error ? <p className="rounded-lg border border-rose-300/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-100">{layer1Error}</p> : null}
-            <button type="submit" className="btn-primary rounded-xl px-4 py-2 text-sm font-semibold">
+            <button type="submit" className="btn-primary mt-2 h-12 rounded-2xl px-4 text-sm font-semibold">
               {labels.continueBtn}
             </button>
           </form>
@@ -209,12 +214,15 @@ export function AdminAuthGate({ lang, children }: AdminAuthGateProps) {
 
   if (!user) {
     return (
-      <main className="mx-auto flex min-h-screen w-full max-w-xl items-center justify-center px-4">
-        <section className="surface-card w-full p-6">
-          <h1 className="text-xl font-bold text-white">{labels.title}</h1>
-          <p className="mt-2 text-sm text-white/70">{labels.subtitle}</p>
+      <main className="mx-auto flex min-h-screen w-full max-w-lg items-center justify-center px-4 py-10">
+        <section className="w-full rounded-[28px] border border-white/10 bg-slate-950/82 p-6 text-center shadow-[0_28px_80px_rgba(2,6,23,0.48)] backdrop-blur-2xl sm:p-8">
+          <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-sky-300/20 bg-sky-400/10 text-sm font-black text-sky-100">
+            AD
+          </div>
+          <h1 className="text-2xl font-bold text-white">{labels.title}</h1>
+          <p className="mt-2 text-sm leading-6 text-white/64">{labels.subtitle}</p>
           {error ? <p className="mt-3 rounded-lg border border-rose-300/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-100">{error}</p> : null}
-          <button className="btn-primary mt-4 rounded-xl px-4 py-2 text-sm font-semibold" onClick={() => void handleSignIn()}>
+          <button className="btn-primary mt-6 h-12 w-full rounded-2xl px-4 text-sm font-semibold" onClick={() => void handleSignIn()}>
             {labels.login}
           </button>
         </section>

@@ -76,12 +76,22 @@ export default function App() {
   const isAccountRoute = normalizedPath === '/account'
   const isSigninRoute = normalizedPath === '/account/signin'
   const isSignupRoute = normalizedPath === '/account/signup'
+  const isAccountLinkedRoute = normalizedPath === '/account/linked'
   const isAdminRoute =
     typeof window !== 'undefined' &&
     (normalizedPath.startsWith('/admin') || window.location.hostname.toLowerCase().startsWith('admin.'))
   const isKnownRootRoute = normalizedPath === '/'
   const fallbackStatus =
-    !redirectTarget && !explicitStatus && !isAccountRoute && !isSigninRoute && !isSignupRoute && !isAdminRoute && !isKnownRootRoute ? 404 : null
+    !redirectTarget &&
+    !explicitStatus &&
+    !isAccountRoute &&
+    !isSigninRoute &&
+    !isSignupRoute &&
+    !isAccountLinkedRoute &&
+    !isAdminRoute &&
+    !isKnownRootRoute
+      ? 404
+      : null
 
   useEffect(() => {
     if (!redirectTarget || typeof window === 'undefined') return
@@ -101,6 +111,8 @@ export default function App() {
         <AuthPage lang={lang} initialMode="login" />
       ) : isSignupRoute ? (
         <AuthPage lang={lang} initialMode="signup" />
+      ) : isAccountLinkedRoute ? (
+        <AuthPage lang={lang} initialMode="login" />
       ) : isAccountRoute ? (
         <AccountPage lang={lang} />
       ) : isAdminRoute ? (

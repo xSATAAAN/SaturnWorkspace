@@ -617,9 +617,16 @@ export function AuthPage({ lang, initialMode }: AuthPageProps) {
         ? linkCopy.successBody
         : linkStatus === 'error'
           ? error === t.noSubscription || error === t.activationMissing
-            ? error
-            : linkCopy.errorBody
+          ? error
+          : linkCopy.errorBody
           : linkCopy.processingBody
+
+  useEffect(() => {
+    if (!deviceLinked || typeof window === 'undefined') return
+    if (window.location.pathname !== '/account/linked') {
+      window.history.replaceState(null, '', '/account/linked')
+    }
+  }, [deviceLinked])
 
   function handleReturnToDesktopApp() {
     if (typeof window === 'undefined') return
@@ -633,39 +640,8 @@ export function AuthPage({ lang, initialMode }: AuthPageProps) {
     return (
       <main className="flex min-h-screen items-center justify-center px-4 py-8 sm:px-6">
         <section className="w-full max-w-[520px] rounded-[28px] border border-white/10 bg-slate-950/84 p-6 text-center shadow-[0_28px_80px_rgba(2,6,23,0.46)] backdrop-blur-2xl sm:p-8">
-          <div className="mx-auto flex w-full max-w-[88px] items-center justify-center gap-3">
-            <img src={appIcon} alt={t.brand} className="h-12 w-12 object-contain drop-shadow-[0_14px_28px_rgba(37,99,235,0.28)]" />
-            <div
-              className={`flex h-12 w-12 items-center justify-center rounded-full border ${
-                isSuccessState
-                  ? 'border-emerald-400/28 bg-emerald-500/12 text-emerald-200'
-                  : isErrorState
-                    ? 'border-rose-400/28 bg-rose-500/12 text-rose-100'
-                    : 'border-sky-400/24 bg-sky-500/12 text-sky-100'
-              }`}
-              aria-hidden="true"
-            >
-              {isSuccessState ? (
-                <svg viewBox="0 0 24 24" className="h-6 w-6 fill-none stroke-current stroke-[2.2]">
-                  <path d="M5 12.5 9.2 16.7 19 7.4" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              ) : isErrorState ? (
-                <svg viewBox="0 0 24 24" className="h-6 w-6 fill-none stroke-current stroke-[2.2]">
-                  <path d="M12 8v5" strokeLinecap="round" />
-                  <path d="M12 16.2h.01" strokeLinecap="round" />
-                  <path
-                    d="M10.3 3.8 2.9 17a2 2 0 0 0 1.7 3h14.8a2 2 0 0 0 1.7-3L13.7 3.8a2 2 0 0 0-3.4 0Z"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              ) : (
-                <svg viewBox="0 0 24 24" className="h-6 w-6 fill-none stroke-current stroke-[2.2]">
-                  <circle cx="12" cy="12" r="8.2" opacity="0.24" />
-                  <path d="M12 7.8v4.4l2.7 2.2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              )}
-            </div>
+          <div className="mx-auto flex w-full justify-center">
+            <img src={appIcon} alt={t.brand} className="h-14 w-14 object-contain drop-shadow-[0_14px_28px_rgba(37,99,235,0.28)]" />
           </div>
 
           <h1 className="mt-6 text-2xl font-bold text-white sm:text-[30px]">{linkStatusTitle}</h1>

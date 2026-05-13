@@ -46,6 +46,22 @@ function daysRemaining(expiresAt?: string | null) {
   return `${Math.ceil(diff / 86_400_000)} days`
 }
 
+function formatEgyptDateTime(value?: string | null) {
+  if (!value) return '--'
+  const date = new Date(value)
+  if (!Number.isFinite(date.getTime())) return value
+  return new Intl.DateTimeFormat('ar-EG-u-nu-latn', {
+    timeZone: 'Africa/Cairo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+  }).format(date)
+}
+
 function visiblePage<T>(items: T[], page: number) {
   return items.slice((page - 1) * pageSize, page * pageSize)
 }
@@ -558,7 +574,7 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
                                       ? `${request.subscription_status || 'linked'}${request.subscription_expires_at ? ` / ${daysRemaining(request.subscription_expires_at)}` : ''}`
                                       : 'missing'}
                                   </td>
-                                  <td className="px-3 py-2">{request.last_event_at || request.created_at || '--'}</td>
+                                  <td className="px-3 py-2">{formatEgyptDateTime(request.last_event_at || request.created_at)}</td>
                                   <td className="px-3 py-2">
                                     <div className="flex flex-wrap gap-2">
                                       <button className="rounded-lg border border-emerald-300/35 bg-emerald-400/10 px-2.5 py-1 text-emerald-100" onClick={() => void handleGrantBeta(request)} disabled={saving || !request.user_email}>
@@ -694,9 +710,9 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
                     <div className="space-y-2 text-sm text-white/75">
                       <div>Email: {selectedUser.item?.user_email || selectedUser.request?.user_email || '--'}</div>
                       <div>HWID: {selectedUser.item?.hwid || selectedUser.request?.hwid || '--'}</div>
-                      <div>Last login: {selectedUser.item?.last_seen_at || selectedUser.request?.last_event_at || '--'}</div>
+                      <div>Last login: {formatEgyptDateTime(selectedUser.item?.last_seen_at || selectedUser.request?.last_event_at)}</div>
                       <div>Request status: {selectedUser.request?.status || '--'}</div>
-                      <div>Last crash: {selectedUser.last_crash?.happened_at || '--'}</div>
+                      <div>Last crash: {formatEgyptDateTime(selectedUser.last_crash?.happened_at)}</div>
                       <div>Devices: {selectedUser.devices.length}</div>
                       <div>Sessions: {selectedUser.sessions.length}</div>
                       <div>Login requests: {selectedUser.login_requests.length}</div>
@@ -882,7 +898,7 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
                       <div key={crash.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white/80">
                         <div className="grid gap-1">
                           <div className="text-rose-200">{crash.error_type}</div>
-                          <div>{crash.happened_at} / {crash.app_version || '--'}</div>
+                          <div>{formatEgyptDateTime(crash.happened_at)} / {crash.app_version || '--'}</div>
                           <div>{crash.device_name || '--'} / {crash.hwid || 'no-hwid'}</div>
                           <div>IP: {crashIp}{crashCountry ? ` / ${crashCountry}` : ''} / Auth: {crashAuth}</div>
                           <div>{[crash.windows_version, crash.cpu, crash.ram_gb ? `${crash.ram_gb}GB` : null, crash.gpu].filter(Boolean).join(' / ') || '--'}</div>
@@ -908,7 +924,7 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
                 {auditLog.map((item, idx) => (
                   <div key={`${item.id || idx}`} className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white/75">
                     <div className="font-semibold text-white">{item.action || item.type || 'admin_action'}</div>
-                    <div>{item.admin_email || item.actor || '--'} / {item.happened_at || item.at || '--'}</div>
+                    <div>{item.admin_email || item.actor || '--'} / {formatEgyptDateTime(item.happened_at || item.at)}</div>
                     <pre className="mt-2 max-h-40 overflow-auto rounded-lg border border-white/10 bg-[#030712] p-2 text-xs text-white/65">
                       {JSON.stringify(item.payload || item, null, 2)}
                     </pre>

@@ -164,6 +164,18 @@ export async function createAppSession(
   return rows[0]
 }
 
+export async function revokeActiveAppSessionsForSubscription(env: Env, subscriptionId: string): Promise<void> {
+  await supabaseJson<unknown>(
+    env,
+    `/app_sessions?subscription_id=eq.${encodeURIComponent(subscriptionId)}&revoked_at=is.null`,
+    {
+      method: "PATCH",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({ revoked_at: new Date().toISOString() }),
+    },
+  )
+}
+
 export async function getAppSessionByHash(env: Env, tokenHash: string): Promise<AppSessionRow | null> {
   const rows = await supabaseJson<AppSessionRow[]>(
     env,

@@ -10,6 +10,7 @@ import {
   getPendingDeviceLoginByUserCode,
   getSubscriptionById,
   revokeAppSession,
+  revokeActiveAppSessionsForSubscription,
   touchAppSession,
   touchSubscription,
   updateDeviceLogin,
@@ -265,16 +266,6 @@ async function authorizePendingDeviceLogin(
     })
     return { success: false, error: "subscription_email_mismatch", status: 403 }
   }
-  if (subscription.hwid && subscription.hwid !== pending.hwid) {
-    await updateDeviceLogin(env, pending.id, {
-      status: "subscription_hwid_mismatch",
-      user_id: firebaseUser.userId,
-      user_email: firebaseUser.email,
-      subscription_id: subscription.id,
-    })
-    return { success: false, error: "subscription_hwid_mismatch", status: 403 }
-  }
-
   const attached = await attachSubscriptionToUser(env, subscription.id, {
     userId: firebaseUser.userId,
     email: firebaseUser.email,
@@ -302,6 +293,7 @@ async function issueDesktopSession(
   const sessionToken = `stk_${randomBase64Url(32)}`
   const tokenHash = await sha256Hex(sessionToken)
   const sessionExpiresAt = String(subscription.expires_at || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString())
+  await revokeActiveAppSessionsForSubscription(env, subscription.id)
   await createAppSession(env, {
     session_token_hash: tokenHash,
     user_id: userId,
