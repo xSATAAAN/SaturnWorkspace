@@ -685,11 +685,11 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
                       </div>
                     ) : null}
                     <div className="grid gap-3 sm:grid-cols-2">
-                      <select className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" value={newSubscriptionPlan} onChange={(e) => setNewSubscriptionPlan(e.target.value as 'monthly' | 'yearly')}>
+                      <select className="site-select" value={newSubscriptionPlan} onChange={(e) => setNewSubscriptionPlan(e.target.value as 'monthly' | 'yearly')}>
                         <option value="monthly">Monthly</option>
                         <option value="yearly">Yearly</option>
                       </select>
-                      <select className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" value={newSubscriptionTier} onChange={(e) => setNewSubscriptionTier(e.target.value as 'public' | 'private')}>
+                      <select className="site-select" value={newSubscriptionTier} onChange={(e) => setNewSubscriptionTier(e.target.value as 'public' | 'private')}>
                         <option value="public">Public</option>
                         <option value="private">Private</option>
                       </select>
@@ -735,7 +735,7 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
                 <h3 className="mb-3 text-sm font-semibold text-white/85">Create Promo Code</h3>
                 <div className="grid gap-3">
                   <input className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" placeholder="Code" value={newPromoCode} onChange={(e) => setNewPromoCode(e.target.value)} />
-                  <select className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" value={newPromoType} onChange={(e) => setNewPromoType(e.target.value as 'percent' | 'fixed')}>
+                  <select className="site-select" value={newPromoType} onChange={(e) => setNewPromoType(e.target.value as 'percent' | 'fixed')}>
                     <option value="percent">Percent</option>
                     <option value="fixed">Fixed amount</option>
                   </select>
@@ -771,18 +771,18 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
                 <h3 className="mb-3 text-sm font-semibold text-white/85">Publish OTA Update</h3>
                 <div className="grid gap-3 md:grid-cols-2">
                   <input className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" placeholder="Version" value={otaVersion} onChange={(e) => setOtaVersion(e.target.value)} />
-                  <select className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" value={otaChannel} onChange={(e) => setOtaChannel(e.target.value)}>
+                  <select className="site-select" value={otaChannel} onChange={(e) => setOtaChannel(e.target.value)}>
                     <option value="beta">Beta</option>
                     <option value="stable">Stable</option>
                   </select>
                   <input className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" type="file" accept=".exe,application/vnd.microsoft.portable-executable,application/octet-stream" onChange={(e) => setOtaFile(e.currentTarget.files?.[0] || null)} />
-                  <select className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" value={otaMode} onChange={(e) => setOtaMode(e.target.value as 'optional' | 'force' | 'required' | 'silent')} disabled={otaMandatory}>
+                  <select className="site-select" value={otaMode} onChange={(e) => setOtaMode(e.target.value as 'optional' | 'force' | 'required' | 'silent')} disabled={otaMandatory}>
                     <option value="optional">Optional</option>
                     <option value="silent">Silent</option>
                     <option value="required">Required</option>
                     <option value="force">Force</option>
                   </select>
-                  <select className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" value={otaRollout} onChange={(e) => setOtaRollout(e.target.value)}>
+                  <select className="site-select" value={otaRollout} onChange={(e) => setOtaRollout(e.target.value)}>
                     <option value="5">Staged 5%</option>
                     <option value="25">Staged 25%</option>
                     <option value="100">Rollout 100%</option>
@@ -833,18 +833,18 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
             <section className="surface-card p-5">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <h3 className="text-sm font-semibold text-white/85">Remote Controls</h3>
-                <select className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" value={remoteChannel} onChange={(e) => setRemoteChannel(e.target.value)}>
+                <select className="site-select" value={remoteChannel} onChange={(e) => setRemoteChannel(e.target.value)}>
                   <option value="beta">Beta</option>
                   <option value="stable">Stable</option>
                 </select>
               </div>
               <div className="grid gap-3 md:grid-cols-2">
-                <select className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" value={otaRollout} onChange={(e) => setOtaRollout(e.target.value)}>
+                <select className="site-select" value={otaRollout} onChange={(e) => setOtaRollout(e.target.value)}>
                   <option value="5">5% rollout</option>
                   <option value="25">25% rollout</option>
                   <option value="100">100% rollout</option>
                 </select>
-                <select className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" value={otaMode} onChange={(e) => setOtaMode(e.target.value as 'optional' | 'force' | 'required' | 'silent')}>
+                <select className="site-select" value={otaMode} onChange={(e) => setOtaMode(e.target.value as 'optional' | 'force' | 'required' | 'silent')}>
                   <option value="optional">Optional update</option>
                   <option value="silent">Silent download</option>
                   <option value="required">Required update</option>

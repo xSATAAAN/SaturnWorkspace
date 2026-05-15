@@ -102,6 +102,59 @@ h1, h2, h3 {
   filter: none;
 }
 
+.site-select {
+  width: 100%;
+  min-height: 44px;
+  appearance: none;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.04)),
+    rgba(255, 255, 255, 0.035);
+  color: rgb(var(--fg));
+  padding: 0.625rem 2.75rem 0.625rem 0.875rem;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  outline: none;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 12px 30px rgba(2, 8, 23, 0.24);
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    background 180ms ease,
+    transform 180ms ease;
+  background-image:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.04)),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='M5 7.5L10 12.5L15 7.5' stroke='rgba(226,232,240,0.92)' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat, no-repeat;
+  background-position: 0 0, calc(100% - 14px) 50%;
+  background-size: auto, 16px 16px;
+}
+
+.site-select:hover:not(:disabled) {
+  border-color: rgba(147, 197, 253, 0.38);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.05)),
+    rgba(255, 255, 255, 0.05);
+}
+
+.site-select:focus-visible {
+  border-color: rgba(147, 197, 253, 0.5);
+  box-shadow:
+    0 0 0 3px rgba(59, 130, 246, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.site-select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.site-select option {
+  color: #0f172a;
+}
+
 /* Header mark: fixed footprint + light rounding (no heavy blue glow) */
 .site-logo {
   display: block;

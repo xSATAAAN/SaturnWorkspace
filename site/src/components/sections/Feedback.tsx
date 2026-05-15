@@ -84,7 +84,7 @@ export function Feedback({ telegramUsername, lang }: FeedbackProps) {
                 <select
                   value={kind}
                   onChange={(e) => setKind(e.target.value as 'suggestion' | 'issue')}
-                  className="h-11 rounded-xl border border-white/12 bg-white/5 px-3 text-sm text-white outline-none focus:border-slate-400/50"
+                  className="site-select h-11 focus:border-slate-400/50"
                 >
                   <option value="suggestion">{t.suggestion}</option>
                   <option value="issue">{t.issue}</option>
