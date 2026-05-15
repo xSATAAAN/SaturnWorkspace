@@ -10,6 +10,7 @@ import {
 } from 'firebase/auth'
 import { clearAdminPreauth, fetchAdminPreauthState, fetchAdminSession, setAdminBearerToken, submitAdminPreauth } from '../../api/admin'
 import { firebaseAuth } from '../../lib/firebase'
+import appIcon from '../../assets/saturnws-app-icon.png'
 
 type AdminAuthGateProps = {
   lang: 'en' | 'ar'
@@ -178,9 +179,7 @@ export function AdminAuthGate({ lang, children }: AdminAuthGateProps) {
     return (
       <main className="mx-auto flex min-h-screen w-full max-w-lg items-center justify-center px-4 py-10">
         <section className="w-full rounded-[28px] border border-white/10 bg-slate-950/82 p-6 shadow-[0_28px_80px_rgba(2,6,23,0.48)] backdrop-blur-2xl sm:p-8">
-          <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-sky-300/20 bg-sky-400/10 text-sm font-black text-sky-100">
-            AD
-          </div>
+          <img src={appIcon} alt="Saturn Workspace" className="mx-auto mb-5 h-12 w-12 object-contain" />
           <div className="text-center">
             <h1 className="text-2xl font-bold text-white">{labels.layer1Title}</h1>
             <p className="mt-2 text-sm leading-6 text-white/64">{labels.layer1Subtitle}</p>
@@ -216,9 +215,7 @@ export function AdminAuthGate({ lang, children }: AdminAuthGateProps) {
     return (
       <main className="mx-auto flex min-h-screen w-full max-w-lg items-center justify-center px-4 py-10">
         <section className="w-full rounded-[28px] border border-white/10 bg-slate-950/82 p-6 text-center shadow-[0_28px_80px_rgba(2,6,23,0.48)] backdrop-blur-2xl sm:p-8">
-          <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-sky-300/20 bg-sky-400/10 text-sm font-black text-sky-100">
-            AD
-          </div>
+          <img src={appIcon} alt="Saturn Workspace" className="mx-auto mb-5 h-12 w-12 object-contain" />
           <h1 className="text-2xl font-bold text-white">{labels.title}</h1>
           <p className="mt-2 text-sm leading-6 text-white/64">{labels.subtitle}</p>
           {error ? <p className="mt-3 rounded-lg border border-rose-300/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-100">{error}</p> : null}
