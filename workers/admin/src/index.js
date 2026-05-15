@@ -530,6 +530,9 @@ function mergeChannelControls(existing, body) {
         ? normalizeAnnouncements(body.announcements ?? requestedRemoteConfig.announcements)
         : normalizeAnnouncements(remoteConfig.announcements),
   };
+  const nextUpdateMode = normalizeUpdateMode(nextRemoteConfig.update_mode);
+  const nextForceDeadline =
+    body.force_update_deadline !== undefined ? optionalIsoDate(body.force_update_deadline) : String(existing.force_update_deadline || "");
   return {
     ...existing,
     rollout_percent:
@@ -539,7 +542,7 @@ function mergeChannelControls(existing, body) {
         ? optionalVersion(body.minimum_supported_version)
         : String(existing.minimum_supported_version || ""),
     force_update_deadline:
-      body.force_update_deadline !== undefined ? optionalIsoDate(body.force_update_deadline) : String(existing.force_update_deadline || ""),
+      nextUpdateMode === "force" || nextUpdateMode === "required" ? nextForceDeadline : "",
     remote_config: nextRemoteConfig,
   };
 }
@@ -625,7 +628,7 @@ async function publishRelease(request, env, adminEmail) {
   const mandatory = Boolean(body?.mandatory) || updateMode === "force" || updateMode === "required";
   const rolloutPercent = clampRolloutPercent(body?.rollout_percent, 100);
   const minimumSupportedVersion = optionalVersion(body?.minimum_supported_version);
-  const forceUpdateDeadline = optionalIsoDate(body?.force_update_deadline);
+  const forceUpdateDeadline = mandatory ? optionalIsoDate(body?.force_update_deadline) : "";
 
   const metaKey = `meta/${channel}/${version}.json`;
   const metaObj = await env.OTA_BUCKET.get(metaKey);

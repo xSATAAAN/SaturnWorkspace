@@ -303,6 +303,8 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
     try {
       const channel = otaChannel.trim() || 'beta'
       const version = otaVersion.trim()
+      const shouldForceUpdate = otaMandatory || otaMode === 'force' || otaMode === 'required'
+      const forceDeadlineIso = shouldForceUpdate && otaForceDeadline ? new Date(otaForceDeadline).toISOString() : ''
       const upload = await uploadReleaseBinary({ file: otaFile, version, channel })
       const publish = await publishRelease({
         version,
@@ -312,7 +314,7 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
         update_mode: otaMandatory ? 'force' : otaMode,
         rollout_percent: Number(otaRollout || 100),
         minimum_supported_version: otaMinimumVersion.trim(),
-        force_update_deadline: otaForceDeadline ? new Date(otaForceDeadline).toISOString() : '',
+        force_update_deadline: forceDeadlineIso,
       })
       const channelManifest = publish.manifest.channels?.[channel]
       setOtaUpdates((prev) => [
@@ -326,7 +328,7 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
           is_published: true,
           rollout_percent: Number(otaRollout || 100),
           minimum_supported_version: otaMinimumVersion.trim(),
-          force_update_deadline: otaForceDeadline || null,
+          force_update_deadline: forceDeadlineIso || null,
           created_at: new Date().toISOString(),
         },
         ...prev,
@@ -377,11 +379,13 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
     try {
       const featureFlags = JSON.parse(featureFlagsText || '{}') as Record<string, unknown>
       const announcements = JSON.parse(announcementsText || '[]') as NonNullable<AdminRemoteControls['remote_config']>['announcements']
+      const shouldForceUpdate = otaMode === 'force' || otaMode === 'required'
+      const forceDeadlineIso = shouldForceUpdate && otaForceDeadline ? new Date(otaForceDeadline).toISOString() : ''
       const res = await updateRemoteControls({
         channel: remoteChannel,
         rollout_percent: Number(otaRollout || 100),
         minimum_supported_version: otaMinimumVersion.trim(),
-        force_update_deadline: otaForceDeadline ? new Date(otaForceDeadline).toISOString() : '',
+        force_update_deadline: forceDeadlineIso,
         remote_config: {
           ...(remoteControls.remote_config || {}),
           update_mode: otaMode,
