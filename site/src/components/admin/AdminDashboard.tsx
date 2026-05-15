@@ -334,7 +334,12 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
       setNotice(`Published ${version}. SHA-256 ${upload.release.sha256}`)
       setOtaFile(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'ota_publish_failed')
+      const message = err instanceof Error ? err.message : 'ota_publish_failed'
+      setError(
+        message === 'same_version_already_active'
+          ? 'This version is already active on the selected channel. Publish a higher version to trigger desktop updates.'
+          : message,
+      )
     } finally {
       setSaving(false)
     }

@@ -54,8 +54,8 @@ export default {
       if (url.pathname === "/updates/latest.json" && request.method === "GET") {
         return serveLatestManifest(env);
       }
-      if (url.pathname.startsWith("/updates/file/") && request.method === "GET") {
-        return serveReleaseBinary(url, env);
+      if (url.pathname.startsWith("/updates/file/") && (request.method === "GET" || request.method === "HEAD")) {
+        return serveReleaseBinary(request, url, env);
       }
       if (url.pathname === "/api/admin/preauth/state" && request.method === "GET") {
         return json({ success: true, authenticated: await hasAdminLayer1Session(request, env) }, 200, corsHeaders(request, env));
@@ -635,6 +635,15 @@ async function publishRelease(request, env, adminEmail) {
   const downloadUrl = `${downloadUrlBase}/file/${encodeURIComponent(release.key)}`;
 
   const manifest = await loadManifest(env);
+  const currentChannel = manifest.channels?.[channel];
+  if (
+    currentChannel &&
+    typeof currentChannel === "object" &&
+    String(currentChannel.version || "").trim() === version &&
+    String(currentChannel.download_url || "").trim()
+  ) {
+    throw new Error("same_version_already_active");
+  }
   const channelManifest = {
     version,
     available: true,
@@ -1041,7 +1050,7 @@ async function serveLatestManifest(env) {
   });
 }
 
-async function serveReleaseBinary(url, env) {
+async function serveReleaseBinary(request, url, env) {
   if (!hasOtaBucket(env)) return new Response("R2 is not enabled for this account.", { status: 503 });
   const raw = decodeURIComponent(url.pathname.replace("/updates/file/", ""));
   const key = raw.trim();
@@ -1054,7 +1063,7 @@ async function serveReleaseBinary(url, env) {
   obj.writeHttpMetadata(headers);
   headers.set("etag", obj.httpEtag);
   headers.set("Cache-Control", "public, max-age=300");
-  return new Response(obj.body, { status: 200, headers });
+  return new Response(request.method === "HEAD" ? null : obj.body, { status: 200, headers });
 }
 
 function getSupabaseConfig(env) {
