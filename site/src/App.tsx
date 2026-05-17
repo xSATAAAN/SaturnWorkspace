@@ -52,6 +52,8 @@ export default function App() {
   const [lang, setLang] = useState<'en' | 'ar'>(() => {
     if (typeof window === 'undefined') return 'ar'
     const pathname = String(window.location.pathname || '').toLowerCase()
+    const hostname = String(window.location.hostname || '').toLowerCase()
+    if (hostname.startsWith('admin.')) return 'ar'
     if (pathname.startsWith('/admin') || pathname.startsWith('/account') || pathname.startsWith('/activate')) return 'ar'
     const docLang = String(document.documentElement.lang || '').trim().toLowerCase()
     if (docLang.startsWith('ar')) return 'ar'
