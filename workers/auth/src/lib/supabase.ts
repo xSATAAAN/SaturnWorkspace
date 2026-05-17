@@ -37,6 +37,17 @@ function headers(env: Env): HeadersInit {
   }
 }
 
+function isMissingAppSessionsColumnError(error: unknown, columnName: string): boolean {
+  const message = String(error || "").trim().toLowerCase()
+  if (!message) return false
+  return (
+    message.includes(`'${columnName}' column`) ||
+    message.includes(`"${columnName}"`) ||
+    message.includes(`column ${columnName}`) ||
+    message.includes(`${columnName} does not exist`)
+  )
+}
+
 async function supabaseJson<T>(env: Env, path: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(`${baseUrl(env)}${path}`, {
     ...init,
@@ -182,25 +193,67 @@ export async function createAppSession(
     metadata?: Record<string, unknown>
   },
 ): Promise<AppSessionRow> {
-  const rows = await supabaseJson<AppSessionRow[]>(env, "/app_sessions", {
-    method: "POST",
-    headers: { Prefer: "return=representation" },
-    body: JSON.stringify({ ...payload, license_id: null, metadata: payload.metadata || {} }),
-  })
-  if (!rows[0]) throw new Error("app_session_insert_empty")
-  return rows[0]
+  try {
+    const rows = await supabaseJson<AppSessionRow[]>(env, "/app_sessions", {
+      method: "POST",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({ ...payload, license_id: null, metadata: payload.metadata || {} }),
+    })
+    if (!rows[0]) throw new Error("app_session_insert_empty")
+    return rows[0]
+  } catch (error) {
+    const missingSubscriptionId = isMissingAppSessionsColumnError(error, "subscription_id")
+    const missingMetadata = isMissingAppSessionsColumnError(error, "metadata")
+    const mentionsLicenseNull =
+      String(error || "").trim().toLowerCase().includes("license_id") &&
+      String(error || "").trim().toLowerCase().includes("null")
+
+    if (!missingSubscriptionId && !missingMetadata && !mentionsLicenseNull) {
+      throw error
+    }
+
+    const legacyRows = await supabaseJson<AppSessionRow[]>(env, "/app_sessions", {
+      method: "POST",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({
+        session_token_hash: payload.session_token_hash,
+        user_id: payload.user_id,
+        user_email: payload.user_email,
+        license_id: payload.subscription_id,
+        hwid: payload.hwid,
+        expires_at: payload.expires_at,
+      }),
+    })
+    if (!legacyRows[0]) throw new Error("app_session_insert_empty")
+    return legacyRows[0]
+  }
 }
 
 export async function revokeActiveAppSessionsForSubscription(env: Env, subscriptionId: string): Promise<void> {
-  await supabaseJson<unknown>(
-    env,
-    `/app_sessions?subscription_id=eq.${encodeURIComponent(subscriptionId)}&revoked_at=is.null`,
-    {
-      method: "PATCH",
-      headers: { Prefer: "return=minimal" },
-      body: JSON.stringify({ revoked_at: new Date().toISOString() }),
-    },
-  )
+  try {
+    await supabaseJson<unknown>(
+      env,
+      `/app_sessions?subscription_id=eq.${encodeURIComponent(subscriptionId)}&revoked_at=is.null`,
+      {
+        method: "PATCH",
+        headers: { Prefer: "return=minimal" },
+        body: JSON.stringify({ revoked_at: new Date().toISOString() }),
+      },
+    )
+  } catch (error) {
+    if (!isMissingAppSessionsColumnError(error, "subscription_id")) {
+      throw error
+    }
+    await supabaseJson<unknown>(
+      env,
+      `/app_sessions?license_id=eq.${encodeURIComponent(subscriptionId)}&revoked_at=is.null`,
+      {
+        method: "PATCH",
+        headers: { Prefer: "return=minimal" },
+        body: JSON.stringify({ revoked_at: new Date().toISOString() }),
+      },
+    )
+  }
 }
 
 export async function getAppSessionByHash(env: Env, tokenHash: string): Promise<AppSessionRow | null> {

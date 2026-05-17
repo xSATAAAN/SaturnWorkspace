@@ -429,8 +429,9 @@ async function resolveSessionSubscription(
   if (session.revoked_at) return { session, subscription: null, error: "session_revoked" }
   if (session.hwid !== hwid) return { session, subscription: null, error: "session_hwid_mismatch" }
   if (isIsoExpired(session.expires_at)) return { session, subscription: null, error: "session_expired" }
-  if (!session.subscription_id) return { session, subscription: null, error: "subscription_missing" }
-  const subscription = await getSubscriptionById(env, session.subscription_id)
+  const subscriptionId = String(session.subscription_id || session.license_id || "").trim()
+  if (!subscriptionId) return { session, subscription: null, error: "subscription_missing" }
+  const subscription = await getSubscriptionById(env, subscriptionId)
   const subscriptionError = isActiveUsableSubscription(subscription)
   if (subscriptionError) return { session, subscription, error: subscriptionError }
   if (subscription?.hwid && subscription.hwid !== hwid) return { session, subscription, error: "subscription_hwid_mismatch" }
