@@ -56,6 +56,7 @@ export interface AppSessionRow {
   session_token_hash: string
   user_id: string
   user_email: string | null
+  metadata?: Record<string, unknown> | null
   license_id?: string | null
   subscription_id?: string | null
   hwid: string

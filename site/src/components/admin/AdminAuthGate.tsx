@@ -170,7 +170,9 @@ export function AdminAuthGate({ lang, children }: AdminAuthGateProps) {
   if (loading) {
     return (
       <main className="mx-auto flex min-h-screen w-full max-w-xl items-center justify-center px-4">
-        <section className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/75">Loading authentication...</section>
+        <section className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/75">
+          {isAr ? 'جار تحميل المصادقة...' : 'Loading authentication...'}
+        </section>
       </main>
     )
   }

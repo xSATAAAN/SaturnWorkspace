@@ -1,6 +1,7 @@
 import { handleCreatePayment, handleGetPaymentStatus } from "./routes/payments.js";
 const CHANNELS = ["stable", "beta"];
 const UPDATE_MODES = ["optional", "force", "required", "silent"];
+const UNLIMITED_SUBSCRIPTION_EXPIRY = "9999-12-31T23:59:59.000Z";
 const DEFAULT_MANIFEST = {
   version: "0",
   available: false,
@@ -36,6 +37,26 @@ const DEFAULT_MANIFEST = {
     },
   },
 };
+
+function normalizeEmail(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function isUnlimitedExpiry(value) {
+  const ts = Date.parse(String(value || ""));
+  if (!Number.isFinite(ts)) return false;
+  return new Date(ts).getUTCFullYear() >= 9999;
+}
+
+function subscriptionIdentityKey(row) {
+  const userId = String(row?.firebase_user_id || "").trim();
+  if (userId) return `uid:${userId}`;
+  const email = normalizeEmail(row?.user_email);
+  if (email) return `email:${email}`;
+  const hwid = String(row?.hwid || "").trim();
+  if (hwid) return `hwid:${hwid}`;
+  return `id:${String(row?.id || "")}`;
+}
 
 function hasOtaBucket(env) {
   return Boolean(env && env.OTA_BUCKET && typeof env.OTA_BUCKET.get === "function" && typeof env.OTA_BUCKET.put === "function");
@@ -1121,14 +1142,15 @@ function safeSearchTerm(value) {
 
 async function getAdminDashboard(env) {
   const [subscriptions, crashes, alerts, updates] = await Promise.all([
-    safeSupabaseRead(env, "account_subscriptions", "select=id,status,tier,created_at&limit=200"),
+    safeSupabaseRead(env, "account_subscriptions", "select=id,firebase_user_id,user_email,hwid,status,tier,expires_at,updated_at,created_at&limit=500"),
     safeSupabaseRead(env, "crash_logs", "select=id,error_type,happened_at,user_id&order=happened_at.desc&limit=20"),
     supabaseRequest(env, "tamper_alerts", "GET", { query: "select=id,severity,resolved,happened_at,reason&resolved=is.false&order=happened_at.desc&limit=50" }),
     supabaseRequest(env, "ota_updates", "GET", { query: "select=id,version,channel,is_mandatory,is_published,created_at&order=created_at.desc&limit=20" }),
   ]);
-  const activeUsers = Array.isArray(subscriptions) ? subscriptions.filter((x) => x.status === "active").length : 0;
-  const churnedUsers = Array.isArray(subscriptions)
-    ? subscriptions.filter((x) => x.status === "expired" || x.status === "canceled").length
+  const uniqueSubscriptions = dedupeSubscriptions(Array.isArray(subscriptions) ? subscriptions : []);
+  const activeUsers = Array.isArray(uniqueSubscriptions) ? uniqueSubscriptions.filter((x) => x.status === "active" && !isExpiredIso(x.expires_at)).length : 0;
+  const churnedUsers = Array.isArray(uniqueSubscriptions)
+    ? uniqueSubscriptions.filter((x) => x.status === "expired" || x.status === "canceled" || isExpiredIso(x.expires_at)).length
     : 0;
   return {
     success: true,
@@ -1147,20 +1169,23 @@ async function getAdminDashboard(env) {
 async function listSubscriptions(url, env) {
   const limit = safeInt(url.searchParams.get("limit"), 50);
   const page = safeInt(url.searchParams.get("page"), 1, 5000);
-  const offset = (page - 1) * limit;
   const status = String(url.searchParams.get("status") || "").trim();
   const tier = String(url.searchParams.get("tier") || "").trim();
   const search = safeSearchTerm(url.searchParams.get("search"));
-  const filters = [];
-  if (status) filters.push(`status.eq.${encodeURIComponent(status)}`);
-  if (tier) filters.push(`tier.eq.${encodeURIComponent(tier)}`);
+  const rows = await safeSupabaseRead(env, "account_subscriptions", "select=*&order=created_at.desc&limit=500");
+  let items = dedupeSubscriptions(Array.isArray(rows) ? rows : []);
+  if (status) items = items.filter((item) => String(item?.status || "").trim().toLowerCase() === status.toLowerCase());
+  if (tier) items = items.filter((item) => String(item?.tier || "").trim().toLowerCase() === tier.toLowerCase());
   if (search) {
-    const term = encodeURIComponent(`*${search}*`);
-    filters.push(`or=(user_email.ilike.${term},firebase_user_id.ilike.${term},hwid.ilike.${term})`);
+    const normalizedSearch = search.toLowerCase();
+    items = items.filter((item) =>
+      [item?.user_email, item?.firebase_user_id, item?.hwid, item?.status, item?.tier, item?.plan]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(normalizedSearch)),
+    );
   }
-  const query = `select=*&order=created_at.desc&limit=${limit}&offset=${offset}${filters.length ? `&${filters.join("&")}` : ""}`;
-  const data = await supabaseRequest(env, "account_subscriptions", "GET", { query });
-  return { success: true, items: data || [], page, limit };
+  const offset = (page - 1) * limit;
+  return { success: true, items: items.slice(offset, offset + limit), total: items.length, page, limit };
 }
 
 async function createSubscription(request, env, adminEmail) {
@@ -1170,36 +1195,64 @@ async function createSubscription(request, env, adminEmail) {
   const hwid = String(body?.hwid || "").trim() || null;
   const plan = String(body?.plan || "monthly").trim().toLowerCase();
   const tier = String(body?.tier || "public").trim().toLowerCase();
-  const expiresAt = String(body?.expires_at || "").trim();
+  const { expiresAt, isUnlimited } = normalizeSubscriptionExpiryInput(body);
   if (!userEmail || !expiresAt) throw new Error("missing_subscription_fields");
+  const existing = await findExistingSubscriptionForIdentity(env, { userEmail, firebaseUserId });
+  const existingMetadata = existing?.metadata && typeof existing.metadata === "object" ? existing.metadata : {};
   const payload = {
-    firebase_user_id: firebaseUserId,
+    firebase_user_id: firebaseUserId || existing?.firebase_user_id || null,
     user_email: userEmail,
     plan,
     tier,
     status: "active",
     starts_at: body?.starts_at ? String(body.starts_at).trim() : new Date().toISOString(),
     expires_at: expiresAt,
-    hwid,
-    bound_at: hwid ? new Date().toISOString() : null,
-    provider: String(body?.provider || "manual").trim().toLowerCase(),
-    provider_customer_id: String(body?.provider_customer_id || "").trim() || null,
-    provider_subscription_id: String(body?.provider_subscription_id || "").trim() || null,
-    feature_payload: body?.feature_payload && typeof body.feature_payload === "object" ? body.feature_payload : {},
-    metadata: { ...(body?.metadata && typeof body.metadata === "object" ? body.metadata : {}), created_by: adminEmail },
+    hwid: hwid || existing?.hwid || null,
+    bound_at: hwid ? new Date().toISOString() : existing?.bound_at || null,
+    provider: String(body?.provider || existing?.provider || "manual").trim().toLowerCase(),
+    provider_customer_id: String(body?.provider_customer_id || existing?.provider_customer_id || "").trim() || null,
+    provider_subscription_id: String(body?.provider_subscription_id || existing?.provider_subscription_id || "").trim() || null,
+    feature_payload:
+      body?.feature_payload && typeof body.feature_payload === "object"
+        ? body.feature_payload
+        : existing?.feature_payload && typeof existing.feature_payload === "object"
+          ? existing.feature_payload
+          : {},
+    metadata: {
+      ...existingMetadata,
+      ...(body?.metadata && typeof body.metadata === "object" ? body.metadata : {}),
+      is_unlimited: isUnlimited,
+      ...(existing ? { updated_by: adminEmail } : { created_by: adminEmail }),
+    },
   };
-  const created = await supabaseRequest(env, "account_subscriptions", "POST", {
-    body: payload,
-    prefer: "return=representation",
-  });
-  const item = Array.isArray(created) ? created[0] : created;
+  const changed = existing
+    ? await supabaseRequest(env, "account_subscriptions", "PATCH", {
+        query: `id=eq.${encodeURIComponent(existing.id)}&select=*`,
+        body: { ...payload, updated_at: new Date().toISOString() },
+        prefer: "return=representation",
+      })
+    : await supabaseRequest(env, "account_subscriptions", "POST", {
+        body: payload,
+        prefer: "return=representation",
+      });
+  const item = Array.isArray(changed) ? changed[0] : changed;
   const autoAuthorized = await authorizeMatchingAccessRequests(env, item).catch(() => 0);
   await appendAudit(env, {
-    type: "subscription_create",
+    type: existing ? "subscription_upsert" : "subscription_create",
     entity: "account_subscriptions",
     entity_id: item?.id || null,
     actor: adminEmail,
-    payload: { user_email: userEmail, firebase_user_id: firebaseUserId, hwid, plan, tier, expires_at: expiresAt, auto_authorized_requests: autoAuthorized },
+    payload: {
+      user_email: userEmail,
+      firebase_user_id: firebaseUserId,
+      hwid,
+      plan,
+      tier,
+      expires_at: expiresAt,
+      is_unlimited: isUnlimited,
+      reused_existing_subscription: Boolean(existing),
+      auto_authorized_requests: autoAuthorized,
+    },
     at: new Date().toISOString(),
   });
   return { success: true, item, auto_authorized_requests: autoAuthorized };
@@ -1212,10 +1265,17 @@ async function updateSubscription(subscriptionId, request, env, adminEmail) {
   if (body?.status) patch.status = String(body.status).trim().toLowerCase();
   if (body?.tier) patch.tier = String(body.tier).trim().toLowerCase();
   if (body?.hwid !== undefined) patch.hwid = body.hwid ? String(body.hwid).trim() : null;
-  if (body?.expires_at) patch.expires_at = String(body.expires_at).trim();
+  const expiryInput = normalizeSubscriptionExpiryInput(body);
+  if (expiryInput.expiresAt) patch.expires_at = expiryInput.expiresAt;
   if (body?.user_email) patch.user_email = String(body.user_email).trim().toLowerCase();
   if (body?.firebase_user_id !== undefined) patch.firebase_user_id = body.firebase_user_id ? String(body.firebase_user_id).trim() : null;
-  patch.metadata = { ...(body?.metadata && typeof body.metadata === "object" ? body.metadata : {}), updated_by: adminEmail };
+  patch.metadata = {
+    ...(body?.metadata && typeof body.metadata === "object" ? body.metadata : {}),
+    ...(body?.expires_at || body?.is_unlimited === true || String(body?.duration || "").trim().toLowerCase() === "unlimited"
+      ? { is_unlimited: expiryInput.isUnlimited }
+      : {}),
+    updated_by: adminEmail,
+  };
   const updated = await supabaseRequest(env, "account_subscriptions", "PATCH", {
     query: `id=eq.${encodeURIComponent(subscriptionId)}&select=*`,
     body: patch,
@@ -1358,10 +1418,6 @@ async function listCrashLogs(url, env) {
   return { success: true, items: data || [], page, limit };
 }
 
-function normalizeEmail(value) {
-  return String(value || "").trim().toLowerCase();
-}
-
 function isExpiredIso(value) {
   const ts = Date.parse(String(value || ""));
   return Number.isFinite(ts) ? ts <= Date.now() : false;
@@ -1373,7 +1429,54 @@ function accessRequestLastEventAt(row) {
 
 function subscriptionSortScore(row) {
   const active = String(row?.status || "").toLowerCase() === "active" && !isExpiredIso(row?.expires_at);
-  return `${active ? "1" : "0"}|${String(row?.expires_at || "")}|${String(row?.created_at || "")}`;
+  const bound = String(row?.firebase_user_id || "").trim() ? "1" : "0";
+  const unlimited = isUnlimitedExpiry(row?.expires_at) ? "1" : "0";
+  return `${active ? "1" : "0"}|${bound}|${unlimited}|${String(row?.expires_at || "")}|${String(row?.updated_at || "")}|${String(row?.created_at || "")}`;
+}
+
+function compareSubscriptions(left, right) {
+  return subscriptionSortScore(right).localeCompare(subscriptionSortScore(left));
+}
+
+function dedupeSubscriptions(rows) {
+  if (!Array.isArray(rows) || !rows.length) return [];
+  const byIdentity = new Map();
+  for (const row of [...rows].sort(compareSubscriptions)) {
+    const key = subscriptionIdentityKey(row);
+    if (!byIdentity.has(key)) byIdentity.set(key, row);
+  }
+  return [...byIdentity.values()];
+}
+
+function normalizeSubscriptionExpiryInput(body) {
+  const requestedUnlimited =
+    body?.is_unlimited === true || String(body?.duration || "").trim().toLowerCase() === "unlimited";
+  if (requestedUnlimited) {
+    return { expiresAt: UNLIMITED_SUBSCRIPTION_EXPIRY, isUnlimited: true };
+  }
+  const expiresAt = String(body?.expires_at || "").trim();
+  return {
+    expiresAt,
+    isUnlimited: isUnlimitedExpiry(expiresAt),
+  };
+}
+
+async function findExistingSubscriptionForIdentity(env, { userEmail, firebaseUserId }) {
+  const filters = [];
+  const normalizedEmail = normalizeEmail(userEmail);
+  if (normalizedEmail) filters.push(`user_email.ilike.${encodeURIComponent(normalizedEmail)}`);
+  if (firebaseUserId) filters.push(`firebase_user_id.eq.${encodeURIComponent(firebaseUserId)}`);
+  if (!filters.length) return null;
+  const rows = await safeSupabaseRead(
+    env,
+    "account_subscriptions",
+    `select=*&or=(${filters.join(",")})&order=created_at.desc&limit=50`,
+  );
+  const candidates = dedupeSubscriptions(Array.isArray(rows) ? rows : []).filter((row) => {
+    if (firebaseUserId && String(row?.firebase_user_id || "").trim() === firebaseUserId) return true;
+    return normalizedEmail && normalizeEmail(row?.user_email) === normalizedEmail;
+  });
+  return candidates[0] || null;
 }
 
 function pickMatchingSubscription(row, subscriptions) {
@@ -1408,7 +1511,7 @@ async function listAccessRequests(url, env) {
     ),
   ]);
 
-  const orderedSubscriptions = [...(Array.isArray(subscriptionRows) ? subscriptionRows : [])].sort((a, b) =>
+  const orderedSubscriptions = dedupeSubscriptions(Array.isArray(subscriptionRows) ? subscriptionRows : []).sort((a, b) =>
     subscriptionSortScore(b).localeCompare(subscriptionSortScore(a)),
   );
 
@@ -1417,7 +1520,7 @@ async function listAccessRequests(url, env) {
     const userId = String(row?.user_id || "").trim();
     const userEmail = normalizeEmail(row?.user_email);
     if (!userId && !userEmail) continue;
-    const key = userId || userEmail || String(row?.hwid || "").trim() || String(row?.id || "");
+    const key = userEmail || userId || String(row?.hwid || "").trim() || String(row?.id || "");
     const matchedSubscription = pickMatchingSubscription(row, orderedSubscriptions);
     if (!accessRequestNeedsAttention(row, matchedSubscription)) continue;
 
@@ -1552,9 +1655,13 @@ async function getUserDetail(userKey, env) {
   const key = safeSearchTerm(userKey);
   const subscriptionQuery = isUuid(key)
     ? `select=*&id=eq.${encodeURIComponent(key)}&limit=1`
-    : `select=*&or=(user_email.ilike.${encodeURIComponent(key)},firebase_user_id.eq.${encodeURIComponent(key)})&limit=1`;
+    : `select=*&or=(user_email.ilike.${encodeURIComponent(key)},firebase_user_id.eq.${encodeURIComponent(key)})&order=created_at.desc&limit=50`;
   const subscriptionRows = await safeSupabaseRead(env, "account_subscriptions", subscriptionQuery);
-  const subscription = Array.isArray(subscriptionRows) && subscriptionRows.length ? subscriptionRows[0] : null;
+  const subscription = isUuid(key)
+    ? Array.isArray(subscriptionRows) && subscriptionRows.length
+      ? subscriptionRows[0]
+      : null
+    : dedupeSubscriptions(Array.isArray(subscriptionRows) ? subscriptionRows : [])[0] || null;
   const subscriptionId = subscription?.id || "";
   const requestedEmail = key.includes("@") ? key : "";
   const userId = subscription?.firebase_user_id || (!isUuid(key) && !requestedEmail ? key : "");

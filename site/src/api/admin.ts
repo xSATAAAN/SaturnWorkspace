@@ -15,6 +15,7 @@ export type AdminSubscription = {
   bound_at?: string | null
   last_seen_at?: string | null
   expires_at: string
+  metadata?: Record<string, unknown> | null
   created_at: string
 }
 
@@ -237,7 +238,8 @@ export async function createSubscription(payload: {
   hwid?: string
   plan: 'monthly' | 'yearly'
   tier: 'public' | 'private'
-  expires_at: string
+  expires_at?: string
+  is_unlimited?: boolean
 }) {
   return adminFetch<{ success: boolean; item: AdminSubscription; auto_authorized_requests?: number }>('/subscriptions', {
     method: 'POST',

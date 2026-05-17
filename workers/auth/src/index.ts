@@ -109,6 +109,7 @@ async function handleVerify(request: Request, env: Env): Promise<Response> {
 function buildSubscriptionRuntime(row: { [key: string]: any }, status: string): Record<string, unknown> {
   const tier = String(row.tier || "public").trim().toLowerCase() === "private" ? "private" : "public"
   const featurePayload = row.feature_payload && typeof row.feature_payload === "object" ? row.feature_payload : {}
+  const metadata = row.metadata && typeof row.metadata === "object" ? row.metadata : {}
   return {
     success: true,
     status,
@@ -117,6 +118,9 @@ function buildSubscriptionRuntime(row: { [key: string]: any }, status: string): 
     license_id: row.id,
     user_id: row.firebase_user_id || row.user_id || null,
     user_email: row.user_email || null,
+    display_name: metadata.display_name || null,
+    avatar_url: metadata.avatar_url || null,
+    auth_provider: metadata.auth_provider || null,
     plan: row.plan || null,
     expires_at: row.expires_at || null,
     runtime_payload: tier === "private" ? featurePayload : {},
@@ -154,7 +158,16 @@ function isActiveUsableSubscription(row: any): string {
   return ""
 }
 
-async function verifyFirebaseUser(idToken: string, env: Env): Promise<{ userId: string; email: string }> {
+async function verifyFirebaseUser(
+  idToken: string,
+  env: Env,
+): Promise<{
+  userId: string
+  email: string
+  displayName: string | null
+  photoUrl: string | null
+  authProvider: string | null
+}> {
   const apiKey = String(env.FIREBASE_WEB_API_KEY || "").trim()
   if (!apiKey) throw new Error("firebase_not_configured")
   const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${encodeURIComponent(apiKey)}`, {
@@ -167,8 +180,14 @@ async function verifyFirebaseUser(idToken: string, env: Env): Promise<{ userId: 
   const user = payload?.users?.[0]
   const userId = String(user?.localId || "").trim()
   const email = String(user?.email || "").trim().toLowerCase()
+  const displayName = String(user?.displayName || "").trim() || null
+  const photoUrl = String(user?.photoUrl || "").trim() || null
+  const providerUserInfo = Array.isArray(user?.providerUserInfo) ? user.providerUserInfo : []
+  const providerId = String(providerUserInfo[0]?.providerId || user?.providerId || "").trim().toLowerCase()
+  const authProvider =
+    providerId === "google.com" ? "google" : providerId === "password" ? "password" : providerId || null
   if (!userId || !email) throw new Error("firebase_user_not_verified")
-  return { userId, email }
+  return { userId, email, displayName, photoUrl, authProvider }
 }
 
 function mapFirebasePasswordError(message: string): string {
@@ -232,7 +251,13 @@ async function authenticateFirebasePassword(
 async function authorizePendingDeviceLogin(
   env: Env,
   pending: any,
-  firebaseUser: { userId: string; email: string },
+  firebaseUser: {
+    userId: string
+    email: string
+    displayName?: string | null
+    photoUrl?: string | null
+    authProvider?: string | null
+  },
 ): Promise<{ success: true; subscription: any; runtime: Record<string, unknown> } | { success: false; error: string; status: number }> {
   const subscription = await getActiveSubscriptionForUser(env, firebaseUser.userId, firebaseUser.email)
   const subscriptionError = isActiveUsableSubscription(subscription)
@@ -242,6 +267,12 @@ async function authorizePendingDeviceLogin(
       status: error,
       user_id: firebaseUser.userId,
       user_email: firebaseUser.email,
+      metadata: {
+        ...(typeof pending?.metadata === "object" && pending?.metadata ? pending.metadata : {}),
+        display_name: firebaseUser.displayName || null,
+        avatar_url: firebaseUser.photoUrl || null,
+        auth_provider: firebaseUser.authProvider || null,
+      },
     })
     return { success: false, error, status: 403 }
   }
@@ -254,6 +285,12 @@ async function authorizePendingDeviceLogin(
       user_id: firebaseUser.userId,
       user_email: firebaseUser.email,
       subscription_id: subscription.id,
+      metadata: {
+        ...(typeof pending?.metadata === "object" && pending?.metadata ? pending.metadata : {}),
+        display_name: firebaseUser.displayName || null,
+        avatar_url: firebaseUser.photoUrl || null,
+        auth_provider: firebaseUser.authProvider || null,
+      },
     })
     return { success: false, error: "subscription_user_mismatch", status: 403 }
   }
@@ -263,6 +300,12 @@ async function authorizePendingDeviceLogin(
       user_id: firebaseUser.userId,
       user_email: firebaseUser.email,
       subscription_id: subscription.id,
+      metadata: {
+        ...(typeof pending?.metadata === "object" && pending?.metadata ? pending.metadata : {}),
+        display_name: firebaseUser.displayName || null,
+        avatar_url: firebaseUser.photoUrl || null,
+        auth_provider: firebaseUser.authProvider || null,
+      },
     })
     return { success: false, error: "subscription_email_mismatch", status: 403 }
   }
@@ -278,8 +321,25 @@ async function authorizePendingDeviceLogin(
     subscription_id: attached.id,
     license_id: null,
     authorized_at: new Date().toISOString(),
+    metadata: {
+      ...(typeof pending?.metadata === "object" && pending?.metadata ? pending.metadata : {}),
+      display_name: firebaseUser.displayName || null,
+      avatar_url: firebaseUser.photoUrl || null,
+      auth_provider: firebaseUser.authProvider || null,
+    },
   })
-  const runtime = buildSubscriptionRuntime(attached, "authorized")
+  const runtime = buildSubscriptionRuntime(
+    {
+      ...attached,
+      metadata: {
+        ...(typeof attached?.metadata === "object" && attached?.metadata ? attached.metadata : {}),
+        display_name: firebaseUser.displayName || null,
+        avatar_url: firebaseUser.photoUrl || null,
+        auth_provider: firebaseUser.authProvider || null,
+      },
+    },
+    "authorized",
+  )
   return { success: true, subscription: attached, runtime }
 }
 
@@ -287,37 +347,75 @@ async function issueDesktopSession(
   env: Env,
   pending: any,
   subscription: any,
-  userId: string,
-  userEmail: string,
+  user: {
+    userId: string
+    email: string
+    displayName?: string | null
+    photoUrl?: string | null
+    authProvider?: string | null
+  },
 ): Promise<Response> {
-  const sessionToken = `stk_${randomBase64Url(32)}`
-  const tokenHash = await sha256Hex(sessionToken)
-  const sessionExpiresAt = String(subscription.expires_at || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString())
-  await revokeActiveAppSessionsForSubscription(env, subscription.id)
-  await createAppSession(env, {
-    session_token_hash: tokenHash,
-    user_id: userId,
-    user_email: userEmail,
-    subscription_id: subscription.id,
-    hwid: pending.hwid,
-    expires_at: sessionExpiresAt,
-  })
-  await updateDeviceLogin(env, pending.id, {
-    status: "consumed",
-    consumed_at: new Date().toISOString(),
-    subscription_id: subscription.id,
-    user_id: userId,
-    user_email: userEmail,
-  })
-  const runtime = buildSubscriptionRuntime(subscription, "verified")
-  return json({
-    success: true,
-    status: "authorized",
-    session_token: sessionToken,
-    user_email: userEmail,
-    subscription: runtime,
-    license: runtime,
-  })
+  try {
+    const sessionToken = `stk_${randomBase64Url(32)}`
+    const tokenHash = await sha256Hex(sessionToken)
+    const sessionExpiresAt = String(subscription.expires_at || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString())
+    await revokeActiveAppSessionsForSubscription(env, subscription.id)
+    await createAppSession(env, {
+      session_token_hash: tokenHash,
+      user_id: user.userId,
+      user_email: user.email,
+      subscription_id: subscription.id,
+      hwid: pending.hwid,
+      expires_at: sessionExpiresAt,
+      metadata: {
+        display_name: user.displayName || null,
+        avatar_url: user.photoUrl || null,
+        auth_provider: user.authProvider || null,
+      },
+    })
+    await updateDeviceLogin(env, pending.id, {
+      status: "consumed",
+      consumed_at: new Date().toISOString(),
+      subscription_id: subscription.id,
+      user_id: user.userId,
+      user_email: user.email,
+    })
+    const runtime = buildSubscriptionRuntime(
+      {
+        ...subscription,
+        metadata: {
+          ...(typeof subscription?.metadata === "object" && subscription?.metadata ? subscription.metadata : {}),
+          display_name: user.displayName || null,
+          avatar_url: user.photoUrl || null,
+          auth_provider: user.authProvider || null,
+        },
+      },
+      "verified",
+    )
+    return json({
+      success: true,
+      status: "authorized",
+      session_token: sessionToken,
+      user_email: user.email,
+      display_name: user.displayName || null,
+      avatar_url: user.photoUrl || null,
+      auth_provider: user.authProvider || null,
+      subscription: runtime,
+      license: runtime,
+    })
+  } catch (error: any) {
+    await updateDeviceLogin(env, pending.id, {
+      status: "session_store_failed",
+      subscription_id: subscription?.id || pending?.subscription_id || null,
+      user_id: user.userId,
+      user_email: user.email,
+      metadata: {
+        ...(typeof pending?.metadata === "object" && pending?.metadata ? pending.metadata : {}),
+        session_store_error: String(error?.message || error || "session_store_failed"),
+      },
+    }).catch(() => undefined)
+    return json({ success: false, error: "session_store_failed" }, 500)
+  }
 }
 
 async function resolveSessionSubscription(
@@ -396,6 +494,9 @@ async function handleDeviceComplete(request: Request, env: Env): Promise<Respons
     success: true,
     status: "authorized",
     user_email: firebaseUser.email,
+    display_name: firebaseUser.displayName || null,
+    avatar_url: firebaseUser.photoUrl || null,
+    auth_provider: firebaseUser.authProvider || null,
     subscription: authorization.runtime,
     license: authorization.runtime,
   })
@@ -433,7 +534,7 @@ async function handleDevicePasswordComplete(request: Request, env: Env): Promise
     return json({ success: false, error: authorization.error }, authorization.status)
   }
 
-  return await issueDesktopSession(env, pending, authorization.subscription, firebaseUser.userId, firebaseUser.email)
+  return await issueDesktopSession(env, pending, authorization.subscription, firebaseUser)
 }
 
 async function handleDevicePoll(request: Request, env: Env): Promise<Response> {
@@ -470,7 +571,13 @@ async function handleDevicePoll(request: Request, env: Env): Promise<Response> {
   const subscription = await getSubscriptionById(env, row.subscription_id)
   const subscriptionError = isActiveUsableSubscription(subscription)
   if (subscriptionError || !subscription) return json({ success: false, error: subscriptionError || "subscription_not_found" }, 403)
-  return await issueDesktopSession(env, row, subscription, String(row.user_id || ""), String(row.user_email || ""))
+  return await issueDesktopSession(env, row, subscription, {
+    userId: String(row.user_id || ""),
+    email: String(row.user_email || ""),
+    displayName: String(row.metadata?.display_name || row.user_email || "").trim() || null,
+    photoUrl: String(row.metadata?.avatar_url || "").trim() || null,
+    authProvider: String(row.metadata?.auth_provider || "").trim() || null,
+  })
 }
 
 async function handleSessionVerify(request: Request, env: Env): Promise<Response> {
@@ -485,8 +592,22 @@ async function handleSessionVerify(request: Request, env: Env): Promise<Response
   await touchAppSession(env, resolved.session.id)
   await touchSubscription(env, resolved.subscription.id)
   return json({
-    ...buildSubscriptionRuntime(resolved.subscription, "verified"),
+    ...buildSubscriptionRuntime(
+      {
+        ...resolved.subscription,
+        metadata: {
+          ...(typeof resolved.subscription?.metadata === "object" && resolved.subscription?.metadata
+            ? resolved.subscription.metadata
+            : {}),
+          ...(typeof resolved.session?.metadata === "object" && resolved.session?.metadata ? resolved.session.metadata : {}),
+        },
+      },
+      "verified",
+    ),
     user_email: resolved.session.user_email,
+    display_name: resolved.session.metadata?.display_name || null,
+    avatar_url: resolved.session.metadata?.avatar_url || null,
+    auth_provider: resolved.session.metadata?.auth_provider || null,
     session_expires_at: resolved.session.expires_at,
   })
 }
@@ -511,6 +632,9 @@ async function handleAccountSubscription(request: Request, env: Env): Promise<Re
       user: {
         id: firebaseUser.userId,
         email: firebaseUser.email,
+        display_name: firebaseUser.displayName || null,
+        avatar_url: firebaseUser.photoUrl || null,
+        auth_provider: firebaseUser.authProvider || null,
       },
       subscription: null,
       status: subscriptionError === "subscription_not_found" ? "subscription_required" : subscriptionError,
@@ -521,6 +645,9 @@ async function handleAccountSubscription(request: Request, env: Env): Promise<Re
     user: {
       id: firebaseUser.userId,
       email: firebaseUser.email,
+      display_name: firebaseUser.displayName || null,
+      avatar_url: firebaseUser.photoUrl || null,
+      auth_provider: firebaseUser.authProvider || null,
     },
     subscription: buildSubscriptionRuntime(subscription, "verified"),
     status: "active",

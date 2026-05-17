@@ -49,7 +49,14 @@ function pathWithCurrentSearch(pathname: string, keysToRemove: string[] = []) {
 }
 
 export default function App() {
-  const [lang, setLang] = useState<'en' | 'ar'>('en')
+  const [lang, setLang] = useState<'en' | 'ar'>(() => {
+    if (typeof window === 'undefined') return 'ar'
+    const docLang = String(document.documentElement.lang || '').trim().toLowerCase()
+    if (docLang.startsWith('ar')) return 'ar'
+    const browserLang = String(window.navigator.language || '').trim().toLowerCase()
+    if (browserLang.startsWith('ar')) return 'ar'
+    return 'en'
+  })
   const isAr = lang === 'ar'
 
   useEffect(() => {

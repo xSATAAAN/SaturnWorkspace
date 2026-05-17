@@ -11,6 +11,7 @@ function formatDate(value: string | undefined, locale: string) {
   if (!value) return '--'
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return '--'
+  if (date.getUTCFullYear() >= 9999) return '∞'
   return new Intl.DateTimeFormat(locale, {
     year: 'numeric',
     month: '2-digit',
@@ -33,6 +34,8 @@ function formatDateTime(value: string | undefined, locale: string) {
 
 function formatDaysRemaining(value: string | undefined) {
   if (!value) return '--'
+  const date = new Date(value)
+  if (!Number.isNaN(date.getTime()) && date.getUTCFullYear() >= 9999) return '∞'
   const diff = Date.parse(value) - Date.now()
   if (!Number.isFinite(diff) || diff <= 0) return '0'
   return String(Math.ceil(diff / 86_400_000))

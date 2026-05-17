@@ -522,6 +522,7 @@ export function AuthPage({ lang, initialMode }: AuthPageProps) {
 
   async function handleSignOut() {
     await signOut(firebaseAuth).catch(() => undefined)
+    clearActivationPayload()
     setUser(null)
     setDeviceLinked(false)
     setDeviceLinkResult(null)

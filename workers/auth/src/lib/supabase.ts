@@ -1,5 +1,28 @@
 import type { AppSessionRow, DeviceLoginRow, Env, SubscriptionRow } from "../types"
 
+function normalizeEmail(value: string | null | undefined): string {
+  return String(value || "").trim().toLowerCase()
+}
+
+function isExpiredIso(value: string | null | undefined): boolean {
+  const ts = Date.parse(String(value || ""))
+  return Number.isFinite(ts) ? ts <= Date.now() : false
+}
+
+function scoreSubscription(row: SubscriptionRow, userId: string, email: string): string {
+  const active = String(row.status || "").trim().toLowerCase() === "active" && !isExpiredIso(row.expires_at) ? "1" : "0"
+  const exactUser = String(row.firebase_user_id || "").trim() === String(userId || "").trim() ? "1" : "0"
+  const exactEmail = normalizeEmail(row.user_email) === normalizeEmail(email) ? "1" : "0"
+  return [
+    active,
+    exactUser,
+    exactEmail,
+    String(row.updated_at || ""),
+    String(row.expires_at || ""),
+    String(row.created_at || ""),
+  ].join("|")
+}
+
 function baseUrl(env: Env): string {
   const raw = String(env.SUPABASE_API_URL || env.SUPABASE_URL || "").replace(/\/+$/, "")
   if (!raw) return ""
@@ -52,9 +75,12 @@ export async function getActiveSubscriptionForUser(env: Env, userId: string, ema
   if (email) filters.push(`user_email.ilike.${encodeURIComponent(email)}`)
   const rows = await supabaseJson<SubscriptionRow[]>(
     env,
-    `/account_subscriptions?or=(${filters.join(",")})&status=eq.active&select=*&order=expires_at.desc&limit=1`,
+    `/account_subscriptions?or=(${filters.join(",")})&status=eq.active&select=*&order=created_at.desc&limit=20`,
   )
-  return rows[0] || null
+  if (!Array.isArray(rows) || !rows.length) return null
+  return [...rows].sort((left, right) =>
+    scoreSubscription(right, userId, email).localeCompare(scoreSubscription(left, userId, email)),
+  )[0] || null
 }
 
 export async function attachSubscriptionToUser(
@@ -153,12 +179,13 @@ export async function createAppSession(
     subscription_id: string
     hwid: string
     expires_at: string
+    metadata?: Record<string, unknown>
   },
 ): Promise<AppSessionRow> {
   const rows = await supabaseJson<AppSessionRow[]>(env, "/app_sessions", {
     method: "POST",
     headers: { Prefer: "return=representation" },
-    body: JSON.stringify({ ...payload, license_id: null }),
+    body: JSON.stringify({ ...payload, license_id: null, metadata: payload.metadata || {} }),
   })
   if (!rows[0]) throw new Error("app_session_insert_empty")
   return rows[0]
