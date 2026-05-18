@@ -710,7 +710,11 @@ export default {
       }
       return json({ success: false, error: "not_found" }, 404, cors)
     } catch (err: any) {
-      return json({ success: false, error: "internal_error", detail: String(err?.message || err || "error") }, 500, cors)
+      console.error("auth_worker_unhandled_error", {
+        message: String(err?.message || err || "error"),
+        stack: String(err?.stack || ""),
+      })
+      return json({ success: false, error: "internal_error", message: "Internal server error" }, 500, cors)
     }
   },
 } satisfies ExportedHandler<Env>

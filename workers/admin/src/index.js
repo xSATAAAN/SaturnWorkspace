@@ -2,6 +2,34 @@ import { handleCreatePayment, handleGetPaymentStatus } from "./routes/payments.j
 const CHANNELS = ["stable", "beta"];
 const UPDATE_MODES = ["optional", "force", "required", "silent"];
 const UNLIMITED_SUBSCRIPTION_EXPIRY = "9999-12-31T23:59:59.000Z";
+const CRASH_PAYLOAD_REDACTED = "[redacted]";
+const CRASH_SENSITIVE_KEYS = new Set([
+  "access_token",
+  "refresh_token",
+  "id_token",
+  "session_token",
+  "session_id",
+  "password",
+  "cookie",
+  "cookies",
+  "authorization",
+  "auth_code",
+  "code_verifier",
+  "google_drive_token",
+  "client_secret",
+]);
+const CRASH_CONTENT_DUMP_KEYS = new Set([
+  "body",
+  "html",
+  "content",
+  "contents",
+  "dump",
+  "payload_dump",
+  "storage_dump",
+  "local_storage",
+  "user_content",
+  "file_contents",
+]);
 const DEFAULT_MANIFEST = {
   version: "0",
   available: false,
@@ -60,6 +88,47 @@ function subscriptionIdentityKey(row) {
 
 function hasOtaBucket(env) {
   return Boolean(env && env.OTA_BUCKET && typeof env.OTA_BUCKET.get === "function" && typeof env.OTA_BUCKET.put === "function");
+}
+
+function normalizeCrashKey(value) {
+  return String(value || "").trim().toLowerCase().replace(/-/g, "_");
+}
+
+function isSensitiveCrashKey(value) {
+  const normalized = normalizeCrashKey(value);
+  if (!normalized) return false;
+  return (
+    CRASH_SENSITIVE_KEYS.has(normalized) ||
+    CRASH_CONTENT_DUMP_KEYS.has(normalized) ||
+    normalized.endsWith("_token") ||
+    normalized.endsWith("_secret") ||
+    normalized.endsWith("_password") ||
+    normalized.endsWith("_cookie")
+  );
+}
+
+function sanitizeCrashString(value) {
+  return String(value || "")
+    .replace(/\b(authorization)\s*:\s*bearer\s+[^\s,;]+/gi, `$1: Bearer ${CRASH_PAYLOAD_REDACTED}`)
+    .replace(/\b(set-cookie|cookie)\s*:\s*[^\r\n]+/gi, (_, key) => `${key}: ${CRASH_PAYLOAD_REDACTED}`)
+    .replace(/([?&](?:access_token|refresh_token|id_token|session_token|session_id|auth_code|code_verifier|password|cookie)=)[^&#\s]+/gi, (_, prefix) => `${prefix}${CRASH_PAYLOAD_REDACTED}`)
+    .replace(/\b(access_token|refresh_token|id_token|session_token|session_id|auth_code|code_verifier|password|cookie|google_drive_token|client_secret)\b\s*([:=])\s*([^\s,;]+)/gi, (_, key, separator) => `${key}${separator}${separator === ":" ? " " : ""}${CRASH_PAYLOAD_REDACTED}`);
+}
+
+function sanitizeCrashValue(value, key = "") {
+  const normalized = normalizeCrashKey(key);
+  if (isSensitiveCrashKey(normalized)) return CRASH_PAYLOAD_REDACTED;
+  if (normalized && CRASH_CONTENT_DUMP_KEYS.has(normalized)) return CRASH_PAYLOAD_REDACTED;
+  if (Array.isArray(value)) return value.map((item) => sanitizeCrashValue(item, normalized));
+  if (value && typeof value === "object") {
+    const output = {};
+    for (const [childKey, childValue] of Object.entries(value)) {
+      output[childKey] = sanitizeCrashValue(childValue, childKey);
+    }
+    return output;
+  }
+  if (typeof value === "string") return sanitizeCrashString(value);
+  return value;
 }
 
 export default {
@@ -1861,7 +1930,8 @@ async function ingestCrashLog(request, env) {
   const body = await request.json();
   const auth = await resolveCrashIngestAuth(request, env, body);
   const session = auth.session || {};
-  const rawPayload = body && typeof body === "object" ? { ...body } : {};
+  const safeBody = body && typeof body === "object" ? sanitizeCrashValue(body) : {};
+  const rawPayload = safeBody && typeof safeBody === "object" ? { ...safeBody } : {};
   rawPayload.auth = {
     source: auth.source,
     firebase_user_id: session.user_id || rawPayload.firebase_user_id || null,
@@ -1875,21 +1945,21 @@ async function ingestCrashLog(request, env) {
     country: String(request.cf?.country || "").trim() || null,
   };
   const payload = {
-    happened_at: body?.happened_at || new Date().toISOString(),
-    user_id: isUuid(body?.user_id) ? String(body.user_id) : null,
-    subscription_id: body?.subscription_id || session.subscription_id || body?.license_id || null,
-    license_id: body?.license_id || null,
-    hwid: body?.hwid || session.hwid || null,
-    windows_version: body?.windows_version || null,
-    device_name: body?.device_name || null,
-    cpu: body?.cpu || null,
-    ram_gb: body?.ram_gb || null,
-    gpu: body?.gpu || null,
-    error_type: limitString(String(body?.error_type || "unknown").trim(), 180),
-    message: body?.message ? limitString(body.message, 4000) : null,
-    stack_trace: limitString(String(body?.stack_trace || "").trim(), 120000),
-    app_version: body?.app_version || null,
-    tool_channel: body?.tool_channel || null,
+    happened_at: safeBody?.happened_at || new Date().toISOString(),
+    user_id: isUuid(safeBody?.user_id) ? String(safeBody.user_id) : null,
+    subscription_id: safeBody?.subscription_id || session.subscription_id || safeBody?.license_id || null,
+    license_id: safeBody?.license_id || null,
+    hwid: safeBody?.hwid || session.hwid || null,
+    windows_version: safeBody?.windows_version || null,
+    device_name: safeBody?.device_name || null,
+    cpu: safeBody?.cpu || null,
+    ram_gb: safeBody?.ram_gb || null,
+    gpu: safeBody?.gpu || null,
+    error_type: limitString(String(safeBody?.error_type || "unknown").trim(), 180),
+    message: safeBody?.message ? limitString(String(safeBody.message), 4000) : null,
+    stack_trace: limitString(String(safeBody?.stack_trace || "").trim(), 120000),
+    app_version: safeBody?.app_version || null,
+    tool_channel: safeBody?.tool_channel || null,
     raw_payload: rawPayload,
   };
   if (!payload.stack_trace) throw new Error("missing_stack_trace");
@@ -1906,9 +1976,17 @@ async function insertCrashLogPayload(env, payload) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error || "");
-    if (!message.toLowerCase().includes("fingerprint") && !message.toLowerCase().includes("schema cache")) throw error;
+    const lower = message.toLowerCase();
+    if (
+      !lower.includes("fingerprint") &&
+      !lower.includes("schema cache") &&
+      !lower.includes("crash_logs_license_id_fkey")
+    ) {
+      throw error;
+    }
     const fallback = { ...payload };
-    delete fallback.fingerprint;
+    if (lower.includes("fingerprint") || lower.includes("schema cache")) delete fallback.fingerprint;
+    if (lower.includes("crash_logs_license_id_fkey")) delete fallback.license_id;
     return supabaseRequest(env, "crash_logs", "POST", {
       body: fallback,
       prefer: "return=representation",

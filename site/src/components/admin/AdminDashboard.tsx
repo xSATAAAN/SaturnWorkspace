@@ -1001,20 +1001,20 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
           ) : null}
 
           {activePage === 'crashes' ? (
-            <section className="grid gap-4 xl:grid-cols-[380px_minmax(0,1fr)]">
-              <article className="surface-card p-5">
+            <section className="grid gap-4 xl:grid-cols-[380px_minmax(0,1fr)] xl:items-start">
+              <article className="surface-card min-w-0 overflow-hidden p-5">
                 <h3 className="mb-3 text-sm font-semibold text-white/85">{isAr ? 'مجموعات الأعطال' : 'Crash Groups'}</h3>
                 <div className="grid gap-2">
                   {crashGroups.map((group) => (
-                    <button key={group.fingerprint} className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-start text-sm text-white/75 hover:border-sky-300/35" onClick={() => setCrashSearch(group.error_type)}>
-                      <div className="font-semibold text-white">{group.error_type}</div>
+                    <button key={group.fingerprint} className="w-full min-w-0 overflow-hidden rounded-xl border border-white/10 bg-white/[0.03] p-3 text-start text-sm text-white/75 hover:border-sky-300/35" onClick={() => setCrashSearch(group.error_type)}>
+                      <div className="break-words font-semibold text-white">{group.error_type}</div>
                       <div>{isAr ? `${group.count} عطل / ${group.affected_hwids.length} جهاز` : `${group.count} crashes / ${group.affected_hwids.length} devices`}</div>
-                      <div className="truncate text-white/50">{group.message || group.fingerprint}</div>
+                      <div className="break-words text-white/50">{group.message || group.fingerprint}</div>
                     </button>
                   ))}
                 </div>
               </article>
-              <article className="surface-card p-5">
+              <article className="surface-card min-w-0 overflow-hidden p-5">
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                   <h3 className="text-sm font-semibold text-white/85">{isAr ? 'سجل الأعطال الخام' : 'Raw Crash Logs'}</h3>
                   <input className="w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none sm:w-72" placeholder={isAr ? 'ابحث في الأعطال...' : 'Search crashes...'} value={crashSearch} onChange={(e) => { setCrashSearch(e.target.value); setCrashPage(1) }} />
@@ -1026,8 +1026,8 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
                     const crashCountry = crash.raw_payload?.request?.country || ''
                     const crashAuth = crash.raw_payload?.auth?.source || '--'
                     return (
-                      <div key={crash.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white/80">
-                        <div className="grid gap-1">
+                      <div key={crash.id} className="min-w-0 overflow-hidden rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white/80">
+                        <div className="grid min-w-0 gap-1">
                           <div className="text-rose-200">{crash.error_type}</div>
                           <div>{formatEgyptDateTime(crash.happened_at)} / {crash.app_version || '--'}</div>
                           <div>{crash.device_name || '--'} / {crash.hwid || (isAr ? 'بدون HWID' : 'no-hwid')}</div>
