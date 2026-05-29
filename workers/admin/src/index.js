@@ -1,5 +1,6 @@
 import { handleCreatePayment, handleGetPaymentStatus } from "./routes/payments.js";
 const CHANNELS = ["stable", "beta"];
+const ARTIFACT_TYPES = ["portable", "installed"];
 const UPDATE_MODES = ["optional", "force", "required", "silent"];
 const UNLIMITED_SUBSCRIPTION_EXPIRY = "9999-12-31T23:59:59.000Z";
 const CRASH_PAYLOAD_REDACTED = "[redacted]";
@@ -42,7 +43,24 @@ const DEFAULT_MANIFEST = {
   download_url: "",
   download_sha256: "",
   filename: "",
+  artifacts: {
+    portable: {
+      url: "",
+      sha256: "",
+      filename: "",
+      size_bytes: 0,
+      package_type: "portable_exe",
+    },
+    installed: {
+      url: "",
+      sha256: "",
+      filename: "",
+      size_bytes: 0,
+      package_type: "installed_zip",
+    },
+  },
   notes: "",
+  history_reset_at: "",
   remote_config: {
     update_mode: "optional",
     kill_switch_enabled: false,
@@ -138,6 +156,9 @@ export default {
     if (request.method === "OPTIONS") return handleOptions(request, env);
 
     try {
+      if (host === "admin.saturnws.com" && url.pathname === "/admin-policy-controls.js" && request.method === "GET") {
+        return serveAdminPolicyControlsScript();
+      }
       if (host === "admin.saturnws.com" && request.method === "GET" && !url.pathname.startsWith("/api/")) {
         return proxyAdminFrontend(url);
       }
@@ -172,6 +193,10 @@ export default {
         const adminEmail = await requireAdmin(request, env);
         return json(await publishRelease(request, env, adminEmail), 200, corsHeaders(request, env));
       }
+      if (url.pathname === "/api/admin/reset-baseline" && request.method === "POST") {
+        const adminEmail = await requireAdmin(request, env);
+        return json(await resetOtaBaseline(request, env, adminEmail), 200, corsHeaders(request, env));
+      }
       if (url.pathname === "/api/admin/history" && request.method === "GET") {
         await requireAdmin(request, env);
         const channel = normalizeChannel(url.searchParams.get("channel"));
@@ -184,6 +209,40 @@ export default {
       if (url.pathname === "/api/admin/remote-config" && request.method === "POST") {
         const adminEmail = await requireAdmin(request, env);
         return json(await updateRemoteControls(request, env, adminEmail), 200, corsHeaders(request, env));
+      }
+      if (url.pathname === "/api/admin/policy/state" && request.method === "GET") {
+        await requireAdmin(request, env);
+        return json(await proxyPolicyAdmin(request, env, "/v1/admin/state"), 200, corsHeaders(request, env));
+      }
+      if (url.pathname === "/api/admin/policy/global-policy" && request.method === "POST") {
+        const adminEmail = await requireAdmin(request, env);
+        const payload = await proxyPolicyAdmin(request, env, "/v1/admin/global-policy");
+        await appendAudit(env, { type: "policy_global_update", actor: adminEmail, at: new Date().toISOString() });
+        return json(payload, 200, corsHeaders(request, env));
+      }
+      if (url.pathname === "/api/admin/policy/disabled-versions" && request.method === "POST") {
+        const adminEmail = await requireAdmin(request, env);
+        const payload = await proxyPolicyAdmin(request, env, "/v1/admin/disabled-versions");
+        await appendAudit(env, { type: "policy_disabled_version_update", actor: adminEmail, at: new Date().toISOString() });
+        return json(payload, 200, corsHeaders(request, env));
+      }
+      if (url.pathname === "/api/admin/policy/users" && request.method === "POST") {
+        const adminEmail = await requireAdmin(request, env);
+        const payload = await proxyPolicyAdmin(request, env, "/v1/admin/users");
+        await appendAudit(env, { type: "policy_user_update", actor: adminEmail, at: new Date().toISOString() });
+        return json(payload, 200, corsHeaders(request, env));
+      }
+      if (url.pathname === "/api/admin/policy/plan-features" && request.method === "POST") {
+        const adminEmail = await requireAdmin(request, env);
+        const payload = await proxyPolicyAdmin(request, env, "/v1/admin/plan-features");
+        await appendAudit(env, { type: "policy_plan_features_update", actor: adminEmail, at: new Date().toISOString() });
+        return json(payload, 200, corsHeaders(request, env));
+      }
+      if (url.pathname === "/api/admin/policy/releases" && request.method === "POST") {
+        const adminEmail = await requireAdmin(request, env);
+        const payload = await proxyPolicyAdmin(request, env, "/v1/admin/releases");
+        await appendAudit(env, { type: "policy_release_catalog_update", actor: adminEmail, at: new Date().toISOString() });
+        return json(payload, 200, corsHeaders(request, env));
       }
       if (url.pathname === "/api/admin/releases/disable" && request.method === "POST") {
         const adminEmail = await requireAdmin(request, env);
@@ -327,9 +386,126 @@ async function proxyAdminFrontend(url) {
 
   const headers = new Headers(finalUpstream.headers);
   headers.set("Cache-Control", "no-store");
+  const contentType = headers.get("Content-Type") || "";
+  if (contentType.includes("text/html")) {
+    const html = await finalUpstream.text();
+    const injected = html.includes("/admin-policy-controls.js")
+      ? html
+      : html.replace("</body>", '<script src="/admin-policy-controls.js" defer></script></body>');
+    headers.delete("Content-Length");
+    return new Response(injected, {
+      status: finalUpstream.status,
+      headers,
+    });
+  }
   return new Response(finalUpstream.body, {
     status: finalUpstream.status,
     headers,
+  });
+}
+
+function serveAdminPolicyControlsScript() {
+  const source = String.raw`
+(function () {
+  if (window.__saturnPolicyControlsLoaded) return;
+  window.__saturnPolicyControlsLoaded = true;
+
+  const styles = document.createElement("style");
+  styles.textContent = [
+    "#saturn-policy-admin{position:fixed;left:18px;bottom:18px;z-index:2147483000;font-family:Inter,Arial,sans-serif;color:#e5edf8;direction:ltr}",
+    "#saturn-policy-admin *{box-sizing:border-box}",
+    "#saturn-policy-toggle{border:1px solid rgba(96,165,250,.35);background:linear-gradient(135deg,#1d4ed8,#0f172a);color:white;border-radius:999px;padding:10px 14px;font-weight:800;font-size:12px;box-shadow:0 16px 42px rgba(0,0,0,.35);cursor:pointer}",
+    "#saturn-policy-panel{display:none;width:min(760px,calc(100vw - 36px));max-height:min(760px,calc(100vh - 96px));overflow:auto;margin-bottom:12px;border:1px solid rgba(148,163,184,.22);background:#0f141c;border-radius:22px;box-shadow:0 22px 70px rgba(0,0,0,.55)}",
+    "#saturn-policy-admin.open #saturn-policy-panel{display:block}",
+    ".sp-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:16px 18px;border-bottom:1px solid rgba(148,163,184,.18);background:#151b25}",
+    ".sp-title{font-weight:900;font-size:15px;color:#f8fafc}.sp-sub{margin-top:4px;font-size:12px;color:#94a3b8}",
+    ".sp-body{display:grid;gap:12px;padding:16px}.sp-card{border:1px solid rgba(148,163,184,.16);background:#121821;border-radius:16px;padding:14px}",
+    ".sp-card h3{margin:0 0 10px;font-size:13px;color:#e2e8f0}.sp-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}",
+    ".sp-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.sp-field{display:grid;gap:5px;font-size:11px;color:#94a3b8}.sp-field input,.sp-field select,.sp-field textarea{min-height:36px;border:1px solid rgba(148,163,184,.2);background:#0b1118;color:#e5edf8;border-radius:10px;padding:8px 10px;outline:none}.sp-field textarea{min-height:70px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px}.sp-field input[type=checkbox]{min-height:auto;width:18px;height:18px}",
+    ".sp-btn{border:1px solid rgba(148,163,184,.22);background:#1b2430;color:#e5edf8;border-radius:10px;padding:9px 12px;font-size:12px;font-weight:800;cursor:pointer}.sp-btn.primary{border-color:rgba(59,130,246,.45);background:#2563eb;color:white}.sp-btn:disabled{opacity:.55;cursor:not-allowed}",
+    ".sp-status{white-space:pre-wrap;border:1px solid rgba(148,163,184,.16);background:#0b1118;border-radius:12px;padding:10px;font-size:11px;color:#a7b4c7;max-height:180px;overflow:auto}",
+    ".sp-list{display:grid;gap:6px;max-height:160px;overflow:auto}.sp-pill{display:flex;justify-content:space-between;gap:10px;border:1px solid rgba(148,163,184,.13);background:#0b1118;border-radius:10px;padding:8px 10px;font-size:11px;color:#cbd5e1}",
+    "@media(max-width:760px){.sp-grid{grid-template-columns:1fr}}"
+  ].join("");
+  document.head.appendChild(styles);
+
+  const root = document.createElement("div");
+  root.id = "saturn-policy-admin";
+  root.innerHTML = '<div id="saturn-policy-panel"><div class="sp-head"><div><div class="sp-title">Policy Controls</div><div class="sp-sub">Live controls backed by api.saturnws.com policy API. Secrets stay server-side.</div></div><button class="sp-btn" data-close>Close</button></div><div class="sp-body"><div class="sp-card"><h3>Global policy</h3><div class="sp-grid"><label class="sp-field">Update mode<select data-global-update-mode><option value="optional">optional</option><option value="mandatory">mandatory</option></select></label><label class="sp-field">Minimum supported version<input data-global-min-version placeholder="1.0.0-beta"></label><label class="sp-field">Kill switch<input data-global-kill type="checkbox"></label><label class="sp-field">Mandatory update<input data-global-mandatory type="checkbox"></label><label class="sp-field">Blocked actions<textarea data-global-blocked placeholder="one action per line"></textarea></label><label class="sp-field">Features JSON<textarea data-global-features>{}</textarea></label></div><div class="sp-row" style="margin-top:10px"><button class="sp-btn primary" data-save-global>Save global policy</button></div></div><div class="sp-card"><h3>Disabled versions</h3><div class="sp-grid"><label class="sp-field">Version<input data-disabled-version placeholder="1.0.0-beta"></label><label class="sp-field">Reason<input data-disabled-reason placeholder="reason"></label></div><div class="sp-row" style="margin-top:10px"><button class="sp-btn" data-disable-version>Disable version</button><button class="sp-btn" data-enable-version>Remove disabled version</button></div></div><div class="sp-card"><h3>User policy override</h3><div class="sp-grid"><label class="sp-field">Email<input data-user-email placeholder="user@example.com"></label><label class="sp-field">Status<select data-user-status><option value="active">active</option><option value="disabled">disabled</option><option value="banned">banned</option><option value="blocked">blocked</option></select></label><label class="sp-field">Plan<input data-user-plan value="default"></label><label class="sp-field">Subscription status<select data-sub-status><option value="">no change</option><option value="active">active</option><option value="trialing">trialing</option><option value="expired">expired</option><option value="inactive">inactive</option><option value="canceled">canceled</option></select></label></div><div class="sp-row" style="margin-top:10px"><button class="sp-btn primary" data-save-user>Save user policy</button></div></div><div class="sp-card"><h3>Plan features / blocked actions</h3><div class="sp-grid"><label class="sp-field">Plan ID<input data-plan-id value="default"></label><label class="sp-field">Blocked actions<textarea data-plan-blocked placeholder="one action per line"></textarea></label><label class="sp-field">Features JSON<textarea data-plan-features>{}</textarea></label><label class="sp-field">Limits JSON<textarea data-plan-limits>{}</textarea></label></div><div class="sp-row" style="margin-top:10px"><button class="sp-btn primary" data-save-plan>Save plan</button></div></div><div class="sp-card"><h3>Release catalog visibility</h3><div class="sp-grid"><label class="sp-field">Version<input data-release-version value="1.0.0-beta"></label><label class="sp-field">Visibility<select data-release-visibility><option value="public">public</option><option value="internal">internal</option><option value="archived">archived</option><option value="hidden">hidden</option></select></label><label class="sp-field">Release type<input data-release-type value="public_beta"></label><label class="sp-field">Artifact kind<input data-release-kind value="full_setup"></label></div><div class="sp-row" style="margin-top:10px"><button class="sp-btn primary" data-save-release>Save release catalog</button></div></div><div class="sp-card"><h3>Current policy state</h3><div class="sp-status" data-policy-log>Not loaded yet.</div><div class="sp-list" data-release-list></div></div></div></div><button id="saturn-policy-toggle">Policy Controls</button>';
+  document.body.appendChild(root);
+
+  const $ = (sel) => root.querySelector(sel);
+  const log = (message) => { $("[data-policy-log]").textContent = typeof message === "string" ? message : JSON.stringify(message, null, 2); };
+  const token = () => window.sessionStorage.getItem("st_admin_firebase_token") || "";
+  const api = async (path, options) => {
+    const headers = new Headers((options && options.headers) || {});
+    if (!headers.has("Content-Type") && options && options.body) headers.set("Content-Type", "application/json");
+    const bearer = token();
+    if (bearer) headers.set("Authorization", "Bearer " + bearer);
+    const res = await fetch(path, { ...(options || {}), headers, credentials: "same-origin" });
+    const payload = await res.json().catch(() => null);
+    if (!res.ok) throw new Error((payload && payload.error) || ("request_failed_" + res.status));
+    return payload;
+  };
+  const listFromText = (value) => String(value || "").split(/\r?\n|,/).map((x) => x.trim()).filter(Boolean);
+  const parseJson = (value, fallback) => {
+    try { return JSON.parse(value || JSON.stringify(fallback)); } catch { return fallback; }
+  };
+  const render = (state) => {
+    const global = state.global_policy || {};
+    $("[data-global-update-mode]").value = global.update_mode || "optional";
+    $("[data-global-min-version]").value = global.minimum_supported_version || "";
+    $("[data-global-kill]").checked = Boolean(global.kill_switch_enabled);
+    $("[data-global-mandatory]").checked = Boolean(global.mandatory_update_enabled);
+    $("[data-global-blocked]").value = JSON.parse(global.blocked_actions_json || "[]").join("\n");
+    $("[data-global-features]").value = JSON.stringify(JSON.parse(global.features_json || "{}"), null, 2);
+    const releases = Array.isArray(state.releases) ? state.releases : [];
+    $("[data-release-list]").innerHTML = releases.slice(0, 10).map((r) => '<div class="sp-pill"><span>' + r.version + '</span><span>' + r.visibility + ' / ' + r.release_type + '</span></div>').join("");
+    log(state);
+  };
+  const load = async () => {
+    try { render(await api("/api/admin/policy/state")); } catch (err) { log("Policy state failed: " + (err && err.message ? err.message : err)); }
+  };
+
+  $("#saturn-policy-toggle").addEventListener("click", () => { root.classList.toggle("open"); if (root.classList.contains("open")) void load(); });
+  $("[data-close]").addEventListener("click", () => root.classList.remove("open"));
+  $("[data-save-global]").addEventListener("click", async () => {
+    try {
+      log(await api("/api/admin/policy/global-policy", { method: "POST", body: JSON.stringify({
+        update_mode: $("[data-global-update-mode]").value,
+        minimum_supported_version: $("[data-global-min-version]").value,
+        kill_switch_enabled: $("[data-global-kill]").checked,
+        mandatory_update_enabled: $("[data-global-mandatory]").checked,
+        blocked_actions: listFromText($("[data-global-blocked]").value),
+        features: parseJson($("[data-global-features]").value, {}),
+        limits: {}
+      }) }));
+      await load();
+    } catch (err) { log("Save failed: " + (err && err.message ? err.message : err)); }
+  });
+  $("[data-disable-version]").addEventListener("click", async () => {
+    try { log(await api("/api/admin/policy/disabled-versions", { method: "POST", body: JSON.stringify({ version: $("[data-disabled-version]").value, reason: $("[data-disabled-reason]").value }) })); await load(); } catch (err) { log("Disable failed: " + (err && err.message ? err.message : err)); }
+  });
+  $("[data-enable-version]").addEventListener("click", async () => {
+    try { log(await api("/api/admin/policy/disabled-versions", { method: "POST", body: JSON.stringify({ version: $("[data-disabled-version]").value, disabled: false }) })); await load(); } catch (err) { log("Enable failed: " + (err && err.message ? err.message : err)); }
+  });
+  $("[data-save-user]").addEventListener("click", async () => {
+    try { log(await api("/api/admin/policy/users", { method: "POST", body: JSON.stringify({ email: $("[data-user-email]").value, status: $("[data-user-status]").value, plan_id: $("[data-user-plan]").value, subscription_status: $("[data-sub-status]").value }) })); await load(); } catch (err) { log("User save failed: " + (err && err.message ? err.message : err)); }
+  });
+  $("[data-save-plan]").addEventListener("click", async () => {
+    try { log(await api("/api/admin/policy/plan-features", { method: "POST", body: JSON.stringify({ plan_id: $("[data-plan-id]").value, blocked_actions: listFromText($("[data-plan-blocked]").value), features: parseJson($("[data-plan-features]").value, {}), limits: parseJson($("[data-plan-limits]").value, {}) }) })); await load(); } catch (err) { log("Plan save failed: " + (err && err.message ? err.message : err)); }
+  });
+  $("[data-save-release]").addEventListener("click", async () => {
+    try { log(await api("/api/admin/policy/releases", { method: "POST", body: JSON.stringify({ version: $("[data-release-version]").value, channel: "beta", visibility: $("[data-release-visibility]").value, release_type: $("[data-release-type]").value, artifact_kind: $("[data-release-kind]").value }) })); await load(); } catch (err) { log("Release save failed: " + (err && err.message ? err.message : err)); }
+  });
+})();
+`;
+  return new Response(source, {
+    status: 200,
+    headers: {
+      "Content-Type": "application/javascript; charset=utf-8",
+      "Cache-Control": "no-store",
+    },
   });
 }
 
@@ -649,6 +825,116 @@ function releaseObjectKey(channel, version, filename) {
   return `releases/${channel}/${version}/${now}_${sanitizeFilename(filename)}`;
 }
 
+function normalizeArtifactType(value) {
+  const normalized = String(value || "portable").trim().toLowerCase();
+  return ARTIFACT_TYPES.includes(normalized) ? normalized : "portable";
+}
+
+function artifactPackageType(artifactType) {
+  return artifactType === "installed" ? "installed_zip" : "portable_exe";
+}
+
+function artifactContentType(artifactType) {
+  return artifactType === "installed" ? "application/zip" : "application/vnd.microsoft.portable-executable";
+}
+
+function releaseObjectKeyForArtifact(channel, version, artifactType, filename) {
+  const now = new Date().toISOString().replace(/[:.]/g, "-");
+  return `releases/${channel}/${version}/${artifactType}/${now}_${sanitizeFilename(filename)}`;
+}
+
+function normalizeReleaseMeta(channel, version, payload) {
+  const base = {
+    channel,
+    version,
+    artifacts: {},
+  };
+  if (!payload || typeof payload !== "object") return base;
+  if (payload.artifacts && typeof payload.artifacts === "object") {
+    for (const artifactType of ARTIFACT_TYPES) {
+      const value = payload.artifacts[artifactType];
+      if (!value || typeof value !== "object") continue;
+      base.artifacts[artifactType] = {
+        key: String(value.key || "").trim(),
+        channel,
+        version,
+        filename: sanitizeFilename(value.filename || (artifactType === "installed" ? "SaturnWorkspace-app.zip" : "SaturnWS.exe")),
+        size: Number(value.size || 0),
+        sha256: String(value.sha256 || "").trim().toLowerCase(),
+        uploaded_at: String(value.uploaded_at || "").trim(),
+        uploaded_by: String(value.uploaded_by || "").trim(),
+        package_type: String(value.package_type || artifactPackageType(artifactType)).trim().toLowerCase(),
+      };
+    }
+    return base;
+  }
+
+  if (payload.key && payload.sha256) {
+    base.artifacts.portable = {
+      key: String(payload.key || "").trim(),
+      channel,
+      version,
+      filename: sanitizeFilename(payload.filename || "SaturnWS.exe"),
+      size: Number(payload.size || 0),
+      sha256: String(payload.sha256 || "").trim().toLowerCase(),
+      uploaded_at: String(payload.uploaded_at || "").trim(),
+      uploaded_by: String(payload.uploaded_by || "").trim(),
+      package_type: "portable_exe",
+    };
+  }
+  return base;
+}
+
+function manifestArtifactsForRelease(release, downloadUrlBase) {
+  const artifacts = {
+    portable: {
+      url: "",
+      sha256: "",
+      filename: "",
+      size_bytes: 0,
+      package_type: "portable_exe",
+    },
+    installed: {
+      url: "",
+      sha256: "",
+      filename: "",
+      size_bytes: 0,
+      package_type: "installed_zip",
+    },
+  };
+  if (!release || typeof release !== "object" || !release.artifacts || typeof release.artifacts !== "object") {
+    return artifacts;
+  }
+  for (const artifactType of ARTIFACT_TYPES) {
+    const record = release.artifacts[artifactType];
+    if (!record || typeof record !== "object") continue;
+    const key = String(record.key || "").trim();
+    if (!key) continue;
+    artifacts[artifactType] = {
+      url: `${downloadUrlBase}/file/${encodeURIComponent(key)}`,
+      sha256: String(record.sha256 || "").trim().toLowerCase(),
+      filename: String(record.filename || "").trim(),
+      size_bytes: Number(record.size || 0),
+      package_type: String(record.package_type || artifactPackageType(artifactType)).trim().toLowerCase(),
+    };
+  }
+  return artifacts;
+}
+
+function uploadedReleaseArtifacts(release) {
+  const artifacts = release && typeof release === "object" && release.artifacts && typeof release.artifacts === "object"
+    ? release.artifacts
+    : {};
+  const portable = artifacts.portable && artifacts.portable.key && artifacts.portable.sha256 ? artifacts.portable : null;
+  const installed = artifacts.installed && artifacts.installed.key && artifacts.installed.sha256 ? artifacts.installed : null;
+  return { portable, installed, primary: portable || installed };
+}
+
+function artifactDownloadUrl(record, downloadUrlBase) {
+  const key = String(record?.key || "").trim();
+  return key ? `${downloadUrlBase}/file/${encodeURIComponent(key)}` : "";
+}
+
 async function uploadReleaseBinary(request, env, adminEmail) {
   if (!hasOtaBucket(env)) throw new Error("r2_not_enabled");
   const maxMb = Number(env.MAX_UPLOAD_MB || 150);
@@ -660,25 +946,32 @@ async function uploadReleaseBinary(request, env, adminEmail) {
   const form = await request.formData();
   const file = form.get("file");
   if (!(file instanceof File)) throw new Error("missing_file");
-  if (!String(file.name || "").toLowerCase().endsWith(".exe")) throw new Error("invalid_file_type");
+  const artifactType = normalizeArtifactType(form.get("artifact_type"));
+  const lowerName = String(file.name || "").toLowerCase();
+  if (artifactType === "installed") {
+    if (!lowerName.endsWith(".zip")) throw new Error("invalid_file_type");
+  } else if (!lowerName.endsWith(".exe")) {
+    throw new Error("invalid_file_type");
+  }
   if (file.size <= 0) throw new Error("empty_file");
   if (file.size > maxMb * 1024 * 1024) throw new Error("file_too_large");
 
   const channel = normalizeChannel(form.get("channel"));
   const version = normalizeVersion(form.get("version"));
-  const key = releaseObjectKey(channel, version, file.name);
+  const key = releaseObjectKeyForArtifact(channel, version, artifactType, file.name);
   const fileBytes = await file.arrayBuffer();
   const hashBuffer = await crypto.subtle.digest("SHA-256", fileBytes);
   const hashHex = [...new Uint8Array(hashBuffer)].map((b) => b.toString(16).padStart(2, "0")).join("");
 
   await env.OTA_BUCKET.put(key, fileBytes, {
     httpMetadata: {
-      contentType: "application/vnd.microsoft.portable-executable",
+      contentType: artifactContentType(artifactType),
       contentDisposition: `attachment; filename="${sanitizeFilename(file.name)}"`,
     },
     customMetadata: {
       version,
       channel,
+      artifactType,
       uploadedBy: adminEmail,
       sha256: hashHex,
     },
@@ -693,8 +986,21 @@ async function uploadReleaseBinary(request, env, adminEmail) {
     sha256: hashHex,
     uploaded_at: new Date().toISOString(),
     uploaded_by: adminEmail,
+    package_type: artifactPackageType(artifactType),
   };
-  await env.OTA_BUCKET.put(`meta/${channel}/${version}.json`, JSON.stringify(releaseRecord, null, 2), {
+  const metaKey = `meta/${channel}/${version}.json`;
+  const existingMetaObj = await env.OTA_BUCKET.get(metaKey);
+  const existingMeta = existingMetaObj ? normalizeReleaseMeta(channel, version, await existingMetaObj.json()) : normalizeReleaseMeta(channel, version, null);
+  const mergedMeta = {
+    ...existingMeta,
+    channel,
+    version,
+    artifacts: {
+      ...(existingMeta.artifacts || {}),
+      [artifactType]: releaseRecord,
+    },
+  };
+  await env.OTA_BUCKET.put(metaKey, JSON.stringify(mergedMeta, null, 2), {
     httpMetadata: { contentType: "application/json; charset=utf-8" },
   });
   await appendAudit(env, {
@@ -702,10 +1008,11 @@ async function uploadReleaseBinary(request, env, adminEmail) {
     channel,
     version,
     key,
+    artifact_type: artifactType,
     actor: adminEmail,
     at: new Date().toISOString(),
   });
-  return { success: true, release: releaseRecord };
+  return { success: true, release: releaseRecord, artifact_type: artifactType, meta: mergedMeta };
 }
 
 async function publishRelease(request, env, adminEmail) {
@@ -723,17 +1030,26 @@ async function publishRelease(request, env, adminEmail) {
   const metaKey = `meta/${channel}/${version}.json`;
   const metaObj = await env.OTA_BUCKET.get(metaKey);
   if (!metaObj) throw new Error("release_not_uploaded");
-  const release = await metaObj.json();
+  const release = normalizeReleaseMeta(channel, version, await metaObj.json());
   const downloadUrlBase = String(env.PUBLIC_UPDATES_BASE_URL || "https://saturnws.com/updates").replace(/\/+$/, "");
-  const downloadUrl = `${downloadUrlBase}/file/${encodeURIComponent(release.key)}`;
+  const { portable: portableRelease, primary: primaryRelease } = uploadedReleaseArtifacts(release);
+  if (!primaryRelease) throw new Error("release_artifact_not_uploaded");
+  const downloadUrl = portableRelease ? artifactDownloadUrl(portableRelease, downloadUrlBase) : "";
+  const recordDownloadUrl = artifactDownloadUrl(primaryRelease, downloadUrlBase);
+  const artifacts = manifestArtifactsForRelease(release, downloadUrlBase);
 
   const manifest = await loadManifest(env);
   const currentChannel = manifest.channels?.[channel];
+  const hasActiveArtifact = Boolean(
+    String(currentChannel?.download_url || "").trim() ||
+    String(currentChannel?.artifacts?.portable?.url || "").trim() ||
+    String(currentChannel?.artifacts?.installed?.url || "").trim()
+  );
   if (
     currentChannel &&
     typeof currentChannel === "object" &&
     String(currentChannel.version || "").trim() === version &&
-    String(currentChannel.download_url || "").trim()
+    hasActiveArtifact
   ) {
     throw new Error("same_version_already_active");
   }
@@ -747,8 +1063,9 @@ async function publishRelease(request, env, adminEmail) {
     minimum_supported_version: minimumSupportedVersion,
     force_update_deadline: forceUpdateDeadline,
     download_url: downloadUrl,
-    download_sha256: release.sha256 || "",
-    filename: release.filename || "Saturn Workspace.exe",
+    download_sha256: portableRelease?.sha256 || "",
+    filename: portableRelease?.filename || "",
+    artifacts,
     notes,
     remote_config: {
       ...(manifest.channels?.[channel]?.remote_config || {}),
@@ -767,8 +1084,9 @@ async function publishRelease(request, env, adminEmail) {
     minimum_supported_version: channel === "stable" ? minimumSupportedVersion : String(manifest.minimum_supported_version || ""),
     force_update_deadline: channel === "stable" ? forceUpdateDeadline : String(manifest.force_update_deadline || ""),
     download_url: channel === "stable" ? downloadUrl : manifest.download_url || "",
-    download_sha256: channel === "stable" ? release.sha256 || "" : manifest.download_sha256 || "",
+    download_sha256: channel === "stable" ? portableRelease?.sha256 || "" : manifest.download_sha256 || "",
     filename: channel === "stable" ? channelManifest.filename : manifest.filename || "",
+    artifacts: channel === "stable" ? artifacts : manifest.artifacts || structuredClone(DEFAULT_MANIFEST.artifacts),
     notes: channel === "stable" ? notes : manifest.notes || "",
     remote_config: channel === "stable" ? channelManifest.remote_config : safePlainObject(manifest.remote_config),
     channels: {
@@ -783,9 +1101,9 @@ async function publishRelease(request, env, adminEmail) {
     version,
     channel,
     release_notes: notes,
-    download_url: downloadUrl,
-    checksum_sha256: release.sha256 || null,
-    file_size_bytes: release.size || null,
+    download_url: recordDownloadUrl,
+    checksum_sha256: primaryRelease.sha256 || null,
+    file_size_bytes: primaryRelease.size || null,
     is_mandatory: mandatory,
     created_by: adminEmail,
   });
@@ -809,12 +1127,15 @@ async function rollbackRelease(request, env, adminEmail) {
   const metaKey = `meta/${channel}/${version}.json`;
   const metaObj = await env.OTA_BUCKET.get(metaKey);
   if (!metaObj) throw new Error("rollback_release_not_found");
-  const release = await metaObj.json();
+  const release = normalizeReleaseMeta(channel, version, await metaObj.json());
 
   const manifest = await loadManifest(env);
   const existing = manifest.channels?.[channel] || {};
   const downloadUrlBase = String(env.PUBLIC_UPDATES_BASE_URL || "https://saturnws.com/updates").replace(/\/+$/, "");
-  const downloadUrl = `${downloadUrlBase}/file/${encodeURIComponent(release.key)}`;
+  const { portable: portableRelease, primary: primaryRelease } = uploadedReleaseArtifacts(release);
+  if (!primaryRelease) throw new Error("release_artifact_not_uploaded");
+  const downloadUrl = portableRelease ? artifactDownloadUrl(portableRelease, downloadUrlBase) : "";
+  const artifacts = manifestArtifactsForRelease(release, downloadUrlBase);
   const updatedChannel = {
     ...existing,
     version,
@@ -822,8 +1143,9 @@ async function rollbackRelease(request, env, adminEmail) {
     disabled: false,
     disabled_reason: "",
     download_url: downloadUrl,
-    download_sha256: release.sha256 || existing.download_sha256 || "",
-    filename: release.filename || existing.filename || "Saturn Workspace.exe",
+    download_sha256: portableRelease?.sha256 || existing.download_sha256 || "",
+    filename: portableRelease?.filename || existing.filename || "",
+    artifacts,
     published_at: new Date().toISOString(),
   };
 
@@ -834,8 +1156,9 @@ async function rollbackRelease(request, env, adminEmail) {
     disabled: channel === "stable" ? false : Boolean(manifest.disabled),
     disabled_reason: channel === "stable" ? "" : String(manifest.disabled_reason || ""),
     download_url: channel === "stable" ? downloadUrl : manifest.download_url,
-    download_sha256: channel === "stable" ? release.sha256 || "" : manifest.download_sha256 || "",
+    download_sha256: channel === "stable" ? portableRelease?.sha256 || "" : manifest.download_sha256 || "",
     filename: channel === "stable" ? updatedChannel.filename : manifest.filename,
+    artifacts: channel === "stable" ? artifacts : manifest.artifacts || structuredClone(DEFAULT_MANIFEST.artifacts),
     channels: {
       stable: manifest.channels?.stable || {},
       beta: manifest.channels?.beta || {},
@@ -849,6 +1172,72 @@ async function rollbackRelease(request, env, adminEmail) {
     version,
     actor: adminEmail,
     at: new Date().toISOString(),
+  });
+  return { success: true, manifest: signedManifest };
+}
+
+async function resetOtaBaseline(request, env, adminEmail) {
+  if (!hasOtaBucket(env)) throw new Error("r2_not_enabled");
+  const body = await request.json().catch(() => ({}));
+  const channel = normalizeChannel(body?.channel);
+  const version = normalizeVersion(body?.version || "1.0.0-beta");
+  const resetAt = new Date().toISOString();
+  const manifest = await loadManifest(env);
+  const remoteConfig = {
+    ...safePlainObject(manifest.remote_config),
+    ...safePlainObject(manifest.channels?.[channel]?.remote_config),
+    update_mode: "optional",
+  };
+  const baselineChannel = {
+    version,
+    available: false,
+    disabled: false,
+    disabled_reason: "",
+    mandatory: false,
+    rollout_percent: 0,
+    minimum_supported_version: "",
+    force_update_deadline: "",
+    download_url: "",
+    download_sha256: "",
+    filename: "",
+    artifacts: structuredClone(DEFAULT_MANIFEST.artifacts),
+    notes: "Public beta baseline. No OTA update is available for this baseline.",
+    remote_config: remoteConfig,
+    published_at: resetAt,
+    release_visibility: "public",
+    release_type: "public_beta",
+  };
+  const nextManifest = {
+    ...structuredClone(DEFAULT_MANIFEST),
+    ...manifest,
+    version,
+    available: false,
+    mandatory: false,
+    disabled: false,
+    disabled_reason: "",
+    rollout_percent: 0,
+    minimum_supported_version: "",
+    force_update_deadline: "",
+    download_url: "",
+    download_sha256: "",
+    filename: "",
+    artifacts: structuredClone(DEFAULT_MANIFEST.artifacts),
+    notes: "Public beta baseline. No public OTA update is available yet.",
+    history_reset_at: resetAt,
+    remote_config: remoteConfig,
+    channels: {
+      stable: {},
+      beta: {},
+      [channel]: baselineChannel,
+    },
+  };
+  const signedManifest = await saveManifest(env, nextManifest);
+  await appendAudit(env, {
+    type: "ota_baseline_reset",
+    channel,
+    version,
+    actor: adminEmail,
+    at: resetAt,
   });
   return { success: true, manifest: signedManifest };
 }
@@ -868,6 +1257,9 @@ function applyChannelToRoot(manifest, channel, channelManifest) {
     download_url: channelManifest.download_url || "",
     download_sha256: channelManifest.download_sha256 || "",
     filename: channelManifest.filename || "",
+    artifacts: channelManifest.artifacts && typeof channelManifest.artifacts === "object"
+      ? channelManifest.artifacts
+      : structuredClone(DEFAULT_MANIFEST.artifacts),
     notes: channelManifest.notes || "",
     remote_config: safePlainObject(channelManifest.remote_config),
   };
@@ -883,6 +1275,37 @@ async function getRemoteControls(url, env) {
     controls: mergeChannelControls(channelManifest, {}),
     manifest,
   };
+}
+
+async function proxyPolicyAdmin(request, env, targetPath) {
+  const token = String(env.POLICY_ADMIN_TOKEN || "").trim();
+  if (!token) throw new Error("policy_admin_token_missing");
+  const base = String(env.POLICY_API_BASE || "https://api.saturnws.com").trim().replace(/\/+$/, "");
+  const headers = {
+    Accept: "application/json",
+    Authorization: `Bearer ${token}`,
+  };
+  const init = {
+    method: request.method,
+    headers,
+  };
+  if (!["GET", "HEAD"].includes(request.method)) {
+    headers["Content-Type"] = "application/json; charset=utf-8";
+    const body = await request.text();
+    init.body = body || "{}";
+  }
+  const response = await fetch(`${base}${targetPath}`, init);
+  const text = await response.text();
+  let payload = null;
+  try {
+    payload = text ? JSON.parse(text) : null;
+  } catch {
+    payload = { success: false, error: text || `policy_admin_${response.status}` };
+  }
+  if (!response.ok) {
+    throw new Error(payload?.error || `policy_admin_${response.status}`);
+  }
+  return payload || { success: true };
 }
 
 async function updateRemoteControls(request, env, adminEmail) {
@@ -961,20 +1384,28 @@ async function disableRelease(request, env, adminEmail) {
 
 async function getReleaseHistory(env, channel) {
   if (!hasOtaBucket(env)) return { success: true, events: [] };
+  const manifest = await loadManifest(env);
+  const resetAt = Date.parse(String(manifest.history_reset_at || ""));
   const audit = await loadAudit(env);
   const filtered = audit
     .filter((event) => !channel || event.channel === channel)
+    .filter((event) => !Number.isFinite(resetAt) || Date.parse(String(event.at || "")) >= resetAt)
     .sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
   return { success: true, events: filtered };
 }
 
 async function loadDashboardState(env) {
   const manifest = await loadManifest(env);
+  const resetAt = Date.parse(String(manifest.history_reset_at || ""));
   const audit = await loadAudit(env);
+  const recentEvents = audit
+    .filter((event) => !Number.isFinite(resetAt) || Date.parse(String(event.at || "")) >= resetAt)
+    .slice(-50)
+    .reverse();
   return {
     success: true,
     manifest,
-    recent_events: audit.slice(-50).reverse(),
+    recent_events: recentEvents,
   };
 }
 
@@ -988,6 +1419,10 @@ async function loadManifest(env) {
     return {
       ...structuredClone(DEFAULT_MANIFEST),
       ...parsed,
+      artifacts: {
+        ...structuredClone(DEFAULT_MANIFEST.artifacts),
+        ...(parsed.artifacts && typeof parsed.artifacts === "object" ? parsed.artifacts : {}),
+      },
       channels: {
         stable: {},
         beta: {},
@@ -1436,10 +1871,39 @@ async function createPromoCode(request, env, adminEmail) {
 
 async function listOtaUpdates(url, env) {
   const limit = safeInt(url.searchParams.get("limit"), 100);
+  const manifest = await loadManifest(env);
+  const resetAt = Date.parse(String(manifest.history_reset_at || ""));
   const data = await supabaseRequest(env, "ota_updates", "GET", {
     query: `select=*&order=created_at.desc&limit=${limit}`,
   });
-  return { success: true, items: data || [] };
+  const publicItems = (Array.isArray(data) ? data : [])
+    .filter((item) => !isInternalTestRelease(item?.version))
+    .filter((item) => {
+      if (!Number.isFinite(resetAt)) return true;
+      const itemAt = Date.parse(String(item?.created_at || item?.published_at || ""));
+      return Number.isFinite(itemAt) && itemAt >= resetAt;
+    });
+  if (!publicItems.some((item) => String(item?.version || "") === "1.0.0-beta")) {
+    publicItems.unshift({
+      id: "baseline-1.0.0-beta",
+      version: "1.0.0-beta",
+      channel: "beta",
+      release_notes: "First public beta baseline.",
+      download_url: "",
+      is_mandatory: false,
+      is_published: true,
+      rollout_percent: 0,
+      minimum_supported_version: null,
+      force_update_deadline: null,
+      created_at: Number.isFinite(resetAt) ? new Date(resetAt).toISOString() : "2026-05-28T20:46:41.605Z",
+    });
+  }
+  return { success: true, items: publicItems.slice(0, limit) };
+}
+
+function isInternalTestRelease(version) {
+  const value = String(version || "").trim().toLowerCase();
+  return value.includes("-test") || value === "1.0.8-beta";
 }
 
 async function createOtaUpdate(request, env, adminEmail) {

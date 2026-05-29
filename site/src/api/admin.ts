@@ -313,6 +313,7 @@ export type AdminReleaseUpload = {
   sha256: string
   uploaded_at: string
   uploaded_by: string
+  package_type?: 'portable_exe' | 'installed_zip'
 }
 
 export type AdminReleaseManifest = {
@@ -325,14 +326,21 @@ export type AdminReleaseManifest = {
   notes: string
   channels?: Record<string, Partial<AdminReleaseManifest>>
   manifest_signature?: string
+  history_reset_at?: string
 }
 
-export async function uploadReleaseBinary(payload: { file: File; version: string; channel: string }) {
+export async function uploadReleaseBinary(payload: {
+  file: File
+  version: string
+  channel: string
+  artifact_type?: 'portable' | 'installed'
+}) {
   const form = new FormData()
   form.set('file', payload.file)
   form.set('version', payload.version)
   form.set('channel', payload.channel)
-  return adminFetch<{ success: boolean; release: AdminReleaseUpload }>('/upload', {
+  if (payload.artifact_type) form.set('artifact_type', payload.artifact_type)
+  return adminFetch<{ success: boolean; release: AdminReleaseUpload; artifact_type: 'portable' | 'installed' }>('/upload', {
     method: 'POST',
     body: form,
   })
@@ -363,6 +371,13 @@ export async function rollbackRelease(payload: { version: string; channel: strin
 
 export async function disableRelease(payload: { channel: string; reason?: string }) {
   return adminFetch<{ success: boolean; manifest: AdminReleaseManifest }>('/releases/disable', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function resetOtaBaseline(payload: { channel: string; version?: string }) {
+  return adminFetch<{ success: boolean; manifest: AdminReleaseManifest }>('/reset-baseline', {
     method: 'POST',
     body: JSON.stringify(payload),
   })

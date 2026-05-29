@@ -15,6 +15,7 @@ import {
   fetchUserDetail,
   patchSubscriptionStatus,
   publishRelease,
+  resetOtaBaseline,
   resetSubscriptionHwid,
   rollbackRelease,
   updateRemoteControls,
@@ -211,7 +212,8 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
   const [otaRollout, setOtaRollout] = useState('100')
   const [otaMinimumVersion, setOtaMinimumVersion] = useState('')
   const [otaForceDeadline, setOtaForceDeadline] = useState('')
-  const [otaFile, setOtaFile] = useState<File | null>(null)
+  const [otaInstalledFile, setOtaInstalledFile] = useState<File | null>(null)
+  const [otaPortableFile, setOtaPortableFile] = useState<File | null>(null)
   const [rollbackVersion, setRollbackVersion] = useState('')
   const [disableReason, setDisableReason] = useState('')
 
@@ -384,7 +386,7 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
   }
 
   const handlePublishOta = async () => {
-    if (!otaVersion.trim() || !otaFile) return
+    if (!otaVersion.trim() || !otaInstalledFile) return
     setSaving(true)
     setError(null)
     try {
@@ -392,7 +394,20 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
       const version = otaVersion.trim()
       const shouldForceUpdate = otaMandatory || otaMode === 'force' || otaMode === 'required'
       const forceDeadlineIso = shouldForceUpdate && otaForceDeadline ? new Date(otaForceDeadline).toISOString() : ''
-      const upload = await uploadReleaseBinary({ file: otaFile, version, channel })
+      const installedUpload = await uploadReleaseBinary({
+        file: otaInstalledFile,
+        version,
+        channel,
+        artifact_type: 'installed',
+      })
+      const portableUpload = otaPortableFile
+        ? await uploadReleaseBinary({
+            file: otaPortableFile,
+            version,
+            channel,
+            artifact_type: 'portable',
+          })
+        : null
       const publish = await publishRelease({
         version,
         channel,
@@ -420,8 +435,13 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
         },
         ...prev,
       ])
-      setNotice(isAr ? `تم نشر ${version}. بصمة SHA-256: ${upload.release.sha256}` : `Published ${version}. SHA-256 ${upload.release.sha256}`)
-      setOtaFile(null)
+      setNotice(
+        isAr
+          ? `تم نشر ${version}. بصمة ZIP: ${installedUpload.release.sha256}${portableUpload ? ` / EXE: ${portableUpload.release.sha256}` : ''}`
+          : `Published ${version}. ZIP SHA-256 ${installedUpload.release.sha256}${portableUpload ? ` / EXE ${portableUpload.release.sha256}` : ''}`,
+      )
+      setOtaInstalledFile(null)
+      setOtaPortableFile(null)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'ota_publish_failed'
       setError(
@@ -429,6 +449,25 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
           ? 'This version is already active on the selected channel. Publish a higher version to trigger desktop updates.'
           : message,
       )
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleResetOtaBaseline = async () => {
+    setSaving(true)
+    setError(null)
+    try {
+      const channel = otaChannel.trim() || 'beta'
+      const version = otaVersion.trim() || '1.0.0-beta'
+      await resetOtaBaseline({ channel, version })
+      setOtaVersion(version)
+      setOtaInstalledFile(null)
+      setOtaPortableFile(null)
+      await loadAll()
+      setNotice(isAr ? `تم تصفير قناة ${channel} على ${version}.` : `Reset ${channel} baseline to ${version}.`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'ota_reset_failed')
     } finally {
       setSaving(false)
     }
@@ -897,7 +936,24 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
                     <option value="beta">{isAr ? 'بيتا' : 'Beta'}</option>
                     <option value="stable">{isAr ? 'مستقر' : 'Stable'}</option>
                   </select>
-                  <input className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" type="file" accept=".exe,application/vnd.microsoft.portable-executable,application/octet-stream" onChange={(e) => setOtaFile(e.currentTarget.files?.[0] || null)} />
+                  <label className="grid gap-1 text-xs text-white/65">
+                    <span>{isAr ? 'ملف التحديث المثبت ZIP' : 'Installed update ZIP'}</span>
+                    <input
+                      className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none file:me-3 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-1.5 file:text-white"
+                      type="file"
+                      accept=".zip,application/zip,application/x-zip-compressed"
+                      onChange={(e) => setOtaInstalledFile(e.currentTarget.files?.[0] || null)}
+                    />
+                  </label>
+                  <label className="grid gap-1 text-xs text-white/65">
+                    <span>{isAr ? 'ملف Portable EXE اختياري' : 'Optional portable EXE'}</span>
+                    <input
+                      className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none file:me-3 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-1.5 file:text-white"
+                      type="file"
+                      accept=".exe,application/vnd.microsoft.portable-executable,application/octet-stream"
+                      onChange={(e) => setOtaPortableFile(e.currentTarget.files?.[0] || null)}
+                    />
+                  </label>
                   <select className="site-select" value={otaMode} onChange={(e) => setOtaMode(e.target.value as 'optional' | 'force' | 'required' | 'silent')} disabled={otaMandatory}>
                     <option value="optional">{isAr ? 'اختياري' : 'Optional'}</option>
                     <option value="silent">{isAr ? 'صامت' : 'Silent'}</option>
@@ -917,10 +973,19 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
                   </label>
                 </div>
                 <textarea className="mt-3 min-h-28 w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" placeholder={isAr ? 'ملاحظات الإصدار' : 'Release notes'} value={otaNotes} onChange={(e) => setOtaNotes(e.target.value)} />
-                {otaFile ? <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-white/65">{otaFile.name} - {(otaFile.size / 1024 / 1024).toFixed(2)} MB</div> : null}
-                <button className="btn-primary mt-3 rounded-xl px-4 py-2 text-sm font-semibold" onClick={() => void handlePublishOta()} disabled={saving || !otaVersion.trim() || !otaFile}>
-                  {saving ? (isAr ? 'جار التنفيذ...' : 'Working...') : isAr ? 'نشر التحديث' : 'Publish Update'}
-                </button>
+                <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs leading-6 text-white/65">
+                  <div>{isAr ? 'الملف الأساسي للتحديث الهوائي هو ZIP الناتج من build_installed_update_package.' : 'The required OTA artifact is the ZIP generated by build_installed_update_package.'}</div>
+                  {otaInstalledFile ? <div className="text-white/80">{isAr ? 'ZIP:' : 'ZIP:'} {otaInstalledFile.name} - {(otaInstalledFile.size / 1024 / 1024).toFixed(2)} MB</div> : null}
+                  {otaPortableFile ? <div className="text-white/70">{isAr ? 'EXE اختياري:' : 'Optional EXE:'} {otaPortableFile.name} - {(otaPortableFile.size / 1024 / 1024).toFixed(2)} MB</div> : null}
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button className="btn-primary rounded-xl px-4 py-2 text-sm font-semibold" onClick={() => void handlePublishOta()} disabled={saving || !otaVersion.trim() || !otaInstalledFile}>
+                    {saving ? (isAr ? 'جار التنفيذ...' : 'Working...') : isAr ? 'نشر التحديث' : 'Publish Update'}
+                  </button>
+                  <button className="rounded-xl border border-white/20 bg-white/[0.03] px-4 py-2 text-sm font-semibold text-white/80 hover:border-white/35 hover:bg-white/[0.06]" onClick={() => void handleResetOtaBaseline()} disabled={saving || !otaVersion.trim()}>
+                    {isAr ? 'تصفير التحديثات من هذا الإصدار' : 'Reset Updates From This Version'}
+                  </button>
+                </div>
               </article>
               <aside className="grid gap-4">
                 <article className="surface-card p-5">
