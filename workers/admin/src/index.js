@@ -1327,7 +1327,11 @@ async function proxyPolicyAdmin(request, env, targetPath) {
     const body = await request.text();
     init.body = body || "{}";
   }
-  const response = await fetch(`${base}${targetPath}`, init);
+  const policyRequest = new Request(`${base}${targetPath}`, init);
+  const response =
+    env.POLICY_WORKER && typeof env.POLICY_WORKER.fetch === "function"
+      ? await env.POLICY_WORKER.fetch(policyRequest)
+      : await fetch(policyRequest);
   const text = await response.text();
   let payload = null;
   try {

@@ -16,6 +16,10 @@ routes = [
 binding = "OTA_BUCKET"
 bucket_name = "saturnws-ota"
 
+[[services]]
+binding = "POLICY_WORKER"
+service = "saturnws-policy"
+
 [vars]
 ADMIN_ORIGIN = "https://admin.saturnws.com"
 PUBLIC_UPDATES_BASE_URL = "https://saturnws.com/updates"
