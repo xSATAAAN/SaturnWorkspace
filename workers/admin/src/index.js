@@ -1333,12 +1333,21 @@ async function proxyPolicyAdmin(request, env, targetPath) {
   try {
     payload = text ? JSON.parse(text) : null;
   } catch {
-    payload = { success: false, error: text || `policy_admin_${response.status}` };
+    payload = { success: false, error: compactUpstreamError(text, response.status, targetPath) };
   }
   if (!response.ok) {
-    throw new Error(payload?.error || `policy_admin_${response.status}`);
+    throw new Error(compactUpstreamError(payload?.error || "", response.status, targetPath));
   }
   return payload || { success: true };
+}
+
+function compactUpstreamError(message, status, targetPath) {
+  const text = String(message || "").trim();
+  const lower = text.toLowerCase();
+  if (lower.startsWith("<!doctype") || lower.startsWith("<html") || lower.includes("site not found")) {
+    return `policy_admin_upstream_html_${status}:${targetPath}`;
+  }
+  return text || `policy_admin_${status}:${targetPath}`;
 }
 
 async function updateRemoteControls(request, env, adminEmail) {

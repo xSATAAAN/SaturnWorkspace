@@ -6,6 +6,15 @@ function adminBaseUrl() {
   if (host === 'admin.saturnws.com' || host === 'admin-api.saturnws.com') return '/api/admin'
   return 'https://admin.saturnws.com/api/admin'
 }
+
+function compactAdminError(message: unknown, status: number, path: string) {
+  const text = String(message || '').trim()
+  const lower = text.toLowerCase()
+  if (lower.startsWith('<!doctype') || lower.startsWith('<html') || lower.includes('site not found')) {
+    return `admin_upstream_html_${status}:${path}`
+  }
+  return text || `request_failed_${status}:${path}`
+}
 const ADMIN_FIREBASE_TOKEN_KEY = 'st_admin_firebase_token'
 let inMemoryBearerToken = ''
 
@@ -216,19 +225,22 @@ async function adminFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (token) headers.set('Authorization', `Bearer ${token}`)
 
   const response = await fetch(`${adminBaseUrl()}${path}`, { ...init, headers, credentials: 'same-origin' })
+  const raw = await response.text()
   let payload: unknown
   try {
-    payload = await response.json()
+    payload = raw ? JSON.parse(raw) : undefined
   } catch {
     payload = undefined
   }
   if (!response.ok) {
-    const message =
+    const rawMessage =
       typeof payload === 'object' && payload !== null && 'error' in payload && typeof payload.error === 'string'
         ? payload.error
-        : `request_failed_${response.status}`
+        : raw || `request_failed_${response.status}`
+    const message = compactAdminError(rawMessage, response.status, path)
     throw new ApiError(message, response.status)
   }
+  if (payload === undefined && raw) throw new ApiError(compactAdminError(raw, response.status, path), response.status)
   return payload as T
 }
 

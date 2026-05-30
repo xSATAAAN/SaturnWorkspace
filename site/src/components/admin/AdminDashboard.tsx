@@ -248,7 +248,7 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
     setLoading(true)
     setError(null)
     try {
-      const [dashboard, access, subs, promos, ota, support, crash, groups, audit, controls] = await Promise.all([
+      const results = await Promise.allSettled([
         fetchAdminDashboard(),
         fetchAccessRequests({ limit: 200 }),
         fetchSubscriptions({ limit: 200 }),
@@ -260,17 +260,37 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
         fetchAuditLog(),
         fetchRemoteControls(remoteChannel),
       ])
-      setKpis(dashboard.kpis || {})
-      setRecentActivity(dashboard.recent_activity || [])
-      setAccessRequests(access.items || [])
-      setSubscriptions(subs.items || [])
-      setPromoCodes(promos.items || [])
-      setOtaUpdates(ota.items || [])
-      setSupportThreads(support.threads || [])
-      setCrashes(crash.items || [])
-      setCrashGroups(groups.items || [])
-      setAuditLog(audit.items || [])
-      applyRemoteControlState(controls.controls || {})
+      const errors: string[] = []
+      const fulfilled = <T,>(result: PromiseSettledResult<T>, label: string): T | null => {
+        if (result.status === 'fulfilled') return result.value
+        const message = result.reason instanceof Error ? result.reason.message : String(result.reason || 'request_failed')
+        errors.push(`${label}: ${message}`)
+        return null
+      }
+      const dashboard = fulfilled(results[0], 'dashboard')
+      const access = fulfilled(results[1], 'access')
+      const subs = fulfilled(results[2], 'subscriptions')
+      const promos = fulfilled(results[3], 'promos')
+      const ota = fulfilled(results[4], 'ota')
+      const support = fulfilled(results[5], 'support')
+      const crash = fulfilled(results[6], 'crashes')
+      const groups = fulfilled(results[7], 'crash-groups')
+      const audit = fulfilled(results[8], 'audit')
+      const controls = fulfilled(results[9], 'remote-controls')
+      if (dashboard) {
+        setKpis(dashboard.kpis || {})
+        setRecentActivity(dashboard.recent_activity || [])
+      }
+      if (access) setAccessRequests(access.items || [])
+      if (subs) setSubscriptions(subs.items || [])
+      if (promos) setPromoCodes(promos.items || [])
+      if (ota) setOtaUpdates(ota.items || [])
+      if (support) setSupportThreads(support.threads || [])
+      if (crash) setCrashes(crash.items || [])
+      if (groups) setCrashGroups(groups.items || [])
+      if (audit) setAuditLog(audit.items || [])
+      if (controls) applyRemoteControlState(controls.controls || {})
+      if (errors.length) setError(errors.join(' | '))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'failed_to_load_admin_data')
     } finally {
