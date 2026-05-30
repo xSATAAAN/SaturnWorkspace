@@ -244,6 +244,25 @@ export default {
         await appendAudit(env, { type: "policy_release_catalog_update", actor: adminEmail, at: new Date().toISOString() });
         return json(payload, 200, corsHeaders(request, env));
       }
+      if (url.pathname === "/api/admin/policy/support" && request.method === "GET") {
+        await requireAdmin(request, env);
+        return json(await proxyPolicyAdmin(request, env, "/v1/admin/support"), 200, corsHeaders(request, env));
+      }
+      if (url.pathname === "/api/admin/policy/support/messages" && request.method === "GET") {
+        await requireAdmin(request, env);
+        const threadId = url.searchParams.get("thread_id") || "";
+        return json(
+          await proxyPolicyAdmin(request, env, `/v1/admin/support/messages?thread_id=${encodeURIComponent(threadId)}`),
+          200,
+          corsHeaders(request, env),
+        );
+      }
+      if (url.pathname === "/api/admin/policy/support/reply" && request.method === "POST") {
+        const adminEmail = await requireAdmin(request, env);
+        const payload = await proxyPolicyAdmin(request, env, "/v1/admin/support/reply");
+        await appendAudit(env, { type: "support_reply", actor: adminEmail, at: new Date().toISOString() });
+        return json(payload, 200, corsHeaders(request, env));
+      }
       if (url.pathname === "/api/admin/releases/disable" && request.method === "POST") {
         const adminEmail = await requireAdmin(request, env);
         return json(await disableRelease(request, env, adminEmail), 200, corsHeaders(request, env));

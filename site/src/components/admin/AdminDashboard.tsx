@@ -12,12 +12,15 @@ import {
   fetchPromoCodes,
   fetchRemoteControls,
   fetchSubscriptions,
+  fetchSupportMessages,
+  fetchSupportThreads,
   fetchUserDetail,
   patchSubscriptionStatus,
   publishRelease,
   resetOtaBaseline,
   resetSubscriptionHwid,
   rollbackRelease,
+  sendSupportReply,
   updateRemoteControls,
   uploadReleaseBinary,
   type AdminAccessRequest,
@@ -28,6 +31,8 @@ import {
   type AdminPromoCode,
   type AdminRemoteControls,
   type AdminSubscription,
+  type AdminSupportMessage,
+  type AdminSupportThread,
   type AdminUserDetail,
 } from '../../api/admin'
 
@@ -35,7 +40,7 @@ type AdminDashboardProps = {
   lang: 'en' | 'ar'
 }
 
-type AdminPage = 'overview' | 'users' | 'subscriptions' | 'promos' | 'ota' | 'controls' | 'crashes' | 'audit'
+type AdminPage = 'overview' | 'users' | 'subscriptions' | 'promos' | 'ota' | 'controls' | 'support' | 'crashes' | 'audit'
 
 const pageSize = 12
 const DEFAULT_DURATION_DAYS = 30
@@ -176,6 +181,7 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
   const [subscriptions, setSubscriptions] = useState<AdminSubscription[]>([])
   const [promoCodes, setPromoCodes] = useState<AdminPromoCode[]>([])
   const [otaUpdates, setOtaUpdates] = useState<AdminOtaUpdate[]>([])
+  const [supportThreads, setSupportThreads] = useState<AdminSupportThread[]>([])
   const [crashes, setCrashes] = useState<AdminCrashLog[]>([])
   const [crashGroups, setCrashGroups] = useState<AdminCrashGroup[]>([])
   const [auditLog, setAuditLog] = useState<AdminAuditLogItem[]>([])
@@ -188,6 +194,10 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
   const [subscriptionPage, setSubscriptionPage] = useState(1)
   const [crashPage, setCrashPage] = useState(1)
   const [expandedCrashId, setExpandedCrashId] = useState<string | null>(null)
+  const [selectedSupportThread, setSelectedSupportThread] = useState<AdminSupportThread | null>(null)
+  const [supportMessages, setSupportMessages] = useState<AdminSupportMessage[]>([])
+  const [supportReply, setSupportReply] = useState('')
+  const [supportLoading, setSupportLoading] = useState(false)
   const [selectedUser, setSelectedUser] = useState<AdminUserDetail | null>(null)
   const [selectedUserLoading, setSelectedUserLoading] = useState(false)
 
@@ -228,7 +238,7 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
       title: isAr ? 'إدارة Saturn Workspace' : 'Saturn Workspace Admin',
       subtitle: isAr
         ? 'إدارة الاشتراكات، التحديثات الهوائية، الأخطاء، والتحكمات البعيدة.'
-        : 'Manage subscriptions, OTA releases, crash telemetry, and remote controls.',
+        : 'Manage subscriptions, OTA releases, support messages, crash telemetry, and remote controls.',
     }),
     [isAr],
   )
@@ -237,12 +247,13 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
     setLoading(true)
     setError(null)
     try {
-      const [dashboard, access, subs, promos, ota, crash, groups, audit, controls] = await Promise.all([
+      const [dashboard, access, subs, promos, ota, support, crash, groups, audit, controls] = await Promise.all([
         fetchAdminDashboard(),
         fetchAccessRequests({ limit: 200 }),
         fetchSubscriptions({ limit: 200 }),
         fetchPromoCodes(),
         fetchOtaUpdates(),
+        fetchSupportThreads(),
         fetchCrashLogs({ limit: 200 }),
         fetchCrashGroups(),
         fetchAuditLog(),
@@ -254,6 +265,7 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
       setSubscriptions(subs.items || [])
       setPromoCodes(promos.items || [])
       setOtaUpdates(ota.items || [])
+      setSupportThreads(support.threads || [])
       setCrashes(crash.items || [])
       setCrashGroups(groups.items || [])
       setAuditLog(audit.items || [])
@@ -542,6 +554,40 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
     }
   }
 
+  const handleOpenSupportThread = async (thread: AdminSupportThread) => {
+    setSupportLoading(true)
+    setError(null)
+    try {
+      const result = await fetchSupportMessages(thread.id)
+      setSelectedSupportThread(result.thread || thread)
+      setSupportMessages(result.messages || [])
+      setSupportThreads((prev) => prev.map((item) => (item.id === thread.id ? { ...item, unread_count: 0 } : item)))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'support_thread_failed')
+    } finally {
+      setSupportLoading(false)
+    }
+  }
+
+  const handleSendSupportReply = async () => {
+    const body = supportReply.trim()
+    if (!selectedSupportThread || !body) return
+    setSaving(true)
+    setError(null)
+    try {
+      await sendSupportReply({ thread_id: selectedSupportThread.id, body })
+      setSupportReply('')
+      await handleOpenSupportThread(selectedSupportThread)
+      const latest = await fetchSupportThreads()
+      setSupportThreads(latest.threads || [])
+      setNotice(isAr ? 'تم إرسال رد الدعم.' : 'Support reply sent.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'support_reply_failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const applyAccessRequestToForm = (request: AdminAccessRequest) => {
     setNewSubscriptionEmail(request.user_email || '')
     setNewSubscriptionUserId(request.user_id || '')
@@ -595,6 +641,7 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
     { id: 'controls', label: isAr ? 'التحكمات البعيدة' : 'Remote Controls', hint: isAr ? 'الرايات والنشر والإيقاف' : 'Flags, rollout, kill switch' },
     { id: 'crashes', label: isAr ? 'سجل الأخطاء' : 'Crash Telemetry', hint: isAr ? 'التجميع والسجلات الخام' : 'Groups and raw logs' },
     { id: 'audit', label: isAr ? 'سجل الإدارة' : 'Audit Log', hint: isAr ? 'إجراءات الأدمن' : 'Admin actions' },
+    { id: 'support', label: isAr ? 'رسائل الدعم' : 'Support', hint: isAr ? 'رسائل المستخدمين والردود' : 'User messages and replies' },
   ]
 
   const kpiCards = [
@@ -1062,6 +1109,95 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
               <button className="btn-primary mt-4 rounded-xl px-4 py-2 text-sm font-semibold" disabled={saving} onClick={() => void handleSaveControls()}>
                 {isAr ? 'حفظ التحكمات' : 'Save Remote Controls'}
               </button>
+            </section>
+          ) : null}
+
+          {activePage === 'support' ? (
+            <section className="grid gap-4 xl:grid-cols-[420px_minmax(0,1fr)] xl:items-start">
+              <article className="surface-card min-w-0 overflow-hidden p-5">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-semibold text-white/85">{isAr ? 'رسائل المستخدمين' : 'User Messages'}</h3>
+                  <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-white/60">
+                    {supportThreads.length}
+                  </span>
+                </div>
+                <div className="grid gap-2">
+                  {supportThreads.length ? supportThreads.map((thread) => (
+                    <button
+                      key={thread.id}
+                      className={`w-full min-w-0 overflow-hidden rounded-xl border p-3 text-start text-sm hover:border-sky-300/35 ${
+                        selectedSupportThread?.id === thread.id
+                          ? 'border-sky-300/45 bg-sky-400/10 text-white'
+                          : 'border-white/10 bg-white/[0.03] text-white/75'
+                      }`}
+                      onClick={() => void handleOpenSupportThread(thread)}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="truncate font-semibold text-white">{thread.subject || (isAr ? 'رسالة دعم' : 'Support message')}</div>
+                        {Number(thread.unread_count || 0) > 0 ? (
+                          <span className="rounded-full bg-sky-400 px-2 py-0.5 text-[10px] font-bold text-slate-950">new</span>
+                        ) : null}
+                      </div>
+                      <div className="mt-1 truncate text-xs text-white/55">{thread.email || '--'} / {thread.app_version || '--'}</div>
+                      <div className="mt-1 line-clamp-2 text-xs text-white/55">{thread.last_message_body || ''}</div>
+                    </button>
+                  )) : (
+                    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm text-white/55">
+                      {isAr ? 'لا توجد رسائل دعم حتى الآن.' : 'No support messages yet.'}
+                    </div>
+                  )}
+                </div>
+              </article>
+              <article className="surface-card min-w-0 overflow-hidden p-5">
+                {selectedSupportThread ? (
+                  <>
+                    <div className="mb-4">
+                      <h3 className="text-sm font-semibold text-white">{selectedSupportThread.subject}</h3>
+                      <div className="mt-1 text-xs text-white/55">
+                        {[selectedSupportThread.email, selectedSupportThread.device_id, selectedSupportThread.install_id, selectedSupportThread.updated_at]
+                          .filter(Boolean)
+                          .join(' / ') || '--'}
+                      </div>
+                    </div>
+                    <div className="grid max-h-[420px] gap-3 overflow-auto rounded-xl border border-white/10 bg-black/15 p-3">
+                      {supportLoading ? <div className="text-sm text-white/55">{isAr ? 'جار التحميل...' : 'Loading...'}</div> : null}
+                      {!supportLoading && supportMessages.map((message) => (
+                        <div
+                          key={message.id}
+                          className={`max-w-[84%] rounded-xl border p-3 text-sm ${
+                            message.sender === 'admin'
+                              ? 'justify-self-end border-sky-300/35 bg-sky-400/10 text-sky-50'
+                              : 'justify-self-start border-white/10 bg-white/[0.04] text-white/80'
+                          }`}
+                        >
+                          <div className="mb-1 text-[11px] font-semibold text-white/45">
+                            {message.sender === 'admin' ? (isAr ? 'الأدمن' : 'Admin') : (isAr ? 'المستخدم' : 'User')}
+                            {message.created_at ? ` / ${formatEgyptDateTime(message.created_at)}` : ''}
+                          </div>
+                          <div className="whitespace-pre-wrap break-words leading-6">{message.body}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <textarea
+                      className="mt-4 min-h-32 w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none"
+                      placeholder={isAr ? 'اكتب رد الدعم هنا...' : 'Write support reply...'}
+                      value={supportReply}
+                      onChange={(e) => setSupportReply(e.target.value)}
+                    />
+                    <button
+                      className="btn-primary mt-3 rounded-xl px-4 py-2 text-sm font-semibold"
+                      disabled={saving || !supportReply.trim()}
+                      onClick={() => void handleSendSupportReply()}
+                    >
+                      {saving ? (isAr ? 'جار الإرسال...' : 'Sending...') : isAr ? 'إرسال الرد' : 'Send Reply'}
+                    </button>
+                  </>
+                ) : (
+                  <div className="rounded-xl border border-white/10 bg-white/[0.03] p-6 text-sm text-white/55">
+                    {isAr ? 'اختر رسالة من القائمة لعرض التفاصيل والرد.' : 'Select a message to view details and reply.'}
+                  </div>
+                )}
+              </article>
             </section>
           ) : null}
 

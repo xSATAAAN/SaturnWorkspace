@@ -123,6 +123,33 @@ export type AdminAuditLogItem = {
   at?: string
 }
 
+export type AdminSupportThread = {
+  id: string
+  subject: string
+  status?: string
+  email?: string | null
+  install_id?: string | null
+  device_id?: string | null
+  app_version?: string | null
+  app_build_id?: string | null
+  channel?: string | null
+  platform?: string | null
+  created_at?: string
+  updated_at?: string
+  last_message_body?: string | null
+  last_message_sender?: string | null
+  last_message_at?: string | null
+  unread_count?: number
+}
+
+export type AdminSupportMessage = {
+  id: string
+  thread_id: string
+  sender: 'user' | 'admin' | string
+  body: string
+  created_at?: string
+}
+
 export type AdminRemoteControls = {
   rollout_percent?: number
   minimum_supported_version?: string
@@ -410,6 +437,23 @@ export async function fetchCrashGroups() {
 
 export async function fetchAuditLog() {
   return adminFetch<{ success: boolean; items: AdminAuditLogItem[] }>('/audit-log?limit=100')
+}
+
+export async function fetchSupportThreads() {
+  return adminFetch<{ success: boolean; threads: AdminSupportThread[] }>('/policy/support')
+}
+
+export async function fetchSupportMessages(threadId: string) {
+  return adminFetch<{ success: boolean; thread?: AdminSupportThread; messages: AdminSupportMessage[] }>(
+    `/policy/support/messages?thread_id=${encodeURIComponent(threadId)}`,
+  )
+}
+
+export async function sendSupportReply(payload: { thread_id: string; body: string }) {
+  return adminFetch<{ success: boolean }>('/policy/support/reply', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
 }
 
 export async function fetchUserDetail(userKey: string) {
