@@ -156,6 +156,9 @@ export default {
     if (request.method === "OPTIONS") return handleOptions(request, env);
 
     try {
+      if (host === "saturnws.com" && (url.pathname === "/admin" || url.pathname.startsWith("/admin/"))) {
+        return Response.redirect("https://admin.saturnws.com/", 302);
+      }
       if (host === "admin.saturnws.com" && url.pathname === "/admin-policy-controls.js" && request.method === "GET") {
         return serveAdminPolicyControlsScript();
       }
@@ -536,8 +539,13 @@ function serveAdminPolicyControlsScript() {
 
 function corsHeaders(request, env) {
   const origin = request.headers.get("Origin") || "";
-  const allowed = String(env.ADMIN_ORIGIN || "").trim();
-  const value = allowed && origin === allowed ? origin : allowed || "*";
+  const allowedOrigins = [
+    ...String(env.ADMIN_ORIGIN || "").split(","),
+    ...String(env.PAYMENTS_ALLOWED_ORIGIN || "").split(","),
+  ]
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const value = origin && allowedOrigins.includes(origin) ? origin : allowedOrigins[0] || "*";
   return {
     "Access-Control-Allow-Origin": value,
     "Access-Control-Allow-Methods": "GET,POST,PATCH,OPTIONS",

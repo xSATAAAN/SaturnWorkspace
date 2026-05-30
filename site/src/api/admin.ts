@@ -1,6 +1,11 @@
 import { ApiError } from './http'
 
-const ADMIN_BASE = '/api/admin'
+function adminBaseUrl() {
+  if (typeof window === 'undefined') return '/api/admin'
+  const host = window.location.hostname.toLowerCase()
+  if (host === 'admin.saturnws.com' || host === 'admin-api.saturnws.com') return '/api/admin'
+  return 'https://admin.saturnws.com/api/admin'
+}
 const ADMIN_FIREBASE_TOKEN_KEY = 'st_admin_firebase_token'
 let inMemoryBearerToken = ''
 
@@ -210,7 +215,7 @@ async function adminFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = getAdminToken()
   if (token) headers.set('Authorization', `Bearer ${token}`)
 
-  const response = await fetch(`${ADMIN_BASE}${path}`, { ...init, headers, credentials: 'same-origin' })
+  const response = await fetch(`${adminBaseUrl()}${path}`, { ...init, headers, credentials: 'same-origin' })
   let payload: unknown
   try {
     payload = await response.json()
