@@ -140,6 +140,7 @@ export type AdminSupportThread = {
   last_message_sender?: string | null
   last_message_at?: string | null
   unread_count?: number
+  support_blocked?: boolean | number
 }
 
 export type AdminSupportMessage = {
@@ -451,6 +452,13 @@ export async function fetchSupportMessages(threadId: string) {
 
 export async function sendSupportReply(payload: { thread_id: string; body: string }) {
   return adminFetch<{ success: boolean }>('/policy/support/reply', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function setSupportBlocked(payload: { thread_id: string; blocked: boolean; reason?: string }) {
+  return adminFetch<{ success: boolean; blocked?: boolean }>('/policy/support/block', {
     method: 'POST',
     body: JSON.stringify(payload),
   })

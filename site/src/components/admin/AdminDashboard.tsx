@@ -21,6 +21,7 @@ import {
   resetSubscriptionHwid,
   rollbackRelease,
   sendSupportReply,
+  setSupportBlocked,
   updateRemoteControls,
   uploadReleaseBinary,
   type AdminAccessRequest,
@@ -588,6 +589,27 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
     }
   }
 
+  const handleSetSupportBlocked = async (blocked: boolean) => {
+    if (!selectedSupportThread) return
+    setSaving(true)
+    setError(null)
+    try {
+      await setSupportBlocked({
+        thread_id: selectedSupportThread.id,
+        blocked,
+        reason: blocked ? 'admin_block' : 'admin_unblock',
+      })
+      const latest = await fetchSupportThreads()
+      setSupportThreads(latest.threads || [])
+      await handleOpenSupportThread({ ...selectedSupportThread, support_blocked: blocked })
+      setNotice(blocked ? (isAr ? 'تم منع المستخدم من إرسال رسائل دعم.' : 'User support messages blocked.') : (isAr ? 'تم إلغاء منع رسائل الدعم.' : 'Support message block removed.'))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'support_block_failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const applyAccessRequestToForm = (request: AdminAccessRequest) => {
     setNewSubscriptionEmail(request.user_email || '')
     setNewSubscriptionUserId(request.user_id || '')
@@ -1134,9 +1156,16 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
                     >
                       <div className="flex items-center justify-between gap-2">
                         <div className="truncate font-semibold text-white">{thread.subject || (isAr ? 'رسالة دعم' : 'Support message')}</div>
-                        {Number(thread.unread_count || 0) > 0 ? (
-                          <span className="rounded-full bg-sky-400 px-2 py-0.5 text-[10px] font-bold text-slate-950">new</span>
-                        ) : null}
+                        <div className="flex shrink-0 items-center gap-1">
+                          {thread.support_blocked ? (
+                            <span className="rounded-full border border-rose-300/35 bg-rose-500/10 px-2 py-0.5 text-[10px] font-bold text-rose-100">
+                              {isAr ? 'ممنوع' : 'blocked'}
+                            </span>
+                          ) : null}
+                          {Number(thread.unread_count || 0) > 0 ? (
+                            <span className="rounded-full bg-sky-400 px-2 py-0.5 text-[10px] font-bold text-slate-950">new</span>
+                          ) : null}
+                        </div>
                       </div>
                       <div className="mt-1 truncate text-xs text-white/55">{thread.email || '--'} / {thread.app_version || '--'}</div>
                       <div className="mt-1 line-clamp-2 text-xs text-white/55">{thread.last_message_body || ''}</div>
@@ -1151,13 +1180,35 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
               <article className="surface-card min-w-0 overflow-hidden p-5">
                 {selectedSupportThread ? (
                   <>
-                    <div className="mb-4">
-                      <h3 className="text-sm font-semibold text-white">{selectedSupportThread.subject}</h3>
-                      <div className="mt-1 text-xs text-white/55">
-                        {[selectedSupportThread.email, selectedSupportThread.device_id, selectedSupportThread.install_id, selectedSupportThread.updated_at]
-                          .filter(Boolean)
-                          .join(' / ') || '--'}
+                    <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-sm font-semibold text-white">{selectedSupportThread.subject}</h3>
+                          {selectedSupportThread.support_blocked ? (
+                            <span className="rounded-full border border-rose-300/35 bg-rose-500/10 px-2 py-0.5 text-[10px] font-bold text-rose-100">
+                              {isAr ? 'إرسال الدعم ممنوع' : 'Support blocked'}
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="mt-1 break-all text-xs text-white/55">
+                          {[selectedSupportThread.email, selectedSupportThread.device_id, selectedSupportThread.install_id, selectedSupportThread.updated_at]
+                            .filter(Boolean)
+                            .join(' / ') || '--'}
+                        </div>
                       </div>
+                      <button
+                        className={`rounded-xl border px-3 py-2 text-xs font-semibold ${
+                          selectedSupportThread.support_blocked
+                            ? 'border-emerald-300/30 bg-emerald-500/10 text-emerald-100 hover:border-emerald-200/50'
+                            : 'border-rose-300/30 bg-rose-500/10 text-rose-100 hover:border-rose-200/50'
+                        }`}
+                        disabled={saving}
+                        onClick={() => void handleSetSupportBlocked(!selectedSupportThread.support_blocked)}
+                      >
+                        {selectedSupportThread.support_blocked
+                          ? isAr ? 'إلغاء منع الرسائل' : 'Unblock Messages'
+                          : isAr ? 'منع الرسائل' : 'Block Messages'}
+                      </button>
                     </div>
                     <div className="grid max-h-[420px] gap-3 overflow-auto rounded-xl border border-white/10 bg-black/15 p-3">
                       {supportLoading ? <div className="text-sm text-white/55">{isAr ? 'جار التحميل...' : 'Loading...'}</div> : null}
