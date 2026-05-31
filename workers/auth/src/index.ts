@@ -45,6 +45,12 @@ function corsHeaders(env: Env, request?: Request): HeadersInit {
   }
 }
 
+function normalizeApiPath(pathname: string): string {
+  if (pathname === "/auth") return "/health"
+  if (pathname.startsWith("/auth/")) return pathname.slice("/auth".length) || "/"
+  return pathname
+}
+
 function oauthConfigPayload(env: Env): unknown {
   const raw = String(env.GOOGLE_DRIVE_CLIENT_CONFIG_JSON || "").trim()
   if (!raw) throw new Error("oauth_config_not_configured")
@@ -658,6 +664,7 @@ async function handleAccountSubscription(request: Request, env: Env): Promise<Re
 export default {
   async fetch(request, env): Promise<Response> {
     const url = new URL(request.url)
+    const apiPath = normalizeApiPath(url.pathname)
     const cors = corsHeaders(env, request)
     const isFirebaseHelperPath = url.pathname === "/__/firebase/init.json" || url.pathname.startsWith("/__/")
 
@@ -669,43 +676,43 @@ export default {
       if (isFirebaseHelperPath) {
         return await proxyFirebaseAuthHelper(request, env)
       }
-      if (request.method === "POST" && url.pathname === "/verify") {
+      if (request.method === "POST" && apiPath === "/verify") {
         const res = await handleVerify(request, env)
         return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
       }
-      if (request.method === "POST" && url.pathname === "/device/start") {
+      if (request.method === "POST" && apiPath === "/device/start") {
         const res = await handleDeviceStart(request, env)
         return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
       }
-      if (request.method === "POST" && url.pathname === "/device/complete") {
+      if (request.method === "POST" && apiPath === "/device/complete") {
         const res = await handleDeviceComplete(request, env)
         return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
       }
-      if (request.method === "POST" && url.pathname === "/device/password-complete") {
+      if (request.method === "POST" && apiPath === "/device/password-complete") {
         const res = await handleDevicePasswordComplete(request, env)
         return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
       }
-      if (request.method === "POST" && url.pathname === "/device/poll") {
+      if (request.method === "POST" && apiPath === "/device/poll") {
         const res = await handleDevicePoll(request, env)
         return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
       }
-      if (request.method === "POST" && url.pathname === "/session/verify") {
+      if (request.method === "POST" && apiPath === "/session/verify") {
         const res = await handleSessionVerify(request, env)
         return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
       }
-      if (request.method === "POST" && url.pathname === "/session/logout") {
+      if (request.method === "POST" && apiPath === "/session/logout") {
         const res = await handleSessionLogout(request, env)
         return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
       }
-      if (request.method === "POST" && url.pathname === "/account/subscription") {
+      if (request.method === "POST" && apiPath === "/account/subscription") {
         const res = await handleAccountSubscription(request, env)
         return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
       }
-      if (request.method === "GET" && url.pathname === "/oauth/google-drive-config") {
+      if (request.method === "GET" && apiPath === "/oauth/google-drive-config") {
         const res = await handleGoogleDriveOAuthConfig(request, env)
         return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
       }
-      if (request.method === "GET" && url.pathname === "/health") {
+      if (request.method === "GET" && apiPath === "/health") {
         return json({ success: true, service: "auth-worker", at: Date.now() }, 200, cors)
       }
       return json({ success: false, error: "not_found" }, 404, cors)

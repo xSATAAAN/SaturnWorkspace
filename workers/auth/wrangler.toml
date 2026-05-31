@@ -4,7 +4,8 @@ main = "src/index.ts"
 compatibility_date = "2026-05-04"
 workers_dev = false
 routes = [
-  { pattern = "auth.saturnws.com/*", zone_name = "saturnws.com" }
+  { pattern = "auth.saturnws.com/*", zone_name = "saturnws.com" },
+  { pattern = "saturnws.com/auth/*", zone_name = "saturnws.com" }
 ]
 
 [observability]
