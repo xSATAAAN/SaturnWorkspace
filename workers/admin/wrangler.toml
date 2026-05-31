@@ -9,6 +9,7 @@ routes = [
   { pattern = "saturnws.com/admin", zone_name = "saturnws.com" },
   { pattern = "saturnws.com/admin/*", zone_name = "saturnws.com" },
   { pattern = "saturnws.com/updates/*", zone_name = "saturnws.com" },
+  { pattern = "updates.saturnws.com/*", zone_name = "saturnws.com" },
   { pattern = "admin-api.saturnws.com/api/*", zone_name = "saturnws.com" }
 ]
 

@@ -165,6 +165,14 @@ export default {
       if (host === "admin.saturnws.com" && request.method === "GET" && !url.pathname.startsWith("/api/")) {
         return proxyAdminFrontend(url);
       }
+      if (host === "updates.saturnws.com" && (url.pathname === "/" || url.pathname === "/latest.json") && request.method === "GET") {
+        return serveLatestManifest(env);
+      }
+      if (host === "updates.saturnws.com" && url.pathname.startsWith("/file/") && (request.method === "GET" || request.method === "HEAD")) {
+        const updatesUrl = new URL(request.url);
+        updatesUrl.pathname = `/updates${url.pathname}`;
+        return serveReleaseBinary(request, updatesUrl, env);
+      }
       if (url.pathname === "/updates/latest.json" && request.method === "GET") {
         return serveLatestManifest(env);
       }
