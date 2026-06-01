@@ -143,6 +143,21 @@ function visiblePage<T>(items: T[], page: number) {
   return items.slice((page - 1) * pageSize, page * pageSize)
 }
 
+function parseOtaTargetEntries(value: string) {
+  return value
+    .split(/[\n,;]+/g)
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function splitOtaUserTargets(value: string) {
+  const entries = parseOtaTargetEntries(value)
+  return {
+    emails: entries.filter((item) => item.includes('@')),
+    userIds: entries.filter((item) => !item.includes('@')),
+  }
+}
+
 function Pager({ page, total, onPage, isAr }: { page: number; total: number; onPage: (next: number) => void; isAr: boolean }) {
   const pages = Math.max(1, Math.ceil(total / pageSize))
   return (
@@ -225,6 +240,9 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
   const [otaForceDeadline, setOtaForceDeadline] = useState('')
   const [otaInstalledFile, setOtaInstalledFile] = useState<File | null>(null)
   const [otaPortableFile, setOtaPortableFile] = useState<File | null>(null)
+  const [otaTargetScope, setOtaTargetScope] = useState<'all' | 'selected'>('all')
+  const [otaTargetUsers, setOtaTargetUsers] = useState('')
+  const [otaTargetDevices, setOtaTargetDevices] = useState('')
   const [rollbackVersion, setRollbackVersion] = useState('')
   const [disableReason, setDisableReason] = useState('')
 
@@ -427,6 +445,13 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
       const version = otaVersion.trim()
       const shouldForceUpdate = otaMandatory || otaMode === 'force' || otaMode === 'required'
       const forceDeadlineIso = shouldForceUpdate && otaForceDeadline ? new Date(otaForceDeadline).toISOString() : ''
+      const userTargets = splitOtaUserTargets(otaTargetUsers)
+      const deviceTargets = parseOtaTargetEntries(otaTargetDevices)
+      const selectedTargetCount = userTargets.emails.length + userTargets.userIds.length + deviceTargets.length
+      if (otaTargetScope === 'selected' && selectedTargetCount <= 0) {
+        setError(isAr ? 'حدد مستخدمًا واحدًا على الأقل قبل نشر تحديث موجه.' : 'Select at least one user before publishing a targeted update.')
+        return
+      }
       const installedUpload = await uploadReleaseBinary({
         file: otaInstalledFile,
         version,
@@ -450,6 +475,12 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
         rollout_percent: Number(otaRollout || 100),
         minimum_supported_version: otaMinimumVersion.trim(),
         force_update_deadline: forceDeadlineIso,
+        target_scope: otaTargetScope,
+        target_user_emails: userTargets.emails,
+        target_user_ids: userTargets.userIds,
+        target_install_ids: [],
+        target_device_ids: deviceTargets,
+        target_hwids: [],
       })
       const channelManifest = publish.manifest.channels?.[channel]
       setOtaUpdates((prev) => [
@@ -471,7 +502,7 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
       setNotice(
         isAr
           ? `تم نشر ${version}. بصمة ZIP: ${installedUpload.release.sha256}${portableUpload ? ` / EXE: ${portableUpload.release.sha256}` : ''}`
-          : `Published ${version}. ZIP SHA-256 ${installedUpload.release.sha256}${portableUpload ? ` / EXE ${portableUpload.release.sha256}` : ''}`,
+          : `Published ${version}${publish.targeted ? ` to selected users (${publish.target_count || selectedTargetCount})` : ''}. ZIP SHA-256 ${installedUpload.release.sha256}${portableUpload ? ` / EXE ${portableUpload.release.sha256}` : ''}`,
       )
       setOtaInstalledFile(null)
       setOtaPortableFile(null)
@@ -1049,6 +1080,10 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
                     <option value="required">{isAr ? 'مطلوب' : 'Required'}</option>
                     <option value="force">{isAr ? 'إجباري' : 'Force'}</option>
                   </select>
+                  <select className="site-select" value={otaTargetScope} onChange={(e) => setOtaTargetScope(e.target.value as 'all' | 'selected')}>
+                    <option value="all">{isAr ? 'كل المستخدمين' : 'All users'}</option>
+                    <option value="selected">{isAr ? 'مستخدمون محددون' : 'Selected users'}</option>
+                  </select>
                   <select className="site-select" value={otaRollout} onChange={(e) => setOtaRollout(e.target.value)}>
                     <option value="5">{isAr ? 'نشر تدريجي 5%' : 'Staged 5%'}</option>
                     <option value="25">{isAr ? 'نشر تدريجي 25%' : 'Staged 25%'}</option>
@@ -1062,6 +1097,27 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
                   </label>
                 </div>
                 <textarea className="mt-3 min-h-28 w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" placeholder={isAr ? 'ملاحظات الإصدار' : 'Release notes'} value={otaNotes} onChange={(e) => setOtaNotes(e.target.value)} />
+                {otaTargetScope === 'selected' ? (
+                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                    <textarea
+                      className="min-h-28 rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none"
+                      placeholder={isAr ? 'إيميلات أو User IDs - عنصر في كل سطر' : 'Emails or user IDs - one per line'}
+                      value={otaTargetUsers}
+                      onChange={(e) => setOtaTargetUsers(e.target.value)}
+                    />
+                    <textarea
+                      className="min-h-28 rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none"
+                      placeholder={isAr ? 'Install IDs / Device IDs / HWIDs اختيارية - عنصر في كل سطر' : 'Optional install IDs / device IDs / HWIDs - one per line'}
+                      value={otaTargetDevices}
+                      onChange={(e) => setOtaTargetDevices(e.target.value)}
+                    />
+                    <p className="md:col-span-2 text-xs leading-6 text-white/55">
+                      {isAr
+                        ? 'النشر المحدد لا يغير الإصدار العام للقناة؛ يظهر التحديث فقط للأهداف المطابقة.'
+                        : 'Targeted publish does not change the public channel version; only matching clients see the update.'}
+                    </p>
+                  </div>
+                ) : null}
                 <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs leading-6 text-white/65">
                   <div>{isAr ? 'الملف الأساسي للتحديث الهوائي هو ZIP الناتج من build_installed_update_package.' : 'The required OTA artifact is the ZIP generated by build_installed_update_package.'}</div>
                   {otaInstalledFile ? <div className="text-white/80">{isAr ? 'ZIP:' : 'ZIP:'} {otaInstalledFile.name} - {(otaInstalledFile.size / 1024 / 1024).toFixed(2)} MB</div> : null}

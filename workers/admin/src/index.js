@@ -793,6 +793,78 @@ function safePlainObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
+function normalizeTargetList(value) {
+  const raw = [];
+  if (Array.isArray(value)) {
+    raw.push(...value);
+  } else if (typeof value === "string") {
+    raw.push(...value.split(/[\s,;]+/g));
+  }
+  const seen = new Set();
+  const result = [];
+  for (const item of raw) {
+    const normalized = String(item || "").trim().toLowerCase();
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    result.push(normalized);
+  }
+  return result.slice(0, 500);
+}
+
+function normalizeReleaseTargets(body) {
+  const scope = String(body?.target_scope || body?.targeting_scope || "all").trim().toLowerCase();
+  const targets = {
+    scope,
+    selected: ["selected", "targeted", "users", "custom"].includes(scope),
+    user_ids: normalizeTargetList(body?.target_user_ids || body?.user_ids),
+    user_emails: normalizeTargetList(body?.target_user_emails || body?.target_emails || body?.user_emails || body?.emails),
+    install_ids: normalizeTargetList(body?.target_install_ids || body?.install_ids),
+    device_ids: normalizeTargetList(body?.target_device_ids || body?.device_ids),
+    hwids: normalizeTargetList(body?.target_hwids || body?.hwids),
+  };
+  targets.count =
+    targets.user_ids.length +
+    targets.user_emails.length +
+    targets.install_ids.length +
+    targets.device_ids.length +
+    targets.hwids.length;
+  if (targets.count > 0) targets.selected = true;
+  if (targets.selected && targets.count <= 0) throw new Error("missing_update_targets");
+  return targets;
+}
+
+function buildTargetedReleaseRule(channel, channelManifest, targets, adminEmail) {
+  const now = new Date().toISOString();
+  return {
+    id: `targeted-release-${channel}-${channelManifest.version}-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
+    type: "release",
+    enabled: true,
+    channel,
+    label: `Targeted OTA ${channelManifest.version}`,
+    user_ids: targets.user_ids,
+    user_emails: targets.user_emails,
+    install_ids: targets.install_ids,
+    device_ids: targets.device_ids,
+    hwids: targets.hwids,
+    release: channelManifest,
+    created_at: now,
+    created_by: adminEmail,
+  };
+}
+
+function mergeTargetedReleaseRule(channelManifest, rule) {
+  const existing = safePlainObject(channelManifest);
+  const targeting = Array.isArray(existing.targeting) ? existing.targeting : [];
+  const nextTargeting = [
+    ...targeting.filter((item) => item && typeof item === "object"),
+    rule,
+  ].slice(-100);
+  return {
+    ...existing,
+    targeting: nextTargeting,
+  };
+}
+
 function normalizeAnnouncements(value) {
   if (!Array.isArray(value)) return [];
   return value
@@ -1067,6 +1139,7 @@ async function publishRelease(request, env, adminEmail) {
   const rolloutPercent = clampRolloutPercent(body?.rollout_percent, 100);
   const minimumSupportedVersion = optionalVersion(body?.minimum_supported_version);
   const forceUpdateDeadline = mandatory ? optionalIsoDate(body?.force_update_deadline) : "";
+  const targets = normalizeReleaseTargets(body);
 
   const metaKey = `meta/${channel}/${version}.json`;
   const metaObj = await env.OTA_BUCKET.get(metaKey);
@@ -1087,6 +1160,7 @@ async function publishRelease(request, env, adminEmail) {
     String(currentChannel?.artifacts?.installed?.url || "").trim()
   );
   if (
+    !targets.selected &&
     currentChannel &&
     typeof currentChannel === "object" &&
     String(currentChannel.version || "").trim() === version &&
@@ -1114,6 +1188,41 @@ async function publishRelease(request, env, adminEmail) {
     },
     published_at: new Date().toISOString(),
   };
+  if (targets.selected) {
+    const targetRule = buildTargetedReleaseRule(channel, channelManifest, targets, adminEmail);
+    const nextChannel = mergeTargetedReleaseRule(manifest.channels?.[channel] || {}, targetRule);
+    const nextManifest = {
+      ...manifest,
+      channels: {
+        stable: manifest.channels?.stable || {},
+        beta: manifest.channels?.beta || {},
+        [channel]: nextChannel,
+      },
+    };
+
+    const signedManifest = await saveManifest(env, nextManifest);
+    await recordPublishedOtaUpdate(env, {
+      version,
+      channel,
+      release_notes: notes,
+      download_url: recordDownloadUrl,
+      checksum_sha256: primaryRelease.sha256 || null,
+      file_size_bytes: primaryRelease.size || null,
+      is_mandatory: mandatory,
+      created_by: adminEmail,
+    });
+    await appendAudit(env, {
+      type: "publish_targeted",
+      channel,
+      version,
+      update_mode: updateMode,
+      rollout_percent: rolloutPercent,
+      target_count: targets.count,
+      actor: adminEmail,
+      at: new Date().toISOString(),
+    });
+    return { success: true, targeted: true, target_count: targets.count, manifest: signedManifest };
+  }
   const nextManifest = {
     ...manifest,
     version: channel === "stable" ? version : manifest.version || version,

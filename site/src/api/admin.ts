@@ -400,8 +400,14 @@ export async function publishRelease(payload: {
   rollout_percent?: number
   minimum_supported_version?: string
   force_update_deadline?: string
+  target_scope?: 'all' | 'selected'
+  target_user_ids?: string[]
+  target_user_emails?: string[]
+  target_install_ids?: string[]
+  target_device_ids?: string[]
+  target_hwids?: string[]
 }) {
-  return adminFetch<{ success: boolean; manifest: AdminReleaseManifest }>('/publish', {
+  return adminFetch<{ success: boolean; targeted?: boolean; target_count?: number; manifest: AdminReleaseManifest }>('/publish', {
     method: 'POST',
     body: JSON.stringify(payload),
   })
