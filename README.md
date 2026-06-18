@@ -11,7 +11,7 @@ Designed for GitHub Pages deployment.
 
 - `site/`: React + Tailwind website frontend
   - `src/components/`: modular UI sections and reusable blocks
-  - `src/api/`: typed browser API clients (payments disabled during beta)
+  - `src/api/`: typed browser API clients for account, subscription, admin, and support flows.
   - `src/constants/`: static display copy and UI constants
 - `workers/auth/`: Cloudflare Worker for device login, license/session checks, and Google Drive OAuth config delivery
 - `workers/admin/`: Cloudflare Worker backend

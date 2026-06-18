@@ -173,6 +173,14 @@ export default {
         updatesUrl.pathname = `/updates${url.pathname}`;
         return serveReleaseBinary(request, updatesUrl, env);
       }
+      if (host === "admin-api.saturnws.com" && url.pathname === "/api/updates/latest.json" && request.method === "GET") {
+        return serveLatestManifest(env);
+      }
+      if (host === "admin-api.saturnws.com" && url.pathname.startsWith("/api/updates/file/") && (request.method === "GET" || request.method === "HEAD")) {
+        const updatesUrl = new URL(request.url);
+        updatesUrl.pathname = url.pathname.replace(/^\/api\/updates\//, "/updates/");
+        return serveReleaseBinary(request, updatesUrl, env);
+      }
       if (url.pathname === "/updates/latest.json" && request.method === "GET") {
         return serveLatestManifest(env);
       }
@@ -467,7 +475,7 @@ function serveAdminPolicyControlsScript() {
 
   const root = document.createElement("div");
   root.id = "saturn-policy-admin";
-  root.innerHTML = '<div id="saturn-policy-panel"><div class="sp-head"><div><div class="sp-title">Policy Controls</div><div class="sp-sub">Live controls backed by api.saturnws.com policy API. Secrets stay server-side.</div></div><button class="sp-btn" data-close>Close</button></div><div class="sp-body"><div class="sp-card"><h3>Global policy</h3><div class="sp-grid"><label class="sp-field">Update mode<select data-global-update-mode><option value="optional">optional</option><option value="mandatory">mandatory</option></select></label><label class="sp-field">Minimum supported version<input data-global-min-version placeholder="1.0.0-beta"></label><label class="sp-field">Kill switch<input data-global-kill type="checkbox"></label><label class="sp-field">Mandatory update<input data-global-mandatory type="checkbox"></label><label class="sp-field">Blocked actions<textarea data-global-blocked placeholder="one action per line"></textarea></label><label class="sp-field">Features JSON<textarea data-global-features>{}</textarea></label></div><div class="sp-row" style="margin-top:10px"><button class="sp-btn primary" data-save-global>Save global policy</button></div></div><div class="sp-card"><h3>Disabled versions</h3><div class="sp-grid"><label class="sp-field">Version<input data-disabled-version placeholder="1.0.0-beta"></label><label class="sp-field">Reason<input data-disabled-reason placeholder="reason"></label></div><div class="sp-row" style="margin-top:10px"><button class="sp-btn" data-disable-version>Disable version</button><button class="sp-btn" data-enable-version>Remove disabled version</button></div></div><div class="sp-card"><h3>User policy override</h3><div class="sp-grid"><label class="sp-field">Email<input data-user-email placeholder="user@example.com"></label><label class="sp-field">Status<select data-user-status><option value="active">active</option><option value="disabled">disabled</option><option value="banned">banned</option><option value="blocked">blocked</option></select></label><label class="sp-field">Plan<input data-user-plan value="default"></label><label class="sp-field">Subscription status<select data-sub-status><option value="">no change</option><option value="active">active</option><option value="trialing">trialing</option><option value="expired">expired</option><option value="inactive">inactive</option><option value="canceled">canceled</option></select></label></div><div class="sp-row" style="margin-top:10px"><button class="sp-btn primary" data-save-user>Save user policy</button></div></div><div class="sp-card"><h3>Plan features / blocked actions</h3><div class="sp-grid"><label class="sp-field">Plan ID<input data-plan-id value="default"></label><label class="sp-field">Blocked actions<textarea data-plan-blocked placeholder="one action per line"></textarea></label><label class="sp-field">Features JSON<textarea data-plan-features>{}</textarea></label><label class="sp-field">Limits JSON<textarea data-plan-limits>{}</textarea></label></div><div class="sp-row" style="margin-top:10px"><button class="sp-btn primary" data-save-plan>Save plan</button></div></div><div class="sp-card"><h3>Release catalog visibility</h3><div class="sp-grid"><label class="sp-field">Version<input data-release-version value="1.0.0-beta"></label><label class="sp-field">Visibility<select data-release-visibility><option value="public">public</option><option value="internal">internal</option><option value="archived">archived</option><option value="hidden">hidden</option></select></label><label class="sp-field">Release type<input data-release-type value="public_beta"></label><label class="sp-field">Artifact kind<input data-release-kind value="full_setup"></label></div><div class="sp-row" style="margin-top:10px"><button class="sp-btn primary" data-save-release>Save release catalog</button></div></div><div class="sp-card"><h3>Current policy state</h3><div class="sp-status" data-policy-log>Not loaded yet.</div><div class="sp-list" data-release-list></div></div></div></div><button id="saturn-policy-toggle">Policy Controls</button>';
+  root.innerHTML = '<div id="saturn-policy-panel"><div class="sp-head"><div><div class="sp-title">Policy Controls</div><div class="sp-sub">Live controls backed by api.saturnws.com policy API. Secrets stay server-side.</div></div><button class="sp-btn" data-close>Close</button></div><div class="sp-body"><div class="sp-card"><h3>Global policy</h3><div class="sp-grid"><label class="sp-field">Update mode<select data-global-update-mode><option value="optional">optional</option><option value="mandatory">mandatory</option></select></label><label class="sp-field">Minimum supported version<input data-global-min-version placeholder="1.0.0"></label><label class="sp-field">Kill switch<input data-global-kill type="checkbox"></label><label class="sp-field">Mandatory update<input data-global-mandatory type="checkbox"></label><label class="sp-field">Blocked actions<textarea data-global-blocked placeholder="one action per line"></textarea></label><label class="sp-field">Features JSON<textarea data-global-features>{}</textarea></label></div><div class="sp-row" style="margin-top:10px"><button class="sp-btn primary" data-save-global>Save global policy</button></div></div><div class="sp-card"><h3>Disabled versions</h3><div class="sp-grid"><label class="sp-field">Version<input data-disabled-version placeholder="1.0.0"></label><label class="sp-field">Reason<input data-disabled-reason placeholder="reason"></label></div><div class="sp-row" style="margin-top:10px"><button class="sp-btn" data-disable-version>Disable version</button><button class="sp-btn" data-enable-version>Remove disabled version</button></div></div><div class="sp-card"><h3>User policy override</h3><div class="sp-grid"><label class="sp-field">Email<input data-user-email placeholder="user@example.com"></label><label class="sp-field">Status<select data-user-status><option value="active">active</option><option value="disabled">disabled</option><option value="banned">banned</option><option value="blocked">blocked</option></select></label><label class="sp-field">Plan<input data-user-plan value="default"></label><label class="sp-field">Subscription status<select data-sub-status><option value="">no change</option><option value="active">active</option><option value="expired">expired</option><option value="inactive">inactive</option><option value="canceled">canceled</option></select></label></div><div class="sp-row" style="margin-top:10px"><button class="sp-btn primary" data-save-user>Save user policy</button></div></div><div class="sp-card"><h3>Plan features / blocked actions</h3><div class="sp-grid"><label class="sp-field">Plan ID<input data-plan-id value="default"></label><label class="sp-field">Blocked actions<textarea data-plan-blocked placeholder="one action per line"></textarea></label><label class="sp-field">Features JSON<textarea data-plan-features>{}</textarea></label><label class="sp-field">Limits JSON<textarea data-plan-limits>{}</textarea></label></div><div class="sp-row" style="margin-top:10px"><button class="sp-btn primary" data-save-plan>Save plan</button></div></div><div class="sp-card"><h3>Release catalog visibility</h3><div class="sp-grid"><label class="sp-field">Version<input data-release-version value="1.0.0"></label><label class="sp-field">Visibility<select data-release-visibility><option value="public">public</option><option value="internal">internal</option><option value="archived">archived</option><option value="hidden">hidden</option></select></label><label class="sp-field">Release type<input data-release-type value="public_release"></label><label class="sp-field">Artifact kind<input data-release-kind value="full_setup"></label></div><div class="sp-row" style="margin-top:10px"><button class="sp-btn primary" data-save-release>Save release catalog</button></div></div><div class="sp-card"><h3>Current policy state</h3><div class="sp-status" data-policy-log>Not loaded yet.</div><div class="sp-list" data-release-list></div></div></div></div><button id="saturn-policy-toggle">Policy Controls</button>';
   document.body.appendChild(root);
 
   const $ = (sel) => root.querySelector(sel);
@@ -1330,7 +1338,7 @@ async function resetOtaBaseline(request, env, adminEmail) {
   if (!hasOtaBucket(env)) throw new Error("r2_not_enabled");
   const body = await request.json().catch(() => ({}));
   const channel = normalizeChannel(body?.channel);
-  const version = normalizeVersion(body?.version || "1.0.0-beta");
+  const version = normalizeVersion(body?.version || "1.0.0");
   const resetAt = new Date().toISOString();
   const manifest = await loadManifest(env);
   const remoteConfig = {
@@ -1351,11 +1359,11 @@ async function resetOtaBaseline(request, env, adminEmail) {
     download_sha256: "",
     filename: "",
     artifacts: structuredClone(DEFAULT_MANIFEST.artifacts),
-    notes: "Public beta baseline. No OTA update is available for this baseline.",
+    notes: "Current production baseline. No OTA update is available for this baseline.",
     remote_config: remoteConfig,
     published_at: resetAt,
     release_visibility: "public",
-    release_type: "public_beta",
+    release_type: "public_release",
   };
   const nextManifest = {
     ...structuredClone(DEFAULT_MANIFEST),
@@ -1372,7 +1380,7 @@ async function resetOtaBaseline(request, env, adminEmail) {
     download_sha256: "",
     filename: "",
     artifacts: structuredClone(DEFAULT_MANIFEST.artifacts),
-    notes: "Public beta baseline. No public OTA update is available yet.",
+    notes: "Current production baseline. No public OTA update is available yet.",
     history_reset_at: resetAt,
     remote_config: remoteConfig,
     channels: {
@@ -1949,15 +1957,18 @@ async function updateSubscription(subscriptionId, request, env, adminEmail) {
     prefer: "return=representation",
   });
   const item = Array.isArray(updated) ? updated[0] : updated;
+  const autoAuthorized = isActiveSubscription(item)
+    ? await authorizeMatchingAccessRequests(env, item).catch(() => 0)
+    : 0;
   await appendAudit(env, {
     type: "subscription_update",
     entity: "account_subscriptions",
     entity_id: subscriptionId,
     actor: adminEmail,
-    payload: patch,
+    payload: { ...patch, auto_authorized_requests: autoAuthorized },
     at: new Date().toISOString(),
   });
-  return { success: true, item };
+  return { success: true, item, auto_authorized_requests: autoAuthorized };
 }
 
 async function resetSubscriptionHwid(subscriptionId, request, env, adminEmail) {
@@ -2046,12 +2057,12 @@ async function listOtaUpdates(url, env) {
       const itemAt = Date.parse(String(item?.created_at || item?.published_at || ""));
       return Number.isFinite(itemAt) && itemAt >= resetAt;
     });
-  if (!publicItems.some((item) => String(item?.version || "") === "1.0.0-beta")) {
+  if (!publicItems.some((item) => String(item?.version || "") === "1.0.0")) {
     publicItems.unshift({
-      id: "baseline-1.0.0-beta",
-      version: "1.0.0-beta",
+      id: "baseline-1.0.0",
+      version: "1.0.0",
       channel: "beta",
-      release_notes: "First public beta baseline.",
+      release_notes: "First public baseline.",
       download_url: "",
       is_mandatory: false,
       is_published: true,
@@ -2119,12 +2130,16 @@ function isExpiredIso(value) {
   return Number.isFinite(ts) ? ts <= Date.now() : false;
 }
 
+function isActiveSubscription(row) {
+  return Boolean(row) && String(row?.status || "").toLowerCase() === "active" && !isExpiredIso(row?.expires_at);
+}
+
 function accessRequestLastEventAt(row) {
   return String(row?.consumed_at || row?.authorized_at || row?.created_at || row?.expires_at || "");
 }
 
 function subscriptionSortScore(row) {
-  const active = String(row?.status || "").toLowerCase() === "active" && !isExpiredIso(row?.expires_at);
+  const active = isActiveSubscription(row);
   const bound = String(row?.firebase_user_id || "").trim() ? "1" : "0";
   const unlimited = isUnlimitedExpiry(row?.expires_at) ? "1" : "0";
   return `${active ? "1" : "0"}|${bound}|${unlimited}|${String(row?.expires_at || "")}|${String(row?.updated_at || "")}|${String(row?.created_at || "")}`;
@@ -2179,15 +2194,16 @@ function pickMatchingSubscription(row, subscriptions) {
   if (!Array.isArray(subscriptions) || !subscriptions.length) return null;
   const userId = String(row?.user_id || "").trim();
   const userEmail = normalizeEmail(row?.user_email);
-  return subscriptions.find((item) => userId && String(item?.firebase_user_id || "").trim() === userId)
-    || subscriptions.find((item) => userEmail && normalizeEmail(item?.user_email) === userEmail)
-    || null;
+  const matches = subscriptions.filter((item) => {
+    if (userId && String(item?.firebase_user_id || "").trim() === userId) return true;
+    return Boolean(userEmail && normalizeEmail(item?.user_email) === userEmail);
+  });
+  return matches.sort(compareSubscriptions)[0] || null;
 }
 
 function accessRequestNeedsAttention(row, subscription) {
+  if (isActiveSubscription(subscription)) return false;
   const status = String(row?.status || "").trim().toLowerCase();
-  const activeSubscription = subscription && String(subscription.status || "").toLowerCase() === "active" && !isExpiredIso(subscription.expires_at);
-  if (!activeSubscription) return true;
   return !["authorized", "consumed"].includes(status);
 }
 

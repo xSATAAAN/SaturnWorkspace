@@ -17,7 +17,7 @@ export function SiteHeader({ lang, onToggleLang }: SiteHeaderProps) {
           feedback: 'المقترحات',
           updates: 'التحديثات',
           login: 'دخول',
-          buy: 'تفعيل البيتا',
+          buy: 'تفعيل الحساب',
           switchLabel: 'EN',
         }
       : {
@@ -28,7 +28,7 @@ export function SiteHeader({ lang, onToggleLang }: SiteHeaderProps) {
           feedback: 'Feedback',
           updates: 'Updates',
           login: 'Login',
-          buy: 'Beta access',
+          buy: 'Get access',
           switchLabel: 'AR',
         }
   const [mobileOpen, setMobileOpen] = useState(false)

@@ -134,7 +134,7 @@ function adminTierLabel(value: string | undefined | null, isAr: boolean) {
 
 function adminChannelLabel(value: string | undefined | null, isAr: boolean) {
   const normalized = String(value || '').trim().toLowerCase()
-  if (normalized === 'beta') return isAr ? 'بيتا' : 'Beta'
+  if (normalized === 'beta') return isAr ? 'قناة التطبيق' : 'App channel'
   if (normalized === 'stable') return isAr ? 'مستقر' : 'Stable'
   return value || '--'
 }
@@ -230,7 +230,7 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
   const [newPromoPrivate, setNewPromoPrivate] = useState(false)
   const [newPromoMaxUses, setNewPromoMaxUses] = useState('')
 
-  const [otaVersion, setOtaVersion] = useState('1.0.0-beta')
+  const [otaVersion, setOtaVersion] = useState('')
   const [otaChannel, setOtaChannel] = useState('beta')
   const [otaNotes, setOtaNotes] = useState('')
   const [otaMandatory, setOtaMandatory] = useState(false)
@@ -523,7 +523,7 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
     setError(null)
     try {
       const channel = otaChannel.trim() || 'beta'
-      const version = otaVersion.trim() || '1.0.0-beta'
+      const version = otaVersion.trim()
       await resetOtaBaseline({ channel, version })
       setOtaVersion(version)
       setOtaInstalledFile(null)
@@ -672,7 +672,7 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
     setNotice(isAr ? 'تم نسخ طلب الوصول إلى نموذج الاشتراك.' : 'Access request copied into the subscription form.')
   }
 
-  const handleGrantBeta = async (request: AdminAccessRequest) => {
+  const handleGrantAccess = async (request: AdminAccessRequest) => {
     if (!request.user_email) return
     const isUnlimited = newSubscriptionDuration === 'unlimited'
     if (!isUnlimited && !newSubscriptionExpiry) return
@@ -798,9 +798,9 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
                   <article className="surface-card min-w-0 p-5">
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                       <div>
-                        <h3 className="text-sm font-semibold text-white/85">{isAr ? 'طلبات الوصول التجريبية' : 'Beta Access Requests'}</h3>
+                        <h3 className="text-sm font-semibold text-white/85">{isAr ? 'طلبات تفعيل الحساب' : 'Account Access Requests'}</h3>
                         <p className="mt-1 text-xs text-white/50">
-                          {isAr ? 'أي حساب أكمل تسجيل الدخول لكنه ما زال يحتاج اشتراكًا يدويًا من لوحة الإدارة.' : 'Any account that finished Google sign-in but still needs a manual beta subscription.'}
+                          {isAr ? 'أي حساب أكمل تسجيل الدخول وما زال يحتاج تفعيل اشتراك أو ربط جهاز.' : 'Accounts that completed sign-in and still need subscription activation or device binding.'}
                         </p>
                       </div>
                       <input
@@ -842,7 +842,7 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
                                   <td className="px-3 py-2">{formatEgyptDateTime(request.last_event_at || request.created_at)}</td>
                                   <td className="px-3 py-2">
                                     <div className="flex flex-wrap gap-2">
-                                      <button className="rounded-lg border border-emerald-300/35 bg-emerald-400/10 px-2.5 py-1 text-emerald-100" onClick={() => void handleGrantBeta(request)} disabled={saving || !request.user_email}>
+                                      <button className="rounded-lg border border-emerald-300/35 bg-emerald-400/10 px-2.5 py-1 text-emerald-100" onClick={() => void handleGrantAccess(request)} disabled={saving || !request.user_email}>
                                         {isAr ? 'منح الوصول' : 'Grant access'}
                                       </button>
                                       <button className="rounded-lg border border-white/20 bg-white/5 px-2.5 py-1" onClick={() => applyAccessRequestToForm(request)}>
@@ -1053,7 +1053,7 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
                 <div className="grid gap-3 md:grid-cols-2">
                   <input className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" placeholder={isAr ? 'الإصدار' : 'Version'} value={otaVersion} onChange={(e) => setOtaVersion(e.target.value)} />
                   <select className="site-select" value={otaChannel} onChange={(e) => setOtaChannel(e.target.value)}>
-                    <option value="beta">{isAr ? 'بيتا' : 'Beta'}</option>
+                    <option value="beta">{isAr ? 'قناة التطبيق' : 'App channel'}</option>
                     <option value="stable">{isAr ? 'مستقر' : 'Stable'}</option>
                   </select>
                   <label className="grid gap-1 text-xs text-white/65">
@@ -1170,7 +1170,7 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <h3 className="text-sm font-semibold text-white/85">{isAr ? 'التحكمات البعيدة' : 'Remote Controls'}</h3>
                 <select className="site-select" value={remoteChannel} onChange={(e) => setRemoteChannel(e.target.value)}>
-                  <option value="beta">{isAr ? 'بيتا' : 'Beta'}</option>
+                  <option value="beta">{isAr ? 'قناة التطبيق' : 'App channel'}</option>
                   <option value="stable">{isAr ? 'مستقر' : 'Stable'}</option>
                 </select>
               </div>

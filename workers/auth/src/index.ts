@@ -13,6 +13,8 @@ import {
   revokeActiveAppSessionsForSubscription,
   touchAppSession,
   touchSubscription,
+  updateAppSessionExpiry,
+  updateAppSessionSubscription,
   updateDeviceLogin,
 } from "./lib/supabase"
 import { isIsoExpired, isValidHwid, normalizeHwid } from "./lib/validators"
@@ -434,13 +436,37 @@ async function resolveSessionSubscription(
   if (!session) return { session: null, subscription: null, error: "session_not_found" }
   if (session.revoked_at) return { session, subscription: null, error: "session_revoked" }
   if (session.hwid !== hwid) return { session, subscription: null, error: "session_hwid_mismatch" }
-  if (isIsoExpired(session.expires_at)) return { session, subscription: null, error: "session_expired" }
   const subscriptionId = String(session.subscription_id || session.license_id || "").trim()
   if (!subscriptionId) return { session, subscription: null, error: "subscription_missing" }
-  const subscription = await getSubscriptionById(env, subscriptionId)
-  const subscriptionError = isActiveUsableSubscription(subscription)
-  if (subscriptionError) return { session, subscription, error: subscriptionError }
+  let subscription = await getSubscriptionById(env, subscriptionId)
+  let subscriptionError = isActiveUsableSubscription(subscription)
+  if (subscriptionError || !subscription) {
+    const replacement = await getActiveSubscriptionForUser(
+      env,
+      String(session.user_id || subscription?.firebase_user_id || ""),
+      String(session.user_email || subscription?.user_email || ""),
+    )
+    const replacementError = isActiveUsableSubscription(replacement)
+    if (!replacement || replacementError) {
+      return { session, subscription, error: subscriptionError || replacementError || "subscription_not_found" }
+    }
+    if (replacement.hwid && replacement.hwid !== hwid) {
+      return { session, subscription: replacement, error: "subscription_hwid_mismatch" }
+    }
+    const nextSessionExpiry = String(replacement.expires_at || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString())
+    await updateAppSessionSubscription(env, session.id, replacement.id, nextSessionExpiry)
+    session.subscription_id = replacement.id
+    session.license_id = null
+    session.expires_at = nextSessionExpiry
+    subscription = replacement
+    subscriptionError = ""
+  }
   if (subscription?.hwid && subscription.hwid !== hwid) return { session, subscription, error: "subscription_hwid_mismatch" }
+  if (isIsoExpired(session.expires_at)) {
+    const nextSessionExpiry = String(subscription.expires_at || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString())
+    await updateAppSessionExpiry(env, session.id, nextSessionExpiry)
+    session.expires_at = nextSessionExpiry
+  }
   return { session, subscription }
 }
 

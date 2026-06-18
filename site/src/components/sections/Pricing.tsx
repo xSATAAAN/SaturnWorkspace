@@ -32,8 +32,8 @@ export function Pricing({ lang }: PricingProps) {
   const t = isAr
     ? {
         tag: 'الأسعار',
-        title: 'وصول Saturn Workspace التجريبي',
-        desc: 'مرحلة البيتا تعمل باشتراكات مجانية يمنحها الأدمن للحسابات المصرح لها. الأسعار هنا مرجعية فقط لما بعد البيتا.',
+        title: 'اشتراك Saturn Workspace',
+        desc: 'اختر مدة الاشتراك المناسبة لحسابك. يتم تفعيل الاشتراك على نفس البريد المستخدم في تسجيل الدخول.',
         monthly: 'شهري',
         starter: 'مرن',
         yearly: 'سنوي',
@@ -43,16 +43,16 @@ export function Pricing({ lang }: PricingProps) {
         compareAt: 'بدلًا من $240 لو دفعت شهريًا لمدة سنة',
         yearlyEquiv: '≈ $10/شهر خلال العرض',
         perYear: '/سنة',
-        order: 'إنشاء حساب البيتا',
+        order: 'إنشاء حساب',
         supportHint: 'للدعم:',
         supportEmail: SUPPORT_EMAIL,
         supportTele: 'تيليجرام المطوّر',
-        note: 'الدفع غير مفعل أثناء البيتا. سجل بحساب Google ثم اطلب تفعيلًا تجريبيًا، وسيتم منح الاشتراك من لوحة الأدمن.',
+        note: 'سجل بحسابك ثم اطلب تفعيل الاشتراك. سيظهر الاشتراك داخل حسابك بعد اعتماد الطلب.',
       }
     : {
         tag: 'PRICING',
-        title: 'Saturn Workspace beta access',
-        desc: 'Beta access is granted manually from the admin dashboard. Prices are reference-only for the post-beta release.',
+        title: 'Saturn Workspace subscription',
+        desc: 'Choose the subscription term that fits your account. Access is activated for the same email used to sign in.',
         monthly: 'Monthly',
         starter: 'Flexible',
         yearly: 'Yearly',
@@ -62,11 +62,11 @@ export function Pricing({ lang }: PricingProps) {
         compareAt: 'vs. $240 if billed monthly for 12 months',
         yearlyEquiv: '≈ $10/mo during promo',
         perYear: '/yr',
-        order: 'Create beta account',
+        order: 'Create account',
         supportHint: 'Support:',
         supportEmail: SUPPORT_EMAIL,
         supportTele: 'Developer on Telegram',
-        note: 'Payments are disabled during beta. Sign in with Google, request beta access, and the admin dashboard will grant the free subscription.',
+        note: 'Sign in, request subscription activation, and your account will show the active subscription after approval.',
       }
 
   return (

@@ -162,7 +162,7 @@ const enCopy: SiteCopy = {
     { q: 'Which Windows versions are supported?', a: 'Windows 10 and Windows 11.' },
     { q: 'Is the subscription per device?', a: 'Yes. Each subscription is bound to one device unless agreed otherwise.' },
     { q: 'Which browsers are supported now?', a: 'AdsPower and Brave are supported now. More browsers may be added later.' },
-    { q: 'How do I get access?', a: 'During beta, sign in with Google and request access. The admin grants the free subscription to that same Google account.' },
+    { q: 'How do I get access?', a: 'Sign in with your account and request subscription activation. Access is activated for the same email after approval.' },
   ],
   footerDesc: 'Official desktop workspace for Vault, Gmail, IP, and controlled cloud sync workflows.',
   footerPrivacy: 'Privacy',

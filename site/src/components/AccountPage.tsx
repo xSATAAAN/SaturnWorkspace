@@ -218,7 +218,7 @@ export function AccountPage({ lang }: AccountPageProps) {
             profile: 'الملف الشخصي',
             profileDesc: 'عدل الاسم الظاهر وراجع بيانات الهوية الأساسية لهذا الحساب.',
             subscription: 'الاشتراك والفوترة',
-            subscriptionDesc: 'اعرض حالة اشتراكك الحالية وما هو متاح خلال مرحلة البيتا.',
+            subscriptionDesc: 'اعرض حالة اشتراكك الحالية وتفاصيل الخطة والتجديد.',
             security: 'الأمان',
             securityDesc: 'راجع طريقة تسجيل الدخول، إعادة تعيين كلمة المرور، وآخر نشاط معروف.',
             sessions: 'الجلسات والأجهزة',
@@ -247,9 +247,9 @@ export function AccountPage({ lang }: AccountPageProps) {
             expiresAt: 'تاريخ الانتهاء',
             daysRemaining: 'الأيام المتبقية',
             tier: 'الفئة',
-            betaManual: 'أنت ضمن مرحلة بيتا. تتم إدارة الاشتراكات يدويًا من لوحة الإدارة حاليًا.',
+            subscriptionManaged: 'تتم إدارة الاشتراك من خلال فريق Saturn Workspace.',
             noSubscription: 'لم يتم تعيين خطة اشتراك نشطة لهذا الحساب بعد.',
-            requestSubscription: 'طلب اشتراك تجريبي',
+            requestSubscription: 'طلب تفعيل الاشتراك',
             invoices: 'الفواتير',
             noInvoices: 'لا توجد فواتير متاحة حتى الآن.',
             passwordManagedByGoogle: 'هذا الحساب يستخدم تسجيل الدخول عبر Google. تتم إدارة كلمة المرور من حساب Google.',
@@ -295,7 +295,7 @@ export function AccountPage({ lang }: AccountPageProps) {
             profile: 'Profile',
             profileDesc: 'Update your display name and review the primary identity details for this account.',
             subscription: 'Subscription & billing',
-            subscriptionDesc: 'Review your current access status and what is available during beta.',
+            subscriptionDesc: 'Review your current access status, plan, and renewal details.',
             security: 'Security',
             securityDesc: 'Review sign-in methods, password reset, and the latest known activity.',
             sessions: 'Sessions & devices',
@@ -324,9 +324,9 @@ export function AccountPage({ lang }: AccountPageProps) {
             expiresAt: 'Expires on',
             daysRemaining: 'Days remaining',
             tier: 'Tier',
-            betaManual: 'You are currently in beta. Subscriptions are managed manually from the admin dashboard.',
+            subscriptionManaged: 'Your subscription is managed by the Saturn Workspace team.',
             noSubscription: 'No active subscription has been assigned to this account yet.',
-            requestSubscription: 'Request beta subscription',
+            requestSubscription: 'Request subscription activation',
             invoices: 'Invoices',
             noInvoices: 'No invoices are available yet.',
             passwordManagedByGoogle: 'This account signs in with Google. Password changes are managed from the Google account.',
@@ -604,7 +604,7 @@ export function AccountPage({ lang }: AccountPageProps) {
                   <FieldRow label={t.daysRemaining} value={formatDaysRemaining(subscription?.expires_at)} />
                 </div>
                 <div className="rounded-2xl border border-sky-400/14 bg-sky-400/8 px-4 py-3 text-sm leading-7 text-sky-100/88">
-                  {t.betaManual}
+                  {t.subscriptionManaged}
                 </div>
                 {!subscription ? (
                   <div className="rounded-2xl border border-amber-400/18 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">{t.noSubscription}</div>
@@ -612,7 +612,7 @@ export function AccountPage({ lang }: AccountPageProps) {
                 <div className="flex flex-wrap gap-3">
                   <a
                     className="btn-primary inline-flex items-center justify-center rounded-2xl px-4 py-2 text-sm font-semibold"
-                    href="mailto:support@saturnws.com?subject=Beta%20subscription%20request"
+                    href="mailto:support@saturnws.com?subject=Subscription%20activation%20request"
                   >
                     {t.requestSubscription}
                   </a>

@@ -7,7 +7,7 @@ Cloudflare Worker + R2 backend for secure Saturn Workspace OTA publishing and ad
 - Public:
   - `GET /updates/latest.json`
   - `GET /updates/file/:encodedKey`
-- Future payments (disabled in beta UI):
+- Payment and subscription routes:
   - `POST /api/payments/create`
   - `GET /api/payments/:orderId`
 - Admin (protected by Cloudflare Access):
@@ -40,7 +40,7 @@ Cloudflare Worker + R2 backend for secure Saturn Workspace OTA publishing and ad
 
 - Price and plan authority live server-side only (`src/services/orders.js`).
 - Checkout payload is normalized and sanitized in `src/validation/payments.js`.
-- The public site does not expose payment UI during beta. These routes are retained for the replacement gateway.
+- The public site uses the production subscription workflow. Payment routes are retained for hosted gateway integration.
 - Public payment endpoints have request rate limits and origin restrictions.
 
 ## Deploy

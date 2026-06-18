@@ -9,14 +9,20 @@ function isExpiredIso(value: string | null | undefined): boolean {
   return Number.isFinite(ts) ? ts <= Date.now() : false
 }
 
+function isUsableSubscription(row: SubscriptionRow | null | undefined): boolean {
+  return Boolean(row) && String(row?.status || "").trim().toLowerCase() === "active" && !isExpiredIso(row?.expires_at)
+}
+
 function scoreSubscription(row: SubscriptionRow, userId: string, email: string): string {
-  const active = String(row.status || "").trim().toLowerCase() === "active" && !isExpiredIso(row.expires_at) ? "1" : "0"
+  const active = isUsableSubscription(row) ? "1" : "0"
   const exactUser = String(row.firebase_user_id || "").trim() === String(userId || "").trim() ? "1" : "0"
   const exactEmail = normalizeEmail(row.user_email) === normalizeEmail(email) ? "1" : "0"
+  const lifetime = Date.parse(String(row.expires_at || "")) >= Date.parse("9999-01-01T00:00:00Z") ? "1" : "0"
   return [
     active,
     exactUser,
     exactEmail,
+    lifetime,
     String(row.updated_at || ""),
     String(row.expires_at || ""),
     String(row.created_at || ""),
@@ -270,6 +276,48 @@ export async function touchAppSession(env: Env, sessionId: string): Promise<void
     headers: { Prefer: "return=minimal" },
     body: JSON.stringify({ last_seen_at: new Date().toISOString() }),
   })
+}
+
+export async function updateAppSessionExpiry(env: Env, sessionId: string, expiresAt: string): Promise<void> {
+  await supabaseJson<unknown>(env, `/app_sessions?id=eq.${encodeURIComponent(sessionId)}`, {
+    method: "PATCH",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify({ expires_at: expiresAt, last_seen_at: new Date().toISOString() }),
+  })
+}
+
+export async function updateAppSessionSubscription(
+  env: Env,
+  sessionId: string,
+  subscriptionId: string,
+  expiresAt: string,
+): Promise<void> {
+  const patch = {
+    subscription_id: subscriptionId,
+    license_id: null,
+    expires_at: expiresAt,
+    last_seen_at: new Date().toISOString(),
+  }
+  try {
+    await supabaseJson<unknown>(env, `/app_sessions?id=eq.${encodeURIComponent(sessionId)}`, {
+      method: "PATCH",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify(patch),
+    })
+  } catch (error) {
+    if (!isMissingAppSessionsColumnError(error, "subscription_id")) {
+      throw error
+    }
+    await supabaseJson<unknown>(env, `/app_sessions?id=eq.${encodeURIComponent(sessionId)}`, {
+      method: "PATCH",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({
+        license_id: subscriptionId,
+        expires_at: expiresAt,
+        last_seen_at: new Date().toISOString(),
+      }),
+    })
+  }
 }
 
 export async function revokeAppSession(env: Env, tokenHash: string): Promise<void> {
