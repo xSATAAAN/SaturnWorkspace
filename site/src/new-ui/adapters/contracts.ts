@@ -42,6 +42,7 @@ export type PlanInfo = {
   id: 'weekly' | 'monthly' | 'yearly'
   name: string
   price: string
+  originalPrice?: string
   period: string
   description: string
   enabled: boolean
