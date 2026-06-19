@@ -206,11 +206,18 @@ Local visual smoke:
 - `/account/support` logged-out guard: passed.
 - `/admin/support` admin login shell: passed. Localhost CORS errors are expected for admin API because live CORS allows `https://admin.saturnws.com`, not localhost.
 
-Live smoke after frontend publish must be checked against:
+Live smoke after frontend publish:
 
-- `https://saturnws.com/account/signin`
-- `https://saturnws.com/download`
-- `https://admin.saturnws.com/admin/support`
+- `https://saturnws.com/account/signin?lang=en&theme=dark`: passed. The production auth card is centered and no longer renders as a full-width generic form.
+- `https://saturnws.com/download?lang=en&theme=light`: passed. The page loads the same-origin update manifest and shows `1.0.7-beta`, `37.8 MB`, and `SaturnWorkspace-app-1.0.7-beta.zip`.
+- `https://admin.saturnws.com/admin/support?lang=en&theme=dark`: passed as an unauthenticated smoke test. It shows the admin login shell. The `401` response from `/api/admin/session` is expected without an admin session.
+
+GitHub deployment:
+
+- Commit: `a52fcb2` (`Repair production auth download and support`)
+- Workflow: `Deploy site to GitHub Pages`
+- Run: `27830090323`
+- Result: success.
 
 ## Files changed
 
@@ -229,4 +236,3 @@ Live smoke after frontend publish must be checked against:
 Desktop app untouched:
 
 - `D:\SaturnWS\desktop-app` was not modified.
-
