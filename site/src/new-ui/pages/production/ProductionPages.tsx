@@ -35,6 +35,7 @@ import { isProductionFeatureEnabled } from '../../adapters/productionFeatureFlag
 import { PublicLayout, WorkspaceShell, type NavigationGroup } from '../../layouts/WorkspaceShell'
 import { Brand, LocaleControl, ThemeControl } from '../../layouts/SharedChrome'
 import type { Navigate } from '../../app/routes'
+import type { MessageKey } from '../../i18n/messages'
 
 type AsyncState<T> = { loading: boolean; data: T | null; error: string | null }
 const PENDING_EMAIL_VERIFICATION_KEY = 'saturnws.production.pendingEmailVerification.v1'
@@ -75,6 +76,14 @@ function LoadingBlock({ label }: { label: string }) {
 function ErrorBlock({ error, onRetry }: { error: string; onRetry?: () => void }) {
   const { t } = useExperience()
   return <Alert title={t('failed')} tone="danger" action={onRetry ? <Button size="sm" onClick={onRetry}>{t('retry')}</Button> : undefined}>{error}</Alert>
+}
+
+function authErrorMessage(error: unknown, t: (key: MessageKey) => string) {
+  const raw = error instanceof Error ? error.message : String(error || '')
+  const key = raw.toLowerCase()
+  if (key.includes('invalid-credential') || key.includes('user-not-found') || key.includes('wrong-password') || key.includes('invalid_credentials')) return t('invalidCredentials')
+  if (key.includes('network') || key.includes('failed to fetch') || key.includes('auth/network-request-failed')) return t('authUnavailable')
+  return t('failed')
 }
 
 function RequireAuth({ children, navigate }: { children: ReactNode; navigate: Navigate }) {
@@ -192,7 +201,7 @@ function EmailPasswordProductionPage({ page, navigate }: { page: string; navigat
       }
       navigate({ surface: 'portal', page: 'overview' })
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'auth_failed')
+      setError(authErrorMessage(err, t))
     } finally {
       setLoading(false)
     }
@@ -208,12 +217,12 @@ function EmailPasswordProductionPage({ page, navigate }: { page: string; navigat
       await auth.sendPasswordReset(email)
       setNotice(t('passwordUpdated'))
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'reset_failed')
+      setError(authErrorMessage(err, t))
     } finally {
       setLoading(false)
     }
   }
-  return <main className="auth-shell"><header><Brand onClick={() => navigate({ surface: 'public', page: 'home' })} /><div className="cluster"><LocaleControl /><ThemeControl /></div></header><section className="auth-card"><span className="auth-icon"><ShieldCheck size={23} /></span><h1>{signup ? t('signUp') : t('signIn')}</h1><p>{t('signInBody')}</p><form className="stack" onSubmit={submit}><FormField label={t('email')} htmlFor="auth-email" required><Input id="auth-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></FormField><FormField label={t('password')} htmlFor="auth-password" required><PasswordInput id="auth-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></FormField>{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}<Button type="submit" variant="primary" size="lg" fullWidth loading={loading}>{signup ? t('signUp') : t('signIn')}</Button><Button type="button" fullWidth onClick={async () => { setLoading(true); setError(''); try { await auth.signInWithGoogle(); navigate({ surface: 'portal', page: 'overview' }) } catch (err) { setError(err instanceof Error ? err.message : 'google_signin_failed') } finally { setLoading(false) } }}>{t('continue')} Google</Button>{!signup ? <Button type="button" variant="text" onClick={reset}>{t('forgotPassword')}</Button> : null}</form><Button variant="text" onClick={() => navigate({ surface: 'auth', page: signup ? 'signin' : 'signup' })}>{signup ? t('signIn') : t('signUp')}</Button></section></main>
+  return <main className="auth-shell"><header><Brand onClick={() => navigate({ surface: 'public', page: 'home' })} /><div className="cluster"><LocaleControl /><ThemeControl /></div></header><section className="auth-card"><span className="auth-icon"><ShieldCheck size={23} /></span><h1>{signup ? t('signUp') : t('signIn')}</h1><p>{t('signInBody')}</p><form className="stack" onSubmit={submit}><FormField label={t('email')} htmlFor="auth-email" required><Input id="auth-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></FormField><FormField label={t('password')} htmlFor="auth-password" required><PasswordInput id="auth-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></FormField>{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}<Button type="submit" variant="primary" size="lg" fullWidth loading={loading}>{signup ? t('signUp') : t('signIn')}</Button><Button type="button" fullWidth onClick={async () => { setLoading(true); setError(''); try { await auth.signInWithGoogle(); navigate({ surface: 'portal', page: 'overview' }) } catch (err) { setError(authErrorMessage(err, t)) } finally { setLoading(false) } }}>{t('continue')} Google</Button>{!signup ? <Button type="button" variant="text" onClick={reset}>{t('forgotPassword')}</Button> : null}</form><Button variant="text" onClick={() => navigate({ surface: 'auth', page: signup ? 'signin' : 'signup' })}>{signup ? t('signIn') : t('signUp')}</Button></section></main>
 }
 
 function EmailVerificationProductionPage({ navigate }: { navigate: Navigate }) {
