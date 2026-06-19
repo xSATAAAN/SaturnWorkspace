@@ -85,7 +85,7 @@ function normalizeRelease(payload: Record<string, unknown>): ReleaseInfo {
 function listStaticPlans(locale: 'ar' | 'en'): PlanInfo[] {
   const copy = publicCopy[locale]
   return [
-    { id: 'weekly', name: copy.weeklyName, price: copy.weeklyPrice, period: copy.weeklyPeriod, description: copy.weeklyBody, enabled: true, checkoutEnabled: false },
+    { id: 'weekly', name: copy.weeklyName, price: copy.weeklyPrice, originalPrice: copy.weeklyOriginalPrice, period: copy.weeklyPeriod, description: copy.weeklyBody, enabled: true, checkoutEnabled: false },
     { id: 'monthly', name: copy.monthlyName, price: copy.monthlyPrice, originalPrice: copy.monthlyOriginalPrice, period: copy.monthlyPeriod, description: copy.monthlyBody, enabled: true, checkoutEnabled: false },
     { id: 'yearly', name: copy.annualName, price: copy.annualPrice, originalPrice: copy.annualOriginalPrice, period: copy.annualPeriod, description: copy.annualBody, enabled: true, checkoutEnabled: false },
   ]
