@@ -282,6 +282,12 @@ export default {
         await appendAudit(env, { type: "support_reply", actor: adminEmail, at: new Date().toISOString() });
         return json(payload, 200, corsHeaders(request, env));
       }
+      if (url.pathname === "/api/admin/policy/support/status" && request.method === "POST") {
+        const adminEmail = await requireAdmin(request, env);
+        const payload = await proxyPolicyAdmin(request, env, "/v1/admin/support/status");
+        await appendAudit(env, { type: "support_status_update", actor: adminEmail, at: new Date().toISOString() });
+        return json(payload, 200, corsHeaders(request, env));
+      }
       if (url.pathname === "/api/admin/policy/support/block" && request.method === "POST") {
         const adminEmail = await requireAdmin(request, env);
         const payload = await proxyPolicyAdmin(request, env, "/v1/admin/support/block");

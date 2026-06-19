@@ -47,7 +47,7 @@ export function PublicFooter({ navigate }: { navigate: Navigate }) {
   const columns = [
     { title: t('footerProduct'), links: [[t('product'), 'product'], [t('features'), 'features'], [t('pricing'), 'pricing'], [t('downloads'), 'download']] },
     { title: t('footerAccount'), links: [[t('signIn'), 'signin'], [t('signUp'), 'signup'], [t('subscription'), 'subscription'], [t('support'), 'support']] },
-    { title: t('footerResources'), links: [[t('releases'), 'releases'], [t('changelog'), 'changelog'], [t('faq'), 'faq'], [t('contact'), 'contact']] },
+    { title: t('footerResources'), links: [[t('faq'), 'faq'], [t('contact'), 'contact']] },
     { title: t('footerLegal'), links: [[t('privacy'), 'privacy'], [t('terms'), 'terms'], [t('refund'), 'refund'], [t('acceptableUse'), 'acceptable-use']] },
   ] as const
   return <footer className="public-footer"><div className="container public-footer__grid"><div className="public-footer__brand"><Brand /><p>{t('heroBody')}</p></div>{columns.map((column) => <div key={column.title}><strong>{column.title}</strong>{column.links.map(([label, page]) => <button type="button" key={page} onClick={() => navigate({ surface: page === 'signin' || page === 'signup' ? 'auth' : 'public', page })}>{label}</button>)}</div>)}</div><div className="container public-footer__bottom"><span>© 2026 {t('brand')}. {t('rights')}</span><span>{t('windowsOnly')}</span></div></footer>

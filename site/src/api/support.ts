@@ -22,6 +22,7 @@ export type WebSupportThread = {
   last_message_sender?: string | null
   last_message_at?: string | null
   unread_count?: number
+  support_blocked?: boolean | number
 }
 
 export type WebSupportMessage = {

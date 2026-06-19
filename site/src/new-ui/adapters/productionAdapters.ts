@@ -28,6 +28,7 @@ import {
   sendSupportReply,
   setAdminBearerToken,
   setSupportBlocked,
+  updateAdminSupportStatus,
   submitAdminPreauth,
   updateRemoteControls,
   uploadReleaseBinary,
@@ -63,20 +64,33 @@ function latestReleaseUrl(channel: 'stable' | 'beta') {
   if (typeof window === 'undefined') return `/api/updates/latest.json?channel=${encodeURIComponent(channel)}`
   const host = window.location.hostname.toLowerCase()
   if (host === 'admin-api.saturnws.com') return `/api/updates/latest.json?channel=${encodeURIComponent(channel)}`
-  return `https://admin-api.saturnws.com/api/updates/latest.json?channel=${encodeURIComponent(channel)}`
+  return `/updates/latest.json?channel=${encodeURIComponent(channel)}`
 }
 
 function normalizeRelease(payload: Record<string, unknown>): ReleaseInfo {
   const channels = payload.channels && typeof payload.channels === 'object' ? payload.channels as Record<string, Record<string, unknown>> : {}
   const selected = channels.beta || payload
+  const artifacts = selected.artifacts && typeof selected.artifacts === 'object' ? selected.artifacts as Record<string, Record<string, unknown>> : {}
+  const installed = artifacts.installed || {}
+  const portable = artifacts.portable || {}
+  const primaryArtifact = installed.url || installed.filename ? installed : portable
+  const filename = String(selected.filename || primaryArtifact.filename || payload.filename || '')
+  const sizeBytes = Number(selected.size_bytes || primaryArtifact.size_bytes || primaryArtifact.size || 0)
+  const architecture = /\b(x64|win64|64-bit|amd64)\b/i.test(filename)
+    ? 'Windows 64-bit'
+    : /\b(x86|win32|32-bit)\b/i.test(filename)
+      ? 'Windows 32-bit'
+      : ''
   return {
     available: Boolean(selected.available ?? payload.available),
     version: String(selected.version || payload.version || ''),
     channel: String(selected.channel || 'beta'),
     mandatory: Boolean(selected.mandatory ?? payload.mandatory),
-    filename: String(selected.filename || payload.filename || ''),
-    downloadUrl: String(selected.download_url || selected.url || payload.download_url || ''),
-    sha256: String(selected.download_sha256 || payload.download_sha256 || ''),
+    filename,
+    downloadUrl: String(selected.download_url || selected.url || primaryArtifact.url || payload.download_url || ''),
+    sha256: String(selected.download_sha256 || primaryArtifact.sha256 || payload.download_sha256 || ''),
+    sizeBytes: Number.isFinite(sizeBytes) && sizeBytes > 0 ? sizeBytes : undefined,
+    architecture: architecture || undefined,
     notes: String(selected.notes || payload.notes || ''),
     raw: payload,
   }
@@ -215,6 +229,8 @@ export const productionAdapters: AppAdapters = {
         subject: thread.subject,
         status: thread.status,
         updatedAt: thread.updated_at || thread.last_message_at || undefined,
+        lastMessageAt: thread.last_message_at || undefined,
+        lastMessageSender: thread.last_message_sender || undefined,
         unreadCount: thread.unread_count,
       }))
     },
@@ -229,6 +245,8 @@ export const productionAdapters: AppAdapters = {
               subject: data.thread.subject,
               status: data.thread.status,
               updatedAt: data.thread.updated_at || data.thread.last_message_at || undefined,
+              lastMessageAt: data.thread.last_message_at || undefined,
+              lastMessageSender: data.thread.last_message_sender || undefined,
               unreadCount: data.thread.unread_count,
             }
           : undefined,
@@ -329,8 +347,11 @@ export const productionAdapters: AppAdapters = {
       const data = await fetchSupportMessages(threadId)
       return data.messages || []
     },
-    async sendSupportReply(threadId, body) {
-      await sendSupportReply({ thread_id: threadId, body })
+    async sendSupportReply(threadId, body, options = {}) {
+      await sendSupportReply({ thread_id: threadId, body, internal_note: options.internal, email_requested: options.emailRequested })
+    },
+    async updateSupportStatus(threadId, status, reason) {
+      await updateAdminSupportStatus({ thread_id: threadId, status, reason })
     },
     async setSupportBlocked(threadId, blocked, reason) {
       await setSupportBlocked({ thread_id: threadId, blocked, reason })

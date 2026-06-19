@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import {
+  ArrowLeft,
+  ArrowRight,
   Bell,
   Bug,
+  Copy,
   CreditCard,
   Download,
   KeyRound,
   LayoutDashboard,
   LifeBuoy,
+  Mail,
   Monitor,
   PackageOpen,
   ReceiptText,
@@ -34,12 +38,59 @@ import { publicCopy } from '../../content/publicCopy'
 import { isProductionFeatureEnabled } from '../../adapters/productionFeatureFlags'
 import { PublicLayout, WorkspaceShell, type NavigationGroup } from '../../layouts/WorkspaceShell'
 import { Brand, LocaleControl, ThemeControl } from '../../layouts/SharedChrome'
+import appIcon from '../../assets/saturnws-app-icon.png'
 import type { Navigate } from '../../app/routes'
 import type { MessageKey } from '../../i18n/messages'
 
 type AsyncState<T> = { loading: boolean; data: T | null; error: string | null }
 const PENDING_EMAIL_VERIFICATION_KEY = 'saturnws.production.pendingEmailVerification.v1'
 const LOCAL_EMAIL_VERIFICATION_TEST_CODE_KEY = 'saturnws.production.localEmailVerificationCode.v1'
+const EMAIL_SUPPORT_ENABLED = false
+
+function copyByLocale(locale: 'ar' | 'en', en: string, ar: string) {
+  return locale === 'ar' ? ar : en
+}
+
+function stableTicketNumber(id: string, createdAt?: string | null, updatedAt?: string | null) {
+  const year = (createdAt || updatedAt || new Date().toISOString()).slice(0, 4).replace(/\D/g, '') || '2026'
+  let hash = 0
+  for (const char of id) hash = (hash * 31 + char.charCodeAt(0)) >>> 0
+  return `SAT-${year}-${String(hash % 1000000).padStart(6, '0')}`
+}
+
+function supportStatusTone(status?: string) {
+  const normalized = String(status || 'open').toLowerCase()
+  if (normalized === 'closed') return 'neutral' as const
+  if (normalized === 'resolved') return 'success' as const
+  if (normalized === 'waiting_for_customer' || normalized === 'answered') return 'warning' as const
+  return 'info' as const
+}
+
+function supportStatusLabel(status: string | undefined, locale: 'ar' | 'en') {
+  const normalized = String(status || 'open').toLowerCase()
+  const labels: Record<string, { en: string; ar: string }> = {
+    open: { en: 'Open', ar: 'مفتوحة' },
+    waiting_for_support: { en: 'Waiting for support', ar: 'بانتظار الدعم' },
+    waiting_for_customer: { en: 'Waiting for customer', ar: 'بانتظار العميل' },
+    answered: { en: 'Waiting for customer', ar: 'بانتظار العميل' },
+    resolved: { en: 'Resolved', ar: 'تم الحل' },
+    closed: { en: 'Closed', ar: 'مغلقة' },
+  }
+  const item = labels[normalized] || labels.open
+  return locale === 'ar' ? item.ar : item.en
+}
+
+function formatBytes(bytes?: number) {
+  if (!bytes || !Number.isFinite(bytes) || bytes <= 0) return ''
+  const units = ['B', 'KB', 'MB', 'GB']
+  let value = bytes
+  let index = 0
+  while (value >= 1024 && index < units.length - 1) {
+    value /= 1024
+    index += 1
+  }
+  return `${value.toFixed(index === 0 ? 0 : 1)} ${units[index]}`
+}
 
 function useAsyncData<T>(load: () => Promise<T>, deps: React.DependencyList): AsyncState<T> & { reload: () => void } {
   const [version, setVersion] = useState(0)
@@ -145,9 +196,22 @@ function FaqSection() {
 }
 
 function DownloadSection({ release, loading, error, reload }: { release: ReleaseInfo | null; loading: boolean; error: string | null; reload: () => void }) {
-  const { t } = useExperience()
+  const { t, locale } = useExperience()
+  const [downloading, setDownloading] = useState(false)
   if (loading) return <div className="marketing-section"><div className="container narrow-page"><LoadingBlock label={t('loading')} /></div></div>
-  return <div className="marketing-section page-enter"><div className="container narrow-page"><header className="marketing-heading marketing-heading--center"><h1>{t('downloadTitle')}</h1><p>{t('downloadBody')}</p></header>{error ? <ErrorBlock error={error} onRetry={reload} /> : release?.available ? <DownloadCard title={t('downloadForWindows')} version={release.version || t('unavailable')} meta={[release.filename || t('fileSize'), release.sha256 ? `SHA256 ${release.sha256.slice(0, 12)}...` : t('architecture')]} buttonLabel={t('downloads')} onClick={() => { if (release.downloadUrl) window.location.href = release.downloadUrl }} /> : <EmptyState icon={Download} title={t('noRelease')} body={t('releaseUnavailable')} action={<Button onClick={reload}>{t('retry')}</Button>} />}<section className="release-notes-block"><h2>{t('releaseNotes')}</h2><p>{release?.notes || t('releaseUnavailable')}</p></section></div></div>
+  const meta = [
+    release?.version ? `${t('version')}: ${release.version}` : '',
+    release?.architecture || '',
+    formatBytes(release?.sizeBytes),
+    release?.filename || '',
+  ].filter(Boolean)
+  const startDownload = () => {
+    if (!release?.downloadUrl) return
+    setDownloading(true)
+    window.location.href = release.downloadUrl
+    window.setTimeout(() => setDownloading(false), 1400)
+  }
+  return <div className="marketing-section page-enter"><div className="container narrow-page"><header className="marketing-heading marketing-heading--center"><img className="download-product-icon" src={appIcon} alt="" /><h1>{t('downloadTitle')}</h1><p>{t('downloadBody')}</p></header>{error ? <ErrorBlock error={error} onRetry={reload} /> : release?.available && release.downloadUrl ? <Card className="download-simple-card"><div><span className="download-simple-card__mark"><Download size={25} /></span><h2>{t('downloadForWindows')}</h2><p>{copyByLocale(locale, 'Get the current Windows package published for Saturn Workspace.', 'نزّل حزمة Windows الحالية المنشورة لـ Saturn Workspace.')}</p><div className="download-simple-card__meta">{meta.map((item) => <span key={item}>{item}</span>)}</div></div><Button size="lg" variant="primary" leadingIcon={<Download size={17} />} loading={downloading} onClick={startDownload}>{t('downloadForWindows')}</Button></Card> : <EmptyState icon={Download} title={t('noRelease')} body={t('releaseUnavailable')} action={<Button onClick={reload}>{t('retry')}</Button>} />}</div></div>
 }
 
 function ReleaseNotes({ release, loading, error }: { release: ReleaseInfo | null; loading: boolean; error: string | null }) {
@@ -172,8 +236,14 @@ export function AuthProductionPages({ page, navigate }: { page: string; navigate
   return <EmailPasswordProductionPage page={page} navigate={navigate} />
 }
 
+function ProductionAuthShell({ children, navigate }: { children: ReactNode; navigate: Navigate }) {
+  const { t, locale } = useExperience()
+  const Arrow = locale === 'ar' ? ArrowRight : ArrowLeft
+  return <main className="auth-shell"><header className="auth-header"><Brand onClick={() => navigate({ surface: 'public', page: 'home' })} /><div><LocaleControl /><ThemeControl /></div></header><section className="auth-main"><div className="auth-form-wrap">{children}</div><Button className="auth-back" variant="ghost" leadingIcon={<Arrow size={16} />} onClick={() => navigate({ surface: 'public', page: 'home' })}>{t('back')}</Button></section></main>
+}
+
 function EmailPasswordProductionPage({ page, navigate }: { page: string; navigate: Navigate }) {
-  const { t } = useExperience()
+  const { t, locale } = useExperience()
   const { auth } = useAdapters()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -222,7 +292,7 @@ function EmailPasswordProductionPage({ page, navigate }: { page: string; navigat
       setLoading(false)
     }
   }
-  return <main className="auth-shell"><header><Brand onClick={() => navigate({ surface: 'public', page: 'home' })} /><div className="cluster"><LocaleControl /><ThemeControl /></div></header><section className="auth-card"><span className="auth-icon"><ShieldCheck size={23} /></span><h1>{signup ? t('signUp') : t('signIn')}</h1><p>{t('signInBody')}</p><form className="stack" onSubmit={submit}><FormField label={t('email')} htmlFor="auth-email" required><Input id="auth-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></FormField><FormField label={t('password')} htmlFor="auth-password" required><PasswordInput id="auth-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></FormField>{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}<Button type="submit" variant="primary" size="lg" fullWidth loading={loading}>{signup ? t('signUp') : t('signIn')}</Button><Button type="button" fullWidth onClick={async () => { setLoading(true); setError(''); try { await auth.signInWithGoogle(); navigate({ surface: 'portal', page: 'overview' }) } catch (err) { setError(authErrorMessage(err, t)) } finally { setLoading(false) } }}>{t('continue')} Google</Button>{!signup ? <Button type="button" variant="text" onClick={reset}>{t('forgotPassword')}</Button> : null}</form><Button variant="text" onClick={() => navigate({ surface: 'auth', page: signup ? 'signin' : 'signup' })}>{signup ? t('signIn') : t('signUp')}</Button></section></main>
+  return <ProductionAuthShell navigate={navigate}><div className="auth-card"><div className="auth-form"><span className="auth-icon"><ShieldCheck size={23} /></span><header><span>{signup ? t('signUp') : copyByLocale(locale, 'Secure account access', 'دخول آمن للحساب')}</span><h1>{signup ? t('signUpTitle') : t('signInTitle')}</h1><p>{signup ? t('signUpBody') : t('signInBody')}</p></header><form className="stack" onSubmit={submit}><FormField label={t('email')} htmlFor="auth-email" required><Input id="auth-email" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></FormField><FormField label={t('password')} htmlFor="auth-password" required><PasswordInput id="auth-password" autoComplete={signup ? 'new-password' : 'current-password'} value={password} onChange={(event) => setPassword(event.target.value)} required /></FormField>{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}<Button type="submit" variant="primary" size="lg" fullWidth loading={loading}>{signup ? t('signUp') : t('signIn')}</Button></form><div className="auth-divider"><span>{t('orContinue')}</span></div><Button type="button" fullWidth size="lg" onClick={async () => { setLoading(true); setError(''); try { await auth.signInWithGoogle(); navigate({ surface: 'portal', page: 'overview' }) } catch (err) { setError(authErrorMessage(err, t)) } finally { setLoading(false) } }}>{t('continueGoogle')}</Button>{!signup ? <Button type="button" variant="text" onClick={reset}>{t('forgotPassword')}</Button> : null}<p className="auth-switch">{signup ? t('haveAccount') : t('noAccount')} <button type="button" onClick={() => navigate({ surface: 'auth', page: signup ? 'signin' : 'signup' })}>{signup ? t('signIn') : t('signUp')}</button></p></div></div></ProductionAuthShell>
 }
 
 function EmailVerificationProductionPage({ navigate }: { navigate: Navigate }) {
@@ -278,7 +348,7 @@ function EmailVerificationProductionPage({ navigate }: { navigate: Navigate }) {
       setLoading(false)
     }
   }
-  return <main className="auth-shell"><header><Brand onClick={() => navigate({ surface: 'public', page: 'home' })} /><div className="cluster"><LocaleControl /><ThemeControl /></div></header><section className="auth-card"><span className="auth-icon"><ShieldCheck size={23} /></span><h1>{t('verificationTitle')}</h1><p>{t('verificationBody')}</p><form className="stack" onSubmit={(event) => { event.preventDefault(); void verify() }}><FormField label={t('email')} htmlFor="verify-email" required><Input id="verify-email" type="email" value={email} onChange={(event) => { setEmail(event.target.value); window.sessionStorage.setItem(PENDING_EMAIL_VERIFICATION_KEY, event.target.value) }} required /></FormField><OTPInput value={code} onChange={setCode} label={t('codeLabel')} />{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}<Button type="submit" variant="primary" size="lg" fullWidth loading={loading} disabled={code.length !== 6}>{t('continue')}</Button><Button type="button" variant="text" onClick={resend} disabled={loading}>{t('resend')}</Button><Button type="button" variant="text" onClick={() => navigate({ surface: 'auth', page: 'signup' })}>{t('changeEmail')}</Button></form></section></main>
+  return <ProductionAuthShell navigate={navigate}><div className="auth-card"><div className="auth-form auth-form--center"><span className="auth-icon"><Mail size={23} /></span><header><h1>{t('verificationTitle')}</h1><p>{t('verificationBody')}</p>{email ? <strong>{email}</strong> : null}</header><form className="stack" onSubmit={(event) => { event.preventDefault(); void verify() }}><FormField label={t('email')} htmlFor="verify-email" required><Input id="verify-email" type="email" value={email} onChange={(event) => { setEmail(event.target.value); window.sessionStorage.setItem(PENDING_EMAIL_VERIFICATION_KEY, event.target.value) }} required /></FormField><OTPInput value={code} onChange={setCode} label={t('codeLabel')} />{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}<Button type="submit" variant="primary" size="lg" fullWidth loading={loading} disabled={code.length !== 6}>{t('continue')}</Button><div className="cluster"><Button type="button" variant="text" onClick={resend} disabled={loading}>{t('resend')}</Button><Button type="button" variant="text" onClick={() => navigate({ surface: 'auth', page: 'signup' })}>{t('changeEmail')}</Button></div></form></div></div></ProductionAuthShell>
 }
 
 export function PortalProductionPages({ page, navigate }: { page: string; navigate: Navigate }) {
@@ -343,17 +413,29 @@ function PortalNotifications() {
 }
 
 function PortalSupport() {
-  const { t } = useExperience()
+  const { t, locale } = useExperience()
   const { support } = useAdapters()
   const [selected, setSelected] = useState<CustomerSupportThread | null>(null)
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
   const [reply, setReply] = useState('')
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
   const threads = useAsyncData(() => support.listThreads(), [support])
   const thread = useAsyncData(() => selected ? support.getThread(selected.id) : Promise.resolve({ messages: [] }), [support, selected?.id])
+  const visibleThreads = useMemo(() => {
+    const query = search.trim().toLowerCase()
+    return (threads.data || []).filter((row) => {
+      const ticketNumber = stableTicketNumber(row.id, row.updatedAt)
+      const status = String(row.status || 'open').toLowerCase()
+      const matchesStatus = !statusFilter || status === statusFilter || (statusFilter === 'waiting_for_customer' && status === 'answered')
+      const matchesSearch = !query || row.subject.toLowerCase().includes(query) || ticketNumber.toLowerCase().includes(query)
+      return matchesStatus && matchesSearch
+    })
+  }, [threads.data, search, statusFilter])
 
   const createTicket = async (event: FormEvent) => {
     event.preventDefault()
@@ -367,7 +449,7 @@ function PortalSupport() {
       setBody('')
       setNotice(t('success'))
       threads.reload()
-      if (result.threadId) setSelected({ id: result.threadId, subject })
+      if (result.threadId) setSelected({ id: result.threadId, subject, status: 'open', updatedAt: new Date().toISOString() })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'support_ticket_failed')
     } finally {
@@ -394,14 +476,33 @@ function PortalSupport() {
     }
   }
 
+  const setSelectedStatus = async (status: 'open' | 'closed') => {
+    if (!selected) return
+    setBusy(true)
+    setError('')
+    try {
+      const result = await support.setThreadStatus(selected.id, status)
+      if (!result.success) throw new Error(result.error || 'support_status_failed')
+      setSelected({ ...selected, status: result.status || status, updatedAt: new Date().toISOString() })
+      setNotice(t('success'))
+      thread.reload()
+      threads.reload()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'support_status_failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const columns: Column<CustomerSupportThread>[] = [
-    { key: 'subject', header: t('support'), render: (row) => row.subject },
-    { key: 'status', header: t('status'), render: (row) => <Badge tone={row.status === 'closed' ? 'neutral' : 'info'}>{row.status || 'open'}</Badge> },
-    { key: 'unread', header: t('notifications'), render: (row) => row.unreadCount || 0 },
+    { key: 'ticket', header: '#', render: (row) => <strong>{stableTicketNumber(row.id, row.updatedAt)}</strong> },
+    { key: 'subject', header: t('support'), render: (row) => <div><strong>{row.subject}</strong><small className="muted">{row.lastMessageAt || row.updatedAt || ''}</small></div> },
+    { key: 'status', header: t('status'), render: (row) => <Badge tone={supportStatusTone(row.status)}>{supportStatusLabel(row.status, locale)}</Badge> },
+    { key: 'unread', header: t('notifications'), render: (row) => row.unreadCount ? <Badge tone="info">{row.unreadCount}</Badge> : '0' },
     { key: 'updated', header: t('date'), render: (row) => row.updatedAt || '—' },
   ]
 
-  return <><PageHeader title={t('support')} description={t('recentSupport')} /><div className="portal-two-column"><Card><SectionHeader title={t('createTicket')} /><form className="settings-form" onSubmit={createTicket}><FormField label={t('details')} htmlFor="support-subject" required><Input id="support-subject" value={subject} onChange={(event) => setSubject(event.target.value)} required /></FormField><FormField label={t('support')} htmlFor="support-body" required><Textarea id="support-body" value={body} onChange={(event) => setBody(event.target.value)} required /></FormField><Button type="submit" variant="primary" loading={busy}>{t('createTicket')}</Button></form></Card><Card><SectionHeader title={t('recentSupport')} />{threads.error ? <ErrorBlock error={threads.error} onRetry={threads.reload} /> : <DataTable columns={columns} rows={threads.data || []} loading={threads.loading} rowKey={(row) => row.id} emptyTitle={t('tableEmpty')} emptyBody={t('support')} onRowClick={setSelected} />}</Card></div>{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}<Drawer open={Boolean(selected)} onClose={() => setSelected(null)} title={selected?.subject || t('support')} closeLabel={t('close')}><div className="support-thread">{thread.loading ? <LoadingBlock label={t('loading')} /> : thread.data?.messages.map((message) => <article key={message.id} className={message.sender === 'admin' ? 'is-admin' : ''}><strong>{message.sender === 'admin' ? t('messageFromAdmin') : t('account')}</strong><p>{message.body}</p><small>{message.createdAt}</small></article>)}</div><form className="settings-form" onSubmit={sendReply}><FormField label={t('reply')} htmlFor="support-reply"><Textarea id="support-reply" value={reply} onChange={(event) => setReply(event.target.value)} required /></FormField><div className="cluster"><Button type="submit" variant="primary" loading={busy}>{t('reply')}</Button>{selected ? <Button type="button" onClick={async () => { await support.setThreadStatus(selected.id, 'closed'); setSelected(null); threads.reload() }}>{t('close')}</Button> : null}</div></form></Drawer></>
+  return <><PageHeader title={t('support')} description={t('recentSupport')} /><div className="portal-two-column"><Card><SectionHeader title={t('createTicket')} description={copyByLocale(locale, 'Support replies appear in this portal. Email delivery is not enabled yet.', 'ستظهر ردود الدعم داخل هذه البوابة. إرسال البريد غير مفعّل حاليًا.')} /><form className="settings-form" onSubmit={createTicket}><FormField label={t('details')} htmlFor="support-subject" required><Input id="support-subject" value={subject} maxLength={160} onChange={(event) => setSubject(event.target.value)} required /></FormField><FormField label={t('support')} htmlFor="support-body" required><Textarea id="support-body" value={body} maxLength={4000} onChange={(event) => setBody(event.target.value)} required /></FormField><Button type="submit" variant="primary" loading={busy}>{t('createTicket')}</Button></form></Card><Card><SectionHeader title={t('recentSupport')} /><TableToolbar searchLabel={t('search')} searchValue={search} onSearch={setSearch} filters={<Select aria-label={t('status')} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">{t('status')}</option><option value="open">{supportStatusLabel('open', locale)}</option><option value="waiting_for_support">{supportStatusLabel('waiting_for_support', locale)}</option><option value="waiting_for_customer">{supportStatusLabel('waiting_for_customer', locale)}</option><option value="resolved">{supportStatusLabel('resolved', locale)}</option><option value="closed">{supportStatusLabel('closed', locale)}</option></Select>} />{threads.error ? <ErrorBlock error={threads.error} onRetry={threads.reload} /> : <DataTable columns={columns} rows={visibleThreads} loading={threads.loading} rowKey={(row) => row.id} emptyTitle={t('tableEmpty')} emptyBody={t('support')} onRowClick={(row) => { setSelected(row); setError(''); setNotice('') }} />}</Card></div>{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}<Drawer open={Boolean(selected)} onClose={() => setSelected(null)} title={selected ? stableTicketNumber(selected.id, selected.updatedAt) : t('support')} description={selected?.subject} closeLabel={t('close')}><div className="support-ticket-meta"><Badge tone={supportStatusTone(thread.data?.thread?.status || selected?.status)}>{supportStatusLabel(thread.data?.thread?.status || selected?.status, locale)}</Badge><span>{thread.data?.thread?.updatedAt || selected?.updatedAt || ''}</span></div><div className="support-thread">{thread.loading ? <LoadingBlock label={t('loading')} /> : thread.data?.messages.filter((message) => message.sender !== 'internal').map((message) => <article key={message.id} className={message.sender === 'admin' ? 'is-admin' : message.sender === 'system' ? 'is-system' : ''}><strong>{message.sender === 'admin' ? t('messageFromAdmin') : message.sender === 'system' ? copyByLocale(locale, 'System', 'النظام') : t('account')}</strong><p>{message.body}</p><small>{message.createdAt}</small></article>)}</div>{(thread.data?.thread?.status || selected?.status) === 'closed' ? <Alert title={supportStatusLabel('closed', locale)} tone="info" action={<Button size="sm" onClick={() => setSelectedStatus('open')} loading={busy}>{copyByLocale(locale, 'Reopen', 'إعادة فتح')}</Button>}>{copyByLocale(locale, 'This ticket is closed. Reopen it if you need to add another reply.', 'هذه التذكرة مغلقة. أعد فتحها إذا كنت تريد إضافة رد جديد.')}</Alert> : <form className="settings-form" onSubmit={sendReply}><FormField label={t('reply')} htmlFor="support-reply"><Textarea id="support-reply" value={reply} maxLength={4000} onChange={(event) => setReply(event.target.value)} required /></FormField><div className="cluster"><Button type="submit" variant="primary" loading={busy}>{t('reply')}</Button>{selected ? <Button type="button" onClick={() => setSelectedStatus('closed')} loading={busy}>{t('close')}</Button> : null}</div></form>}</Drawer></>
 }
 
 function PortalSettings() {
@@ -423,7 +524,7 @@ export function AdminProductionPages({ page, navigate }: { page: string; navigat
     { label: t('governance'), items: [{ id: 'policies', label: t('policies'), icon: ShieldCheck }, { id: 'audit', label: t('auditLog'), icon: ScrollText }, { id: 'settings', label: t('settings'), icon: Settings }] },
   ], [t])
   const title = groups.flatMap((group) => group.items).find((item) => item.id === page)?.label || t('adminOverview')
-  return <AdminGuard navigate={navigate}><WorkspaceShell surface="admin" page={page} title={title} groups={groups} navigate={navigate} admin>{page === 'subscriptions' || page === 'users' ? <AdminSubscriptions /> : page === 'releases' ? <AdminReleases /> : page === 'support' ? <AdminSupport /> : page === 'diagnostics' ? <AdminDiagnostics /> : page === 'audit' ? <AdminAudit /> : page === 'promos' ? <AdminPromos /> : page === 'commerce' ? <AdminCommerce /> : page === 'policies' ? <AdminPolicies /> : <AdminOverview />}</WorkspaceShell></AdminGuard>
+  return <AdminGuard navigate={navigate}><WorkspaceShell surface="admin" page={page} title={title} groups={groups} navigate={navigate} admin>{page === 'subscriptions' || page === 'users' ? <AdminSubscriptions /> : page === 'releases' ? <AdminReleases /> : page === 'support' ? <AdminSupportV2 /> : page === 'diagnostics' ? <AdminDiagnostics /> : page === 'audit' ? <AdminAudit /> : page === 'promos' ? <AdminPromos /> : page === 'commerce' ? <AdminCommerce /> : page === 'policies' ? <AdminPolicies /> : <AdminOverview />}</WorkspaceShell></AdminGuard>
 }
 
 function AdminGuard({ children }: { children: ReactNode; navigate: Navigate }) {
@@ -526,7 +627,116 @@ function AdminReleases() {
   return <><PageHeader title={t('releases')} description={t('managedUpdates')} />{release.error ? <ErrorBlock error={release.error} onRetry={release.reload} /> : <Card><dl className="detail-list"><div><dt>{t('version')}</dt><dd>{release.data?.version || t('unavailable')}</dd></div><div><dt>{t('mandatory')}</dt><dd>{release.data?.mandatory ? t('enabled') : t('disabled')}</dd></div><div><dt>SHA256</dt><dd>{release.data?.sha256 || '—'}</dd></div></dl></Card>}<Card><SectionHeader title={t('publishRelease')} description={t('managedUpdates')} /><form className="settings-form" onSubmit={submit}><div className="form-grid"><FormField label={t('version')} htmlFor="release-version" required><Input id="release-version" value={version} onChange={(event) => setVersion(event.target.value)} required /></FormField><FormField label={t('channel')} htmlFor="release-channel" required><Select id="release-channel" value={channel} onChange={(event) => setChannel(event.target.value)}><option value="beta">{t('beta')}</option><option value="stable">{t('stable')}</option></Select></FormField></div><div className="form-grid"><FormField label={t('type')} htmlFor="release-artifact"><Select id="release-artifact" value={artifactType} onChange={(event) => setArtifactType(event.target.value as 'portable' | 'installed')}><option value="installed">installed</option><option value="portable">portable</option></Select></FormField><FormField label={t('availability')} htmlFor="release-mode"><Select id="release-mode" value={updateMode} onChange={(event) => setUpdateMode(event.target.value as 'optional' | 'force' | 'required' | 'silent')}><option value="optional">optional</option><option value="required">required</option><option value="force">force</option><option value="silent">silent</option></Select></FormField></div><FormField label={t('uploadArtifact')} htmlFor="release-file"><Input id="release-file" type="file" onChange={(event) => setFile(event.target.files?.[0] || null)} /></FormField><FormField label={t('releaseNotes')} htmlFor="release-notes"><Textarea id="release-notes" value={notes} onChange={(event) => setNotes(event.target.value)} /></FormField><label className="ui-checkbox"><input type="checkbox" checked={mandatory} onChange={(event) => setMandatory(event.target.checked)} />{t('mandatory')}</label><Button type="submit" variant="primary" loading={busy}>{t('publishRelease')}</Button>{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}</form></Card></>
 }
 
-function AdminSupport() {
+function AdminSupportV2() {
+  const { t, locale } = useExperience()
+  const { admin } = useAdapters()
+  const [selected, setSelected] = useState<AdminSupportThread | null>(null)
+  const [reply, setReply] = useState('')
+  const [internalNote, setInternalNote] = useState('')
+  const [replyMode, setReplyMode] = useState<'portal' | 'portal_email'>('portal')
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [statusReason, setStatusReason] = useState('')
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  const [busy, setBusy] = useState(false)
+  const threads = useAsyncData(() => admin.listSupportThreads(), [admin])
+  const messages = useAsyncData(() => selected ? admin.listSupportMessages(selected.id) : Promise.resolve([]), [admin, selected?.id])
+  const visibleThreads = useMemo(() => {
+    const query = search.trim().toLowerCase()
+    return (threads.data || []).filter((row) => {
+      const ticketNumber = stableTicketNumber(row.id, row.created_at, row.updated_at)
+      const status = String(row.status || 'open').toLowerCase()
+      const matchesStatus = !statusFilter || status === statusFilter || (statusFilter === 'waiting_for_customer' && status === 'answered')
+      const haystack = [ticketNumber, row.subject, row.email, row.install_id, row.device_id, row.last_message_body].filter(Boolean).join(' ').toLowerCase()
+      return matchesStatus && (!query || haystack.includes(query))
+    })
+  }, [threads.data, search, statusFilter])
+  const columns: Column<AdminSupportThread>[] = [
+    { key: 'ticket', header: '#', render: (row) => <div><strong>{stableTicketNumber(row.id, row.created_at, row.updated_at)}</strong>{row.unread_count ? <small className="muted">{row.unread_count} unread</small> : null}</div> },
+    { key: 'customer', header: t('email'), render: (row) => <div><strong>{row.email || '—'}</strong><small className="muted">{row.install_id || row.device_id || ''}</small></div> },
+    { key: 'subject', header: t('support'), render: (row) => <div><strong>{row.subject}</strong><small className="muted">{row.last_message_body || ''}</small></div> },
+    { key: 'status', header: t('status'), render: (row) => <Badge tone={supportStatusTone(row.status)}>{supportStatusLabel(row.status, locale)}</Badge> },
+    { key: 'updated', header: t('date'), render: (row) => row.updated_at || '—' },
+  ]
+
+  const sendReply = async (event: FormEvent) => {
+    event.preventDefault()
+    if (!selected) return
+    setBusy(true)
+    setError('')
+    setNotice('')
+    try {
+      await admin.sendSupportReply(selected.id, reply, { emailRequested: replyMode === 'portal_email' })
+      setReply('')
+      setNotice(replyMode === 'portal_email' && !EMAIL_SUPPORT_ENABLED ? copyByLocale(locale, 'Portal reply saved. Email delivery is not configured yet.', 'تم حفظ الرد في البوابة. إرسال البريد غير مفعّل بعد.') : t('success'))
+      messages.reload()
+      threads.reload()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'support_reply_failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+  const saveInternalNote = async () => {
+    if (!selected || !internalNote.trim()) return
+    setBusy(true)
+    setError('')
+    setNotice('')
+    try {
+      await admin.sendSupportReply(selected.id, internalNote, { internal: true })
+      setInternalNote('')
+      setNotice(t('success'))
+      messages.reload()
+      threads.reload()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'support_note_failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+  const changeStatus = async (status: string) => {
+    if (!selected) return
+    setBusy(true)
+    setError('')
+    setNotice('')
+    try {
+      await admin.updateSupportStatus(selected.id, status, statusReason)
+      setSelected({ ...selected, status, updated_at: new Date().toISOString() })
+      setStatusReason('')
+      setNotice(t('success'))
+      messages.reload()
+      threads.reload()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'support_status_failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+  const copyTicketNumber = async () => {
+    if (!selected) return
+    await navigator.clipboard?.writeText(stableTicketNumber(selected.id, selected.created_at, selected.updated_at))
+    setNotice(t('success'))
+  }
+  const toggleBlock = async () => {
+    if (!selected) return
+    setBusy(true)
+    setError('')
+    try {
+      await admin.setSupportBlocked(selected.id, !selected.support_blocked, selected.support_blocked ? undefined : 'admin_block')
+      setSelected({ ...selected, support_blocked: !selected.support_blocked })
+      threads.reload()
+      setNotice(t('success'))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'support_block_failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+  return <><PageHeader title={t('supportInbox')} description={copyByLocale(locale, 'Manage customer support threads, internal notes, status changes, and sender blocks.', 'إدارة تذاكر الدعم، الملاحظات الداخلية، تغييرات الحالة، وحظر المرسلين.')} /><TableToolbar searchLabel={t('search')} searchValue={search} onSearch={setSearch} filters={<Select aria-label={t('status')} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">{t('status')}</option><option value="open">{supportStatusLabel('open', locale)}</option><option value="waiting_for_support">{supportStatusLabel('waiting_for_support', locale)}</option><option value="waiting_for_customer">{supportStatusLabel('waiting_for_customer', locale)}</option><option value="resolved">{supportStatusLabel('resolved', locale)}</option><option value="closed">{supportStatusLabel('closed', locale)}</option></Select>} />{threads.error ? <ErrorBlock error={threads.error} onRetry={threads.reload} /> : <DataTable columns={columns} rows={visibleThreads} loading={threads.loading} rowKey={(row) => row.id} emptyTitle={t('tableEmpty')} emptyBody={t('supportInbox')} onRowClick={(row) => { setSelected(row); setError(''); setNotice(''); setReply(''); setInternalNote('') }} />}{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}<Drawer open={Boolean(selected)} onClose={() => setSelected(null)} title={selected ? stableTicketNumber(selected.id, selected.created_at, selected.updated_at) : t('support')} description={selected?.subject || t('support')} closeLabel={t('close')}><div className="support-admin-head"><div><Badge tone={supportStatusTone(selected?.status)}>{supportStatusLabel(selected?.status, locale)}</Badge><span>{selected?.email || '—'}</span><small>{selected?.app_version || selected?.platform || ''}</small></div><div className="cluster"><Button size="sm" leadingIcon={<Copy size={14} />} onClick={copyTicketNumber}>{copyByLocale(locale, 'Copy ticket number', 'نسخ رقم التذكرة')}</Button><Button size="sm" variant="secondary" onClick={toggleBlock} disabled={!selected || busy}>{selected?.support_blocked ? t('enabled') : t('blockSender')}</Button></div></div><div className="form-grid"><FormField label={t('status')} htmlFor="admin-ticket-status"><Select id="admin-ticket-status" value={selected?.status || 'open'} onChange={(event) => changeStatus(event.target.value)}><option value="open">{supportStatusLabel('open', locale)}</option><option value="waiting_for_support">{supportStatusLabel('waiting_for_support', locale)}</option><option value="waiting_for_customer">{supportStatusLabel('waiting_for_customer', locale)}</option><option value="resolved">{supportStatusLabel('resolved', locale)}</option><option value="closed">{supportStatusLabel('closed', locale)}</option></Select></FormField><FormField label={t('reason')} htmlFor="support-status-reason"><Input id="support-status-reason" value={statusReason} onChange={(event) => setStatusReason(event.target.value)} /></FormField></div><div className="support-thread">{messages.loading ? <LoadingBlock label={t('loading')} /> : messages.data?.map((message) => <article key={message.id} className={message.sender === 'admin' ? 'is-admin' : message.sender === 'internal' ? 'is-internal' : message.sender === 'system' ? 'is-system' : ''}><strong>{message.sender === 'internal' ? copyByLocale(locale, 'Internal note', 'ملاحظة داخلية') : message.sender === 'system' ? copyByLocale(locale, 'System', 'النظام') : message.sender === 'admin' ? t('messageFromAdmin') : t('account')}</strong><p>{message.body}</p><small>{message.created_at}</small></article>)}</div><form className="settings-form" onSubmit={sendReply}><div className="form-grid"><FormField label={t('type')} htmlFor="admin-support-mode"><Select id="admin-support-mode" value={replyMode} onChange={(event) => setReplyMode(event.target.value as 'portal' | 'portal_email')}><option value="portal">{copyByLocale(locale, 'Portal only', 'البوابة فقط')}</option><option value="portal_email">{copyByLocale(locale, 'Portal + email', 'البوابة + البريد')}</option></Select></FormField><FormField label={copyByLocale(locale, 'Assigned admin', 'المسؤول المعين')} htmlFor="assigned-admin"><Input id="assigned-admin" value={copyByLocale(locale, 'Unassigned', 'غير معيّن')} readOnly /></FormField></div>{replyMode === 'portal_email' && !EMAIL_SUPPORT_ENABLED ? <Alert title={copyByLocale(locale, 'Email provider required', 'يتطلب مزود بريد')} tone="warning">{copyByLocale(locale, 'The reply will be saved in the portal. Email sending stays off until a transactional email provider is configured.', 'سيتم حفظ الرد داخل البوابة فقط. إرسال البريد يظل متوقفًا حتى يتم إعداد مزود بريد للرسائل التشغيلية.')}</Alert> : null}<FormField label={t('reply')} htmlFor="admin-support-reply"><Textarea id="admin-support-reply" value={reply} maxLength={4000} onChange={(event) => setReply(event.target.value)} required /></FormField><Button type="submit" variant="primary" loading={busy}>{t('reply')}</Button></form><Card padding="sm"><SectionHeader title={copyByLocale(locale, 'Internal note', 'ملاحظة داخلية')} description={copyByLocale(locale, 'Visible only to administrators.', 'تظهر للمديرين فقط.')} /><FormField label={t('adminNote')} htmlFor="admin-internal-note"><Textarea id="admin-internal-note" value={internalNote} maxLength={4000} onChange={(event) => setInternalNote(event.target.value)} /></FormField><Button type="button" onClick={saveInternalNote} loading={busy}>{t('save')}</Button></Card></Drawer></>
+}
+
+export function AdminSupport() {
   const { t } = useExperience()
   const { admin } = useAdapters()
   const [selected, setSelected] = useState<AdminSupportThread | null>(null)

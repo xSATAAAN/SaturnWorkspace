@@ -160,7 +160,7 @@ export type AdminSupportThread = {
 export type AdminSupportMessage = {
   id: string
   thread_id: string
-  sender: 'user' | 'admin' | string
+  sender: 'user' | 'admin' | 'system' | 'internal' | string
   body: string
   created_at?: string
 }
@@ -473,8 +473,15 @@ export async function fetchSupportMessages(threadId: string) {
   )
 }
 
-export async function sendSupportReply(payload: { thread_id: string; body: string }) {
+export async function sendSupportReply(payload: { thread_id: string; body: string; internal_note?: boolean; email_requested?: boolean }) {
   return adminFetch<{ success: boolean }>('/policy/support/reply', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function updateAdminSupportStatus(payload: { thread_id: string; status: string; reason?: string }) {
+  return adminFetch<{ success: boolean; status?: string }>('/policy/support/status', {
     method: 'POST',
     body: JSON.stringify(payload),
   })

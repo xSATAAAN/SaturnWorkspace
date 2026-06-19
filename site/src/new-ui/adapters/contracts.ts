@@ -34,6 +34,8 @@ export type ReleaseInfo = {
   filename?: string
   downloadUrl?: string
   sha256?: string
+  sizeBytes?: number
+  architecture?: string
   notes?: string
   raw?: unknown
 }
@@ -73,6 +75,8 @@ export type CustomerSupportThread = {
   subject: string
   status?: string
   updatedAt?: string
+  lastMessageAt?: string
+  lastMessageSender?: string
   unreadCount?: number
 }
 
@@ -156,7 +160,8 @@ export type AdminAdapter = {
   updateRemoteControls(input: AdminRemoteControls & { channel: string }): Promise<AdminRemoteControls>
   listSupportThreads(): Promise<AdminSupportThread[]>
   listSupportMessages(threadId: string): Promise<AdminSupportMessage[]>
-  sendSupportReply(threadId: string, body: string): Promise<void>
+  sendSupportReply(threadId: string, body: string, options?: { internal?: boolean; emailRequested?: boolean }): Promise<void>
+  updateSupportStatus(threadId: string, status: string, reason?: string): Promise<void>
   setSupportBlocked(threadId: string, blocked: boolean, reason?: string): Promise<void>
   listCrashLogs(): Promise<AdminCrashLog[]>
   listCrashGroups(): Promise<AdminCrashGroup[]>
