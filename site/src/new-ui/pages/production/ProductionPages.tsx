@@ -4,6 +4,7 @@ import {
   ArrowRight,
   Bell,
   Bug,
+  Check,
   Copy,
   CreditCard,
   Download,
@@ -25,12 +26,16 @@ import {
 import type { AdminAuditLogItem, AdminCrashGroup, AdminCrashLog, AdminRemoteControls, AdminSubscription, AdminSupportThread } from '../../../api/admin'
 import type { AccountSubscription } from '../../../api/account'
 import { useAdapters } from '../../adapters/AdapterProvider'
-import type { AppUser, CustomerSupportThread, PlanInfo, ReleaseInfo } from '../../adapters/contracts'
+import type { CustomerSupportThread, PlanInfo, ReleaseInfo } from '../../adapters/contracts'
 import { useExperience } from '../../app/ExperienceProvider'
+import { createAuthRoute, createPricingReturnState, currentInternalLocation, readAuthIntent, readCheckoutPlan } from '../../app/navigationIntent'
+import { routeFromInternalUrl } from '../../app/productionRouter'
 import { Button } from '../../components/ui/Button'
+import { CheckoutDialog } from '../../components/CheckoutDialog'
+import { GoogleIcon } from '../../components/icons/GoogleIcon'
 import { Card, DataTable, PageHeader, SectionHeader, StatCard, TableToolbar, type Column } from '../../components/ui/DataDisplay'
 import { Alert, Badge, EmptyState, FullPageState } from '../../components/ui/Feedback'
-import { FormField, Input, OTPInput, PasswordInput, Select, Textarea } from '../../components/ui/FormControls'
+import { Checkbox, FormField, Input, OTPInput, PasswordInput, Select, Textarea } from '../../components/ui/FormControls'
 import { Accordion, Tabs } from '../../components/ui/Navigation'
 import { Drawer } from '../../components/ui/Overlays'
 import { DownloadCard, PricingCard, SubscriptionCard } from '../../components/ui/ProductCards'
@@ -41,6 +46,7 @@ import { Brand, LocaleControl, ThemeControl } from '../../layouts/SharedChrome'
 import appIcon from '../../assets/saturnws-app-icon.png'
 import type { Navigate } from '../../app/routes'
 import type { MessageKey } from '../../i18n/messages'
+import { useAuthState } from '../../hooks/useAuthState'
 
 type AsyncState<T> = { loading: boolean; data: T | null; error: string | null }
 const PENDING_EMAIL_VERIFICATION_KEY = 'saturnws.production.pendingEmailVerification.v1'
@@ -113,13 +119,6 @@ function useAsyncData<T>(load: () => Promise<T>, deps: React.DependencyList): As
   return { ...state, reload: () => setVersion((value) => value + 1) }
 }
 
-function useAuthState() {
-  const { auth } = useAdapters()
-  const [state, setState] = useState(() => ({ ready: false, user: null as AppUser | null }))
-  useEffect(() => auth.subscribe(setState), [auth])
-  return state
-}
-
 function LoadingBlock({ label }: { label: string }) {
   return <Card><div className="stack"><strong>{label}</strong><div className="download-skeleton"><span /><span /><span /></div></div></Card>
 }
@@ -141,18 +140,19 @@ function RequireAuth({ children, navigate }: { children: ReactNode; navigate: Na
   const { t } = useExperience()
   const { ready, user } = useAuthState()
   if (!ready) return <FullPageState icon={ShieldCheck} title={t('loading')} body={t('accountOverviewBody')} primaryLabel={t('retry')} onPrimary={() => window.location.reload()} />
-  if (!user) return <FullPageState icon={KeyRound} title={t('signIn')} body={t('signInBody')} primaryLabel={t('signIn')} onPrimary={() => navigate({ surface: 'auth', page: 'signin' })} secondaryLabel={t('signUp')} onSecondary={() => navigate({ surface: 'auth', page: 'signup' })} />
+  if (!user) return <FullPageState icon={KeyRound} title={t('signIn')} body={t('signInBody')} primaryLabel={t('signIn')} onPrimary={() => navigate(createAuthRoute('signin', { returnTo: currentInternalLocation() }))} secondaryLabel={t('signUp')} onSecondary={() => navigate(createAuthRoute('signup', { returnTo: currentInternalLocation() }))} />
   return children
 }
 
-export function PublicProductionPages({ page, navigate }: { page: string; navigate: Navigate }) {
+export function PublicProductionPages({ page, routeState, navigate }: { page: string; routeState?: string; navigate: Navigate }) {
   const { t, locale } = useExperience()
   const adapters = useAdapters()
+  const { ready, user } = useAuthState()
   const c = publicCopy[locale]
   const plans = useAsyncData(() => adapters.plans.listPlans(locale), [adapters, locale])
   const release = useAsyncData(() => adapters.releases.getLatest('beta'), [adapters])
   let content: ReactNode
-  if (page === 'pricing') content = <PricingSection plans={plans.data || []} loading={plans.loading} navigate={navigate} />
+  if (page === 'pricing') content = <PricingSection page={page} routeState={routeState} plans={plans.data || []} loading={plans.loading} navigate={navigate} />
   else if (page === 'product' || page === 'features') content = <ProductDetailsSection />
   else if (page === 'download') content = <DownloadSection release={release.data} loading={release.loading} error={release.error} reload={release.reload} />
   else if (page === 'releases' || page === 'changelog') content = <ReleaseNotes release={release.data} loading={release.loading} error={release.error} />
@@ -160,7 +160,11 @@ export function PublicProductionPages({ page, navigate }: { page: string; naviga
   else if (page === 'contact' || page === 'support') content = <PublicContact navigate={navigate} />
   else if (['privacy', 'terms', 'refund', 'acceptable-use', 'cookies'].includes(page)) content = <LegalSection page={page} />
   else if (page === '404') content = <FullPageState icon={ShieldAlert} title={t('system404')} body={t('systemBody')} primaryLabel={t('back')} onPrimary={() => navigate({ surface: 'public', page: 'home' })} />
-  else content = <><section className="marketing-hero"><div className="container"><div className="marketing-hero__copy"><span className="announcement">{c.announcement}</span><h1>{c.heroTitle}</h1><p>{c.heroBody}</p><div className="hero-actions"><Button size="lg" variant="primary" onClick={() => navigate({ surface: 'auth', page: 'signup' })}>{c.heroPrimary}</Button><Button size="lg" variant="ghost" onClick={() => navigate({ surface: 'public', page: 'pricing' })}>{t('pricing')}</Button></div><ul><li><Monitor size={15} />{c.proofOne}</li><li><ShieldCheck size={15} />{c.proofTwo}</li><li><Download size={15} />{c.proofThree}</li></ul></div><Card className="hero-product-reveal"><SectionHeader title={c.sessionsTitle} description={c.sessionsBody} /><div className="value-line"><span>{c.stepAccount}</span><span>{c.stepProfile}</span><span>{c.stepLaunch}</span></div></Card></div></section><section className="marketing-section"><div className="container split-feature"><div><span className="section-index">01</span><SectionHeader title={c.accountsTitle} description={c.accountsBody} /></div><Card><SectionHeader title={c.backupTitle} description={c.backupBody} /></Card></div></section><PricingSection plans={plans.data || []} loading={plans.loading} navigate={navigate} compact /><section className="final-cta"><div className="container"><div><h2>{c.finalTitle}</h2><p>{c.finalBody}</p></div><Button size="lg" variant="primary" onClick={() => navigate({ surface: 'auth', page: 'signup' })}>{c.heroPrimary}</Button></div></section></>
+  else {
+    const primaryLabel = ready && user ? t('account') : c.heroPrimary
+    const primaryAction = () => ready && user ? navigate({ surface: 'portal', page: 'overview' }) : navigate(createAuthRoute('signup', { returnTo: currentInternalLocation() }))
+    content = <><section className="marketing-hero"><div className="container"><div className="marketing-hero__copy"><span className="announcement">{c.announcement}</span><h1>{c.heroTitle}</h1><p>{c.heroBody}</p><div className="hero-actions"><Button size="lg" variant="primary" disabled={!ready} onClick={primaryAction}>{primaryLabel}</Button><Button size="lg" variant="ghost" onClick={() => navigate({ surface: 'public', page: 'pricing' })}>{t('pricing')}</Button></div><ul><li><Monitor size={15} />{c.proofOne}</li><li><ShieldCheck size={15} />{c.proofTwo}</li><li><Download size={15} />{c.proofThree}</li></ul></div><Card className="hero-product-reveal"><SectionHeader title={c.sessionsTitle} description={c.sessionsBody} /><div className="value-line"><span>{c.stepAccount}</span><span>{c.stepProfile}</span><span>{c.stepLaunch}</span></div></Card></div></section><section className="marketing-section"><div className="container split-feature"><div><span className="section-index">01</span><SectionHeader title={c.accountsTitle} description={c.accountsBody} /></div><Card><SectionHeader title={c.backupTitle} description={c.backupBody} /></Card></div></section><PricingSection page={page} routeState={routeState} plans={plans.data || []} loading={plans.loading} navigate={navigate} compact /><section className="final-cta"><div className="container"><div><h2>{c.finalTitle}</h2><p>{c.finalBody}</p></div><Button size="lg" variant="primary" disabled={!ready} onClick={primaryAction}>{primaryLabel}</Button></div></section></>
+  }
   return <PublicLayout navigate={navigate}>{content}</PublicLayout>
 }
 
@@ -176,11 +180,36 @@ function ProductDetailsSection() {
   return <section className="marketing-section page-enter"><div className="container"><header className="marketing-heading marketing-heading--center marketing-heading--wide"><h1>{c.productPageTitle}</h1><p>{c.productPageBody}</p></header><div className="feature-grid">{sections.map((section) => <Card key={section.title}><SectionHeader title={section.title} description={section.body} /></Card>)}</div></div></section>
 }
 
-function PricingSection({ plans, loading, navigate, compact = false }: { plans: PlanInfo[]; loading: boolean; navigate: Navigate; compact?: boolean }) {
+function PricingSection({ page, routeState, plans, loading, navigate, compact = false }: { page: string; routeState?: string; plans: PlanInfo[]; loading: boolean; navigate: Navigate; compact?: boolean }) {
   const { t, locale } = useExperience()
+  const { ready, user } = useAuthState()
   const c = publicCopy[locale]
-  const featuresForPlan = (_plan: PlanInfo) => [c.featureWorkspace, c.featureProfiles, c.featureUpdates]
-  return <section className={`marketing-section pricing-section${compact ? '' : ' pricing-page'}`}><div className="container"><header className="marketing-heading marketing-heading--center">{compact ? <h2>{c.pricingTitle}</h2> : <h1>{c.pricingTitle}</h1>}<p>{c.pricingBody}</p></header><div className="pricing-promo">{c.trialPromo}</div>{loading ? <LoadingBlock label={t('loading')} /> : <div className="pricing-grid">{plans.map((plan) => <PricingCard key={plan.id} name={plan.name} description={plan.description} price={plan.price} originalPrice={plan.originalPrice} period={plan.period} features={featuresForPlan(plan)} cta={plan.checkoutEnabled ? t('checkout') : t('signUp')} featured={plan.id === 'monthly'} featuredLabel={c.recommended} onClick={() => navigate({ surface: 'auth', page: 'signup' })} />)}</div>}<Alert title={t('decisionRequired')} tone="info">{locale === 'ar' ? 'الدفع الحقيقي مغلق حتى يتم اختيار مزود الدفع وتفعيل بياناته.' : 'Live checkout is disabled until a payment provider is approved and configured.'}</Alert></div></section>
+  const featuresForPlan = () => [c.featureWorkspace, c.featureProfiles, c.featureUpdates]
+  const [selectedPlan, setSelectedPlan] = useState<PlanInfo | null>(null)
+  const requestedPlan = readCheckoutPlan(routeState)
+  const requestedCheckoutPlan = ready && user && requestedPlan && !loading
+    ? plans.find((plan) => plan.id === requestedPlan) ?? null
+    : null
+  const activeCheckoutPlan = selectedPlan ?? requestedCheckoutPlan
+  const choosePlan = (plan: PlanInfo) => {
+    if (!ready) return
+    if (!user) {
+      navigate(createAuthRoute('signup', { returnTo: currentInternalLocation().split('?')[0], plan: plan.id, checkout: true }))
+      return
+    }
+    setSelectedPlan(plan)
+  }
+  const closeCheckout = () => {
+    setSelectedPlan(null)
+    if (requestedPlan) navigate({ surface: 'public', page })
+  }
+  const trialLabel = locale === 'ar' ? 'ابدأ بـ 7 أيام مجانًا' : 'Start with 7 days free'
+  const getCta = (plan: PlanInfo) => {
+    if (!ready) return t('loading')
+    if (user) return locale === 'ar' ? 'اختر الخطة' : 'Choose plan'
+    return plan.id === 'weekly' ? t('getStarted') : (locale === 'ar' ? 'ابدأ التجربة المجانية' : 'Start free trial')
+  }
+  return <section className={`marketing-section pricing-section${compact ? '' : ' pricing-page'}`}><div className="container"><header className="marketing-heading marketing-heading--center">{compact ? <h2>{c.pricingTitle}</h2> : <h1>{c.pricingTitle}</h1>}<p>{c.pricingBody}</p></header><div className="pricing-promo">{c.trialPromo}</div>{loading ? <LoadingBlock label={t('loading')} /> : <div className="pricing-grid">{plans.map((plan) => <PricingCard key={plan.id} name={plan.name} description={plan.description} price={plan.price} originalPrice={plan.originalPrice} period={plan.period} features={featuresForPlan()} cta={getCta(plan)} featured={plan.id === 'monthly'} featuredLabel={c.recommended} trialLabel={plan.id === 'monthly' || plan.id === 'yearly' ? trialLabel : undefined} disabled={!ready} onClick={() => choosePlan(plan)} />)}</div>}<p className="pricing-trust-note"><ShieldCheck size={15} />{c.trustNote}</p></div><CheckoutDialog open={Boolean(activeCheckoutPlan)} plan={activeCheckoutPlan} user={user} features={activeCheckoutPlan ? featuresForPlan() : []} onClose={closeCheckout} /></section>
 }
 
 function FaqSection() {
@@ -221,7 +250,7 @@ function ReleaseNotes({ release, loading, error }: { release: ReleaseInfo | null
 
 function PublicContact({ navigate }: { navigate: Navigate }) {
   const { t } = useExperience()
-  return <div className="marketing-section page-enter"><div className="container contact-grid"><div><LifeBuoy size={28} /><h1>{t('contact')}</h1><p>{t('signInBody')}</p></div><Card><Alert title={t('signIn')} tone="info" action={<Button variant="primary" onClick={() => navigate({ surface: 'auth', page: 'signin' })}>{t('signIn')}</Button>}>{t('integrationPending')}</Alert></Card></div></div>
+  return <div className="marketing-section page-enter"><div className="container contact-grid"><div><LifeBuoy size={28} /><h1>{t('contact')}</h1><p>{t('signInBody')}</p></div><Card><Alert title={t('signIn')} tone="info" action={<Button variant="primary" onClick={() => navigate(createAuthRoute('signin', { returnTo: currentInternalLocation() }))}>{t('signIn')}</Button>}>{t('integrationPending')}</Alert></Card></div></div>
 }
 
 function LegalSection({ page }: { page: string }) {
@@ -231,9 +260,9 @@ function LegalSection({ page }: { page: string }) {
   return <div className="marketing-section page-enter"><article className="container legal-document">{legal.loading ? <LoadingBlock label={t('loading')} /> : legal.error ? <ErrorBlock error={legal.error} /> : <><h1>{legal.data?.title}</h1><p>{legal.data?.body}</p></>}</article></div>
 }
 
-export function AuthProductionPages({ page, navigate }: { page: string; navigate: Navigate }) {
-  if (page === 'verify') return <EmailVerificationProductionPage navigate={navigate} />
-  return <EmailPasswordProductionPage page={page} navigate={navigate} />
+export function AuthProductionPages({ page, routeState, navigate }: { page: string; routeState?: string; navigate: Navigate }) {
+  if (page === 'verify') return <EmailVerificationProductionPage routeState={routeState} navigate={navigate} />
+  return <EmailPasswordProductionPage page={page} routeState={routeState} navigate={navigate} />
 }
 
 function ProductionAuthShell({ children, navigate }: { children: ReactNode; navigate: Navigate }) {
@@ -242,19 +271,42 @@ function ProductionAuthShell({ children, navigate }: { children: ReactNode; navi
   return <main className="auth-shell"><header className="auth-header"><Brand onClick={() => navigate({ surface: 'public', page: 'home' })} /><div><LocaleControl /><ThemeControl /></div></header><section className="auth-main"><div className="auth-form-wrap">{children}</div><Button className="auth-back" variant="ghost" leadingIcon={<Arrow size={16} />} onClick={() => navigate({ surface: 'public', page: 'home' })}>{t('back')}</Button></section></main>
 }
 
-function EmailPasswordProductionPage({ page, navigate }: { page: string; navigate: Navigate }) {
+function destinationAfterAuth(routeState?: string) {
+  const intent = readAuthIntent(routeState)
+  const destination = routeFromInternalUrl(intent.returnTo || '/account')
+  if (intent.checkout && intent.plan) return { ...destination, state: createPricingReturnState(intent.plan) }
+  return destination
+}
+
+function EmailPasswordProductionPage({ page, routeState, navigate }: { page: string; routeState?: string; navigate: Navigate }) {
   const { t, locale } = useExperience()
   const { auth } = useAdapters()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [acceptedTerms, setAcceptedTerms] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [loading, setLoading] = useState(false)
   const signup = page === 'signup'
+  const passwordLongEnough = password.length >= 6
+  const passwordsMatch = Boolean(confirmPassword) && password === confirmPassword
   const submit = async (event: FormEvent) => {
     event.preventDefault()
-    setLoading(true)
     setError('')
+    if (signup && !passwordLongEnough) {
+      setError(locale === 'ar' ? 'يجب أن تتكون كلمة المرور من 6 أحرف على الأقل.' : 'Password must contain at least 6 characters.')
+      return
+    }
+    if (signup && !passwordsMatch) {
+      setError(locale === 'ar' ? 'كلمتا المرور غير متطابقتين.' : 'Passwords do not match.')
+      return
+    }
+    if (signup && !acceptedTerms) {
+      setError(locale === 'ar' ? 'يجب الموافقة على شروط الخدمة وسياسة الخصوصية.' : 'You must agree to the Terms of Service and Privacy Policy.')
+      return
+    }
+    setLoading(true)
     try {
       if (signup) {
         await auth.signUpWithEmail(email, password)
@@ -263,13 +315,13 @@ function EmailPasswordProductionPage({ page, navigate }: { page: string; navigat
           if (!verification.success) throw new Error(verification.error || 'email_verification_failed')
           window.sessionStorage.setItem(PENDING_EMAIL_VERIFICATION_KEY, email.trim())
           if (verification.testCode) window.sessionStorage.setItem(LOCAL_EMAIL_VERIFICATION_TEST_CODE_KEY, verification.testCode)
-          navigate({ surface: 'auth', page: 'verify' })
+          navigate({ surface: 'auth', page: 'verify', state: routeState })
           return
         }
       } else {
         await auth.signInWithEmail(email, password)
       }
-      navigate({ surface: 'portal', page: 'overview' })
+      navigate(destinationAfterAuth(routeState))
     } catch (err) {
       setError(authErrorMessage(err, t))
     } finally {
@@ -285,17 +337,17 @@ function EmailPasswordProductionPage({ page, navigate }: { page: string; navigat
     setError('')
     try {
       await auth.sendPasswordReset(email)
-      setNotice(t('passwordUpdated'))
+      setNotice(locale === 'ar' ? 'أرسلنا رابط استعادة كلمة المرور إلى بريدك إذا كان الحساب مسجلًا.' : 'A password reset link was sent if this email is registered.')
     } catch (err) {
       setError(authErrorMessage(err, t))
     } finally {
       setLoading(false)
     }
   }
-  return <ProductionAuthShell navigate={navigate}><div className="auth-card"><div className="auth-form"><span className="auth-icon"><ShieldCheck size={23} /></span><header><span>{signup ? t('signUp') : copyByLocale(locale, 'Secure account access', 'دخول آمن للحساب')}</span><h1>{signup ? t('signUpTitle') : t('signInTitle')}</h1><p>{signup ? t('signUpBody') : t('signInBody')}</p></header><form className="stack" onSubmit={submit}><FormField label={t('email')} htmlFor="auth-email" required><Input id="auth-email" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></FormField><FormField label={t('password')} htmlFor="auth-password" required><PasswordInput id="auth-password" autoComplete={signup ? 'new-password' : 'current-password'} value={password} onChange={(event) => setPassword(event.target.value)} required /></FormField>{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}<Button type="submit" variant="primary" size="lg" fullWidth loading={loading}>{signup ? t('signUp') : t('signIn')}</Button></form><div className="auth-divider"><span>{t('orContinue')}</span></div><Button type="button" fullWidth size="lg" onClick={async () => { setLoading(true); setError(''); try { await auth.signInWithGoogle(); navigate({ surface: 'portal', page: 'overview' }) } catch (err) { setError(authErrorMessage(err, t)) } finally { setLoading(false) } }}>{t('continueGoogle')}</Button>{!signup ? <Button type="button" variant="text" onClick={reset}>{t('forgotPassword')}</Button> : null}<p className="auth-switch">{signup ? t('haveAccount') : t('noAccount')} <button type="button" onClick={() => navigate({ surface: 'auth', page: signup ? 'signin' : 'signup' })}>{signup ? t('signIn') : t('signUp')}</button></p></div></div></ProductionAuthShell>
+  return <ProductionAuthShell navigate={navigate}><div className={`auth-card auth-card--${signup ? 'signup' : 'signin'}`}><div className="auth-form"><header><span>{signup ? copyByLocale(locale, 'Create your workspace access', 'ابدأ إعداد مساحة عملك') : copyByLocale(locale, 'Secure account access', 'دخول آمن للحساب')}</span><h1>{signup ? t('signUpTitle') : t('signInTitle')}</h1><p>{signup ? copyByLocale(locale, 'Create one account for subscriptions, downloads, support, and your desktop sign-in.', 'أنشئ حسابًا واحدًا للاشتراك والتنزيلات والدعم وتسجيل الدخول إلى الأداة.') : t('signInBody')}</p></header><form className="stack" onSubmit={submit} noValidate><FormField label={t('email')} htmlFor="auth-email" required><Input id="auth-email" type="email" autoComplete="email" placeholder={locale === 'ar' ? 'name@example.com' : 'name@example.com'} value={email} onChange={(event) => setEmail(event.target.value)} required /></FormField><FormField label={t('password')} htmlFor="auth-password" required><PasswordInput id="auth-password" autoComplete={signup ? 'new-password' : 'current-password'} value={password} onChange={(event) => setPassword(event.target.value)} required /></FormField>{signup ? <><FormField label={t('confirmPassword')} htmlFor="auth-confirm-password" required error={confirmPassword && !passwordsMatch ? (locale === 'ar' ? 'كلمتا المرور غير متطابقتين.' : 'Passwords do not match.') : undefined}><PasswordInput id="auth-confirm-password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required /></FormField><div className="password-requirements" aria-live="polite"><strong>{locale === 'ar' ? 'متطلبات كلمة المرور' : 'Password requirements'}</strong><span className={passwordLongEnough ? 'is-valid' : ''}><Check size={14} />{locale === 'ar' ? '6 أحرف على الأقل' : 'At least 6 characters'}</span><span className={passwordsMatch ? 'is-valid' : ''}><Check size={14} />{locale === 'ar' ? 'تطابق كلمتي المرور' : 'Both passwords match'}</span></div><Checkbox checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} required label={<span>{locale === 'ar' ? 'أوافق على ' : 'I agree to the '}<a href="/terms">{t('terms')}</a>{locale === 'ar' ? ' و' : ' and the '}<a href="/privacy">{t('privacy')}</a></span>} /></> : <div className="auth-form__options"><Button type="button" variant="text" onClick={reset}>{t('forgotPassword')}</Button></div>}{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}<Button type="submit" variant="primary" size="lg" fullWidth loading={loading}>{signup ? t('signUp') : t('signIn')}</Button></form><div className="auth-divider"><span>{t('orContinue')}</span></div><Button type="button" fullWidth size="lg" leadingIcon={<GoogleIcon />} onClick={async () => { setLoading(true); setError(''); try { await auth.signInWithGoogle(); navigate(destinationAfterAuth(routeState)) } catch (err) { setError(authErrorMessage(err, t)) } finally { setLoading(false) } }}>{t('continueGoogle')}</Button><p className="auth-switch">{signup ? t('haveAccount') : t('noAccount')} <button type="button" onClick={() => navigate({ surface: 'auth', page: signup ? 'signin' : 'signup', state: routeState })}>{signup ? t('signIn') : t('signUp')}</button></p></div></div></ProductionAuthShell>
 }
 
-function EmailVerificationProductionPage({ navigate }: { navigate: Navigate }) {
+function EmailVerificationProductionPage({ routeState, navigate }: { routeState?: string; navigate: Navigate }) {
   const { t } = useExperience()
   const { auth } = useAdapters()
   const [email, setEmail] = useState(() => window.sessionStorage.getItem(PENDING_EMAIL_VERIFICATION_KEY) || '')
@@ -318,7 +370,7 @@ function EmailVerificationProductionPage({ navigate }: { navigate: Navigate }) {
       if (!result.success) throw new Error(result.error || 'EMAIL_CODE_INVALID')
       window.sessionStorage.removeItem(PENDING_EMAIL_VERIFICATION_KEY)
       window.sessionStorage.removeItem(LOCAL_EMAIL_VERIFICATION_TEST_CODE_KEY)
-      navigate({ surface: 'portal', page: 'overview' })
+      navigate(destinationAfterAuth(routeState))
     } catch (err) {
       setError(err instanceof Error ? err.message : t('codeInvalid'))
     } finally {
@@ -348,7 +400,7 @@ function EmailVerificationProductionPage({ navigate }: { navigate: Navigate }) {
       setLoading(false)
     }
   }
-  return <ProductionAuthShell navigate={navigate}><div className="auth-card"><div className="auth-form auth-form--center"><span className="auth-icon"><Mail size={23} /></span><header><h1>{t('verificationTitle')}</h1><p>{t('verificationBody')}</p>{email ? <strong>{email}</strong> : null}</header><form className="stack" onSubmit={(event) => { event.preventDefault(); void verify() }}><FormField label={t('email')} htmlFor="verify-email" required><Input id="verify-email" type="email" value={email} onChange={(event) => { setEmail(event.target.value); window.sessionStorage.setItem(PENDING_EMAIL_VERIFICATION_KEY, event.target.value) }} required /></FormField><OTPInput value={code} onChange={setCode} label={t('codeLabel')} />{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}<Button type="submit" variant="primary" size="lg" fullWidth loading={loading} disabled={code.length !== 6}>{t('continue')}</Button><div className="cluster"><Button type="button" variant="text" onClick={resend} disabled={loading}>{t('resend')}</Button><Button type="button" variant="text" onClick={() => navigate({ surface: 'auth', page: 'signup' })}>{t('changeEmail')}</Button></div></form></div></div></ProductionAuthShell>
+  return <ProductionAuthShell navigate={navigate}><div className="auth-card"><div className="auth-form auth-form--center"><span className="auth-icon"><Mail size={23} /></span><header><h1>{t('verificationTitle')}</h1><p>{t('verificationBody')}</p>{email ? <strong>{email}</strong> : null}</header><form className="stack" onSubmit={(event) => { event.preventDefault(); void verify() }}><FormField label={t('email')} htmlFor="verify-email" required><Input id="verify-email" type="email" value={email} onChange={(event) => { setEmail(event.target.value); window.sessionStorage.setItem(PENDING_EMAIL_VERIFICATION_KEY, event.target.value) }} required /></FormField><OTPInput value={code} onChange={setCode} label={t('codeLabel')} />{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}<Button type="submit" variant="primary" size="lg" fullWidth loading={loading} disabled={code.length !== 6}>{t('continue')}</Button><div className="cluster"><Button type="button" variant="text" onClick={resend} disabled={loading}>{t('resend')}</Button><Button type="button" variant="text" onClick={() => navigate({ surface: 'auth', page: 'signup', state: routeState })}>{t('changeEmail')}</Button></div></form></div></div></ProductionAuthShell>
 }
 
 export function PortalProductionPages({ page, navigate }: { page: string; navigate: Navigate }) {

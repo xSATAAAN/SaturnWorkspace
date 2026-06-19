@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Check, Download, ExternalLink, MessageCircle } from 'lucide-react'
+import { Check, Download, ExternalLink, MessageCircle, Sparkles } from 'lucide-react'
 import { Button } from './Button'
 import { Badge } from './Feedback'
 import { Card } from './DataDisplay'
@@ -9,8 +9,8 @@ export function FeatureCard({ icon, title, body, children }: { icon: ReactNode; 
   return <article className="product-feature"><span className="product-feature__icon">{icon}</span><h3>{title}</h3><p>{body}</p>{children}</article>
 }
 
-export function PricingCard({ name, description, price, originalPrice, period, features, cta, featured, disabled, featuredLabel, onClick }: { name: string; description: string; price: string; originalPrice?: string; period?: string; features: string[]; cta: string; featured?: boolean; disabled?: boolean; featuredLabel?: string; onClick?: () => void }) {
-  return <Card className={`pricing-card${featured ? ' is-featured' : ''}`}><div className="pricing-card__head"><h3>{name}</h3>{featured && featuredLabel ? <Badge tone="info">{featuredLabel}</Badge> : null}</div><p>{description}</p><div className="pricing-card__price">{originalPrice ? <del>{originalPrice}</del> : null}<strong>{price}</strong>{period ? <span>{period}</span> : null}</div><ul>{features.map((feature) => <li key={feature}><Check size={15} />{feature}</li>)}</ul><Button variant={featured ? 'primary' : 'secondary'} fullWidth disabled={disabled} onClick={onClick}>{cta}</Button></Card>
+export function PricingCard({ name, description, price, originalPrice, period, features, cta, featured, disabled, featuredLabel, trialLabel, onClick }: { name: string; description: string; price: string; originalPrice?: string; period?: string; features: string[]; cta: string; featured?: boolean; disabled?: boolean; featuredLabel?: string; trialLabel?: string; onClick?: () => void }) {
+  return <Card className={`pricing-card${featured ? ' is-featured' : ''}`}><div className="pricing-card__head"><h3>{name}</h3>{featured && featuredLabel ? <Badge tone="info">{featuredLabel}</Badge> : null}</div><p>{description}</p>{trialLabel ? <div className="pricing-card__trial"><Sparkles size={15} /><strong>{trialLabel}</strong></div> : <div className="pricing-card__trial-placeholder" aria-hidden="true" />}<div className="pricing-card__price">{originalPrice ? <del>{originalPrice}</del> : null}<strong>{price}</strong>{period ? <span>{period}</span> : null}</div><ul>{features.map((feature) => <li key={feature}><Check size={15} />{feature}</li>)}</ul><Button variant={featured ? 'primary' : 'secondary'} fullWidth disabled={disabled} onClick={onClick}>{cta}</Button></Card>
 }
 
 export function DownloadCard({ title, version, meta, buttonLabel, disabled, onClick }: { title: string; version: string; meta: string[]; buttonLabel: string; disabled?: boolean; onClick?: () => void }) {
@@ -30,6 +30,6 @@ export function SupportTicketCard({ subject, status, updated, onOpen }: { subjec
   return <Card padding="sm" className="support-ticket"><MessageCircle size={18} /><div><strong>{subject}</strong><span className="muted">{updated}</span></div><Badge tone="info">{status}</Badge><Button variant="text" onClick={onOpen}>{t('open')}</Button></Card>
 }
 
-export function PaymentMethodCard({ name, description, selected, onSelect }: { name: string; description: string; selected: boolean; onSelect: () => void }) {
-  return <button type="button" className={`payment-method${selected ? ' is-selected' : ''}`} onClick={onSelect}><span className="payment-method__radio">{selected ? <span /> : null}</span><span><strong>{name}</strong><small>{description}</small></span></button>
+export function PaymentMethodCard({ name, description, status, selected, disabled, onSelect }: { name: string; description: string; status?: string; selected: boolean; disabled?: boolean; onSelect: () => void }) {
+  return <button type="button" className={`payment-method${selected ? ' is-selected' : ''}`} disabled={disabled} onClick={onSelect}><span className="payment-method__radio">{selected ? <span /> : null}</span><span><strong>{name}</strong><small>{description}</small></span>{status ? <Badge tone={disabled ? 'neutral' : 'success'}>{status}</Badge> : null}</button>
 }

@@ -78,7 +78,7 @@ export function MultiSelect({ label, options, values, onChange }: { label: strin
   )
 }
 
-export function Checkbox({ label, ...props }: InputHTMLAttributes<HTMLInputElement> & { label: string }) {
+export function Checkbox({ label, ...props }: InputHTMLAttributes<HTMLInputElement> & { label: ReactNode }) {
   return <label className="ui-check"><input type="checkbox" {...props} /><span className="ui-check__box"><Check size={12} /></span><span>{label}</span></label>
 }
 

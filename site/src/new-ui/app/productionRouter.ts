@@ -11,41 +11,50 @@ function normalizePath(pathname: string) {
 }
 
 export function routeToPath(route: AppRoute): string {
-  if (route.surface === 'auth') return route.page === 'signup' ? '/account/signup' : route.page === 'verify' ? '/account/verify' : '/account/signin'
-  if (route.surface === 'portal') return route.page === 'overview' ? '/account' : `/account/${route.page}`
-  if (route.surface === 'admin') return route.page === 'overview' ? '/admin' : `/admin/${route.page}`
-  if (route.surface === 'system') return `/${route.page}`
-  if (route.page === 'home') return '/'
-  return `/${route.page}`
+  let path: string
+  if (route.surface === 'auth') path = route.page === 'signup' ? '/account/signup' : route.page === 'verify' ? '/account/verify' : '/account/signin'
+  else if (route.surface === 'portal') path = route.page === 'overview' ? '/account' : `/account/${route.page}`
+  else if (route.surface === 'admin') path = route.page === 'overview' ? '/admin' : `/admin/${route.page}`
+  else if (route.surface === 'system') path = `/${route.page}`
+  else if (route.page === 'home') path = '/'
+  else path = `/${route.page}`
+  return `${path}${route.state?.startsWith('?') ? route.state : ''}`
+}
+
+export function routeFromInternalUrl(value: string): AppRoute {
+  const url = new URL(value, window.location.origin)
+  if (url.origin !== window.location.origin) return { surface: 'public', page: 'home' }
+  const host = url.hostname.toLowerCase()
+  const path = normalizePath(url.pathname)
+  const state = url.search || undefined
+  if (host.startsWith('admin.')) {
+    const page = path === '/' || path === '/admin' ? 'overview' : path.replace(/^\/admin\/?/, '') || 'overview'
+    return { surface: 'admin', page: ADMIN_PAGES.has(page) ? page : 'overview', state }
+  }
+  if (path === '/login' || path === '/account/signin' || path === '/activate') return { surface: 'auth', page: 'signin', state }
+  if (path === '/account/signup') return { surface: 'auth', page: 'signup', state }
+  if (path === '/account/verify') return { surface: 'auth', page: 'verify', state }
+  if (path === '/account/linked') return { surface: 'auth', page: 'signin', state: 'linked' }
+  if (path === '/account') return { surface: 'portal', page: 'overview', state }
+  if (path.startsWith('/account/')) {
+    const page = path.replace('/account/', '')
+    return { surface: 'portal', page: PORTAL_PAGES.has(page) ? page : 'overview', state }
+  }
+  if (path === '/admin') return { surface: 'admin', page: 'overview', state }
+  if (path.startsWith('/admin/')) {
+    const page = path.replace('/admin/', '')
+    return { surface: 'admin', page: ADMIN_PAGES.has(page) ? page : 'overview', state }
+  }
+  if (path === '/downloads') return { surface: 'public', page: 'download', state }
+  if (path === '/release-notes') return { surface: 'public', page: 'releases', state }
+  if (['/403', '/404', '/429', '/500', '/503'].includes(path)) return { surface: 'system', page: path.slice(1), state }
+  if (path === '/') return { surface: 'public', page: 'home', state }
+  const page = path.slice(1)
+  return { surface: 'public', page: PUBLIC_PAGES.has(page) ? page : '404', state }
 }
 
 export function readProductionRoute(): AppRoute {
-  const host = window.location.hostname.toLowerCase()
-  const path = normalizePath(window.location.pathname)
-  if (host.startsWith('admin.')) {
-    const page = path === '/' || path === '/admin' ? 'overview' : path.replace(/^\/admin\/?/, '') || 'overview'
-    return { surface: 'admin', page: ADMIN_PAGES.has(page) ? page : 'overview' }
-  }
-  if (path === '/login' || path === '/account/signin' || path === '/activate') return { surface: 'auth', page: 'signin' }
-  if (path === '/account/signup') return { surface: 'auth', page: 'signup' }
-  if (path === '/account/verify') return { surface: 'auth', page: 'verify' }
-  if (path === '/account/linked') return { surface: 'auth', page: 'signin', state: 'linked' }
-  if (path === '/account') return { surface: 'portal', page: 'overview' }
-  if (path.startsWith('/account/')) {
-    const page = path.replace('/account/', '')
-    return { surface: 'portal', page: PORTAL_PAGES.has(page) ? page : 'overview' }
-  }
-  if (path === '/admin') return { surface: 'admin', page: 'overview' }
-  if (path.startsWith('/admin/')) {
-    const page = path.replace('/admin/', '')
-    return { surface: 'admin', page: ADMIN_PAGES.has(page) ? page : 'overview' }
-  }
-  if (path === '/downloads') return { surface: 'public', page: 'download' }
-  if (path === '/release-notes') return { surface: 'public', page: 'releases' }
-  if (['/403', '/404', '/429', '/500', '/503'].includes(path)) return { surface: 'system', page: path.slice(1) }
-  if (path === '/') return { surface: 'public', page: 'home' }
-  const page = path.slice(1)
-  return { surface: 'public', page: PUBLIC_PAGES.has(page) ? page : '404' }
+  return routeFromInternalUrl(window.location.href)
 }
 
 export function useProductionRouter() {

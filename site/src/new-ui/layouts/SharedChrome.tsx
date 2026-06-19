@@ -1,10 +1,13 @@
 import { useState, type ReactNode } from 'react'
-import { Bell, ChevronDown, Globe2, HelpCircle, Menu, Moon, Search, Sun, X } from 'lucide-react'
+import { Bell, ChevronDown, Globe2, HelpCircle, LayoutDashboard, LogOut, Menu, Moon, Search, Settings, Sun, X } from 'lucide-react'
 import appIcon from '../assets/saturnws-app-icon.png'
+import { useAdapters } from '../adapters/AdapterProvider'
 import { useExperience } from '../app/ExperienceProvider'
+import { createAuthRoute, currentInternalLocation } from '../app/navigationIntent'
 import type { AppRoute, Navigate } from '../app/routes'
 import { Button, IconButton } from '../components/ui/Button'
 import { Dropdown, DropdownItem } from '../components/ui/Overlays'
+import { useAuthState } from '../hooks/useAuthState'
 
 export type { Navigate } from '../app/routes'
 
@@ -20,17 +23,22 @@ export function LocaleControl() {
 
 export function ThemeControl() {
   const { theme, setTheme, t } = useExperience()
-  const Icon = theme === 'light' ? Sun : Moon
-  return <Dropdown label={t('theme')} trigger={<span className="chrome-trigger"><Icon size={16} /><span>{theme === 'light' ? t('light') : t('dark')}</span><ChevronDown size={14} /></span>}><DropdownItem onClick={() => setTheme('light')}><Sun size={15} />{t('light')}</DropdownItem><DropdownItem onClick={() => setTheme('dark')}><Moon size={15} />{t('dark')}</DropdownItem></Dropdown>
+  return <div className="theme-toggle" role="group" aria-label={t('theme')}><button type="button" className={theme === 'light' ? 'is-active' : ''} aria-pressed={theme === 'light'} title={t('light')} onClick={() => setTheme('light')}><Sun size={15} /><span className="sr-only">{t('light')}</span></button><button type="button" className={theme === 'dark' ? 'is-active' : ''} aria-pressed={theme === 'dark'} title={t('dark')} onClick={() => setTheme('dark')}><Moon size={15} /><span className="sr-only">{t('dark')}</span></button></div>
 }
 
-export function Topbar({ title, breadcrumbs, onOpenMenu, admin = false }: { title: string; breadcrumbs?: ReactNode; onOpenMenu?: () => void; admin?: boolean }) {
+export function Topbar({ title, breadcrumbs, onOpenMenu, navigate, admin = false }: { title: string; breadcrumbs?: ReactNode; onOpenMenu?: () => void; navigate: Navigate; admin?: boolean }) {
   const { t } = useExperience()
-  return <header className="workspace-topbar"><div className="workspace-topbar__identity">{onOpenMenu ? <IconButton className="workspace-topbar__menu" label={t('menu')} onClick={onOpenMenu}><Menu size={18} /></IconButton> : null}<div>{breadcrumbs}<strong>{title}</strong></div></div><div className="workspace-topbar__tools"><label className="topbar-search"><Search size={15} /><input aria-label={t('search')} placeholder={t('search')} /></label><IconButton label={t('notifications')}><Bell size={17} /></IconButton><IconButton label={t('support')}><HelpCircle size={17} /></IconButton><LocaleControl /><ThemeControl /><button type="button" className="account-trigger"><span>{admin ? 'A' : 'S'}</span><div><strong>{admin ? t('adminConsole') : t('account')}</strong><small>{admin ? 'admin@example.com' : 'user@example.com'}</small></div><ChevronDown size={14} /></button></div></header>
+  const { auth } = useAdapters()
+  const { user } = useAuthState()
+  const email = user?.email || ''
+  const initial = email.slice(0, 1).toUpperCase() || (admin ? 'A' : 'S')
+  return <header className="workspace-topbar"><div className="workspace-topbar__identity">{onOpenMenu ? <IconButton className="workspace-topbar__menu" label={t('menu')} onClick={onOpenMenu}><Menu size={18} /></IconButton> : null}<div>{breadcrumbs}<strong>{title}</strong></div></div><div className="workspace-topbar__tools"><label className="topbar-search"><Search size={15} /><input aria-label={t('search')} placeholder={t('search')} /></label><IconButton label={t('notifications')} onClick={() => !admin && navigate({ surface: 'portal', page: 'notifications' })}><Bell size={17} /></IconButton><IconButton label={t('support')} onClick={() => navigate({ surface: admin ? 'admin' : 'portal', page: 'support' })}><HelpCircle size={17} /></IconButton><LocaleControl /><ThemeControl /><Dropdown label={t('account')} trigger={<span className="account-trigger"><span>{initial}</span><div><strong>{user?.displayName || (admin ? t('adminConsole') : t('account'))}</strong><small>{email}</small></div><ChevronDown size={14} /></span>}><DropdownItem onClick={() => navigate({ surface: admin ? 'admin' : 'portal', page: 'overview' })}><LayoutDashboard size={15} />{admin ? t('adminConsole') : t('account')}</DropdownItem><DropdownItem onClick={() => { void auth.signOut().finally(() => navigate({ surface: 'public', page: 'home' })) }}><LogOut size={15} />{t('signOut')}</DropdownItem></Dropdown></div></header>
 }
 
 export function PublicHeader({ navigate }: { navigate: Navigate }) {
   const { t } = useExperience()
+  const { auth } = useAdapters()
+  const { ready, user } = useAuthState()
   const [open, setOpen] = useState(false)
   const links: { label: ReturnType<typeof t>; route: AppRoute }[] = [
     { label: t('product'), route: { surface: 'public', page: 'product' } },
@@ -39,7 +47,8 @@ export function PublicHeader({ navigate }: { navigate: Navigate }) {
     { label: t('faq'), route: { surface: 'public', page: 'faq' } },
     { label: t('contact'), route: { surface: 'public', page: 'contact' } },
   ]
-  return <header className="public-header"><div className="container public-header__inner"><Brand onClick={() => navigate({ surface: 'public', page: 'home' })} /><nav className={open ? 'is-open' : ''}>{links.map((link) => <button type="button" key={link.label} onClick={() => { navigate(link.route); setOpen(false) }}>{link.label}</button>)}</nav><div className="public-header__actions"><LocaleControl /><ThemeControl /><Button variant="ghost" onClick={() => navigate({ surface: 'auth', page: 'signin' })}>{t('signIn')}</Button><Button variant="primary" onClick={() => navigate({ surface: 'auth', page: 'signup' })}>{t('getStarted')}</Button></div><IconButton className="public-header__menu" label={open ? t('close') : t('menu')} onClick={() => setOpen((value) => !value)}>{open ? <X size={19} /> : <Menu size={19} />}</IconButton></div></header>
+  const returnTo = currentInternalLocation()
+  return <header className="public-header"><div className="container public-header__inner"><Brand onClick={() => navigate({ surface: 'public', page: 'home' })} /><nav className={open ? 'is-open' : ''}>{links.map((link) => <button type="button" key={link.label} onClick={() => { navigate(link.route); setOpen(false) }}>{link.label}</button>)}</nav><div className="public-header__actions"><LocaleControl /><ThemeControl />{ready && user ? <><Button variant="ghost" onClick={() => navigate({ surface: 'portal', page: 'overview' })}>{t('account')}</Button><Dropdown label={t('account')} trigger={<span className="public-account-trigger"><span>{user.email.slice(0, 1).toUpperCase()}</span><ChevronDown size={14} /></span>}><DropdownItem onClick={() => navigate({ surface: 'portal', page: 'settings' })}><Settings size={15} />{t('settings')}</DropdownItem><DropdownItem onClick={() => { void auth.signOut().finally(() => navigate({ surface: 'public', page: 'home' })) }}><LogOut size={15} />{t('signOut')}</DropdownItem></Dropdown></> : <><Button variant="ghost" disabled={!ready} onClick={() => navigate(createAuthRoute('signin', { returnTo }))}>{t('signIn')}</Button><Button variant="primary" disabled={!ready} onClick={() => navigate(createAuthRoute('signup', { returnTo }))}>{t('getStarted')}</Button></>}</div><IconButton className="public-header__menu" label={open ? t('close') : t('menu')} onClick={() => setOpen((value) => !value)}>{open ? <X size={19} /> : <Menu size={19} />}</IconButton></div></header>
 }
 
 export function PublicFooter({ navigate }: { navigate: Navigate }) {
@@ -50,5 +59,5 @@ export function PublicFooter({ navigate }: { navigate: Navigate }) {
     { title: t('footerResources'), links: [[t('faq'), 'faq'], [t('contact'), 'contact']] },
     { title: t('footerLegal'), links: [[t('privacy'), 'privacy'], [t('terms'), 'terms'], [t('refund'), 'refund'], [t('acceptableUse'), 'acceptable-use']] },
   ] as const
-  return <footer className="public-footer"><div className="container public-footer__grid"><div className="public-footer__brand"><Brand /><p>{t('heroBody')}</p></div>{columns.map((column) => <div key={column.title}><strong>{column.title}</strong>{column.links.map(([label, page]) => <button type="button" key={page} onClick={() => navigate({ surface: page === 'signin' || page === 'signup' ? 'auth' : 'public', page })}>{label}</button>)}</div>)}</div><div className="container public-footer__bottom"><span>© 2026 {t('brand')}. {t('rights')}</span><span>{t('windowsOnly')}</span></div></footer>
+  return <footer className="public-footer"><div className="container public-footer__grid"><div className="public-footer__brand"><Brand onClick={() => navigate({ surface: 'public', page: 'home' })} /><p>{t('heroBody')}</p></div>{columns.map((column) => <div key={column.title}><strong>{column.title}</strong>{column.links.map(([label, page]) => <button type="button" key={page} onClick={() => navigate(page === 'signin' || page === 'signup' ? createAuthRoute(page, { returnTo: currentInternalLocation() }) : page === 'subscription' ? { surface: 'portal', page } : { surface: 'public', page })}>{label}</button>)}</div>)}</div><div className="container public-footer__bottom"><span>© 2026 {t('brand')}. {t('rights')}</span><span>{t('windowsOnly')}</span></div></footer>
 }
