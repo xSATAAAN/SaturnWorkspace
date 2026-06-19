@@ -1,6 +1,10 @@
 /**
  * GitHub Pages has no URL rewriting. Clean URLs need path/index.html.
  * Runs after Vite build; writes into site/dist only.
+ *
+ * Frontend cutover note:
+ * The React production app now owns public, auth, account and admin routes.
+ * Do not copy legacy root HTML pages over these routes.
  */
 import fs from 'fs'
 import path from 'path'
@@ -9,9 +13,6 @@ import { fileURLToPath } from 'url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const root = path.join(__dirname, '..')
 const dist = path.join(root, 'site', 'dist')
-
-/** Static HTML from repo root → served at /{name}/ */
-const LEGAL_PAGES = ['privacy', 'terms', 'refund', 'login', 'cookies', 'acceptable-use', 'contact']
 
 const ROOT_STATIC_FILES = [
   'styles.css',
@@ -24,23 +25,59 @@ const ROOT_STATIC_FILES = [
   'logo-header.png',
 ]
 
-function rewriteRootRelative(html) {
-  let out = html
-  out = out.replace(/href="\.\/index\.html#/g, 'href="/#')
-  out = out.replace(/href="\.\/index\.html"/g, 'href="/"')
-  out = out.replace(/href="\.\/privacy\.html"/g, 'href="/privacy/"')
-  out = out.replace(/href="\.\/terms\.html"/g, 'href="/terms/"')
-  out = out.replace(/href="\.\/refund\.html"/g, 'href="/refund/"')
-  out = out.replace(/href="\.\/cookies\.html"/g, 'href="/cookies/"')
-  out = out.replace(/href="\.\/acceptable-use\.html"/g, 'href="/acceptable-use/"')
-  out = out.replace(/href="\.\/contact\.html"/g, 'href="/contact/"')
-  out = out.replace(/href="\.\/updates\.html"/g, 'href="/release-notes/"')
-  out = out.replace(/href="\.\/login\.html"/g, 'href="/login/"')
-  out = out.replace(/href="\.\/styles\.css"/g, 'href="/styles.css"')
-  out = out.replace(/href="\.\//g, 'href="/')
-  out = out.replace(/src="\.\//g, 'src="/')
-  return out
-}
+const SPA_FALLBACK_SEGMENTS = [
+  'product',
+  'features',
+  'pricing',
+  'compare',
+  'download',
+  'downloads',
+  'releases',
+  'release-notes',
+  'changelog',
+  'faq',
+  'contact',
+  'support',
+  'privacy',
+  'terms',
+  'refund',
+  'cookies',
+  'acceptable-use',
+  'login',
+  'activate',
+  'account',
+  'account/signin',
+  'account/signup',
+  'account/verify',
+  'account/linked',
+  'account/subscription',
+  'account/payments',
+  'account/downloads',
+  'account/devices',
+  'account/notifications',
+  'account/support',
+  'account/security',
+  'account/settings',
+  'admin',
+  'admin/users',
+  'admin/subscriptions',
+  'admin/commerce',
+  'admin/releases',
+  'admin/promos',
+  'admin/support',
+  'admin/communications',
+  'admin/diagnostics',
+  'admin/policies',
+  'admin/audit',
+  'admin/content',
+  'admin/settings',
+  'admin/coverage',
+  '403',
+  '404',
+  '429',
+  '500',
+  '503',
+]
 
 function copyIfExists(srcName) {
   const from = path.join(root, srcName)
@@ -51,7 +88,7 @@ function copyIfExists(srcName) {
 }
 
 if (!fs.existsSync(dist)) {
-  console.error('Missing site/dist — run Vite build first.')
+  console.error('Missing site/dist - run Vite build first.')
   process.exit(1)
 }
 
@@ -61,27 +98,7 @@ if (!fs.existsSync(spaIndex)) {
   process.exit(1)
 }
 
-for (const name of LEGAL_PAGES) {
-  const src = path.join(root, `${name}.html`)
-  if (!fs.existsSync(src)) {
-    console.warn(`skip missing source: ${name}.html`)
-    continue
-  }
-  const html = rewriteRootRelative(fs.readFileSync(src, 'utf8'))
-  const outDir = path.join(dist, name)
-  fs.mkdirSync(outDir, { recursive: true })
-  fs.writeFileSync(path.join(outDir, 'index.html'), html)
-}
-
-const updatesSrc = path.join(root, 'updates.html')
-if (fs.existsSync(updatesSrc)) {
-  const html = rewriteRootRelative(fs.readFileSync(updatesSrc, 'utf8'))
-  const outDir = path.join(dist, 'release-notes')
-  fs.mkdirSync(outDir, { recursive: true })
-  fs.writeFileSync(path.join(outDir, 'index.html'), html)
-}
-
-for (const segment of ['admin', 'account', 'account/signin', 'account/signup', 'activate', '403', '404', '429', '500', '503']) {
+for (const segment of SPA_FALLBACK_SEGMENTS) {
   const dir = path.join(dist, segment)
   fs.mkdirSync(dir, { recursive: true })
   fs.copyFileSync(spaIndex, path.join(dir, 'index.html'))
@@ -98,4 +115,4 @@ if (fs.existsSync(cname)) {
   fs.copyFileSync(cname, path.join(dist, 'CNAME'))
 }
 
-console.log('Static pages + SPA fallbacks merged into site/dist')
+console.log('New UI SPA fallbacks merged into site/dist')

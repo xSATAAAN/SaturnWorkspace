@@ -40,12 +40,20 @@ jobs:
         working-directory: site
         run: npm ci
 
+      - name: Verify production frontend environment
+        working-directory: site
+        run: node scripts/check-production-env.mjs
+
       - name: Build
         working-directory: site
         run: npm run build
 
       - name: Publish static pages and SPA path fallbacks
         run: node tools/publish-static-pages.mjs
+
+      - name: Verify frontend cutover output
+        working-directory: site
+        run: node scripts/check-frontend-cutover.mjs
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

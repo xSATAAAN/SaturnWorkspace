@@ -1,0 +1,6 @@
+.admin-login { min-height: 100vh; display: grid; grid-template-rows: 68px 1fr; background: var(--background-subtle); }
+.admin-login > header { display: flex; align-items: center; justify-content: space-between; padding: 0 var(--space-6); border-bottom: 1px solid var(--border); background: var(--surface); }
+.admin-login__card { width: min(calc(100% - 32px), 440px); place-self: center; display: flex; flex-direction: column; gap: var(--space-5); }
+.admin-login__card h1 { margin: 0; font-size: 1.8rem; }
+.admin-login__card > p { margin: -10px 0 0; color: var(--text-secondary); }
+.admin-login__card > .ui-badge { align-self: flex-start; }

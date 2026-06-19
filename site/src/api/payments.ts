@@ -6,6 +6,7 @@ export type PaymentPlan = 'monthly' | 'yearly'
 export type CreatePaymentRequest = {
   plan: PaymentPlan
   id_token?: string
+  idempotency_key?: string
   customer: {
     email?: string
     phone?: string

@@ -1,0 +1,126 @@
+:root {
+  color-scheme: light;
+  --background: #ffffff;
+  --background-subtle: #f7f7f5;
+  --background-muted: #f3f3f1;
+  --surface: #ffffff;
+  --surface-elevated: #ffffff;
+  --surface-hover: #f3f3f1;
+  --surface-active: #edf5ff;
+  --surface-inverse: #171715;
+  --border: #e3e3df;
+  --border-strong: #cecec8;
+  --border-soft: #ecece8;
+  --text-primary: #171715;
+  --text-secondary: #5f5e59;
+  --text-muted: #85837c;
+  --text-disabled: #aaa8a1;
+  --text-inverse: #f6f5f1;
+  --brand-primary: #2474d2;
+  --brand-hover: #1c63b6;
+  --brand-pressed: #154f94;
+  --brand-soft: #edf5ff;
+  --action-primary: #1d1c1a;
+  --action-primary-hover: #2a2926;
+  --action-primary-text: #ffffff;
+  --focus-ring: #2474d2;
+  --success: #1c7c54;
+  --success-soft: #e9f6ef;
+  --warning: #9a6300;
+  --warning-soft: #fff5dd;
+  --danger: #c73b4a;
+  --danger-soft: #fff0f2;
+  --info: #3466a8;
+  --info-soft: #eef5ff;
+  --overlay: rgba(22, 22, 26, 0.46);
+  --shadow-color: 23 23 21;
+
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-arabic: 'Tajawal', 'Segoe UI', sans-serif;
+  --text-display: clamp(3.1rem, 6vw, 5.75rem);
+  --text-h1: clamp(2.25rem, 4vw, 4rem);
+  --text-h2: clamp(1.75rem, 3vw, 2.75rem);
+  --text-h3: 1.375rem;
+  --text-body-lg: 1.0625rem;
+  --text-body: 0.9375rem;
+  --text-body-sm: 0.8125rem;
+  --text-caption: 0.75rem;
+
+  --space-0: 0;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-20: 5rem;
+  --space-24: 6rem;
+
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.25rem;
+  --radius-pill: 999px;
+
+  --shadow-subtle: 0 1px 2px rgb(var(--shadow-color) / 0.05);
+  --shadow-raised: 0 20px 60px rgb(var(--shadow-color) / 0.10), 0 2px 10px rgb(var(--shadow-color) / 0.05);
+  --shadow-modal: 0 28px 80px rgb(var(--shadow-color) / 0.22);
+  --shadow-focus: 0 0 0 3px color-mix(in srgb, var(--focus-ring) 24%, transparent);
+
+  --duration-fast: 140ms;
+  --duration-normal: 240ms;
+  --duration-slow: 460ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasized: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  --container: 1200px;
+  --sidebar-width: 248px;
+  --header-height: 64px;
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+  --background: #090908;
+  --background-subtle: #11110f;
+  --background-muted: #242220;
+  --surface: #191816;
+  --surface-elevated: #242220;
+  --surface-hover: #242220;
+  --surface-active: #17283d;
+  --surface-inverse: #f5f4f0;
+  --border: #3a3834;
+  --border-strong: #514e48;
+  --border-soft: #2d2b28;
+  --text-primary: #f6f5f1;
+  --text-secondary: #b8b4ac;
+  --text-muted: #89857d;
+  --text-disabled: #625f59;
+  --text-inverse: #171715;
+  --brand-primary: #6ba7ec;
+  --brand-hover: #87b9f2;
+  --brand-pressed: #5393dc;
+  --brand-soft: #17283d;
+  --action-primary: #f5f4f0;
+  --action-primary-hover: #ffffff;
+  --action-primary-text: #171715;
+  --focus-ring: #6ba7ec;
+  --success: #64c494;
+  --success-soft: #172a20;
+  --warning: #e6b35c;
+  --warning-soft: #2d2518;
+  --danger: #ee7c88;
+  --danger-soft: #301c20;
+  --info: #82ace0;
+  --info-soft: #1b2634;
+  --overlay: rgba(0, 0, 0, 0.68);
+  --shadow-color: 0 0 0;
+}
+
+@media (max-width: 1279px) {
+  :root { --sidebar-width: 224px; }
+}

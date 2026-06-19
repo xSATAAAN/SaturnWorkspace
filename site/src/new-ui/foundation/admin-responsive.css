@@ -1,0 +1,11 @@
+.admin-metric-strip { grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; }
+.admin-metric-strip .ui-card { min-width: 0; border-bottom: 1px solid var(--border); }
+.admin-metric-strip .ui-card:nth-child(4n) { border-inline-end: 0; }
+.admin-metric-strip .ui-card:nth-last-child(-n+3) { border-bottom: 0; }
+
+@media (min-width: 1500px) {
+  .admin-metric-strip { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  .admin-metric-strip .ui-card { border-bottom: 0; }
+  .admin-metric-strip .ui-card:nth-child(4n) { border-inline-end: 1px solid var(--border); }
+  .admin-metric-strip .ui-card:last-child { border-inline-end: 0; }
+}
