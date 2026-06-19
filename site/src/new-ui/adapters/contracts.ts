@@ -9,6 +9,7 @@ import type {
   AdminSupportMessage,
   AdminSupportThread,
   AdminUserDetail,
+  AdminEmailStatus,
 } from '../../api/admin'
 import type { AccountSubscription } from '../../api/account'
 
@@ -163,6 +164,10 @@ export type AdminAdapter = {
   sendSupportReply(threadId: string, body: string, options?: { internal?: boolean; emailRequested?: boolean }): Promise<void>
   updateSupportStatus(threadId: string, status: string, reason?: string): Promise<void>
   setSupportBlocked(threadId: string, blocked: boolean, reason?: string): Promise<void>
+  getEmailOperations(): Promise<AdminEmailStatus>
+  processEmailOutbox(): Promise<{ processed: number; sent: number; skipped: number }>
+  retryEmailJob(jobId: string): Promise<{ processed?: number; sent?: number; skipped?: number }>
+  sendAdminTestEmail(input: { recipient: string; emailType?: string; locale?: 'ar' | 'en'; subject?: string; message?: string }): Promise<void>
   listCrashLogs(): Promise<AdminCrashLog[]>
   listCrashGroups(): Promise<AdminCrashGroup[]>
   listAuditLog(): Promise<AdminAuditLogItem[]>

@@ -17,6 +17,7 @@ import {
   fetchAuditLog,
   fetchCrashGroups,
   fetchCrashLogs,
+  fetchEmailOperations as fetchAdminEmailOperations,
   fetchPromoCodes,
   fetchRemoteControls,
   fetchSubscriptions,
@@ -26,8 +27,11 @@ import {
   publishRelease,
   resetSubscriptionHwid,
   sendSupportReply,
+  sendAdminTestEmail as sendAdminTestEmailRequest,
   setAdminBearerToken,
   setSupportBlocked,
+  processEmailOutbox as processEmailOutboxRequest,
+  retryEmailJob as retryEmailJobRequest,
   updateAdminSupportStatus,
   submitAdminPreauth,
   updateRemoteControls,
@@ -356,6 +360,26 @@ export const productionAdapters: AppAdapters = {
     },
     async setSupportBlocked(threadId, blocked, reason) {
       await setSupportBlocked({ thread_id: threadId, blocked, reason })
+    },
+    getEmailOperations() {
+      return fetchAdminEmailOperations()
+    },
+    async processEmailOutbox() {
+      const data = await processEmailOutboxRequest()
+      return data.processed
+    },
+    async retryEmailJob(jobId) {
+      const data = await retryEmailJobRequest(jobId)
+      return data.processed || {}
+    },
+    async sendAdminTestEmail(input) {
+      await sendAdminTestEmailRequest({
+        recipient: input.recipient,
+        email_type: input.emailType,
+        locale: input.locale,
+        subject: input.subject,
+        message: input.message,
+      })
     },
     async listCrashLogs() {
       const data = await fetchCrashLogs({ limit: 100 })

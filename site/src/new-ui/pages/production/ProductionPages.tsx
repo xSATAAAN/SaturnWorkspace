@@ -15,7 +15,9 @@ import {
   Monitor,
   PackageOpen,
   ReceiptText,
+  RefreshCcw,
   ScrollText,
+  Send,
   Settings,
   ShieldAlert,
   ShieldCheck,
@@ -23,7 +25,7 @@ import {
   Users,
   WalletCards,
 } from 'lucide-react'
-import type { AdminAuditLogItem, AdminCrashGroup, AdminCrashLog, AdminRemoteControls, AdminSubscription, AdminSupportThread } from '../../../api/admin'
+import type { AdminAuditLogItem, AdminCrashGroup, AdminCrashLog, AdminEmailCatalogItem, AdminEmailJob, AdminEmailProviderEvent, AdminEmailRecipientFlag, AdminEmailStatus, AdminInboundEmailMessage, AdminRemoteControls, AdminScheduledEmail, AdminSubscription, AdminSupportThread } from '../../../api/admin'
 import type { AccountSubscription } from '../../../api/account'
 import { useAdapters } from '../../adapters/AdapterProvider'
 import type { CustomerSupportThread, PlanInfo, ReleaseInfo } from '../../adapters/contracts'
@@ -84,6 +86,27 @@ function supportStatusLabel(status: string | undefined, locale: 'ar' | 'en') {
   }
   const item = labels[normalized] || labels.open
   return locale === 'ar' ? item.ar : item.en
+}
+
+function emailJobTone(status?: string) {
+  const normalized = String(status || '').toLowerCase()
+  if (normalized === 'sent' || normalized === 'delivered') return 'success' as const
+  if (normalized === 'pending' || normalized === 'queued' || normalized === 'scheduled') return 'info' as const
+  if (normalized === 'retrying') return 'warning' as const
+  if (normalized === 'failed' || normalized === 'bounced' || normalized === 'complained' || normalized === 'suppressed') return 'danger' as const
+  return 'neutral' as const
+}
+
+function emailIntegrationTone(status?: string) {
+  const normalized = String(status || '').toLowerCase()
+  if (normalized === 'linked') return 'success' as const
+  if (normalized === 'prepared') return 'info' as const
+  if (normalized === 'disabled') return 'warning' as const
+  return 'danger' as const
+}
+
+function boolLabel(value: unknown, locale: 'ar' | 'en') {
+  return value ? copyByLocale(locale, 'On', 'مفعّل') : copyByLocale(locale, 'Off', 'متوقف')
 }
 
 function formatBytes(bytes?: number) {
@@ -567,16 +590,16 @@ function PortalSettings() {
 }
 
 export function AdminProductionPages({ page, navigate }: { page: string; navigate: Navigate }) {
-  const { t } = useExperience()
+  const { t, locale } = useExperience()
   const groups = useMemo<NavigationGroup[]>(() => [
     { items: [{ id: 'overview', label: t('overview'), icon: LayoutDashboard }] },
     { label: t('users'), items: [{ id: 'users', label: t('users'), icon: Users }, { id: 'subscriptions', label: t('subscriptions'), icon: CreditCard }, { id: 'commerce', label: t('payments'), icon: WalletCards }] },
     { label: t('distribution'), items: [{ id: 'releases', label: t('releases'), icon: PackageOpen }, { id: 'promos', label: t('promoCodes'), icon: Tags }] },
-    { label: t('operations'), items: [{ id: 'support', label: t('supportInbox'), icon: LifeBuoy }, { id: 'diagnostics', label: t('diagnostics'), icon: Bug }] },
+    { label: t('operations'), items: [{ id: 'support', label: t('supportInbox'), icon: LifeBuoy }, { id: 'communications', label: copyByLocale(locale, 'Email Operations', 'عمليات البريد'), icon: Mail }, { id: 'diagnostics', label: t('diagnostics'), icon: Bug }] },
     { label: t('governance'), items: [{ id: 'policies', label: t('policies'), icon: ShieldCheck }, { id: 'audit', label: t('auditLog'), icon: ScrollText }, { id: 'settings', label: t('settings'), icon: Settings }] },
-  ], [t])
+  ], [t, locale])
   const title = groups.flatMap((group) => group.items).find((item) => item.id === page)?.label || t('adminOverview')
-  return <AdminGuard navigate={navigate}><WorkspaceShell surface="admin" page={page} title={title} groups={groups} navigate={navigate} admin>{page === 'subscriptions' || page === 'users' ? <AdminSubscriptions /> : page === 'releases' ? <AdminReleases /> : page === 'support' ? <AdminSupportV2 /> : page === 'diagnostics' ? <AdminDiagnostics /> : page === 'audit' ? <AdminAudit /> : page === 'promos' ? <AdminPromos /> : page === 'commerce' ? <AdminCommerce /> : page === 'policies' ? <AdminPolicies /> : <AdminOverview />}</WorkspaceShell></AdminGuard>
+  return <AdminGuard navigate={navigate}><WorkspaceShell surface="admin" page={page} title={title} groups={groups} navigate={navigate} admin>{page === 'subscriptions' || page === 'users' ? <AdminSubscriptions /> : page === 'releases' ? <AdminReleases /> : page === 'support' ? <AdminSupportV2 /> : page === 'communications' ? <AdminEmailOperations /> : page === 'diagnostics' ? <AdminDiagnostics /> : page === 'audit' ? <AdminAudit /> : page === 'promos' ? <AdminPromos /> : page === 'commerce' ? <AdminCommerce /> : page === 'policies' ? <AdminPolicies /> : <AdminOverview />}</WorkspaceShell></AdminGuard>
 }
 
 function AdminGuard({ children }: { children: ReactNode; navigate: Navigate }) {
@@ -833,6 +856,181 @@ export function AdminSupport() {
     }
   }
   return <><PageHeader title={t('supportInbox')} description={t('support')} />{threads.error ? <ErrorBlock error={threads.error} onRetry={threads.reload} /> : <DataTable columns={columns} rows={threads.data || []} loading={threads.loading} rowKey={(row) => row.id} emptyTitle={t('tableEmpty')} emptyBody={t('supportInbox')} onRowClick={(row) => { setSelected(row); setError(''); setNotice(''); setReply('') }} />}{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}<Drawer open={Boolean(selected)} onClose={() => setSelected(null)} title={selected?.subject || t('support')} closeLabel={t('close')}><div className="support-thread">{messages.loading ? <LoadingBlock label={t('loading')} /> : messages.data?.map((message) => <article key={message.id} className={message.sender === 'admin' ? 'is-admin' : ''}><strong>{message.sender}</strong><p>{message.body}</p><small>{message.created_at}</small></article>)}</div><form className="settings-form" onSubmit={sendReply}><FormField label={t('reply')} htmlFor="admin-support-reply"><Textarea id="admin-support-reply" value={reply} onChange={(event) => setReply(event.target.value)} required /></FormField><div className="cluster"><Button type="submit" variant="primary" loading={busy}>{t('reply')}</Button><Button type="button" variant="secondary" onClick={toggleBlock} disabled={!selected || busy}>{selected?.support_blocked ? t('enabled') : t('blockSender')}</Button></div></form></Drawer></>
+}
+
+function AdminEmailOperations() {
+  const { t, locale } = useExperience()
+  const { admin } = useAdapters()
+  const status = useAsyncData(() => admin.getEmailOperations(), [admin])
+  const [tab, setTab] = useState('catalog')
+  const [recipient, setRecipient] = useState('')
+  const [emailType, setEmailType] = useState('admin.email_test')
+  const [testLocale, setTestLocale] = useState<'ar' | 'en'>(locale)
+  const [notice, setNotice] = useState('')
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const data = status.data as AdminEmailStatus | null
+  const catalog = data?.catalog || []
+  const testableCatalog = catalog.filter((item) => item.admin_test_allowed !== false && item.integration_status !== 'disabled')
+  const categoryFlags = data?.config.category_flags || {}
+
+  const sendTest = async (event: FormEvent) => {
+    event.preventDefault()
+    setBusy(true)
+    setError('')
+    setNotice('')
+    try {
+      await admin.sendAdminTestEmail({ recipient, emailType, locale: testLocale })
+      setNotice(copyByLocale(locale, 'Test email queued.', 'تمت إضافة رسالة الاختبار إلى الطابور.'))
+      status.reload()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'email_test_failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const processQueue = async () => {
+    setBusy(true)
+    setError('')
+    setNotice('')
+    try {
+      const result = await admin.processEmailOutbox()
+      setNotice(copyByLocale(locale, `Processed ${result.processed}; sent ${result.sent}.`, `تمت معالجة ${result.processed}؛ تم إرسال ${result.sent}.`))
+      status.reload()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'email_process_failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const retryJob = async (jobId: string) => {
+    setBusy(true)
+    setError('')
+    setNotice('')
+    try {
+      await admin.retryEmailJob(jobId)
+      setNotice(copyByLocale(locale, 'Retry requested.', 'تم طلب إعادة المحاولة.'))
+      status.reload()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'email_retry_failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const catalogColumns: Column<AdminEmailCatalogItem>[] = [
+    { key: 'event', header: copyByLocale(locale, 'Event', 'الحدث'), render: (row) => <div><strong>{locale === 'ar' ? row.title_ar : row.title_en}</strong><small className="muted">{row.event_type}</small></div> },
+    { key: 'category', header: copyByLocale(locale, 'Category', 'التصنيف'), render: (row) => <Badge>{row.category}</Badge> },
+    { key: 'status', header: t('status'), render: (row) => <Badge tone={emailIntegrationTone(row.integration_status)}>{row.integration_status}</Badge> },
+    { key: 'sender', header: copyByLocale(locale, 'Sender', 'المرسل'), render: (row) => row.sender_identity },
+    { key: 'template', header: copyByLocale(locale, 'Template', 'القالب'), render: (row) => `${row.template_key} v${row.template_version}` },
+  ]
+  const jobColumns: Column<AdminEmailJob>[] = [
+    { key: 'type', header: copyByLocale(locale, 'Type', 'النوع'), render: (row) => <div><strong>{row.catalog_event_type || row.email_type}</strong><small className="muted">{row.template_key || ''}</small></div> },
+    { key: 'recipient', header: copyByLocale(locale, 'Recipient', 'المستلم'), render: (row) => row.recipient },
+    { key: 'status', header: t('status'), render: (row) => <Badge tone={emailJobTone(row.status)}>{row.status}</Badge> },
+    { key: 'attempts', header: copyByLocale(locale, 'Attempts', 'المحاولات'), render: (row) => `${row.attempt_count || 0}/${row.max_attempts || 0}` },
+    { key: 'date', header: t('date'), render: (row) => row.created_at || row.updated_at || '—' },
+    { key: 'actions', header: t('actions'), render: (row) => <Button type="button" size="sm" onClick={() => retryJob(row.id)} disabled={busy}>{copyByLocale(locale, 'Retry', 'إعادة')}</Button> },
+  ]
+  const scheduledColumns: Column<AdminScheduledEmail>[] = [
+    { key: 'type', header: copyByLocale(locale, 'Type', 'النوع'), render: (row) => row.event_type },
+    { key: 'recipient', header: copyByLocale(locale, 'Recipient', 'المستلم'), render: (row) => row.recipient },
+    { key: 'status', header: t('status'), render: (row) => <Badge tone={emailJobTone(row.status)}>{row.status}</Badge> },
+    { key: 'scheduled', header: copyByLocale(locale, 'Scheduled for', 'موعد الإرسال'), render: (row) => row.scheduled_for },
+    { key: 'error', header: t('details'), render: (row) => row.last_error || '—' },
+  ]
+  const inboundColumns: Column<AdminInboundEmailMessage>[] = [
+    { key: 'from', header: copyByLocale(locale, 'From', 'من'), render: (row) => row.sender_email || '—' },
+    { key: 'to', header: copyByLocale(locale, 'To', 'إلى'), render: (row) => row.recipient_email || '—' },
+    { key: 'subject', header: t('details'), render: (row) => row.subject || row.rejection_reason || '—' },
+    { key: 'status', header: t('status'), render: (row) => <Badge tone={emailJobTone(row.status)}>{row.status}</Badge> },
+    { key: 'date', header: t('date'), render: (row) => row.received_at || row.created_at || '—' },
+  ]
+  const providerColumns: Column<AdminEmailProviderEvent>[] = [
+    { key: 'event', header: copyByLocale(locale, 'Provider event', 'حدث المزود'), render: (row) => <Badge tone={emailJobTone(row.event_type)}>{row.event_type}</Badge> },
+    { key: 'message', header: copyByLocale(locale, 'Message ID', 'معرف الرسالة'), render: (row) => row.provider_message_id || '—' },
+    { key: 'job', header: copyByLocale(locale, 'Job', 'المهمة'), render: (row) => row.email_job_id || '—' },
+    { key: 'date', header: t('date'), render: (row) => row.created_at || row.processed_at || '—' },
+  ]
+  const flagColumns: Column<AdminEmailRecipientFlag>[] = [
+    { key: 'email', header: t('email'), render: (row) => row.email },
+    { key: 'status', header: t('status'), render: (row) => <Badge tone={emailJobTone(row.status)}>{row.status}</Badge> },
+    { key: 'reason', header: t('reason'), render: (row) => row.reason || '—' },
+    { key: 'date', header: t('date'), render: (row) => row.updated_at || row.created_at || '—' },
+  ]
+
+  return (
+    <>
+      <PageHeader
+        title={copyByLocale(locale, 'Email Operations', 'عمليات البريد')}
+        description={copyByLocale(locale, 'Transactional email catalog, queue, provider webhooks, and suppression state.', 'كتالوج الرسائل التشغيلية والطابور وأحداث المزود وحالات الحظر.')}
+        actions={<Button type="button" leadingIcon={<RefreshCcw size={15} />} onClick={status.reload}>{t('retry')}</Button>}
+      />
+      {status.error ? <ErrorBlock error={status.error} onRetry={status.reload} /> : null}
+      {data ? (
+        <>
+          <div className="admin-metric-strip">
+            <StatCard label={copyByLocale(locale, 'Outbound', 'الإرسال')} value={boolLabel(data.config.outbound_enabled, locale)} />
+            <StatCard label={copyByLocale(locale, 'Inbound', 'الاستقبال')} value={boolLabel(data.config.inbound_enabled, locale)} />
+            <StatCard label={copyByLocale(locale, 'Scheduler', 'الجدولة')} value={boolLabel(data.config.scheduler_enabled, locale)} />
+            <StatCard label={copyByLocale(locale, 'Linked', 'مربوط')} value={data.metrics?.catalog_linked ?? 0} />
+            <StatCard label={copyByLocale(locale, 'Prepared', 'جاهز')} value={data.metrics?.catalog_prepared ?? 0} />
+            <StatCard label={copyByLocale(locale, 'Disabled', 'معطل')} value={data.metrics?.catalog_disabled ?? 0} />
+            <StatCard label={copyByLocale(locale, 'Queued', 'الطابور')} value={data.jobs.length} />
+          </div>
+          <div className="admin-overview-grid">
+            <Card>
+              <SectionHeader title={copyByLocale(locale, 'Sender identities', 'هويات الإرسال')} description={data.config.reply_domain} />
+              <dl className="detail-list">
+                {Object.entries(data.config.sender_identities || { general: data.config.from }).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}
+              </dl>
+            </Card>
+            <Card>
+              <SectionHeader title={copyByLocale(locale, 'Category flags', 'تفعيل التصنيفات')} description={copyByLocale(locale, 'Feature flags control which categories may send.', 'تحدد flags أي تصنيفات مسموح بإرسالها.')} />
+              <div className="cluster">
+                {Object.entries(categoryFlags).map(([key, value]) => <Badge key={key} tone={value ? 'success' : 'warning'}>{key}: {boolLabel(value, locale)}</Badge>)}
+              </div>
+            </Card>
+          </div>
+          <Card>
+            <SectionHeader title={copyByLocale(locale, 'Admin test email', 'رسالة اختبار للإدارة')} description={copyByLocale(locale, 'Only catalog events marked as admin-testable can be queued from here.', 'يمكن إرسال الأحداث المسموح باختبارها من الكتالوج فقط.')} />
+            <form className="settings-form" onSubmit={sendTest}>
+              <div className="form-grid">
+                <FormField label={copyByLocale(locale, 'Recipient', 'المستلم')} htmlFor="email-test-recipient" required><Input id="email-test-recipient" type="email" value={recipient} onChange={(event) => setRecipient(event.target.value)} required /></FormField>
+                <FormField label={copyByLocale(locale, 'Template', 'القالب')} htmlFor="email-test-template"><Select id="email-test-template" value={emailType} onChange={(event) => setEmailType(event.target.value)}>{(testableCatalog.length ? testableCatalog : [{ event_type: 'admin.email_test', title_en: 'Admin test email', title_ar: 'رسالة اختبار من الإدارة' } as AdminEmailCatalogItem]).map((item) => <option key={item.event_type} value={item.event_type}>{locale === 'ar' ? item.title_ar : item.title_en}</option>)}</Select></FormField>
+                <FormField label={copyByLocale(locale, 'Language', 'اللغة')} htmlFor="email-test-locale"><Select id="email-test-locale" value={testLocale} onChange={(event) => setTestLocale(event.target.value as 'ar' | 'en')}><option value="ar">العربية</option><option value="en">English</option></Select></FormField>
+              </div>
+              <div className="cluster">
+                <Button type="submit" variant="primary" leadingIcon={<Send size={15} />} loading={busy}>{copyByLocale(locale, 'Queue test', 'إرسال اختبار')}</Button>
+                <Button type="button" onClick={processQueue} loading={busy}>{copyByLocale(locale, 'Process queue', 'معالجة الطابور')}</Button>
+              </div>
+            </form>
+          </Card>
+          {error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}
+          {notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}
+          <Tabs ariaLabel={copyByLocale(locale, 'Email sections', 'أقسام البريد')} active={tab} onChange={setTab} items={[
+            { id: 'catalog', label: copyByLocale(locale, 'Catalog', 'الكتالوج') },
+            { id: 'outbox', label: copyByLocale(locale, 'Outbox', 'الطابور') },
+            { id: 'scheduled', label: copyByLocale(locale, 'Scheduled', 'مجدول') },
+            { id: 'inbound', label: copyByLocale(locale, 'Inbound', 'الوارد') },
+            { id: 'events', label: copyByLocale(locale, 'Provider events', 'أحداث المزود') },
+            { id: 'flags', label: copyByLocale(locale, 'Recipient flags', 'حالات المستلمين') },
+          ]} />
+          <div className="admin-tab-panel">
+            {tab === 'catalog' ? <DataTable columns={catalogColumns} rows={catalog} rowKey={(row) => row.event_type} emptyTitle={t('tableEmpty')} emptyBody={copyByLocale(locale, 'No catalog events found.', 'لا توجد أحداث بريد.')} /> : null}
+            {tab === 'outbox' ? <DataTable columns={jobColumns} rows={data.jobs} rowKey={(row) => row.id} emptyTitle={t('tableEmpty')} emptyBody={copyByLocale(locale, 'No queued jobs.', 'لا توجد مهام في الطابور.')} /> : null}
+            {tab === 'scheduled' ? <DataTable columns={scheduledColumns} rows={data.scheduled || []} rowKey={(row) => row.id} emptyTitle={t('tableEmpty')} emptyBody={copyByLocale(locale, 'No scheduled notifications.', 'لا توجد رسائل مجدولة.')} /> : null}
+            {tab === 'inbound' ? <DataTable columns={inboundColumns} rows={data.inbound} rowKey={(row) => row.id} emptyTitle={t('tableEmpty')} emptyBody={copyByLocale(locale, 'No inbound emails.', 'لا توجد رسائل واردة.')} /> : null}
+            {tab === 'events' ? <DataTable columns={providerColumns} rows={data.provider_events || []} rowKey={(row) => row.id} emptyTitle={t('tableEmpty')} emptyBody={copyByLocale(locale, 'No provider events.', 'لا توجد أحداث من المزود.')} /> : null}
+            {tab === 'flags' ? <DataTable columns={flagColumns} rows={data.recipient_flags || []} rowKey={(row) => row.email} emptyTitle={t('tableEmpty')} emptyBody={copyByLocale(locale, 'No suppressed recipients.', 'لا توجد حالات حظر للمستلمين.')} /> : null}
+          </div>
+        </>
+      ) : <Card><LoadingBlock label={t('loading')} /></Card>}
+    </>
+  )
 }
 
 function AdminDiagnostics() {
