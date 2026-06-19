@@ -27,7 +27,7 @@ import { Button } from '../../components/ui/Button'
 import { Card, DataTable, PageHeader, SectionHeader, StatCard, TableToolbar, type Column } from '../../components/ui/DataDisplay'
 import { Alert, Badge, EmptyState, FullPageState } from '../../components/ui/Feedback'
 import { FormField, Input, OTPInput, PasswordInput, Select, Textarea } from '../../components/ui/FormControls'
-import { Tabs } from '../../components/ui/Navigation'
+import { Accordion, Tabs } from '../../components/ui/Navigation'
 import { Drawer } from '../../components/ui/Overlays'
 import { DownloadCard, PricingCard, SubscriptionCard } from '../../components/ui/ProductCards'
 import { publicCopy } from '../../content/publicCopy'
@@ -93,8 +93,10 @@ export function PublicProductionPages({ page, navigate }: { page: string; naviga
   const release = useAsyncData(() => adapters.releases.getLatest('beta'), [adapters])
   let content: ReactNode
   if (page === 'pricing') content = <PricingSection plans={plans.data || []} loading={plans.loading} navigate={navigate} />
+  else if (page === 'product' || page === 'features') content = <ProductDetailsSection />
   else if (page === 'download') content = <DownloadSection release={release.data} loading={release.loading} error={release.error} reload={release.reload} />
   else if (page === 'releases' || page === 'changelog') content = <ReleaseNotes release={release.data} loading={release.loading} error={release.error} />
+  else if (page === 'faq') content = <FaqSection />
   else if (page === 'contact' || page === 'support') content = <PublicContact navigate={navigate} />
   else if (['privacy', 'terms', 'refund', 'acceptable-use', 'cookies'].includes(page)) content = <LegalSection page={page} />
   else if (page === '404') content = <FullPageState icon={ShieldAlert} title={t('system404')} body={t('systemBody')} primaryLabel={t('back')} onPrimary={() => navigate({ surface: 'public', page: 'home' })} />
@@ -102,11 +104,35 @@ export function PublicProductionPages({ page, navigate }: { page: string; naviga
   return <PublicLayout navigate={navigate}>{content}</PublicLayout>
 }
 
+function ProductDetailsSection() {
+  const { locale } = useExperience()
+  const c = publicCopy[locale]
+  const sections = [
+    { title: c.sessionsTitle, body: c.sessionsBody },
+    { title: c.accountsTitle, body: c.accountsBody },
+    { title: c.backupTitle, body: c.backupBody },
+    { title: c.proxyTitle, body: c.proxyBody },
+  ]
+  return <section className="marketing-section page-enter"><div className="container"><header className="marketing-heading marketing-heading--center marketing-heading--wide"><h1>{c.productPageTitle}</h1><p>{c.productPageBody}</p></header><div className="feature-grid">{sections.map((section) => <Card key={section.title}><SectionHeader title={section.title} description={section.body} /></Card>)}</div></div></section>
+}
+
 function PricingSection({ plans, loading, navigate, compact = false }: { plans: PlanInfo[]; loading: boolean; navigate: Navigate; compact?: boolean }) {
   const { t, locale } = useExperience()
   const c = publicCopy[locale]
   const featuresForPlan = (plan: PlanInfo) => plan.id === 'monthly' ? [c.monthlyTrialFeature, c.featureWorkspace, c.featureProfiles, c.featureUpdates] : [c.featureWorkspace, c.featureProfiles, c.featureUpdates]
   return <section className={`marketing-section pricing-section${compact ? '' : ' pricing-page'}`}><div className="container"><header className="marketing-heading marketing-heading--center">{compact ? <h2>{c.pricingTitle}</h2> : <h1>{c.pricingTitle}</h1>}<p>{c.pricingBody}</p></header>{loading ? <LoadingBlock label={t('loading')} /> : <div className="pricing-grid">{plans.map((plan) => <PricingCard key={plan.id} name={plan.name} description={plan.description} price={plan.price} originalPrice={plan.originalPrice} period={plan.period} features={featuresForPlan(plan)} cta={plan.checkoutEnabled ? t('checkout') : t('signUp')} featured={plan.id === 'monthly'} featuredLabel={c.recommended} onClick={() => navigate({ surface: 'auth', page: 'signup' })} />)}</div>}<Alert title={t('decisionRequired')} tone="info">{locale === 'ar' ? 'الدفع الحقيقي مغلق حتى يتم اختيار مزود الدفع وتفعيل بياناته.' : 'Live checkout is disabled until a payment provider is approved and configured.'}</Alert></div></section>
+}
+
+function FaqSection() {
+  const { locale } = useExperience()
+  const c = publicCopy[locale]
+  const items = [
+    { id: 'windows', title: c.faqWindows, body: c.faqWindowsBody },
+    { id: 'profiles', title: c.faqProfiles, body: c.faqProfilesBody },
+    { id: 'backup', title: c.faqBackup, body: c.faqBackupBody },
+    { id: 'proxy', title: c.faqProxy, body: c.faqProxyBody },
+  ]
+  return <section className="marketing-section faq-section page-enter"><div className="container narrow-page"><header className="marketing-heading marketing-heading--center"><h1>{c.faqTitle}</h1></header><Accordion items={items} /></div></section>
 }
 
 function DownloadSection({ release, loading, error, reload }: { release: ReleaseInfo | null; loading: boolean; error: string | null; reload: () => void }) {
