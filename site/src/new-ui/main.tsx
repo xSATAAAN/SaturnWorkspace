@@ -20,6 +20,7 @@ import './foundation/portal.css'
 import './foundation/admin.css'
 import './foundation/admin-login.css'
 import './foundation/admin-responsive.css'
+import './foundation/preview.css'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

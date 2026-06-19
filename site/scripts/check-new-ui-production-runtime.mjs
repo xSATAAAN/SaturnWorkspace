@@ -18,6 +18,10 @@ const forbidden = [
   'developmentMockAdapter',
   'previewRouter',
   'PreviewSwitcher',
+  'preview-switcher',
+  'Development preview',
+  'معاينة تطويرية',
+  'This preview does not publish',
   'development-mock',
   'ui-complete-mock',
 ]
@@ -49,13 +53,25 @@ for (const rel of sourceFiles) {
   }
 }
 
+const includeNewUiDistProduction = process.argv.includes('--include-new-ui-dist-production')
 const distDir = join(root, 'src/new-ui/dist-production')
-if (existsSync(distDir)) {
+if (includeNewUiDistProduction && existsSync(distDir)) {
   for (const file of walk(distDir)) {
     if (!/\.(js|html|css)$/.test(file)) continue
     const text = readFileSync(file, 'utf8')
     for (const token of forbidden) {
       if (text.includes(token)) failures.push(`${file}: forbidden bundled token ${token}`)
+    }
+  }
+}
+
+const productionDistDir = join(root, 'dist')
+if (existsSync(productionDistDir)) {
+  for (const file of walk(productionDistDir)) {
+    if (!/\.(js|html|css)$/.test(file)) continue
+    const text = readFileSync(file, 'utf8')
+    for (const token of forbidden) {
+      if (text.includes(token)) failures.push(`${file}: forbidden production token ${token}`)
     }
   }
 }

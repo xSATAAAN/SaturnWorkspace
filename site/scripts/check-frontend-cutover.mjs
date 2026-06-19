@@ -61,6 +61,10 @@ for (const oldStatic of ['privacy.html', 'terms.html', 'refund.html', 'cookies.h
 const forbiddenBundleTokens = [
   '?surface',
   'PreviewSwitcher',
+  'preview-switcher',
+  'Development preview',
+  'معاينة تطويرية',
+  'This preview does not publish',
   'mockAdapter',
   'mockData',
   'developmentMockAdapter',

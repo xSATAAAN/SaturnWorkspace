@@ -9,7 +9,7 @@
     "dev:new-ui:production": "vite --config src/new-ui/vite.production.config.ts",
     "build": "tsc -b && tsc -p src/new-ui/tsconfig.json --noEmit && vite build && node scripts/check-new-ui-production-runtime.mjs",
     "build:new-ui": "tsc -p src/new-ui/tsconfig.json --noEmit && vite build --config src/new-ui/vite.config.ts",
-    "build:new-ui:production": "tsc -p src/new-ui/tsconfig.json --noEmit && vite build --config src/new-ui/vite.production.config.ts && node scripts/check-new-ui-production-runtime.mjs",
+    "build:new-ui:production": "tsc -p src/new-ui/tsconfig.json --noEmit && vite build --config src/new-ui/vite.production.config.ts && node scripts/check-new-ui-production-runtime.mjs --include-new-ui-dist-production",
     "lint:new-ui": "eslint src/new-ui --ignore-pattern dist --ignore-pattern dist-production",
     "test:new-ui:production": "node scripts/check-new-ui-production-runtime.mjs",
     "test:new-ui:round3b": "node scripts/check-new-ui-production-runtime.mjs && node scripts/check-round3b-production-integration.mjs",

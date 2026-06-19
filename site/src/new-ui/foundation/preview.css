@@ -1,0 +1,40 @@
+.preview-switcher {
+  position: fixed;
+  z-index: 120;
+  inset-inline-start: 18px;
+  inset-block-end: 18px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-elevated);
+  box-shadow: var(--shadow-raised);
+}
+
+.preview-switcher button {
+  min-height: 32px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 0 var(--space-3);
+  cursor: pointer;
+  font-size: var(--text-caption);
+  font-weight: 600;
+}
+
+.preview-switcher button.is-active {
+  background: var(--brand-soft);
+  color: var(--brand-primary);
+}
+
+@media (max-width: 767px) {
+  .preview-switcher {
+    inset-inline: 10px;
+    inset-block-end: 10px;
+    max-width: calc(100vw - 20px);
+    overflow-x: auto;
+  }
+}
