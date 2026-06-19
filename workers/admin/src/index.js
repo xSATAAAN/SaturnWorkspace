@@ -294,6 +294,35 @@ export default {
         await appendAudit(env, { type: "support_block_update", actor: adminEmail, at: new Date().toISOString() });
         return json(payload, 200, corsHeaders(request, env));
       }
+      if (url.pathname === "/api/admin/policy/email/status" && request.method === "GET") {
+        await requireAdmin(request, env);
+        return json(await proxyPolicyAdmin(request, env, "/v1/admin/email/status"), 200, corsHeaders(request, env));
+      }
+      if (url.pathname === "/api/admin/policy/email/preview" && (request.method === "GET" || request.method === "POST")) {
+        await requireAdmin(request, env);
+        const target = request.method === "GET"
+          ? `/v1/admin/email/preview${url.search || ""}`
+          : "/v1/admin/email/preview";
+        return json(await proxyPolicyAdmin(request, env, target), 200, corsHeaders(request, env));
+      }
+      if (url.pathname === "/api/admin/policy/email/retry" && request.method === "POST") {
+        const adminEmail = await requireAdmin(request, env);
+        const payload = await proxyPolicyAdmin(request, env, "/v1/admin/email/retry");
+        await appendAudit(env, { type: "email_retry", actor: adminEmail, at: new Date().toISOString() });
+        return json(payload, 200, corsHeaders(request, env));
+      }
+      if (url.pathname === "/api/admin/policy/email/test" && request.method === "POST") {
+        const adminEmail = await requireAdmin(request, env);
+        const payload = await proxyPolicyAdmin(request, env, "/v1/admin/email/test");
+        await appendAudit(env, { type: "email_test", actor: adminEmail, at: new Date().toISOString() });
+        return json(payload, 200, corsHeaders(request, env));
+      }
+      if (url.pathname === "/api/admin/policy/email/process" && request.method === "POST") {
+        const adminEmail = await requireAdmin(request, env);
+        const payload = await proxyPolicyAdmin(request, env, "/v1/admin/email/process");
+        await appendAudit(env, { type: "email_process", actor: adminEmail, at: new Date().toISOString() });
+        return json(payload, 200, corsHeaders(request, env));
+      }
       if (url.pathname === "/api/admin/releases/disable" && request.method === "POST") {
         const adminEmail = await requireAdmin(request, env);
         return json(await disableRelease(request, env, adminEmail), 200, corsHeaders(request, env));

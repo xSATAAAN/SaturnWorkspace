@@ -1,0 +1,21 @@
+{
+  "name": "saturn-workspace-policy-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "tsc --noEmit",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "migrate:local": "wrangler d1 migrations apply saturnws-policy --local",
+    "migrate:remote": "wrangler d1 migrations apply saturnws-policy --remote"
+  },
+  "dependencies": {
+    "tweetnacl": "^1.0.3"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260504.0",
+    "typescript": "^5.8.3",
+    "wrangler": "^4.87.0"
+  }
+}

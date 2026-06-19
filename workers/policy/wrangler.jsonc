@@ -1,0 +1,47 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "saturnws-policy",
+  "account_id": "0665376659b7e5b47ccc2114b25f75a6",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-05-28",
+  "workers_dev": false,
+  "routes": [
+    { "pattern": "api.saturnws.com/*", "zone_name": "saturnws.com" }
+  ],
+  "observability": { "enabled": true },
+  "vars": {
+    "APP_ENV": "production",
+    "ALLOW_ORIGIN": "https://saturnws.com,https://www.saturnws.com,https://admin.saturnws.com",
+    "AUTH_VERIFY_URL": "https://auth.saturnws.com/session/verify",
+    "DEFAULT_TTL_SECONDS": "120",
+    "EMAIL_OUTBOUND_ENABLED": "false",
+    "EMAIL_INBOUND_ENABLED": "false",
+    "EMAIL_SUPPORT_ENABLED": "true",
+    "EMAIL_AUTH_ENABLED": "false",
+    "EMAIL_BILLING_ENABLED": "false",
+    "EMAIL_RELEASE_ENABLED": "false",
+    "EMAIL_SECURITY_ENABLED": "false",
+    "EMAIL_SCHEDULER_ENABLED": "false",
+    "EMAIL_ADMIN_ALERTS_ENABLED": "false",
+    "EMAIL_FROM_SUPPORT": "SaturnWS Support <support@mail.saturnws.com>",
+    "EMAIL_FROM_GENERAL": "SaturnWS <no-reply@mail.saturnws.com>",
+    "EMAIL_FROM_SECURITY": "SaturnWS Security <security@mail.saturnws.com>",
+    "EMAIL_FROM_BILLING": "SaturnWS Billing <billing@mail.saturnws.com>",
+    "EMAIL_FROM_ACCOUNT": "SaturnWS <hello@mail.saturnws.com>",
+    "EMAIL_REPLY_DOMAIN": "mail.saturnws.com",
+    "APP_PUBLIC_URL": "https://saturnws.com"
+  },
+  "services": [
+    {
+      "binding": "AUTH_SERVICE",
+      "service": "saturnws-auth"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "saturnws-policy",
+      "database_id": "82332161-352a-42fd-a4f4-758e8df5a907"
+    }
+  ]
+}

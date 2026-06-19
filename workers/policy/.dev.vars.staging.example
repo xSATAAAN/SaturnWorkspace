@@ -1,0 +1,18 @@
+# Saturn Policy Worker staging .dev.vars example.
+# Placeholder values only. Do not commit real .dev.vars files.
+# D1 binding DB and service binding AUTH_SERVICE must be configured by Wrangler environment.
+
+# Service: runtime environment
+# Visibility: public config
+# Use: runtime behavior and CORS
+APP_ENV=staging
+ALLOW_ORIGIN=https://staging.saturnws.com,https://staging-admin.saturnws.com
+AUTH_VERIFY_URL=https://staging-auth.saturnws.com/session/verify
+DEFAULT_TTL_SECONDS=120
+
+# Service: policy signing/admin auth
+# Visibility: secrets
+# Use: runtime policy response signing and admin route authorization
+POLICY_SIGNING_SEED_B64=STAGING_POLICY_SIGNING_SEED_BASE64
+ADMIN_TOKEN_SHA256=STAGING_POLICY_ADMIN_TOKEN_SHA256
+POLICY_STAGING_TOKEN=STAGING_POLICY_TEST_TOKEN

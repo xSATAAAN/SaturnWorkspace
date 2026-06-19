@@ -4,6 +4,7 @@ import {
   createPromoCode,
   createSubscription,
   disableRelease,
+  fetchEmailOperations,
   fetchAdminDashboard,
   fetchAuditLog,
   fetchCrashGroups,
@@ -16,11 +17,14 @@ import {
   fetchSupportThreads,
   fetchUserDetail,
   patchSubscriptionStatus,
+  processEmailOutbox,
   publishRelease,
   resetOtaBaseline,
   resetSubscriptionHwid,
+  retryEmailJob,
   rollbackRelease,
   sendSupportReply,
+  sendAdminTestEmail,
   setSupportBlocked,
   updateRemoteControls,
   uploadReleaseBinary,
@@ -28,6 +32,7 @@ import {
   type AdminAuditLogItem,
   type AdminCrashGroup,
   type AdminCrashLog,
+  type AdminEmailStatus,
   type AdminOtaUpdate,
   type AdminPromoCode,
   type AdminRemoteControls,
@@ -41,7 +46,7 @@ type AdminDashboardProps = {
   lang: 'en' | 'ar'
 }
 
-type AdminPage = 'overview' | 'users' | 'subscriptions' | 'promos' | 'ota' | 'controls' | 'support' | 'crashes' | 'audit'
+type AdminPage = 'overview' | 'users' | 'subscriptions' | 'promos' | 'ota' | 'controls' | 'support' | 'email' | 'crashes' | 'audit'
 
 const pageSize = 12
 const DEFAULT_DURATION_DAYS = 30
@@ -214,6 +219,12 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
   const [supportMessages, setSupportMessages] = useState<AdminSupportMessage[]>([])
   const [supportReply, setSupportReply] = useState('')
   const [supportLoading, setSupportLoading] = useState(false)
+  const [emailStatus, setEmailStatus] = useState<AdminEmailStatus | null>(null)
+  const [emailSearch, setEmailSearch] = useState('')
+  const [emailTestRecipient, setEmailTestRecipient] = useState('')
+  const [emailTestSubject, setEmailTestSubject] = useState('SaturnWS email operations test')
+  const [emailTestType, setEmailTestType] = useState('admin.email_test')
+  const [emailTestLocale, setEmailTestLocale] = useState<'en' | 'ar'>('en')
   const [selectedUser, setSelectedUser] = useState<AdminUserDetail | null>(null)
   const [selectedUserLoading, setSelectedUserLoading] = useState(false)
 
@@ -277,6 +288,7 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
         fetchCrashGroups(),
         fetchAuditLog(),
         fetchRemoteControls(remoteChannel),
+        fetchEmailOperations(),
       ])
       const errors: string[] = []
       const fulfilled = <T,>(result: PromiseSettledResult<T>, label: string): T | null => {
@@ -295,6 +307,7 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
       const groups = fulfilled(results[7], 'crash-groups')
       const audit = fulfilled(results[8], 'audit')
       const controls = fulfilled(results[9], 'remote-controls')
+      const email = fulfilled(results[10], 'email-operations')
       if (dashboard) {
         setKpis(dashboard.kpis || {})
         setRecentActivity(dashboard.recent_activity || [])
@@ -308,6 +321,7 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
       if (groups) setCrashGroups(groups.items || [])
       if (audit) setAuditLog(audit.items || [])
       if (controls) applyRemoteControlState(controls.controls || {})
+      if (email) setEmailStatus(email)
       if (errors.length) setError(errors.join(' | '))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'failed_to_load_admin_data')
@@ -366,6 +380,33 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
         .some((value) => String(value).toLowerCase().includes(term)),
     )
   }, [crashes, crashSearch])
+
+  const filteredEmailJobs = useMemo(() => {
+    const jobs = emailStatus?.jobs || []
+    const term = emailSearch.trim().toLowerCase()
+    if (!term) return jobs
+    return jobs.filter((item) =>
+      [item.email_type, item.recipient, item.sender, item.subject, item.status, item.linked_ticket_id, item.last_error]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(term)),
+    )
+  }, [emailStatus, emailSearch])
+
+  const filteredInboundEmail = useMemo(() => {
+    const inbound = emailStatus?.inbound || []
+    const term = emailSearch.trim().toLowerCase()
+    if (!term) return inbound
+    return inbound.filter((item) =>
+      [item.sender_email, item.recipient_email, item.subject, item.status, item.rejection_reason, item.thread_id]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(term)),
+    )
+  }, [emailStatus, emailSearch])
+
+  const emailCatalog = emailStatus?.catalog || []
+  const emailScheduled = emailStatus?.scheduled || []
+  const emailProviderEvents = emailStatus?.provider_events || []
+  const emailRecipientFlags = emailStatus?.recipient_flags || []
 
   const handleCreateSubscription = async () => {
     const isUnlimited = newSubscriptionDuration === 'unlimited'
@@ -661,6 +702,65 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
     }
   }
 
+  const refreshEmailOperations = async () => {
+    try {
+      setEmailStatus(await fetchEmailOperations())
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'email_status_failed')
+    }
+  }
+
+  const handleRetryEmailJob = async (jobId: string) => {
+    if (!jobId) return
+    setSaving(true)
+    setError(null)
+    try {
+      const result = await retryEmailJob(jobId)
+      await refreshEmailOperations()
+      setNotice(isAr ? `تمت إعادة محاولة الإرسال. المرسل: ${result.processed?.sent ?? 0}` : `Email retry queued. Sent: ${result.processed?.sent ?? 0}`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'email_retry_failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleSendTestEmail = async () => {
+    const recipient = emailTestRecipient.trim()
+    if (!recipient) return
+    setSaving(true)
+    setError(null)
+    try {
+      const result = await sendAdminTestEmail({
+        recipient,
+        email_type: emailTestType,
+        locale: emailTestLocale,
+        subject: emailTestSubject.trim() || undefined,
+        message: 'SaturnWS operational email test from admin panel.',
+      })
+      await refreshEmailOperations()
+      setNotice(isAr ? `تم إنشاء رسالة اختبار. المرسل: ${result.processed?.sent ?? 0}` : `Test email queued. Sent: ${result.processed?.sent ?? 0}`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'email_test_failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleProcessEmailOutbox = async () => {
+    setSaving(true)
+    setError(null)
+    try {
+      const result = await processEmailOutbox()
+      await refreshEmailOperations()
+      setNotice(isAr ? `تمت معالجة طابور البريد. المرسل: ${result.processed.sent}` : `Email outbox processed. Sent: ${result.processed.sent}`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'email_process_failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const applyAccessRequestToForm = (request: AdminAccessRequest) => {
     setNewSubscriptionEmail(request.user_email || '')
     setNewSubscriptionUserId(request.user_id || '')
@@ -715,6 +815,7 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
     { id: 'crashes', label: isAr ? 'سجل الأخطاء' : 'Crash Telemetry', hint: isAr ? 'التجميع والسجلات الخام' : 'Groups and raw logs' },
     { id: 'audit', label: isAr ? 'سجل الإدارة' : 'Audit Log', hint: isAr ? 'إجراءات الأدمن' : 'Admin actions' },
     { id: 'support', label: isAr ? 'رسائل الدعم' : 'Support', hint: isAr ? 'رسائل المستخدمين والردود' : 'User messages and replies' },
+    { id: 'email', label: isAr ? 'عمليات البريد' : 'Email Operations', hint: isAr ? 'الإرسال والاستقبال والطابور' : 'Outbound, inbound, queue' },
   ]
 
   const kpiCards = [
@@ -1207,6 +1308,244 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
               <button className="btn-primary mt-4 rounded-xl px-4 py-2 text-sm font-semibold" disabled={saving} onClick={() => void handleSaveControls()}>
                 {isAr ? 'حفظ التحكمات' : 'Save Remote Controls'}
               </button>
+            </section>
+          ) : null}
+
+          {activePage === 'email' ? (
+            <section className="grid gap-4">
+              <article className="surface-card p-5">
+                <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-semibold text-white/85">{isAr ? 'عمليات البريد التشغيلي' : 'Operational Email'}</h3>
+                    <p className="mt-1 text-xs leading-6 text-white/55">
+                      {isAr
+                        ? 'إرسال الدعم والاختبارات يعمل من خلال Resend عندما تكون مفاتيح Worker والـ feature flags مفعلة. استقبال الردود يبقى معطلًا حتى تفعيل Receiving.'
+                        : 'Support emails and tests use Resend only when Worker secrets and feature flags are enabled. Reply ingestion stays disabled until Receiving is enabled.'}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button className="rounded-xl border border-white/20 bg-white/[0.03] px-3 py-2 text-xs font-semibold text-white/80" disabled={saving} onClick={() => void refreshEmailOperations()}>
+                      {isAr ? 'تحديث' : 'Refresh'}
+                    </button>
+                    <button className="rounded-xl border border-sky-300/35 bg-sky-400/10 px-3 py-2 text-xs font-semibold text-sky-100" disabled={saving} onClick={() => void handleProcessEmailOutbox()}>
+                      {isAr ? 'معالجة الطابور' : 'Process Queue'}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  {[
+                    [isAr ? 'الإرسال' : 'Outbound', emailStatus?.config.outbound_enabled ? (isAr ? 'مفعل' : 'Enabled') : (isAr ? 'معطل' : 'Disabled')],
+                    [isAr ? 'الاستقبال' : 'Inbound', emailStatus?.config.inbound_enabled ? (isAr ? 'مفعل' : 'Enabled') : (isAr ? 'معطل' : 'Disabled')],
+                    [isAr ? 'مفتاح Resend' : 'Resend key', emailStatus?.config.has_resend_api_key ? (isAr ? 'موجود' : 'Present') : (isAr ? 'غير موجود' : 'Missing')],
+                    [isAr ? 'توقيع Webhook' : 'Webhook secret', emailStatus?.config.has_resend_webhook_secret ? (isAr ? 'موجود' : 'Present') : (isAr ? 'غير موجود' : 'Missing')],
+                    ['Scheduler', emailStatus?.config.scheduler_enabled ? 'Enabled' : 'Disabled'],
+                    ['Catalog', `${emailStatus?.metrics?.catalog_total ?? emailCatalog.length} events`],
+                    ['Linked', `${emailStatus?.metrics?.catalog_linked ?? 0}`],
+                    ['Prepared', `${emailStatus?.metrics?.catalog_prepared ?? 0}`],
+                  ].map(([label, value]) => (
+                    <div key={label} className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                      <div className="text-xs text-white/50">{label}</div>
+                      <div className="mt-1 text-sm font-semibold text-white">{value}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
+                  <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs leading-6 text-white/60">
+                    <div><span className="text-white/80">{isAr ? 'المرسل:' : 'From:'}</span> {emailStatus?.config.from || '--'}</div>
+                    <div><span className="text-white/80">{isAr ? 'دومين الرد:' : 'Reply domain:'}</span> {emailStatus?.config.reply_domain || '--'}</div>
+                    <div><span className="text-white/80">{isAr ? 'مسار Webhook:' : 'Webhook path:'}</span> {emailStatus?.config.webhook_path || '--'}</div>
+                    <div><span className="text-white/80">{isAr ? 'الطابور:' : 'Queue:'}</span> {(emailStatus?.counts || []).map((item) => `${item.status}:${item.count}`).join(' / ') || '--'}</div>
+                  </div>
+                  <div className="grid gap-2">
+                    <select className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" value={emailTestType} onChange={(event) => setEmailTestType(event.target.value)}>
+                      {(emailCatalog.length ? emailCatalog : [{ event_type: 'admin.email_test', title_en: 'Admin test email', admin_test_allowed: true }]).filter((item) => item.admin_test_allowed !== false).map((item) => (
+                        <option key={item.event_type} value={item.event_type} className="bg-slate-950">
+                          {item.event_type} · {'title_en' in item ? item.title_en : 'Admin test email'}
+                        </option>
+                      ))}
+                    </select>
+                    <select className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" value={emailTestLocale} onChange={(event) => setEmailTestLocale(event.target.value as 'en' | 'ar')}>
+                      <option value="en" className="bg-slate-950">English template</option>
+                      <option value="ar" className="bg-slate-950">Arabic template</option>
+                    </select>
+                    <input className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" placeholder={isAr ? 'بريد اختبار' : 'Test recipient'} value={emailTestRecipient} onChange={(e) => setEmailTestRecipient(e.target.value)} />
+                    <input className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none" placeholder={isAr ? 'عنوان الاختبار' : 'Test subject'} value={emailTestSubject} onChange={(e) => setEmailTestSubject(e.target.value)} />
+                    <button className="btn-primary rounded-xl px-4 py-2 text-sm font-semibold" disabled={saving || !emailTestRecipient.trim()} onClick={() => void handleSendTestEmail()}>
+                      {isAr ? 'إرسال اختبار' : 'Send Test'}
+                    </button>
+                  </div>
+                </div>
+              </article>
+
+              <article className="surface-card p-5">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                  <h3 className="text-sm font-semibold text-white/85">Email Event Catalog</h3>
+                  <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-white/60">{emailCatalog.length} events</span>
+                </div>
+                <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
+                  {emailCatalog.slice(0, 18).map((event) => (
+                    <div key={event.event_type} className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="truncate text-xs font-semibold text-white">{event.event_type}</div>
+                          <div className="mt-1 text-xs text-white/55">{event.title_en}</div>
+                        </div>
+                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${
+                          event.integration_status === 'linked'
+                            ? 'border-emerald-300/30 bg-emerald-500/10 text-emerald-100'
+                            : event.integration_status === 'disabled'
+                              ? 'border-rose-300/30 bg-rose-500/10 text-rose-100'
+                              : 'border-amber-300/30 bg-amber-500/10 text-amber-100'
+                        }`}>
+                          {event.integration_status}
+                        </span>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] text-white/50">
+                        <span className="rounded-full bg-white/5 px-2 py-0.5">{event.category}</span>
+                        <span className="rounded-full bg-white/5 px-2 py-0.5">{event.sender_identity}</span>
+                        <span className="rounded-full bg-white/5 px-2 py-0.5">v{event.template_version}</span>
+                        {event.essential ? <span className="rounded-full bg-white/5 px-2 py-0.5">essential</span> : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </article>
+
+              <div className="grid gap-4 xl:grid-cols-2">
+                <article className="surface-card p-5">
+                  <h3 className="mb-3 text-sm font-semibold text-white/85">Scheduled Notifications</h3>
+                  <div className="overflow-x-auto rounded-xl border border-white/10">
+                    <table className="w-full min-w-[680px] text-sm">
+                      <thead className="bg-white/5 text-white/60">
+                        <tr>
+                          <th className="px-3 py-2 text-start">Event</th>
+                          <th className="px-3 py-2 text-start">Recipient</th>
+                          <th className="px-3 py-2 text-start">Status</th>
+                          <th className="px-3 py-2 text-start">Scheduled</th>
+                          <th className="px-3 py-2 text-start">Error</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {emailScheduled.slice(0, 20).map((item) => (
+                          <tr key={item.id} className="border-t border-white/10 text-white/80">
+                            <td className="px-3 py-2">{item.event_type}</td>
+                            <td className="px-3 py-2">{item.recipient}</td>
+                            <td className="px-3 py-2">{item.status}</td>
+                            <td className="px-3 py-2">{formatEgyptDateTime(item.scheduled_for)}</td>
+                            <td className="max-w-56 truncate px-3 py-2">{item.last_error || '--'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {!emailScheduled.length ? <div className="mt-3 rounded-xl border border-dashed border-white/12 bg-white/[0.03] px-4 py-6 text-sm text-white/55">No scheduled email notifications.</div> : null}
+                </article>
+                <article className="surface-card p-5">
+                  <h3 className="mb-3 text-sm font-semibold text-white/85">Provider Events & Recipient Flags</h3>
+                  <div className="grid gap-3">
+                    {emailProviderEvents.slice(0, 8).map((item) => (
+                      <div key={item.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs text-white/70">
+                        <div className="font-semibold text-white">{item.event_type}</div>
+                        <div className="mt-1 break-all text-white/45">{item.provider_message_id || item.email_job_id || '--'}</div>
+                        <div className="mt-1 text-white/45">{formatEgyptDateTime(item.processed_at || item.created_at)}</div>
+                      </div>
+                    ))}
+                    {emailRecipientFlags.slice(0, 6).map((item) => (
+                      <div key={item.email} className="rounded-xl border border-rose-300/20 bg-rose-500/10 p-3 text-xs text-rose-100">
+                        <div className="font-semibold">{item.email}</div>
+                        <div className="mt-1">{item.status} · {item.reason || '--'}</div>
+                      </div>
+                    ))}
+                    {!emailProviderEvents.length && !emailRecipientFlags.length ? <div className="rounded-xl border border-dashed border-white/12 bg-white/[0.03] px-4 py-6 text-sm text-white/55">No provider events or recipient flags yet.</div> : null}
+                  </div>
+                </article>
+              </div>
+
+              <article className="surface-card p-5">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                  <h3 className="text-sm font-semibold text-white/85">{isAr ? 'طابور الإرسال' : 'Outbound Queue'}</h3>
+                  <input
+                    className="w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none sm:w-72"
+                    placeholder={isAr ? 'بحث في البريد...' : 'Search email...'}
+                    value={emailSearch}
+                    onChange={(e) => setEmailSearch(e.target.value)}
+                  />
+                </div>
+                <div className="overflow-x-auto rounded-xl border border-white/10">
+                  <table className="w-full min-w-[980px] text-sm">
+                    <thead className="bg-white/5 text-white/60">
+                      <tr>
+                        <th className="px-3 py-2 text-start">{isAr ? 'النوع' : 'Type'}</th>
+                        <th className="px-3 py-2 text-start">{isAr ? 'المستلم' : 'Recipient'}</th>
+                        <th className="px-3 py-2 text-start">{isAr ? 'العنوان' : 'Subject'}</th>
+                        <th className="px-3 py-2 text-start">{isAr ? 'الحالة' : 'Status'}</th>
+                        <th className="px-3 py-2 text-start">{isAr ? 'المحاولات' : 'Attempts'}</th>
+                        <th className="px-3 py-2 text-start">{isAr ? 'آخر خطأ' : 'Last error'}</th>
+                        <th className="px-3 py-2 text-start">{isAr ? 'إجراءات' : 'Actions'}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredEmailJobs.slice(0, 60).map((job) => (
+                        <tr key={job.id} className="border-t border-white/10 text-white/80">
+                          <td className="px-3 py-2">{job.catalog_event_type || job.email_type}</td>
+                          <td className="px-3 py-2">{job.recipient}</td>
+                          <td className="max-w-64 truncate px-3 py-2">{job.subject}</td>
+                          <td className="px-3 py-2">{job.status}</td>
+                          <td className="px-3 py-2">{job.attempt_count ?? 0}/{job.max_attempts ?? '--'}</td>
+                          <td className="max-w-64 truncate px-3 py-2">{job.last_error || '--'}</td>
+                          <td className="px-3 py-2">
+                            <button className="rounded-lg border border-white/20 bg-white/5 px-2.5 py-1 text-xs" disabled={saving} onClick={() => void handleRetryEmailJob(job.id)}>
+                              {isAr ? 'إعادة محاولة' : 'Retry'}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {!filteredEmailJobs.length ? (
+                  <div className="mt-3 rounded-xl border border-dashed border-white/12 bg-white/[0.03] px-4 py-6 text-sm text-white/55">
+                    {isAr ? 'لا توجد رسائل في الطابور.' : 'No queued email jobs.'}
+                  </div>
+                ) : null}
+              </article>
+
+              <article className="surface-card p-5">
+                <h3 className="mb-3 text-sm font-semibold text-white/85">{isAr ? 'رسائل واردة من البريد' : 'Inbound Email'}</h3>
+                <div className="overflow-x-auto rounded-xl border border-white/10">
+                  <table className="w-full min-w-[760px] text-sm">
+                    <thead className="bg-white/5 text-white/60">
+                      <tr>
+                        <th className="px-3 py-2 text-start">{isAr ? 'المرسل' : 'Sender'}</th>
+                        <th className="px-3 py-2 text-start">{isAr ? 'المستلم' : 'Recipient'}</th>
+                        <th className="px-3 py-2 text-start">{isAr ? 'الموضوع' : 'Subject'}</th>
+                        <th className="px-3 py-2 text-start">{isAr ? 'الحالة' : 'Status'}</th>
+                        <th className="px-3 py-2 text-start">{isAr ? 'السبب' : 'Reason'}</th>
+                        <th className="px-3 py-2 text-start">{isAr ? 'التاريخ' : 'Date'}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredInboundEmail.slice(0, 50).map((item) => (
+                        <tr key={item.id} className="border-t border-white/10 text-white/80">
+                          <td className="px-3 py-2">{item.sender_email || '--'}</td>
+                          <td className="px-3 py-2">{item.recipient_email || '--'}</td>
+                          <td className="max-w-64 truncate px-3 py-2">{item.subject || '--'}</td>
+                          <td className="px-3 py-2">{item.status}</td>
+                          <td className="px-3 py-2">{item.rejection_reason || '--'}</td>
+                          <td className="px-3 py-2">{formatEgyptDateTime(item.processed_at || item.created_at)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {!filteredInboundEmail.length ? (
+                  <div className="mt-3 rounded-xl border border-dashed border-white/12 bg-white/[0.03] px-4 py-6 text-sm text-white/55">
+                    {isAr ? 'لا توجد رسائل بريد واردة مسجلة.' : 'No inbound email messages recorded.'}
+                  </div>
+                ) : null}
+              </article>
             </section>
           ) : null}
 

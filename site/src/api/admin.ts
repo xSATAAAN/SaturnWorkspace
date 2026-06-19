@@ -165,6 +165,127 @@ export type AdminSupportMessage = {
   created_at?: string
 }
 
+export type AdminEmailJob = {
+  id: string
+  email_type: string
+  catalog_event_type?: string | null
+  template_key?: string | null
+  template_version?: number | null
+  email_category?: string | null
+  recipient: string
+  sender?: string | null
+  subject: string
+  linked_user_id?: string | null
+  linked_ticket_id?: string | null
+  status: string
+  attempt_count?: number
+  max_attempts?: number
+  provider_message_id?: string | null
+  last_error?: string | null
+  last_attempt_at?: string | null
+  sent_at?: string | null
+  delivered_at?: string | null
+  created_at?: string | null
+  updated_at?: string | null
+}
+
+export type AdminInboundEmailMessage = {
+  id: string
+  provider_email_id?: string | null
+  thread_id?: string | null
+  sender_email?: string | null
+  recipient_email?: string | null
+  subject?: string | null
+  status: string
+  rejection_reason?: string | null
+  received_at?: string | null
+  processed_at?: string | null
+  created_at?: string | null
+}
+
+export type AdminEmailCatalogItem = {
+  event_type: string
+  template_key: string
+  template_version: number
+  category: string
+  sender_identity: string
+  title_en: string
+  title_ar: string
+  description_en: string
+  description_ar: string
+  default_subject_en?: string
+  default_subject_ar?: string
+  integration_status: 'linked' | 'prepared' | 'disabled' | 'backend_missing'
+  user_can_disable: boolean
+  retry_allowed: boolean
+  essential: boolean
+  requires_backend_event: boolean
+  admin_test_allowed: boolean
+}
+
+export type AdminEmailProviderEvent = {
+  id: string
+  event_type: string
+  provider_message_id?: string | null
+  email_job_id?: string | null
+  processed_at?: string | null
+  created_at?: string | null
+}
+
+export type AdminEmailRecipientFlag = {
+  email: string
+  status: string
+  reason?: string | null
+  provider_message_id?: string | null
+  created_at?: string | null
+  updated_at?: string | null
+}
+
+export type AdminScheduledEmail = {
+  id: string
+  event_type: string
+  recipient: string
+  status: string
+  scheduled_for: string
+  attempts?: number | null
+  last_error?: string | null
+  linked_user_id?: string | null
+  linked_ticket_id?: string | null
+  created_at?: string | null
+  updated_at?: string | null
+}
+
+export type AdminEmailStatus = {
+  success: boolean
+  generated_at?: string
+  config: {
+    outbound_enabled: boolean
+    inbound_enabled: boolean
+    scheduler_enabled?: boolean
+    category_flags?: Record<string, boolean>
+    has_resend_api_key: boolean
+    has_resend_webhook_secret: boolean
+    from: string
+    sender_identities?: Record<string, string>
+    reply_domain: string
+    webhook_path: string
+  }
+  metrics?: {
+    catalog_total?: number
+    catalog_linked?: number
+    catalog_prepared?: number
+    catalog_disabled?: number
+    latest_event_at?: string | null
+  }
+  catalog?: AdminEmailCatalogItem[]
+  counts: Array<{ status: string; count: number }>
+  jobs: AdminEmailJob[]
+  inbound: AdminInboundEmailMessage[]
+  provider_events?: AdminEmailProviderEvent[]
+  recipient_flags?: AdminEmailRecipientFlag[]
+  scheduled?: AdminScheduledEmail[]
+}
+
 export type AdminRemoteControls = {
   rollout_percent?: number
   minimum_supported_version?: string
@@ -491,6 +612,45 @@ export async function setSupportBlocked(payload: { thread_id: string; blocked: b
   return adminFetch<{ success: boolean; blocked?: boolean }>('/policy/support/block', {
     method: 'POST',
     body: JSON.stringify(payload),
+  })
+}
+
+export async function fetchEmailOperations() {
+  return adminFetch<AdminEmailStatus>('/policy/email/status')
+}
+
+export async function retryEmailJob(jobId: string) {
+  return adminFetch<{ success: boolean; processed?: { processed: number; sent: number; skipped: number } }>('/policy/email/retry', {
+    method: 'POST',
+    body: JSON.stringify({ job_id: jobId }),
+  })
+}
+
+export async function fetchEmailPreview(params: { email_type?: string; locale?: 'en' | 'ar' } = {}) {
+  const query = new URLSearchParams()
+  if (params.email_type) query.set('email_type', params.email_type)
+  if (params.locale) query.set('locale', params.locale)
+  return adminFetch<{
+    success: boolean
+    event: AdminEmailCatalogItem
+    sender: { from: string; reply_to?: string }
+    preview: { event_type: string; subject: string; html: string; text: string; locale: string; template_key: string; template_version: number }
+  }>(`/policy/email/preview?${query}`)
+}
+
+export async function sendAdminTestEmail(payload: { recipient: string; subject?: string; message?: string; email_type?: string; locale?: 'en' | 'ar' }) {
+  return adminFetch<{ success: boolean; job_id?: string; processed?: { processed: number; sent: number; skipped: number } }>(
+    '/policy/email/test',
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+  )
+}
+
+export async function processEmailOutbox() {
+  return adminFetch<{ success: boolean; processed: { processed: number; sent: number; skipped: number } }>('/policy/email/process', {
+    method: 'POST',
   })
 }
 
