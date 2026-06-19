@@ -156,6 +156,30 @@ Live HTTP smoke after deployment returned `200` and served the React app shell f
 - `https://saturnws.com/account/signin`
 - `https://saturnws.com/admin/releases`
 
+## Post-Cutover Verification Updates
+
+Additional frontend-only fixes were deployed during live verification:
+
+- `97cf8f871c2565d1ff6e787478bfce2d8a697feb`
+  - Restored production `/product`, `/features`, and `/faq` routing.
+  - GitHub Actions: `https://github.com/xSATAAAN/SaturnWorkspace/actions/runs/27826182886`
+- `1263bca2449b3aeb63fe6396a1f1a91424450e6b`
+  - Replaced raw Firebase invalid sign-in text with a user-safe message.
+  - GitHub Actions: `https://github.com/xSATAAAN/SaturnWorkspace/actions/runs/27826385307`
+- `09d9dfcf9d80f8e46fd31fd91f2f6b3de429dfef`
+  - Hardened production bundle checks and removed preview/development wording from production output.
+  - GitHub Actions: `https://github.com/xSATAAAN/SaturnWorkspace/actions/runs/27827122499`
+
+Post-cutover verification report:
+
+- `D:\SaturnWS\web-platform\docs\production-integration\post-cutover-functional-verification.md`
+
+Final post-cutover verdict:
+
+- `Production frontend partially functional`
+
+Reason: public website routing, pricing, auth guards, admin unauth guard, invalid auth messaging, RTL/theme behavior, responsive smoke, build checks, and bundle scans passed. Downloads/releases remain blocked by live release manifest CORS, customer web support returns `404`, and authenticated portal/admin E2E requires test credentials.
+
 ## Rollback
 
 Rollback options:
@@ -174,6 +198,6 @@ Rollback options:
 
 ## Verdict
 
-`Frontend cutover successful`
+`Frontend cutover successful; production functional verification partially complete`
 
-Reason: local frontend cutover verification passed, the changes were pushed to `main`, GitHub Pages deployment completed successfully, and live route smoke checks served the new React app shell.
+Reason: local frontend cutover verification passed, the changes were pushed to `main`, GitHub Pages deployment completed successfully, and live route smoke checks served the new React app shell. The later functional verification identified backend/CORS and credential-gated blockers that require separate follow-up before the whole production experience can be considered fully verified.
