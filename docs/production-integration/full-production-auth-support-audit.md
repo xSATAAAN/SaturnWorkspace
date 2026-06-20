@@ -117,6 +117,7 @@ No launcher, updater, installer, OTA, or unrelated desktop behavior was modified
 - `https://saturnws.com/account/support`: returned 200.
 - `https://admin.saturnws.com/support`: returned 200.
 - Admin subdomain clean paths such as `/support` and `/communications` are routed directly without requiring a duplicated `/admin/...` prefix.
+- Admin subdomain internal navigation now generates clean paths (`/support`, `/communications`) while legacy `/admin/...` deep links are canonicalized client-side and remain usable.
 - Live site bundle contains the restored desktop linking flow (`/device/complete`).
 - Live site bundle also contains support error mapping and admin reply `email_requested` handling.
 - Browser smoke check:

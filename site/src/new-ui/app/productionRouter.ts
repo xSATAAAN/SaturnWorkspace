@@ -10,11 +10,15 @@ function normalizePath(pathname: string) {
   return pathname.endsWith('/') ? pathname.slice(0, -1) : pathname
 }
 
+function isAdminHost() {
+  return typeof window !== 'undefined' && window.location.hostname.toLowerCase().startsWith('admin.')
+}
+
 export function routeToPath(route: AppRoute): string {
   let path: string
   if (route.surface === 'auth') path = route.page === 'signup' ? '/account/signup' : route.page === 'verify' ? '/account/verify' : route.page === 'linked' ? '/account/linked' : '/account/signin'
   else if (route.surface === 'portal') path = route.page === 'overview' ? '/account' : `/account/${route.page}`
-  else if (route.surface === 'admin') path = route.page === 'overview' ? '/admin' : `/admin/${route.page}`
+  else if (route.surface === 'admin') path = isAdminHost() ? (route.page === 'overview' ? '/' : `/${route.page}`) : (route.page === 'overview' ? '/admin' : `/admin/${route.page}`)
   else if (route.surface === 'system') path = `/${route.page}`
   else if (route.page === 'home') path = '/'
   else path = `/${route.page}`
@@ -54,7 +58,13 @@ export function routeFromInternalUrl(value: string): AppRoute {
 }
 
 export function readProductionRoute(): AppRoute {
-  return routeFromInternalUrl(window.location.href)
+  const route = routeFromInternalUrl(window.location.href)
+  if (isAdminHost() && window.location.pathname.startsWith('/admin')) {
+    const cleanPath = routeToPath(route)
+    const currentPath = `${window.location.pathname}${window.location.search}`
+    if (cleanPath !== currentPath) window.history.replaceState({}, '', cleanPath)
+  }
+  return route
 }
 
 export function useProductionRouter() {
