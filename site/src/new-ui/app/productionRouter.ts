@@ -28,7 +28,7 @@ export function routeFromInternalUrl(value: string): AppRoute {
   const path = normalizePath(url.pathname)
   const state = url.search || undefined
   if (host.startsWith('admin.')) {
-    const page = path === '/' || path === '/admin' ? 'overview' : path.replace(/^\/admin\/?/, '') || 'overview'
+    const page = path === '/' || path === '/admin' ? 'overview' : path.replace(/^\/admin\/?/, '').replace(/^\//, '') || 'overview'
     return { surface: 'admin', page: ADMIN_PAGES.has(page) ? page : 'overview', state }
   }
   if (path === '/login' || path === '/account/signin' || path === '/activate') return { surface: 'auth', page: 'signin', state }
