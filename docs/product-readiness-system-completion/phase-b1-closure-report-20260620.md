@@ -115,9 +115,14 @@ Results:
 
 ## Deployment
 
-Pending.
+GitHub Pages deployment completed successfully for the implementation commit.
 
-This report was prepared before GitHub sync/deploy/live verification. If deployed after this report, update the commit/deploy section below.
+- Repository: `xSATAAAN/SaturnWorkspace`
+- Branch: `main`
+- Implementation commit: `68577b6f593c6f76493103021c449dfae4736357`
+- GitHub Pages workflow run: `27882072970`
+- Workflow conclusion: `success`
+- Workflow URL: `https://github.com/xSATAAAN/SaturnWorkspace/actions/runs/27882072970`
 
 ## Worker Versions
 
@@ -125,7 +130,28 @@ No Worker deployment in this phase.
 
 ## Commit / Deployment Record
 
-Pending GitHub sync.
+- Implementation commit: `68577b6` (`Close Phase B.1 UI readiness polish`)
+- Deploy workflow: `Deploy site to GitHub Pages`
+- Deploy result: `success`
+
+## Live Verification
+
+Executed against production after the GitHub Pages deployment:
+
+- `https://saturnws.com/contact/`
+  - Rendered successfully.
+  - Public contact page shows contact routing cards.
+  - No unauthenticated support form was present.
+  - Support CTA was present.
+- `https://saturnws.com/account/support/`
+  - Rendered successfully.
+  - Signed-out state showed sign-in gate instead of blank page.
+  - No browser console/page errors were captured in the test run.
+
+Local preview note:
+
+- Local `vite preview` without Firebase env values does not mount the app and throws `missing_firebase_env`.
+- This is expected for a local shell without `.env`; GitHub Pages build uses GitHub Actions secrets for the public Firebase client config.
 
 ## Manual Tests Required
 
@@ -172,4 +198,3 @@ Next allowed work after manual acceptance:
 ## Human Intervention Required
 
 Manual UI acceptance is required before Emergency Subscription Grant.
-
