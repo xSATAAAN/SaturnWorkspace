@@ -53,11 +53,18 @@ export function PublicHeader({ navigate }: { navigate: Navigate }) {
 
 export function PublicFooter({ navigate }: { navigate: Navigate }) {
   const { t } = useExperience()
+  const { ready, user } = useAuthState()
   const columns = [
     { title: t('footerProduct'), links: [[t('product'), 'product'], [t('features'), 'features'], [t('pricing'), 'pricing'], [t('downloads'), 'download']] },
     { title: t('footerAccount'), links: [[t('signIn'), 'signin'], [t('signUp'), 'signup'], [t('subscription'), 'subscription'], [t('support'), 'support']] },
     { title: t('footerResources'), links: [[t('faq'), 'faq'], [t('contact'), 'contact']] },
     { title: t('footerLegal'), links: [[t('privacy'), 'privacy'], [t('terms'), 'terms'], [t('refund'), 'refund'], [t('acceptableUse'), 'acceptable-use']] },
   ] as const
-  return <footer className="public-footer"><div className="container public-footer__grid"><div className="public-footer__brand"><Brand onClick={() => navigate({ surface: 'public', page: 'home' })} /><p>{t('heroBody')}</p></div>{columns.map((column) => <div key={column.title}><strong>{column.title}</strong>{column.links.map(([label, page]) => <button type="button" key={page} onClick={() => navigate(page === 'signin' || page === 'signup' ? createAuthRoute(page, { returnTo: currentInternalLocation() }) : page === 'subscription' ? { surface: 'portal', page } : { surface: 'public', page })}>{label}</button>)}</div>)}</div><div className="container public-footer__bottom"><span>© 2026 {t('brand')}. {t('rights')}</span><span>{t('windowsOnly')}</span></div></footer>
+  const footerRoute = (page: string): AppRoute => {
+    if (page === 'signin' || page === 'signup') return createAuthRoute(page, { returnTo: currentInternalLocation() })
+    if (page === 'subscription') return ready && user ? { surface: 'portal', page } : createAuthRoute('signin', { returnTo: '/account/subscription' })
+    if (page === 'support') return ready && user ? { surface: 'portal', page } : createAuthRoute('signin', { returnTo: '/account/support' })
+    return { surface: 'public', page }
+  }
+  return <footer className="public-footer"><div className="container public-footer__grid"><div className="public-footer__brand"><Brand onClick={() => navigate({ surface: 'public', page: 'home' })} /><p>{t('heroBody')}</p></div>{columns.map((column) => <div key={column.title}><strong>{column.title}</strong>{column.links.map(([label, page]) => <button type="button" key={page} onClick={() => navigate(footerRoute(page))}>{label}</button>)}</div>)}</div><div className="container public-footer__bottom"><span>© 2026 {t('brand')}. {t('rights')}</span><span>{t('windowsOnly')}</span></div></footer>
 }

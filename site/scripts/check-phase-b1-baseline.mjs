@@ -4,6 +4,9 @@ import { join } from 'node:path'
 const root = process.cwd()
 const productionPage = readFileSync(join(root, 'src/new-ui/pages/production/ProductionPages.tsx'), 'utf8')
 const workspaceShell = readFileSync(join(root, 'src/new-ui/layouts/WorkspaceShell.tsx'), 'utf8')
+const sharedChrome = readFileSync(join(root, 'src/new-ui/layouts/SharedChrome.tsx'), 'utf8')
+const portalCss = readFileSync(join(root, 'src/new-ui/foundation/portal.css'), 'utf8')
+const messages = readFileSync(join(root, 'src/new-ui/i18n/messages.ts'), 'utf8')
 const adapters = readFileSync(join(root, 'src/new-ui/adapters/productionAdapters.ts'), 'utf8')
 const authWorker = readFileSync(join(root, '../workers/auth/src/index.ts'), 'utf8')
 
@@ -19,6 +22,26 @@ const checks = [
   {
     name: 'support thread rendering uses semantic sender roles',
     pass: productionPage.includes('SupportThreadMessage') && productionPage.includes('supportSenderRole') && productionPage.includes('supportMessageClass'),
+  },
+  {
+    name: 'page skeletons are page-specific rather than generic card placeholders',
+    pass: productionPage.includes('PortalOverviewSkeleton') && productionPage.includes('PortalSupportSkeleton') && productionPage.includes('AdminEmailOperationsSkeleton') && !productionPage.includes('PageSkeleton cards'),
+  },
+  {
+    name: 'public contact page routes support to authenticated support center',
+    pass: productionPage.includes("returnTo: '/account/support'") && !productionPage.includes('You are signed in') && !productionPage.includes('أنت مسجّل الدخول'),
+  },
+  {
+    name: 'public footer separates contact from support portal routing',
+    pass: sharedChrome.includes("returnTo: '/account/support'") && sharedChrome.includes("returnTo: '/account/subscription'") && sharedChrome.includes('footerRoute(page)'),
+  },
+  {
+    name: 'support message CSS distinguishes customer, support, internal, and system roles',
+    pass: portalCss.includes('support-message--customer') && portalCss.includes('var(--brand-primary)') && portalCss.includes('support-message--support_agent') && portalCss.includes('support-message--internal_note') && portalCss.includes('support-message--system'),
+  },
+  {
+    name: 'technical placeholder copy is not exposed in UI messages',
+    pass: !messages.includes('Plan data unavailable') && !messages.includes('Backend integration required') && !messages.includes('Product decision required') && !messages.includes('Integration pending') && !messages.includes('الربط قيد الانتظار'),
   },
   {
     name: 'portal brand navigates to public home while admin brand stays admin',

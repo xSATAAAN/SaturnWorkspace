@@ -66,7 +66,7 @@ export function CheckoutDialog({ open, plan, user, features, onClose }: Checkout
             onSelect={() => undefined}
           />
           {error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}
-          {!checkoutAvailable ? <Alert title={locale === 'ar' ? 'الدفع غير مفعّل' : 'Checkout unavailable'} tone="info">{locale === 'ar' ? 'يمكنك مراجعة الخطة الآن، وسيصبح زر المتابعة متاحًا عند تفعيل وسيلة الدفع لهذه الخطة.' : 'You can review the plan now. Continue will become available when checkout is enabled for this plan.'}</Alert> : null}
+          {!checkoutAvailable ? <Alert title={locale === 'ar' ? 'الدفع غير مفعّل' : 'Checkout unavailable'} tone="info">{locale === 'ar' ? 'تفاصيل الخطة ظاهرة الآن، وسيصبح زر المتابعة متاحًا عند تفعيل وسيلة الدفع لهذه الخطة.' : 'Plan details are visible now. Continue will become available when checkout is enabled for this plan.'}</Alert> : null}
           <Button variant="primary" size="lg" fullWidth disabled={!checkoutAvailable} loading={submitting} onClick={() => void continueToCheckout()}>{locale === 'ar' ? 'المتابعة إلى الدفع' : 'Continue to checkout'}</Button>
           <div className="checkout-trust"><span><LockKeyhole size={14} />{locale === 'ar' ? 'دفع آمن' : 'Secure checkout'}</span><span><Check size={14} />{locale === 'ar' ? 'يتفعّل الوصول بعد تأكيد العملية' : 'Access follows payment confirmation'}</span></div>
         </section>

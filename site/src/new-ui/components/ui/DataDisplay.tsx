@@ -8,7 +8,7 @@ export function Card({ children, className = '', padding = 'md' }: { children: R
   return <section className={`ui-card ui-card--${padding} ${className}`}>{children}</section>
 }
 
-export function StatCard({ label, value, detail, icon }: { label: string; value: ReactNode; detail?: string; icon?: ReactNode }) {
+export function StatCard({ label, value, detail, icon }: { label: ReactNode; value: ReactNode; detail?: string; icon?: ReactNode }) {
   return <Card padding="sm" className="ui-stat"><div className="ui-stat__top"><span>{label}</span>{icon}</div><strong>{value}</strong>{detail ? <small>{detail}</small> : null}</Card>
 }
 
