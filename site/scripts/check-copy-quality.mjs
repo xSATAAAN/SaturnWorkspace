@@ -11,14 +11,18 @@ const roots = [
 const extensions = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.css', '.html'])
 const ignoredSegments = new Set(['node_modules', '.git', '.wrangler', 'dist', 'dist-production'])
 const focusedSourceFragments = [
-  'src/new-ui/pages/production/',
+  'src/new-ui/app/',
+  'src/new-ui/components/',
+  'src/new-ui/layouts/',
+  'src/new-ui/pages/',
   'src/new-ui/content/',
   'src/new-ui/i18n/',
-  'src/new-ui/layouts/',
-  'src/new-ui/components/ui/',
 ]
 
 const banned = [
+  'Secure sign in',
+  'Secure login',
+  'Secure account access',
   'Plan data unavailable',
   'You are logged in',
   'You are signed in',
@@ -40,8 +44,15 @@ const banned = [
   'Technical account help is handled inside',
   'TODO',
   'Lorem ipsum',
+  'دخول آمن للحساب',
+  'تسجيل دخول آمن',
+  'دخول موثوق',
+  'وصول محمي',
+  'تجربة آمنة',
+  'حماية حسابك',
   'هذه الصفحة تعرض',
   'أنت مسجّل الدخول',
+  'أنت مسجل الدخول',
   'تم التعرف على حسابك',
   'البوابة جاهزة',
   'البريد مفعّل',
@@ -51,11 +62,30 @@ const banned = [
 
 const allowedLineFragments = [
   'const banned = [',
+  'const trustClaimFragments = [',
   'Backend integration required',
   'Product decision required',
   'Integration pending',
   'Live plan names and prices',
   'commercial source of truth',
+  'دخول آمن للحساب',
+  'تسجيل دخول آمن',
+  'Secure sign in',
+  'You are logged in',
+  'أنت مسجل الدخول',
+]
+
+const trustClaimFragments = [
+  'Secure account',
+  'Secure sign',
+  'Secure login',
+  'Protected access',
+  'Trusted access',
+  'دخول آمن',
+  'تسجيل دخول آمن',
+  'دخول موثوق',
+  'وصول محمي',
+  'تجربة آمنة',
 ]
 
 const failures = []
@@ -81,6 +111,9 @@ function walk(dir) {
       if (allowedLineFragments.some((fragment) => line.includes(fragment)) && path.endsWith('check-copy-quality.mjs')) return
       banned.forEach((phrase) => {
         if (line.includes(phrase)) failures.push(`${relative(root, path)}:${index + 1}: ${phrase}`)
+      })
+      trustClaimFragments.forEach((phrase) => {
+        if (line.includes(phrase)) failures.push(`${relative(root, path)}:${index + 1}: trust claim: ${phrase}`)
       })
     })
   }

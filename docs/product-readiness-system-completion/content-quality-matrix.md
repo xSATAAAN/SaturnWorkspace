@@ -8,6 +8,18 @@ Scope: website/customer portal/admin UI copy and support/contact semantics only.
 
 Scope stays limited to Phase B/B.1 surfaces: sign in, sign up, auth loading/error states, account overview, subscription, downloads, support, contact, settings, account navigation, empty/error/success states, buttons, tooltips, admin overview, admin subscriptions, and admin email operations.
 
+Latest manual result: `PHASE_B1_NEEDS_FIXES`. This matrix is updated for the focused fix batch and remains `IMPLEMENTED_PENDING_MANUAL_ACCEPTANCE` until the live sign-in copy and account skeleton are accepted manually.
+
+### Forensic Correction
+
+| Item | Result |
+|---|---|
+| Active sign-in route | `/account/signin` and `/login` resolve to `surface: auth`, `page: signin` in `site/src/new-ui/app/productionRouter.ts`. |
+| Active component | `EmailPasswordProductionPage` in `site/src/new-ui/pages/production/ProductionPages.tsx`. |
+| Rejected copy source | Hardcoded `copyByLocale(locale, 'Secure account access', 'دخول آمن للحساب')` in the active component, not `messages.ts` or `publicCopy.ts`. |
+| Why the prior gate passed | The gate did not include this Arabic phrase or trust-claim class and relied on a narrower set of English/internal phrases. |
+| Production behavior | The live bundle contained both the Arabic and English trust-claim strings before this fix batch. |
+
 ### Copy Classification Rules
 
 | Classification | Keep? | Rule |
@@ -26,7 +38,7 @@ Scope stays limited to Phase B/B.1 surfaces: sign in, sign up, auth loading/erro
 
 | Surface | Rewritten/removed | Left unchanged |
 |---|---|---|
-| Sign in / sign up | Reduced generic sign-in body to direct continuation copy; signup body now avoids subscription-management explanation. | Field labels, password requirements, terms acknowledgement, Google action. |
+| Sign in / sign up | Removed the visible sign-in eyebrow entirely. Reduced generic sign-in body to direct continuation copy; signup body avoids subscription-management explanation. | Field labels, password requirements, terms acknowledgement, Google action, and signup-only setup context. |
 | Auth loading/error | Admin normal loading no longer shows a retry action. Errors continue to use stable user-facing messages. | Email verification body remains because it explains a real action: enter the 6-digit code. |
 | Account overview | Removed generic overview subtitle; notification empty copy now describes where important messages appear. | Subscription/download cards and retry actions for real recoverable failures. |
 | Subscription | Removed generic account subtitle and product-decision alert. | Subscription state projection and no-active-subscription CTA. |
@@ -53,6 +65,9 @@ Scope stays limited to Phase B/B.1 surfaces: sign in, sign up, auth loading/erro
 - Implementation vocabulary: backend required, integration pending, commercial source of truth, provider setup wording in customer UI.
 - Placeholder/filler: TODO, lorem ipsum, demo placeholders.
 - Raw or weak production copy: plan-data placeholders and mojibake markers.
+- Obvious auth trust claims in English and Arabic, including `Secure sign in`, `Secure account access`, `دخول آمن للحساب`, `تسجيل دخول آمن`, and direct equivalents.
+
+The gate scans runtime new-ui source under `app`, `components`, `layouts`, `pages`, `content`, and `i18n`, plus generated `dist` during production build.
 
 ## Terminology Baseline
 

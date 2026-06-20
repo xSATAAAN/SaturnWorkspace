@@ -4,12 +4,25 @@
 
 Current execution is limited to Phase B.1 remediation after manual acceptance. The following were accepted and must not be reopened in this batch unless a regression is found: subscription state consistency, Arabic encoding, support role colors, basic contact/support route separation, cache isolation between accounts, and the basic async loading model.
 
+Latest manual result: `PHASE_B1_NEEDS_FIXES`. Do not start Phase B.2, OTP, Emergency Subscription Grant, Phase C, or desktop work before the new B.1 fix batch is manually accepted.
+
 The failed B.1 criteria are tracked as one organized remediation batch:
 
 | B.1 item | Root issue | Action in this batch | Next gate |
 |---|---|---|---|
 | Product copy / UX writing | Some customer/admin strings narrated implementation, repeated page titles, or described obvious state. | Rewrite/remove B.1 copy only; strengthen copy gate; record non-B.1 copy as later backlog. | Manual copy review on auth, portal, support/contact, settings, downloads, and admin B.1 surfaces. |
 | Skeleton visual fidelity | Some skeletons used generic subtitles/cards not present in final page layout. | Keep page-specific skeletons and remove skeleton-only subtitle/card placeholders. | Manual visual review after production Pages deployment. |
+
+### Phase B.1 fix batch findings
+
+| Finding | Decision |
+|---|---|
+| `/account/signin` is owned by the production new-ui auth route, not legacy static HTML. | Fix the active production component only; no backend or Worker change. |
+| The rejected Arabic auth eyebrow was hardcoded in `EmailPasswordProductionPage`. | Remove sign-in eyebrow entirely; do not replace it with another trust/security claim. |
+| The previous copy gate missed Arabic hardcoded customer-facing strings. | Gate must scan runtime new-ui source plus generated dist and include Arabic/English fixtures. |
+| Account skeleton used a separate approximation of the final structure. | Skeletons should reuse shared layout/card primitives and swap content for skeleton values. |
+
+Current B.1 status after implementation: `IMPLEMENTED_PENDING_MANUAL_ACCEPTANCE`.
 
 Future observations found while reviewing B.1 should be logged by phase instead of patched immediately:
 

@@ -7,6 +7,8 @@ const workspaceShell = readFileSync(join(root, 'src/new-ui/layouts/WorkspaceShel
 const sharedChrome = readFileSync(join(root, 'src/new-ui/layouts/SharedChrome.tsx'), 'utf8')
 const portalCss = readFileSync(join(root, 'src/new-ui/foundation/portal.css'), 'utf8')
 const messages = readFileSync(join(root, 'src/new-ui/i18n/messages.ts'), 'utf8')
+const dataDisplay = readFileSync(join(root, 'src/new-ui/components/ui/DataDisplay.tsx'), 'utf8')
+const productCards = readFileSync(join(root, 'src/new-ui/components/ui/ProductCards.tsx'), 'utf8')
 const adapters = readFileSync(join(root, 'src/new-ui/adapters/productionAdapters.ts'), 'utf8')
 const authWorker = readFileSync(join(root, '../workers/auth/src/index.ts'), 'utf8')
 
@@ -29,7 +31,11 @@ const checks = [
   },
   {
     name: 'page skeletons avoid filler subtitles unless the final page has one',
-    pass: productionPage.includes('function PageHeaderSkeleton({ actions = false, description = false }') && productionPage.includes('function SectionHeaderSkeleton({ action = false, description = false }') && !productionPage.includes('function PortalSubscriptionSkeleton() {\n  return <><PageHeaderSkeleton /><SubscriptionSummarySkeleton /><Card>'),
+    pass: productionPage.includes('function PageHeaderSkeleton({ actions = false, description = false }') && productionPage.includes('function SectionHeaderSkeleton({ action = false, description = false }') && productionPage.includes('<PageHeader title={<Skeleton') && productionPage.includes('<SectionHeader title={<Skeleton') && productionPage.includes('<SubscriptionCard title={<Skeleton') && productionPage.includes('<DownloadCard title={<Skeleton') && dataDisplay.includes('title: ReactNode') && productCards.includes('details: { label: ReactNode; value: ReactNode }[]') && !productionPage.includes('function PortalSubscriptionSkeleton() {\n  return <><PageHeaderSkeleton /><SubscriptionSummarySkeleton /><Card>'),
+  },
+  {
+    name: 'sign-in page has no filler trust eyebrow',
+    pass: !productionPage.includes('Secure account access') && !productionPage.includes('دخول آمن للحساب') && !productionPage.includes('Secure sign in') && !productionPage.includes('تسجيل دخول آمن') && productionPage.includes("signup ? <span>{copyByLocale(locale, 'Create your workspace access'"),
   },
   {
     name: 'public contact page routes support to authenticated support center',

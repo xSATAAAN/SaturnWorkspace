@@ -13,16 +13,16 @@ export function PricingCard({ name, description, price, originalPrice, period, f
   return <Card className={`pricing-card${featured ? ' is-featured' : ''}`}><div className="pricing-card__head"><h3>{name}</h3>{featured && featuredLabel ? <Badge tone="info">{featuredLabel}</Badge> : null}</div><p>{description}</p>{trialLabel ? <div className="pricing-card__trial"><Sparkles size={15} /><strong>{trialLabel}</strong></div> : <div className="pricing-card__trial-placeholder" aria-hidden="true" />}<div className="pricing-card__price">{originalPrice ? <del>{originalPrice}</del> : null}<strong>{price}</strong>{period ? <span>{period}</span> : null}</div><ul>{features.map((feature) => <li key={feature}><Check size={15} />{feature}</li>)}</ul><Button variant={featured ? 'primary' : 'secondary'} fullWidth disabled={disabled} onClick={onClick}>{cta}</Button></Card>
 }
 
-export function DownloadCard({ title, version, meta, buttonLabel, disabled, onClick }: { title: string; version: string; meta: string[]; buttonLabel: string; disabled?: boolean; onClick?: () => void }) {
-  return <Card className="download-card"><div><span className="download-card__mark"><Download size={21} /></span><h3>{title}</h3><strong>{version}</strong><div className="cluster muted">{meta.map((item) => <span key={item}>{item}</span>)}</div></div><Button variant="primary" leadingIcon={<Download size={16} />} disabled={disabled} onClick={onClick}>{buttonLabel}</Button></Card>
+export function DownloadCard({ title, version, meta, buttonLabel, disabled, onClick }: { title: ReactNode; version: ReactNode; meta: ReactNode[]; buttonLabel: ReactNode; disabled?: boolean; onClick?: () => void }) {
+  return <Card className="download-card"><div><span className="download-card__mark"><Download size={21} /></span><h3>{title}</h3><strong>{version}</strong><div className="cluster muted">{meta.map((item, index) => <span key={index}>{item}</span>)}</div></div><Button variant="primary" leadingIcon={<Download size={16} />} disabled={disabled} onClick={onClick}>{buttonLabel}</Button></Card>
 }
 
 export function ReleaseCard({ version, channel, status, date, notesLabel }: { version: string; channel: string; status: string; date: string; notesLabel: string }) {
   return <article className="release-row"><div><strong>{version}</strong><div className="cluster"><Badge>{channel}</Badge><Badge tone="success">{status}</Badge></div></div><span className="muted">{date}</span><Button variant="text" trailingIcon={<ExternalLink size={14} />}>{notesLabel}</Button></article>
 }
 
-export function SubscriptionCard({ title, status, details, action, tone = 'success', badgeLabel }: { title: string; status: string; details: { label: string; value: string }[]; action?: ReactNode; tone?: Tone; badgeLabel?: string }) {
-  return <Card className="subscription-card"><header className="split"><div><span className="muted">{title}</span><h3>{status}</h3></div><Badge tone={tone}>{badgeLabel || status}</Badge></header>{details.length ? <dl>{details.map((detail) => <div key={detail.label}><dt>{detail.label}</dt><dd>{detail.value}</dd></div>)}</dl> : null}{action}</Card>
+export function SubscriptionCard({ title, status, details, action, tone = 'success', badgeLabel }: { title: ReactNode; status: ReactNode; details: { label: ReactNode; value: ReactNode }[]; action?: ReactNode; tone?: Tone; badgeLabel?: ReactNode }) {
+  return <Card className="subscription-card"><header className="split"><div><span className="muted">{title}</span><h3>{status}</h3></div><Badge tone={tone}>{badgeLabel || status}</Badge></header>{details.length ? <dl>{details.map((detail, index) => <div key={index}><dt>{detail.label}</dt><dd>{detail.value}</dd></div>)}</dl> : null}{action}</Card>
 }
 
 export function SupportTicketCard({ subject, status, updated, onOpen }: { subject: string; status: string; updated: string; onOpen?: () => void }) {

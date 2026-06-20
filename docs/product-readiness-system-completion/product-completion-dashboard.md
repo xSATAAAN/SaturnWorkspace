@@ -8,6 +8,8 @@ This dashboard supplements `feature-completeness-matrix.md`. It does not replace
 
 Phase B.1 remains the active stop point. Phase B.2, OTP, Emergency Subscription Grant, Phase C, and desktop work are not started.
 
+Latest manual result: `PHASE_B1_NEEDS_FIXES`. The previous B.1 report overstated readiness because the live sign-in route still rendered an auth eyebrow from the active production component and the skeleton geometry still differed from the loaded account overview.
+
 | B.1 criterion | Manual result | Current implementation response |
 |---|---|---|
 | Subscription state consistency | Accepted | Kept unchanged. |
@@ -18,6 +20,16 @@ Phase B.1 remains the active stop point. Phase B.2, OTP, Emergency Subscription 
 | Basic async loading model | Accepted | Kept unchanged; normal loading no longer shows retry in admin guard. |
 | Product copy / UX writing | Failed B.1 acceptance | Reworked Phase B.1 customer/admin-facing strings to remove redundant subtitles, implementation-facing copy, and state narration. |
 | Skeleton visual fidelity | Failed B.1 acceptance | Adjusted skeleton header/section placeholders to avoid skeleton-only subtitles and keep page-specific structures closer to final layouts. |
+
+## Phase B.1 Fix Batch - 2026-06-21
+
+Status: `IMPLEMENTED_PENDING_MANUAL_ACCEPTANCE`.
+
+| Failed criterion | Root cause found | Fix in this batch | Acceptance state |
+|---|---|---|---|
+| Sign-in copy | Active route `/account/signin` renders `EmailPasswordProductionPage` from `site/src/new-ui/pages/production/ProductionPages.tsx`; the rejected eyebrow was hardcoded there and not covered by the previous gate. | Removed the sign-in eyebrow instead of replacing it with another trust claim. Strengthened copy gate for Arabic and English auth trust claims in source and generated dist. | Pending manual check on live `/account/signin`. |
+| Copy gate false confidence | The gate checked selected English/internal phrases and missed the Arabic hardcoded auth surface. | Expanded gate coverage across runtime new-ui pages/components/layouts/app/content/i18n and added explicit Arabic/English rejected phrase fixtures. | Pending manual check after deploy. |
+| Skeleton geometry mismatch | Skeleton headers/cards used separate placeholder DOM instead of the final page primitives. | Skeleton headers now use the shared `PageHeader`/`SectionHeader`; subscription/download skeletons now use the same card components as loaded content with skeleton values inside. | Pending manual desktop/mobile review. |
 
 ## Phase B.1 Current Batch Status - 2026-06-21
 

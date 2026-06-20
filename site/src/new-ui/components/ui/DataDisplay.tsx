@@ -12,11 +12,11 @@ export function StatCard({ label, value, detail, icon }: { label: ReactNode; val
   return <Card padding="sm" className="ui-stat"><div className="ui-stat__top"><span>{label}</span>{icon}</div><strong>{value}</strong>{detail ? <small>{detail}</small> : null}</Card>
 }
 
-export function PageHeader({ title, description, actions, breadcrumbs }: { title: string; description?: string; actions?: ReactNode; breadcrumbs?: ReactNode }) {
+export function PageHeader({ title, description, actions, breadcrumbs }: { title: ReactNode; description?: ReactNode; actions?: ReactNode; breadcrumbs?: ReactNode }) {
   return <header className="ui-page-header">{breadcrumbs}<div className="split"><div><h1>{title}</h1>{description ? <p>{description}</p> : null}</div>{actions ? <div className="cluster">{actions}</div> : null}</div></header>
 }
 
-export function SectionHeader({ title, description, action }: { title: string; description?: string; action?: ReactNode }) {
+export function SectionHeader({ title, description, action }: { title: ReactNode; description?: ReactNode; action?: ReactNode }) {
   return <header className="ui-section-header"><div><h2>{title}</h2>{description ? <p>{description}</p> : null}</div>{action}</header>
 }
 

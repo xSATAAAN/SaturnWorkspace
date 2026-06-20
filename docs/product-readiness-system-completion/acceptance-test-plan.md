@@ -6,9 +6,13 @@ This is the required regression plan before declaring product readiness.
 
 Run this checklist before allowing Phase B.2, OTP, Emergency Subscription Grant, Phase C, or any desktop work.
 
+Current status: `IMPLEMENTED_PENDING_MANUAL_ACCEPTANCE` after the `PHASE_B1_NEEDS_FIXES` follow-up. The next manual pass must verify the live route/component/bundle, not only local build output.
+
 ### Product Copy / UX Writing
 
 1. Sign in page does not describe obvious login state and does not repeat the title in the subtitle.
+   - `/account/signin` must not show `دخول آمن للحساب`, `تسجيل دخول آمن`, `Secure sign in`, `Secure account access`, or a replacement trust-claim eyebrow.
+   - The sign-in card may use only task copy: title, fields, forgot password, submit, Google, and create-account navigation.
 2. Sign up page explains only the next useful action and does not describe internal subscription provisioning.
 3. Auth loading states do not show retry buttons during normal initialization.
 4. Auth errors are understandable and do not expose raw provider/backend codes.
@@ -24,6 +28,8 @@ Run this checklist before allowing Phase B.2, OTP, Emergency Subscription Grant,
 ### Skeleton Visual Fidelity
 
 1. Account overview skeleton keeps the same shell, grid, card count, column split, and action positions as the loaded page.
+   - Header skeleton must use the same `PageHeader` wrapper as the loaded page.
+   - No subtitle skeleton should be present when the loaded page has no subtitle.
 2. Subscription skeleton keeps the same subscription summary structure as the loaded page and does not include extra cards.
 3. Downloads skeleton keeps the same download-card height, icon, content, and button position as the loaded page.
 4. Support skeleton keeps the same two-column form/table structure as the loaded page.
@@ -40,6 +46,12 @@ Run this checklist before allowing Phase B.2, OTP, Emergency Subscription Grant,
 2. `npm run test:phase-b`
 3. `npm run build`
 4. Browser/live verification after Pages deploy, because local preview requires production Firebase environment variables.
+5. Literal search of live bundle for rejected sign-in phrases.
+6. Screenshots for:
+   - Sign-in Arabic desktop.
+   - Sign-in English desktop.
+   - Sign-in Arabic mobile.
+   - Account overview skeleton fixture or live controlled loading state if available.
 
 ## Phase B: Critical Authentication
 
