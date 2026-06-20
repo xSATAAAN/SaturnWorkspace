@@ -389,7 +389,7 @@ export function AuthPage({ lang, initialMode }: AuthPageProps) {
     setError('')
     setInfo('')
     try {
-      const idToken = await nextUser.getIdToken(true)
+      const idToken = await nextUser.getIdToken(false)
       const response = await fetch(`${AUTH_BASE}/device/complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

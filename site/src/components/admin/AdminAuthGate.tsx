@@ -117,7 +117,7 @@ export function AdminAuthGate({ lang, children }: AdminAuthGateProps) {
   useEffect(() => {
     if (!user) return
     const timer = window.setInterval(() => {
-      void user.getIdToken(true).then((token) => {
+      void user.getIdToken(false).then((token) => {
         setAdminBearerToken(token)
       })
     }, TOKEN_REFRESH_MS)

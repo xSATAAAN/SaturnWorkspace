@@ -383,7 +383,7 @@ export function AccountPage({ lang }: AccountPageProps) {
     setLoading(true)
     setError('')
     try {
-      const token = await nextUser.getIdToken(true)
+      const token = await nextUser.getIdToken(false)
       const payload = await fetchAccountSubscription(token)
       setAccount(payload)
     } catch (err) {
