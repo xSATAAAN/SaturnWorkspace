@@ -100,6 +100,27 @@ No launcher, updater, installer, OTA, or unrelated desktop behavior was modified
 - `https://api.saturnws.com/health`: returned success.
 - Anonymous support request to `/v1/web/support/threads`: rejected with 401, as expected.
 
+## Production Deployment Verification
+
+- Git commit pushed to GitHub: `c63ceef`.
+- Policy Worker deployed successfully.
+- Policy Worker version: `7d1c3577-3aaa-4119-8836-7507bde21b45`.
+- Cron remained registered: `*/5 * * * *`.
+- `https://api.saturnws.com/health`: returned `{"success":true,"service":"saturnws-policy","status":"ok"}`.
+- `OPTIONS https://api.saturnws.com/v1/web/support/threads` from `https://saturnws.com` returned 204 and allowed `authorization,content-type`.
+- `POST /v1/web/support/threads` without a session returned 401.
+- `POST /v1/web/support/threads` with an invalid Bearer token returned 401.
+- `https://saturnws.com/activate?device_code=...&code=...`: returned 200.
+- `https://saturnws.com/account/support`: returned 200.
+- `https://admin.saturnws.com/support`: returned 200.
+- Live site bundle contains the restored desktop linking flow (`/device/complete`).
+
+## Additional Local Checks
+
+- `node scripts/check-round3b-production-integration.mjs`: passed, with known missing optional migration files in this checkout reported as skipped by the script.
+- `node tools/publish-static-pages.mjs` then `node site/scripts/check-frontend-cutover.mjs`: passed with 27 SPA fallbacks.
+- Auth Worker TypeScript check was run after installing local dependencies in the GitHub checkout: passed.
+
 ## Not Tested Without User Login
 
 The following require an authenticated Firebase user session and were not bypassed:
@@ -121,4 +142,3 @@ The following require an authenticated Firebase user session and were not bypass
 - Revert the Worker change in:
   - `workers/policy/src/index.ts`
 - Redeploy `saturnws-policy` and the site from the previous commit if production regression appears.
-
