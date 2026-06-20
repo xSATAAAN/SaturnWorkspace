@@ -52,7 +52,8 @@ import { firebaseAuth } from '../../lib/firebase'
 import { publicCopy } from '../content/publicCopy'
 import { getJson } from './apiClient'
 import { isProductionFeatureEnabled, productionFeatureFlags } from './productionFeatureFlags'
-import type { AppAdapters, AppUser, AuthState, PlanInfo, ReleaseInfo, SignUpWithEmailInput } from './contracts'
+import type { AccountSubscription } from '../../api/account'
+import type { AppAdapters, AppUser, AuthState, PlanInfo, ReleaseInfo, SignUpWithEmailInput, SupportSenderRole } from './contracts'
 
 function userFromFirebase(user: typeof firebaseAuth.currentUser): AppUser {
   if (!user?.email) throw new Error('auth_user_missing_email')
@@ -76,6 +77,62 @@ function mapFirebaseAuthError(error: unknown): Error {
   return error instanceof Error ? error : new Error('REQUEST_FAILED')
 }
 
+function supportSenderRole(sender: string | null | undefined): SupportSenderRole {
+  const normalized = String(sender || '').trim().toLowerCase()
+  if (normalized === 'admin' || normalized === 'support' || normalized === 'support_agent' || normalized === 'agent') return 'support_agent'
+  if (normalized === 'internal' || normalized === 'internal_note') return 'internal_note'
+  if (normalized === 'system') return 'system'
+  return 'customer'
+}
+
+type AccountBootstrap = {
+  uid: string
+  user: AppUser
+  account: AccountSubscription
+  fetchedAt: number
+}
+
+let accountBootstrapCache: AccountBootstrap | null = null
+let accountBootstrapInflight: Promise<AccountBootstrap> | null = null
+
+function clearAccountBootstrap() {
+  accountBootstrapCache = null
+  accountBootstrapInflight = null
+}
+
+function currentPerformanceNow() {
+  return typeof performance !== 'undefined' ? performance.now() : Date.now()
+}
+
+async function loadAccountBootstrap(forceRefresh = false): Promise<AccountBootstrap> {
+  const user = firebaseAuth.currentUser
+  if (!user?.email) throw new Error('not_authenticated')
+  const uid = user.uid
+  if (!forceRefresh && accountBootstrapCache?.uid === uid) return accountBootstrapCache
+  if (!forceRefresh && accountBootstrapInflight) return accountBootstrapInflight
+  const startedAt = currentPerformanceNow()
+  accountBootstrapInflight = user.getIdToken(false)
+    .then((token) => fetchAccountSubscription(token))
+    .then((account) => {
+      const profile = account.user?.profile || null
+      const bootstrapped: AccountBootstrap = {
+        uid,
+        account,
+        user: { ...userFromFirebase(user), profile, emailVerified: Boolean(profile?.email_verified) },
+        fetchedAt: Date.now(),
+      }
+      accountBootstrapCache = bootstrapped
+      if (typeof console !== 'undefined' && typeof console.info === 'function') {
+        console.info('saturnws:account_bootstrap', { duration_ms: Math.round(currentPerformanceNow() - startedAt), source: 'network' })
+      }
+      return bootstrapped
+    })
+    .finally(() => {
+      accountBootstrapInflight = null
+    })
+  return accountBootstrapInflight
+}
+
 async function provisionCurrentFirebaseUser(input: {
   displayName?: string
   locale?: 'ar' | 'en'
@@ -87,7 +144,7 @@ async function provisionCurrentFirebaseUser(input: {
   if (input.displayName !== undefined && input.displayName.trim() !== (user.displayName || '')) {
     await updateProfile(user, { displayName: input.displayName.trim() || null })
   }
-  const token = await user.getIdToken(true)
+  const token = await user.getIdToken(false)
   const provisioned = await provisionAccountProfile(token, {
     displayName: input.displayName ?? user.displayName ?? undefined,
     locale: input.locale,
@@ -96,6 +153,7 @@ async function provisionCurrentFirebaseUser(input: {
     termsAcceptedAt: input.termsAccepted ? new Date().toISOString() : undefined,
   })
   if (!provisioned.success || !provisioned.profile) throw new Error(provisioned.error || 'PROFILE_PROVISIONING_FAILED')
+  clearAccountBootstrap()
   return { ...userFromFirebase(user), profile: provisioned.profile, emailVerified: Boolean(provisioned.profile.email_verified) }
 }
 
@@ -129,6 +187,7 @@ function ensureAuthListener() {
         sessionState: 'expired',
         error: null,
       })
+      clearAccountBootstrap()
       return
     }
     const baseUser = userFromFirebase(user)
@@ -141,13 +200,12 @@ function ensureAuthListener() {
       sessionState: 'refresh_required',
       error: null,
     })
-    user.getIdToken(true)
-      .then((token) => fetchAccountSubscription(token))
+    loadAccountBootstrap(false)
       .then((account) => {
-        const profile = account.user?.profile || null
+        const profile = account.user.profile || null
         publishAuthState({
           ready: true,
-          user: { ...baseUser, profile, emailVerified: Boolean(profile?.email_verified) },
+          user: account.user,
           status: 'authenticated',
           profileState: profile?.account_status === 'suspended' ? 'disabled' : profile ? 'ready' : 'missing',
           emailVerificationState: profile?.email_verified ? 'verified' : 'unverified',
@@ -280,13 +338,13 @@ export const productionAdapters: AppAdapters = {
       await sendPasswordResetEmail(firebaseAuth, email.trim())
     },
     async requestEmailVerification(email) {
-      const token = await productionAdapters.auth.getIdToken(true)
+      const token = await productionAdapters.auth.getIdToken(false)
       if (!token) return { success: false, error: 'not_authenticated' }
       const result = await requestEmailVerificationCode(token, email)
       return { success: result.success, status: result.status, expiresAt: result.expires_at, error: result.error, testCode: result.test_code }
     },
     async verifyEmailCode(email, code) {
-      const token = await productionAdapters.auth.getIdToken(true)
+      const token = await productionAdapters.auth.getIdToken(false)
       if (!token) return { success: false, error: 'not_authenticated' }
       const result = await verifyEmailVerificationCode(token, email, code)
       return { success: result.success, status: result.status, verifiedAt: result.verified_at, error: result.error }
@@ -294,6 +352,7 @@ export const productionAdapters: AppAdapters = {
     async signOut() {
       publishAuthState({ ...currentAuthState, status: 'signing_out' })
       setAdminBearerToken(null)
+      clearAccountBootstrap()
       await signOut(firebaseAuth)
     },
     async getIdToken(forceRefresh = false) {
@@ -302,19 +361,16 @@ export const productionAdapters: AppAdapters = {
   },
   account: {
     async getSubscription() {
-      const token = await productionAdapters.auth.getIdToken(true)
-      if (!token) return { success: false, error: 'not_authenticated' }
-      return fetchAccountSubscription(token)
+      return loadAccountBootstrap(false).then((bootstrap) => bootstrap.account)
     },
     async getSubscriptionProjection() {
-      const token = await productionAdapters.auth.getIdToken(true)
-      if (!token) return null
-      const result = await fetchAccountSubscription(token)
+      const result = await loadAccountBootstrap(false).then((bootstrap) => bootstrap.account)
       return result.subscription_projection || null
     },
     async updateProfile(input) {
       if (!firebaseAuth.currentUser) throw new Error('not_authenticated')
       await updateProfile(firebaseAuth.currentUser, { displayName: input.displayName.trim() || null })
+      clearAccountBootstrap()
       return userFromFirebase(firebaseAuth.currentUser)
     },
     async sendPasswordReset() {
@@ -363,13 +419,13 @@ export const productionAdapters: AppAdapters = {
       return isProductionFeatureEnabled('customerSupport')
     },
     async createTicket(input) {
-      const token = await productionAdapters.auth.getIdToken(true)
+      const token = await productionAdapters.auth.getIdToken(false)
       if (!token) return { success: false, error: 'not_authenticated' }
       const result = await createWebSupportTicket(token, input)
       return { success: result.success, threadId: result.thread_id, error: result.error }
     },
     async listThreads() {
-      const token = await productionAdapters.auth.getIdToken(true)
+      const token = await productionAdapters.auth.getIdToken(false)
       if (!token) throw new Error('not_authenticated')
       const data = await fetchWebSupportThreads(token)
       return (data.threads || []).map((thread) => ({
@@ -383,7 +439,7 @@ export const productionAdapters: AppAdapters = {
       }))
     },
     async getThread(threadId) {
-      const token = await productionAdapters.auth.getIdToken(true)
+      const token = await productionAdapters.auth.getIdToken(false)
       if (!token) throw new Error('not_authenticated')
       const data = await fetchWebSupportThread(token, threadId)
       return {
@@ -401,18 +457,19 @@ export const productionAdapters: AppAdapters = {
         messages: (data.messages || []).map((message) => ({
           id: message.id,
           sender: message.sender,
+          senderRole: supportSenderRole(message.sender),
           body: message.body,
           createdAt: message.created_at,
         })),
       }
     },
     async replyThread(threadId, body) {
-      const token = await productionAdapters.auth.getIdToken(true)
+      const token = await productionAdapters.auth.getIdToken(false)
       if (!token) return { success: false, error: 'not_authenticated' }
       return replyWebSupportThread(token, threadId, body)
     },
     async setThreadStatus(threadId, status) {
-      const token = await productionAdapters.auth.getIdToken(true)
+      const token = await productionAdapters.auth.getIdToken(false)
       if (!token) return { success: false, error: 'not_authenticated' }
       return updateWebSupportStatus(token, threadId, status)
     },
@@ -428,7 +485,7 @@ export const productionAdapters: AppAdapters = {
     },
     async signInWithGoogle() {
       const user = await productionAdapters.auth.signInWithGoogle()
-      const token = await productionAdapters.auth.getIdToken(true)
+      const token = await productionAdapters.auth.getIdToken(false)
       setAdminBearerToken(token)
       return user
     },

@@ -7,22 +7,34 @@ export type AccountSubscription = {
     email: string
     profile?: AccountProfileProjection | null
   }
-  subscription?: {
-    status: string
-    tier?: string
-    subscription_id?: string
-    user_email?: string
-    plan?: string
-    expires_at?: string
-    runtime_payload?: Record<string, unknown>
-    lifecycle?: string | null
-    entitlement?: string | null
-    plan_term?: string | null
-    renewal_state?: string | null
-  } | null
+  current_subscription?: AccountSubscriptionRuntime | null
+  subscription?: AccountSubscriptionRuntime | null
+  entitlement?: SubscriptionProjection['entitlement']
+  subscription_history_summary?: {
+    total: number
+    current_usable_count: number
+    historical_expired_count: number
+    latest_expired_at: string | null
+    legacy_email_candidates: number
+    uid_mismatch_candidates: number
+  }
   subscription_projection?: SubscriptionProjection
   status?: string
   error?: string
+}
+
+export type AccountSubscriptionRuntime = {
+  status: string
+  tier?: string
+  subscription_id?: string
+  user_email?: string
+  plan?: string
+  expires_at?: string | null
+  runtime_payload?: Record<string, unknown>
+  lifecycle?: string | null
+  entitlement?: string | null
+  plan_term?: string | null
+  renewal_state?: string | null
 }
 
 export type AccountProfileProjection = {

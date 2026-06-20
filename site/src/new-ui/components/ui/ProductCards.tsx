@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Check, Download, ExternalLink, MessageCircle, Sparkles } from 'lucide-react'
 import { Button } from './Button'
-import { Badge } from './Feedback'
+import { Badge, type Tone } from './Feedback'
 import { Card } from './DataDisplay'
 import { useExperience } from '../../app/ExperienceProvider'
 
@@ -21,8 +21,8 @@ export function ReleaseCard({ version, channel, status, date, notesLabel }: { ve
   return <article className="release-row"><div><strong>{version}</strong><div className="cluster"><Badge>{channel}</Badge><Badge tone="success">{status}</Badge></div></div><span className="muted">{date}</span><Button variant="text" trailingIcon={<ExternalLink size={14} />}>{notesLabel}</Button></article>
 }
 
-export function SubscriptionCard({ title, status, details, action }: { title: string; status: string; details: { label: string; value: string }[]; action?: ReactNode }) {
-  return <Card className="subscription-card"><header className="split"><div><span className="muted">{title}</span><h3>{status}</h3></div><Badge tone="success">{status}</Badge></header><dl>{details.map((detail) => <div key={detail.label}><dt>{detail.label}</dt><dd>{detail.value}</dd></div>)}</dl>{action}</Card>
+export function SubscriptionCard({ title, status, details, action, tone = 'success', badgeLabel }: { title: string; status: string; details: { label: string; value: string }[]; action?: ReactNode; tone?: Tone; badgeLabel?: string }) {
+  return <Card className="subscription-card"><header className="split"><div><span className="muted">{title}</span><h3>{status}</h3></div><Badge tone={tone}>{badgeLabel || status}</Badge></header>{details.length ? <dl>{details.map((detail) => <div key={detail.label}><dt>{detail.label}</dt><dd>{detail.value}</dd></div>)}</dl> : null}{action}</Card>
 }
 
 export function SupportTicketCard({ subject, status, updated, onOpen }: { subject: string; status: string; updated: string; onOpen?: () => void }) {

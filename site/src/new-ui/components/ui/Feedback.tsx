@@ -40,6 +40,18 @@ export function Skeleton({ width = '100%', height = 14 }: { width?: string; heig
   return <span className="ui-skeleton" style={{ width, height }} aria-hidden="true" />
 }
 
+export function SkeletonStack({ rows = 3 }: { rows?: number }) {
+  return <div className="ui-skeleton-stack" aria-hidden="true">{Array.from({ length: rows }).map((_, index) => <Skeleton key={index} width={index === rows - 1 ? '46%' : index % 2 ? '72%' : '100%'} height={index === 0 ? 18 : 14} />)}</div>
+}
+
+export function CardSkeleton({ rows = 4 }: { rows?: number }) {
+  return <div className="ui-card-skeleton" aria-hidden="true"><Skeleton width="34%" height={12} /><Skeleton width="58%" height={24} /><SkeletonStack rows={rows} /></div>
+}
+
+export function PageSkeleton({ withHeader = true, cards = 3 }: { withHeader?: boolean; cards?: number }) {
+  return <div className="ui-page-skeleton" aria-busy="true">{withHeader ? <div className="ui-page-skeleton__header"><Skeleton width="28%" height={30} /><Skeleton width="52%" height={15} /></div> : null}<div className="ui-page-skeleton__grid">{Array.from({ length: cards }).map((_, index) => <CardSkeleton key={index} rows={index === 0 ? 4 : 3} />)}</div></div>
+}
+
 export function FullPageState({ icon: Icon = AlertCircle, title, body, primaryLabel, onPrimary, secondaryLabel, onSecondary }: { icon?: LucideIcon; title: string; body: string; primaryLabel: string; onPrimary: () => void; secondaryLabel?: string; onSecondary?: () => void }) {
   return (
     <main className="ui-full-state page-enter">

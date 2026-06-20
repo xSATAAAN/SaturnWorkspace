@@ -600,8 +600,8 @@ export function AccountPage({ lang }: AccountPageProps) {
                   <FieldRow label={t.currentPlan} value={subscription?.plan || '--'} />
                   <FieldRow label={t.subscriptionStatus} value={subscriptionState.label} />
                   <FieldRow label={t.tier} value={String(subscription?.tier || 'public')} />
-                  <FieldRow label={t.expiresAt} value={formatDate(subscription?.expires_at, locale)} />
-                  <FieldRow label={t.daysRemaining} value={formatDaysRemaining(subscription?.expires_at)} />
+                  <FieldRow label={t.expiresAt} value={formatDate(subscription?.expires_at || undefined, locale)} />
+                  <FieldRow label={t.daysRemaining} value={formatDaysRemaining(subscription?.expires_at || undefined)} />
                 </div>
                 <div className="rounded-2xl border border-sky-400/14 bg-sky-400/8 px-4 py-3 text-sm leading-7 text-sky-100/88">
                   {t.subscriptionManaged}

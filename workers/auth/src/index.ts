@@ -9,10 +9,10 @@ import {
   getActiveSubscriptionForUser,
   getAppSessionByHash,
   getDeviceLoginByCode,
-  getLatestSubscriptionForUser,
   getLatestEmailVerification,
   getPendingDeviceLoginByUserCode,
   getSubscriptionById,
+  getSubscriptionRowsForUser,
   insertEmailVerificationAudit,
   markAccountProfileEmailVerified,
   revokeAppSession,
@@ -190,8 +190,12 @@ async function proxyFirebaseAuthHelper(request: Request, env: Env): Promise<Resp
 
 function isActiveUsableSubscription(row: any): string {
   if (!row) return "subscription_not_found"
-  if (String(row.status || "").toLowerCase() !== "active") return "subscription_inactive"
-  if (isIsoExpired(row.expires_at || null)) return "subscription_expired"
+  const status = String(row.status || "").trim().toLowerCase()
+  const expiresAt = Date.parse(String(row.expires_at || ""))
+  const lifetime = Number.isFinite(expiresAt) && expiresAt >= Date.parse("9999-01-01T00:00:00Z")
+  if (status === "suspended") return "subscription_inactive"
+  if ((status === "expired" || isIsoExpired(row.expires_at || null)) && !lifetime) return "subscription_expired"
+  if (!["active", "trialing", "trial", "past_due", "cancelled", "canceled"].includes(status)) return "subscription_inactive"
   return ""
 }
 
@@ -305,11 +309,12 @@ async function provisionProfile(
 function subscriptionLifecycle(row: SubscriptionRow | null): "trialing" | "active" | "past_due" | "cancelled" | "expired" | "suspended" | null {
   if (!row) return null
   const status = String(row.status || "").trim().toLowerCase()
+  const term = planTerm(row)
   if (status === "suspended") return "suspended"
   if (status === "past_due") return "past_due"
   if (status === "trialing" || status === "trial") return "trialing"
   if (status === "canceled" || status === "cancelled") return "cancelled"
-  if (status === "expired" || isIsoExpired(row.expires_at || null)) return "expired"
+  if ((status === "expired" || isIsoExpired(row.expires_at || null)) && term !== "lifetime") return "expired"
   if (status === "active") return "active"
   return "expired"
 }
@@ -341,7 +346,7 @@ function entitlementResult(row: SubscriptionRow | null): "no_subscription" | "en
   if (!row || !lifecycle) return "no_subscription"
   if (lifecycle === "suspended") return "suspended"
   if (lifecycle === "past_due") return "payment_required"
-  if (lifecycle === "expired" || lifecycle === "cancelled") return "expired"
+  if (lifecycle === "expired") return "expired"
   return "entitled"
 }
 
@@ -357,6 +362,56 @@ function subscriptionProjection(row: SubscriptionRow | null) {
     tier: row?.tier || null,
     expires_at: row?.expires_at || null,
     source: "supabase_account_subscriptions",
+  }
+}
+
+function subscriptionBelongsToFirebaseUser(row: SubscriptionRow, userId: string, email: string): boolean {
+  const rowUserId = String(row.firebase_user_id || "").trim()
+  if (rowUserId) return rowUserId === String(userId || "").trim()
+  return Boolean(email) && String(row.user_email || "").trim().toLowerCase() === String(email || "").trim().toLowerCase()
+}
+
+function isCurrentSubscriptionCandidate(row: SubscriptionRow): boolean {
+  const lifecycle = subscriptionLifecycle(row)
+  if (!lifecycle || lifecycle === "expired" || lifecycle === "suspended") return false
+  return ["active", "trialing", "past_due", "cancelled"].includes(lifecycle)
+}
+
+function currentSubscriptionScore(row: SubscriptionRow, userId: string): string {
+  const exactUser = String(row.firebase_user_id || "").trim() === String(userId || "").trim() ? "1" : "0"
+  const lifecycle = subscriptionLifecycle(row)
+  const lifecycleScore = lifecycle === "active" ? "5" : lifecycle === "trialing" ? "4" : lifecycle === "past_due" ? "3" : lifecycle === "cancelled" ? "2" : "0"
+  const lifetime = planTerm(row) === "lifetime" ? "1" : "0"
+  return [exactUser, lifecycleScore, lifetime, String(row.expires_at || ""), String(row.updated_at || ""), String(row.created_at || "")].join("|")
+}
+
+function selectCurrentSubscription(rows: SubscriptionRow[], userId: string, email: string): SubscriptionRow | null {
+  const owned = rows.filter((row) => subscriptionBelongsToFirebaseUser(row, userId, email))
+  const current = owned.filter(isCurrentSubscriptionCandidate)
+  if (current.length > 1) {
+    console.warn(JSON.stringify({ event: "subscription_integrity_multiple_current", user_id: userId, count: current.length }))
+  }
+  return current.sort((left, right) => currentSubscriptionScore(right, userId).localeCompare(currentSubscriptionScore(left, userId)))[0] || null
+}
+
+function subscriptionHistorySummary(rows: SubscriptionRow[], current: SubscriptionRow | null, userId: string, email: string) {
+  const owned = rows.filter((row) => subscriptionBelongsToFirebaseUser(row, userId, email))
+  const historicalExpired = owned.filter((row) => subscriptionLifecycle(row) === "expired")
+  const latestExpired = historicalExpired
+    .map((row) => String(row.expires_at || row.updated_at || row.created_at || ""))
+    .filter(Boolean)
+    .sort()
+    .reverse()[0] || null
+  return {
+    total: owned.length,
+    current_usable_count: current ? owned.filter(isCurrentSubscriptionCandidate).length : 0,
+    historical_expired_count: historicalExpired.length,
+    latest_expired_at: latestExpired,
+    legacy_email_candidates: owned.filter((row) => !String(row.firebase_user_id || "").trim()).length,
+    uid_mismatch_candidates: rows.filter((row) => {
+      const rowUserId = String(row.firebase_user_id || "").trim()
+      return rowUserId && rowUserId !== String(userId || "").trim() && String(row.user_email || "").trim().toLowerCase() === String(email || "").trim().toLowerCase()
+    }).length,
   }
 }
 
@@ -1117,9 +1172,17 @@ async function handleAccountSubscription(request: Request, env: Env): Promise<Re
   if (!idToken) return json({ success: false, error: "missing_id_token" }, 400)
   const firebaseUser = await verifyFirebaseUser(idToken, env)
   const profile = await provisionProfile(env, firebaseUser).catch(() => null)
-  const subscription = await getLatestSubscriptionForUser(env, firebaseUser.userId, firebaseUser.email)
-  const projection = subscriptionProjection(subscription)
-  const subscriptionError = isActiveUsableSubscription(subscription)
+  const rows = await getSubscriptionRowsForUser(env, firebaseUser.userId, firebaseUser.email)
+  const currentSubscription = selectCurrentSubscription(rows, firebaseUser.userId, firebaseUser.email)
+  const projection = subscriptionProjection(currentSubscription)
+  const historySummary = subscriptionHistorySummary(rows, currentSubscription, firebaseUser.userId, firebaseUser.email)
+  const runtime = currentSubscription ? {
+    ...buildSubscriptionRuntime(currentSubscription, "verified"),
+    lifecycle: projection.lifecycle,
+    entitlement: projection.entitlement,
+    plan_term: projection.plan_term,
+    renewal_state: projection.renewal_state,
+  } : null
   return json({
     success: true,
     user: {
@@ -1130,15 +1193,12 @@ async function handleAccountSubscription(request: Request, env: Env): Promise<Re
       auth_provider: firebaseUser.authProvider || null,
       profile: profile ? profileProjection(profile, firebaseUser) : null,
     },
-    subscription: subscription && !subscriptionError ? {
-      ...buildSubscriptionRuntime(subscription, "verified"),
-      lifecycle: projection.lifecycle,
-      entitlement: projection.entitlement,
-      plan_term: projection.plan_term,
-      renewal_state: projection.renewal_state,
-    } : null,
+    current_subscription: runtime,
+    subscription: runtime,
     subscription_projection: projection,
-    status: projection.entitlement === "entitled" ? "active" : projection.entitlement,
+    entitlement: projection.entitlement,
+    subscription_history_summary: historySummary,
+    status: runtime ? "active" : "no_subscription",
   })
 }
 

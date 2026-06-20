@@ -10,7 +10,20 @@ function isExpiredIso(value: string | null | undefined): boolean {
 }
 
 function isUsableSubscription(row: SubscriptionRow | null | undefined): boolean {
-  return Boolean(row) && String(row?.status || "").trim().toLowerCase() === "active" && !isExpiredIso(row?.expires_at)
+  if (!row) return false
+  const status = String(row.status || "").trim().toLowerCase()
+  const expiresAt = Date.parse(String(row.expires_at || ""))
+  const lifetime = Number.isFinite(expiresAt) && expiresAt >= Date.parse("9999-01-01T00:00:00Z")
+  if (status === "suspended" || status === "expired") return false
+  if (lifetime) return ["active", "trialing", "trial", "past_due", "cancelled", "canceled"].includes(status)
+  if (isExpiredIso(row.expires_at)) return false
+  return ["active", "trialing", "trial", "past_due", "cancelled", "canceled"].includes(status)
+}
+
+function belongsToFirebaseUser(row: SubscriptionRow, userId: string, email: string): boolean {
+  const rowUserId = String(row.firebase_user_id || "").trim()
+  if (rowUserId) return rowUserId === String(userId || "").trim()
+  return Boolean(email) && normalizeEmail(row.user_email) === normalizeEmail(email)
 }
 
 function scoreSubscription(row: SubscriptionRow, userId: string, email: string): string {
@@ -92,10 +105,12 @@ export async function getActiveSubscriptionForUser(env: Env, userId: string, ema
   if (email) filters.push(`user_email.ilike.${encodeURIComponent(email)}`)
   const rows = await supabaseJson<SubscriptionRow[]>(
     env,
-    `/account_subscriptions?or=(${filters.join(",")})&status=eq.active&select=*&order=created_at.desc&limit=20`,
+    `/account_subscriptions?or=(${filters.join(",")})&select=*&order=created_at.desc&limit=50`,
   )
   if (!Array.isArray(rows) || !rows.length) return null
-  return [...rows].sort((left, right) =>
+  const candidates = rows.filter((row) => belongsToFirebaseUser(row, userId, email) && isUsableSubscription(row))
+  if (!candidates.length) return null
+  return [...candidates].sort((left, right) =>
     scoreSubscription(right, userId, email).localeCompare(scoreSubscription(left, userId, email)),
   )[0] || null
 }
@@ -108,9 +123,21 @@ export async function getLatestSubscriptionForUser(env: Env, userId: string, ema
     `/account_subscriptions?or=(${filters.join(",")})&select=*&order=created_at.desc&limit=50`,
   )
   if (!Array.isArray(rows) || !rows.length) return null
-  return [...rows].sort((left, right) =>
+  const candidates = rows.filter((row) => belongsToFirebaseUser(row, userId, email))
+  if (!candidates.length) return null
+  return [...candidates].sort((left, right) =>
     scoreSubscription(right, userId, email).localeCompare(scoreSubscription(left, userId, email)),
   )[0] || null
+}
+
+export async function getSubscriptionRowsForUser(env: Env, userId: string, email: string): Promise<SubscriptionRow[]> {
+  const filters = [`firebase_user_id.eq.${encodeURIComponent(userId)}`]
+  if (email) filters.push(`user_email.ilike.${encodeURIComponent(email)}`)
+  const rows = await supabaseJson<SubscriptionRow[]>(
+    env,
+    `/account_subscriptions?or=(${filters.join(",")})&select=*&order=created_at.desc&limit=100`,
+  )
+  return Array.isArray(rows) ? rows : []
 }
 
 export async function getAccountProfileByFirebaseUid(env: Env, firebaseUid: string): Promise<AccountProfileRow | null> {

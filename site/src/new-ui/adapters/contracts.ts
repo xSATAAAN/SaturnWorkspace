@@ -125,9 +125,12 @@ export type CustomerSupportThread = {
 export type CustomerSupportMessage = {
   id: string
   sender: string
+  senderRole?: SupportSenderRole
   body: string
   createdAt?: string
 }
+
+export type SupportSenderRole = 'customer' | 'support_agent' | 'internal_note' | 'system'
 
 export type AuthAdapter = {
   subscribe(callback: (state: AuthState) => void): () => void
