@@ -103,6 +103,9 @@ No launcher, updater, installer, OTA, or unrelated desktop behavior was modified
 ## Production Deployment Verification
 
 - Git commit pushed to GitHub: `c63ceef`.
+- Additional Git commits pushed to GitHub:
+  - `f493100` documented deployment verification.
+  - `3f8239a` enabled clean admin subdomain routes.
 - Policy Worker deployed successfully.
 - Policy Worker version: `7d1c3577-3aaa-4119-8836-7507bde21b45`.
 - Cron remained registered: `*/5 * * * *`.
@@ -115,6 +118,12 @@ No launcher, updater, installer, OTA, or unrelated desktop behavior was modified
 - `https://admin.saturnws.com/support`: returned 200.
 - Admin subdomain clean paths such as `/support` and `/communications` are routed directly without requiring a duplicated `/admin/...` prefix.
 - Live site bundle contains the restored desktop linking flow (`/device/complete`).
+- Live site bundle also contains support error mapping and admin reply `email_requested` handling.
+- Browser smoke check:
+  - `/activate?device_code=...&code=...` rendered the desktop linking sign-in flow.
+  - `/account/support` rendered the account authentication gate.
+  - `admin.saturnws.com/support` rendered the admin authentication gate.
+  - `admin.saturnws.com/communications` rendered the admin authentication gate.
 
 ## Additional Local Checks
 
