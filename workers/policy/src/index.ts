@@ -48,6 +48,8 @@ interface Env {
   EMAIL_FROM_BILLING?: string
   EMAIL_FROM_ACCOUNT?: string
   APP_PUBLIC_URL?: string
+  AUTH_EMAIL_ENQUEUE_TOKEN?: string
+  EMAIL_SENSITIVE_PAYLOAD_KEY_B64?: string
 }
 
 interface PolicyRequest {
@@ -180,6 +182,9 @@ interface EmailJobRow {
   max_attempts: number
   next_attempt_at: string
   provider_message_id: string | null
+  sensitive_payload_ciphertext?: string | null
+  sensitive_payload_expires_at?: string | null
+  sensitive_payload_purged_at?: string | null
   last_error: string | null
   last_attempt_at: string | null
   sent_at: string | null
@@ -764,6 +769,36 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary)
 }
 
+async function sensitivePayloadKey(env: Env): Promise<CryptoKey> {
+  const keyText = normalizeText(env.EMAIL_SENSITIVE_PAYLOAD_KEY_B64)
+  if (!keyText) throw new Error("email_sensitive_payload_key_missing")
+  const keyBytes = base64ToBytes(keyText)
+  if (keyBytes.length !== 32) throw new Error("email_sensitive_payload_key_invalid")
+  return crypto.subtle.importKey("raw", keyBytes, { name: "AES-GCM" }, false, ["encrypt", "decrypt"])
+}
+
+async function encryptSensitiveEmailPayload(env: Env, payload: Record<string, unknown>): Promise<string> {
+  const iv = new Uint8Array(12)
+  crypto.getRandomValues(iv)
+  const key = await sensitivePayloadKey(env)
+  const plaintext = new TextEncoder().encode(toJsonText(payload, {}))
+  const ciphertext = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, plaintext))
+  return `v1.${bytesToBase64(iv)}.${bytesToBase64(ciphertext)}`
+}
+
+async function decryptSensitiveEmailPayload(env: Env, value: string): Promise<Record<string, unknown>> {
+  const parts = normalizeText(value).split(".")
+  if (parts.length !== 3 || parts[0] !== "v1") throw new Error("email_sensitive_payload_invalid")
+  const iv = base64ToBytes(parts[1])
+  const ciphertext = base64ToBytes(parts[2])
+  if (iv.length !== 12 || ciphertext.length < 16) throw new Error("email_sensitive_payload_invalid")
+  const key = await sensitivePayloadKey(env)
+  const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext)
+  const parsed = JSON.parse(new TextDecoder().decode(plaintext))
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("email_sensitive_payload_invalid")
+  return parsed as Record<string, unknown>
+}
+
 function sortForCanonical(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(sortForCanonical)
   if (!value || typeof value !== "object") return value
@@ -811,6 +846,9 @@ function envFlag(value: unknown, fallback = false): boolean {
   if (["0", "false", "no", "off", "disabled"].includes(text)) return false
   return fallback
 }
+
+const AUTH_EMAIL_ENQUEUE_EVENTS = new Set(["auth.email_verification", "auth.verification_resend"])
+const AUTH_EMAIL_ENQUEUE_MAX_BYTES = 4096
 
 function emailOutboundEnabled(env: Env): boolean {
   return envFlag(env.EMAIL_OUTBOUND_ENABLED, false) && Boolean(normalizeText(env.RESEND_SEND_API_KEY))
@@ -1039,6 +1077,8 @@ async function enqueueEmailJob(
     linkedUserId?: string | null
     linkedTicketId?: string | null
     templateData?: Record<string, unknown>
+    sensitivePayload?: Record<string, unknown>
+    sensitivePayloadExpiresAt?: string | null
     headers?: Record<string, string>
   }
 ): Promise<string | null> {
@@ -1068,6 +1108,17 @@ async function enqueueEmailJob(
     "X-SaturnWS-Email-Type": eventType,
     "X-SaturnWS-Template": `${catalog.template_key}@${catalog.template_version}`,
   }
+  const sensitiveCiphertext = input.sensitivePayload
+    ? await encryptSensitiveEmailPayload(env, {
+        ...input.sensitivePayload,
+        event_type: eventType,
+        template_key: catalog.template_key,
+        template_version: catalog.template_version,
+      })
+    : null
+  const sensitiveExpiresAt = sensitiveCiphertext
+    ? normalizeText(input.sensitivePayloadExpiresAt) || normalizeText(input.sensitivePayload?.expires_at)
+    : null
   const baseBind = [
     jobId,
     clampText(input.idempotencyKey, 240),
@@ -1089,14 +1140,15 @@ async function enqueueEmailJob(
   try {
     await env.DB.prepare(
       `INSERT OR IGNORE INTO email_jobs
-        (id, idempotency_key, email_type, recipient, sender, reply_to, subject, html_body, text_body, template_data_json, headers_json, linked_user_id, linked_ticket_id, status, max_attempts, next_attempt_at, last_error, catalog_event_type, template_key, template_version, email_category, created_at, updated_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, datetime('now'), ?16, ?3, ?17, ?18, ?19, datetime('now'), datetime('now'))`
+        (id, idempotency_key, email_type, recipient, sender, reply_to, subject, html_body, text_body, template_data_json, headers_json, linked_user_id, linked_ticket_id, status, max_attempts, next_attempt_at, last_error, catalog_event_type, template_key, template_version, email_category, sensitive_payload_ciphertext, sensitive_payload_expires_at, sensitive_payload_purged_at, created_at, updated_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, datetime('now'), ?16, ?3, ?17, ?18, ?19, ?20, ?21, NULL, datetime('now'), datetime('now'))`
     )
-      .bind(...baseBind, catalog.template_key, catalog.template_version, catalog.category)
+      .bind(...baseBind, catalog.template_key, catalog.template_version, catalog.category, sensitiveCiphertext, sensitiveExpiresAt)
       .run()
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error || "")
     if (!/catalog_event_type|template_key|email_category|no such column/i.test(message)) throw error
+    if (sensitiveCiphertext) throw new Error("email_sensitive_payload_schema_missing")
     await env.DB.prepare(
       `INSERT OR IGNORE INTO email_jobs
         (id, idempotency_key, email_type, recipient, sender, reply_to, subject, html_body, text_body, template_data_json, headers_json, linked_user_id, linked_ticket_id, status, max_attempts, next_attempt_at, last_error, created_at, updated_at)
@@ -1106,6 +1158,133 @@ async function enqueueEmailJob(
       .run()
   }
   return jobId
+}
+
+async function requireInternalAuthEmailToken(request: Request, env: Env): Promise<Response | null> {
+  const configured = normalizeText(env.AUTH_EMAIL_ENQUEUE_TOKEN)
+  const supplied = bearerToken(request)
+  if (!configured || !supplied || !(await safeEqualHashed(supplied, configured))) {
+    return json({ success: false, error: "unauthorized" }, 401)
+  }
+  return null
+}
+
+async function readLimitedJson(request: Request, maxBytes: number): Promise<Record<string, unknown> | null> {
+  const contentLength = Number(request.headers.get("Content-Length") || 0)
+  if (Number.isFinite(contentLength) && contentLength > maxBytes) return null
+  const text = await request.text()
+  if (new TextEncoder().encode(text).byteLength > maxBytes) return null
+  try {
+    const parsed = JSON.parse(text)
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null
+  } catch {
+    return null
+  }
+}
+
+function sqliteLikeContains(value: string): string {
+  return `%${value.replace(/[\\%_]/g, (match) => `\\${match}`)}%`
+}
+
+async function cancelSupersededAuthEmailJobs(env: Env, verificationRequestId: string, currentIdempotencyKey: string): Promise<void> {
+  if (!verificationRequestId) return
+  await env.DB.prepare(
+    `UPDATE email_jobs
+     SET status = 'cancelled',
+         last_error = 'superseded_by_new_verification_code',
+         sensitive_payload_ciphertext = NULL,
+         sensitive_payload_purged_at = CASE WHEN sensitive_payload_ciphertext IS NOT NULL THEN datetime('now') ELSE sensitive_payload_purged_at END,
+         updated_at = datetime('now')
+     WHERE email_type IN ('auth.email_verification', 'auth.verification_resend')
+       AND status IN ('queued', 'processing')
+       AND idempotency_key <> ?1
+       AND template_data_json LIKE ?2 ESCAPE '\\'`
+  )
+    .bind(currentIdempotencyKey, sqliteLikeContains(`"verification_request_id":"${verificationRequestId}"`))
+    .run()
+    .catch(() => null)
+}
+
+async function handleInternalAuthEmailEnqueue(request: Request, env: Env): Promise<Response> {
+  if (request.method !== "POST") return json({ success: false, error: "method_not_allowed" }, 405)
+  const authError = await requireInternalAuthEmailToken(request, env)
+  if (authError) return authError
+  if (!envFlag(env.EMAIL_AUTH_ENABLED, false)) {
+    return json({ success: false, error: "email_auth_disabled" }, 503)
+  }
+
+  const body = await readLimitedJson(request, AUTH_EMAIL_ENQUEUE_MAX_BYTES)
+  if (!body) return json({ success: false, error: "invalid_payload" }, 400)
+
+  const eventType = normalizeLower(body.event_type)
+  if (!AUTH_EMAIL_ENQUEUE_EVENTS.has(eventType)) {
+    return json({ success: false, error: "email_event_not_allowed" }, 400)
+  }
+  const recipient = normalizeEmailAddress(body.recipient)
+  if (!recipient) return json({ success: false, error: "recipient_required" }, 400)
+  const idempotencyKey = clampText(body.idempotency_key, 240)
+  const verificationRequestId = clampText(body.verification_request_id, 120)
+  if (!idempotencyKey || !verificationRequestId) {
+    return json({ success: false, error: "idempotency_or_verification_id_required" }, 400)
+  }
+
+  const payload = body.payload && typeof body.payload === "object" && !Array.isArray(body.payload)
+    ? body.payload as Record<string, unknown>
+    : {}
+  const code = normalizeText(payload.code).replace(/\D/g, "").slice(0, 6)
+  const expiresAt = normalizeText(payload.expires_at)
+  if (code.length !== 6 || !Number.isFinite(Date.parse(expiresAt))) {
+    return json({ success: false, error: "verification_payload_invalid" }, 400)
+  }
+
+  const locale = normalizeLower(body.locale).startsWith("en") ? "en" : "ar"
+  const displayName = clampText(payload.display_name, 120)
+  await cancelSupersededAuthEmailJobs(env, verificationRequestId, idempotencyKey)
+  const catalog = EMAIL_CATALOG[eventType]
+  const subject = locale === "ar" ? catalog.default_subject_ar : catalog.default_subject_en
+  let jobId: string | null = null
+  try {
+    jobId = await enqueueEmailJob(env, {
+      idempotencyKey,
+      emailType: eventType,
+      recipient,
+      subject,
+      html: "",
+      text: "",
+      linkedUserId: clampText(body.user_id, 120) || null,
+      templateData: {
+        verification_request_id: verificationRequestId,
+        expires_at: expiresAt,
+        locale,
+        code_redacted: true,
+        sensitive_payload: "encrypted",
+      },
+      sensitivePayload: {
+        code,
+        display_name: displayName || undefined,
+        expires_at: expiresAt,
+        locale,
+        message: locale === "ar"
+          ? "استخدم رمز التحقق التالي لتأكيد بريدك الإلكتروني في Saturn Workspace."
+          : "Use the following verification code to confirm your Saturn Workspace email address.",
+      },
+      sensitivePayloadExpiresAt: expiresAt,
+      headers: {
+        "Message-ID": emailMessageId("auth-email-verification", verificationRequestId),
+        "Auto-Submitted": "auto-generated",
+        "X-SaturnWS-Verification-Request": verificationRequestId,
+      },
+    })
+  } catch (error) {
+    const message = normalizeText(error instanceof Error ? error.message : error)
+    const safeErrors = new Set([
+      "email_sensitive_payload_key_missing",
+      "email_sensitive_payload_key_invalid",
+      "email_sensitive_payload_schema_missing",
+    ])
+    return json({ success: false, error: safeErrors.has(message) ? message : "email_auth_enqueue_failed" }, 500)
+  }
+  return json({ success: true, status: jobId ? "queued" : "suppressed", job_id: jobId })
 }
 
 async function resendSend(env: Env, message: EmailProviderMessage): Promise<{ id: string }> {
@@ -1137,6 +1316,38 @@ async function resendSend(env: Env, message: EmailProviderMessage): Promise<{ id
   const id = normalizeText(payload.id || (payload.data as Record<string, unknown> | undefined)?.id)
   if (!id) throw new Error("resend_message_id_missing")
   return { id }
+}
+
+async function purgeSensitiveEmailPayload(env: Env, jobId: string): Promise<void> {
+  await env.DB.prepare(
+    "UPDATE email_jobs SET sensitive_payload_ciphertext = NULL, sensitive_payload_purged_at = datetime('now'), updated_at = datetime('now') WHERE id = ?1 AND sensitive_payload_ciphertext IS NOT NULL"
+  )
+    .bind(jobId)
+    .run()
+    .catch(() => null)
+}
+
+async function materializeEmailJobForSend(
+  env: Env,
+  job: EmailJobRow,
+): Promise<{ subject: string; html: string; text: string }> {
+  if (!job.sensitive_payload_ciphertext) {
+    return { subject: job.subject, html: job.html_body || "", text: job.text_body || "" }
+  }
+  const expiresAt = normalizeText(job.sensitive_payload_expires_at)
+  const expiresAtMs = Date.parse(expiresAt)
+  if (!expiresAt || !Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now()) {
+    await env.DB.prepare("UPDATE email_jobs SET status = 'failed', last_error = 'sensitive_payload_expired', sensitive_payload_ciphertext = NULL, sensitive_payload_purged_at = datetime('now'), updated_at = datetime('now') WHERE id = ?1")
+      .bind(job.id)
+      .run()
+      .catch(() => null)
+    throw new Error("sensitive_payload_expired")
+  }
+  const sensitivePayload = await decryptSensitiveEmailPayload(env, job.sensitive_payload_ciphertext)
+  const safeTemplateData = parseJsonObject(job.template_data_json, {})
+  const locale = normalizeLower(safeTemplateData.locale || sensitivePayload.locale || "ar") === "en" ? "en" : "ar"
+  const rendered = renderTransactionalEmail(job.email_type, { ...safeTemplateData, ...sensitivePayload, locale }, locale)
+  return { subject: rendered.subject, html: rendered.html, text: rendered.text }
 }
 
 async function resetStuckEmailJobs(env: Env): Promise<void> {
@@ -1207,13 +1418,14 @@ async function processEmailOutbox(env: Env, limit = EMAIL_OUTBOX_BATCH_LIMIT): P
     }
     try {
       const headers = parseJsonObject(job.headers_json, {}) as Record<string, string>
+      const renderedJob = await materializeEmailJobForSend(env, job)
       const result = await resendSend(env, {
         from: job.sender,
         to: job.recipient,
         replyTo: job.reply_to || undefined,
-        subject: job.subject,
-        html: job.html_body || "",
-        text: job.text_body || "",
+        subject: renderedJob.subject,
+        html: renderedJob.html,
+        text: renderedJob.text,
         headers,
         tags: [
           { name: "email_type", value: normalizeLower(job.email_type).replace(/[^a-z0-9_-]/g, "_").slice(0, 120) || "support" },
@@ -1223,14 +1435,19 @@ async function processEmailOutbox(env: Env, limit = EMAIL_OUTBOX_BATCH_LIMIT): P
       await env.DB.prepare("UPDATE email_jobs SET status = 'sent', provider_message_id = ?1, sent_at = datetime('now'), updated_at = datetime('now'), last_error = NULL WHERE id = ?2")
         .bind(result.id, job.id)
         .run()
+      await purgeSensitiveEmailPayload(env, job.id)
       sent += 1
     } catch (error) {
       const message = clampText(error instanceof Error ? error.message : String(error || "send_failed"), 900)
+      if (message === "sensitive_payload_expired") {
+        continue
+      }
       const attempts = Number(job.attempt_count || 0) + 1
       if (attempts >= Number(job.max_attempts || EMAIL_MAX_ATTEMPTS)) {
         await env.DB.prepare("UPDATE email_jobs SET status = 'failed', last_error = ?1, updated_at = datetime('now') WHERE id = ?2")
           .bind(message, job.id)
           .run()
+        await purgeSensitiveEmailPayload(env, job.id)
       } else {
         await env.DB.prepare("UPDATE email_jobs SET status = 'queued', last_error = ?1, next_attempt_at = datetime('now', ?2), updated_at = datetime('now') WHERE id = ?3")
           .bind(message, `+${retryBackoffSeconds(attempts)} seconds`, job.id)
@@ -3011,6 +3228,9 @@ export default {
       }
       if (request.method === "POST" && url.pathname === "/api/webhooks/resend") {
         return await handleResendWebhook(request, env)
+      }
+      if (url.pathname === "/v1/internal/email/auth/enqueue") {
+        return await handleInternalAuthEmailEnqueue(request, env)
       }
       if (url.pathname.startsWith("/v1/web/support/")) {
         const res = await handleWebSupportRequest(request, env, ctx)

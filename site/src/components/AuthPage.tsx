@@ -223,6 +223,7 @@ export function AuthPage({ lang, initialMode }: AuthPageProps) {
             signupFromSite: 'إذا لم يكن لديك حساب، يمكنك إنشاء حساب جديد من الموقع.',
             signUpCta: 'إنشاء حساب جديد',
             selectedPlan: 'الخطة المطلوبة',
+            weekly: 'أسبوعي',
             monthly: 'شهري',
             yearly: 'سنوي',
             slides: [
@@ -288,6 +289,7 @@ export function AuthPage({ lang, initialMode }: AuthPageProps) {
             signupFromSite: "If you don't have an account yet, create one from the website.",
             signUpCta: 'Create new account',
             selectedPlan: 'Selected plan',
+            weekly: 'Weekly',
             monthly: 'Monthly',
             yearly: 'Yearly',
             slides: [
@@ -311,7 +313,7 @@ export function AuthPage({ lang, initialMode }: AuthPageProps) {
   const selectedPlan = useMemo(() => {
     if (typeof window === 'undefined') return ''
     const value = String(new URLSearchParams(window.location.search).get('plan') || '').trim().toLowerCase()
-    return value === 'monthly' || value === 'yearly' ? value : ''
+    return value === 'weekly' || value === 'monthly' || value === 'yearly' ? value : ''
   }, [])
 
   useEffect(() => {
@@ -768,7 +770,7 @@ export function AuthPage({ lang, initialMode }: AuthPageProps) {
 
             {selectedPlan ? (
               <div className="mb-4 rounded-2xl border border-sky-400/18 bg-sky-400/8 px-4 py-3 text-sm text-sky-100/92">
-                {t.selectedPlan}: {selectedPlan === 'monthly' ? t.monthly : t.yearly}
+                {t.selectedPlan}: {selectedPlan === 'weekly' ? t.weekly : selectedPlan === 'monthly' ? t.monthly : t.yearly}
               </div>
             ) : null}
             {activationPayload ? (

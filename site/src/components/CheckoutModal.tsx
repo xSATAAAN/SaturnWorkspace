@@ -33,7 +33,7 @@ export function CheckoutModal({
         title: 'إتمام الطلب',
         close: 'إلغاء',
         monthly: 'ترخيص شهري',
-        yearly: 'ترخيص سنوي (عرض محدود)',
+        yearly: 'ترخيص سنوي',
         email: 'البريد الإلكتروني',
         phone: 'الهاتف / واتساب',
         notes: 'ملاحظات الطلب',
@@ -48,7 +48,7 @@ export function CheckoutModal({
         title: 'Subscription checkout',
         close: 'Cancel',
         monthly: 'Monthly subscription',
-        yearly: 'Yearly subscription (limited promo)',
+        yearly: 'Yearly subscription',
         email: 'Email',
         phone: 'Phone / WhatsApp',
         notes: 'Order notes',
@@ -98,11 +98,11 @@ export function CheckoutModal({
     lines.push(`Order: ${orderId}`)
     const planLine = isAr
       ? plan === 'monthly'
-        ? 'الخطة: شهري — 20$/شهر'
-        : 'الخطة: سنوي — 120$ (عرض −50% مقارنة بـ 240$ لو دفعت شهريًا لسنة)'
+        ? 'الخطة: شهري — 30$/شهر'
+        : 'الخطة: سنوي — 300$/سنة'
       : plan === 'monthly'
-        ? 'Plan: Monthly — $20/mo'
-        : 'Plan: Yearly — $120 (limited-time −50% vs. $240 at monthly rate for 12 mo.)'
+        ? 'Plan: Monthly — $30/mo'
+        : 'Plan: Yearly — $300/yr'
     lines.push(planLine)
     if (email.trim()) lines.push(`Email: ${normalizeField(email, 120)}`)
     if (phone.trim()) lines.push(`Phone: ${normalizeField(phone, 40)}`)
@@ -202,7 +202,7 @@ export function CheckoutModal({
                 }
               >
                 <div className="text-sm font-semibold text-white">{t.monthly}</div>
-                <div className="mt-1 text-sm text-white/70">$20 / mo</div>
+                <div className="mt-1 text-sm text-white/70">$30 / mo</div>
               </button>
               <button
                 type="button"
@@ -215,9 +215,7 @@ export function CheckoutModal({
               >
                 <div className="text-sm font-semibold text-white">{t.yearly}</div>
                 <div className="mt-1 flex flex-wrap items-baseline gap-2 text-sm">
-                  <span className="text-white/45 line-through">$240</span>
-                  <span className="text-white/85">$120</span>
-                  <span className="text-xs font-semibold text-emerald-200/90">−50%</span>
+                  <span className="text-white/85">$300 / yr</span>
                 </div>
               </button>
             </div>

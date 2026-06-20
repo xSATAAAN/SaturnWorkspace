@@ -11,7 +11,7 @@ import type {
   AdminUserDetail,
   AdminEmailStatus,
 } from '../../api/admin'
-import type { AccountSubscription } from '../../api/account'
+import type { AccountProfileProjection, AccountSubscription, SubscriptionProjection } from '../../api/account'
 
 export type RuntimeMode = 'preview' | 'production'
 
@@ -20,11 +20,43 @@ export type AppUser = {
   email: string
   displayName?: string | null
   emailVerified?: boolean
+  profile?: AccountProfileProjection | null
 }
+
+export type AuthBootstrapStatus =
+  | 'initializing'
+  | 'unauthenticated'
+  | 'authenticating'
+  | 'authenticated'
+  | 'refreshing'
+  | 'signing_out'
+  | 'error'
+
+export type EmailVerificationState =
+  | 'not_required'
+  | 'unverified'
+  | 'verification_pending'
+  | 'verified'
+  | 'verification_expired'
+  | 'verification_locked'
+
+export type AccountProfileState =
+  | 'missing'
+  | 'provisioning'
+  | 'ready'
+  | 'failed_recoverable'
+  | 'disabled'
+
+export type SessionState = 'valid' | 'refresh_required' | 'expired' | 'revoked'
 
 export type AuthState = {
   ready: boolean
   user: AppUser | null
+  status?: AuthBootstrapStatus
+  emailVerificationState?: EmailVerificationState
+  profileState?: AccountProfileState
+  sessionState?: SessionState
+  error?: string | null
 }
 
 export type ReleaseInfo = {
@@ -71,6 +103,15 @@ export type PaymentIntentResult = {
   reason?: string
 }
 
+export type SignUpWithEmailInput = {
+  displayName: string
+  email: string
+  password: string
+  locale: 'ar' | 'en'
+  termsAccepted: boolean
+  termsVersion?: string
+}
+
 export type CustomerSupportThread = {
   id: string
   subject: string
@@ -91,8 +132,9 @@ export type CustomerSupportMessage = {
 export type AuthAdapter = {
   subscribe(callback: (state: AuthState) => void): () => void
   signInWithEmail(email: string, password: string): Promise<AppUser>
-  signUpWithEmail(email: string, password: string): Promise<AppUser>
-  signInWithGoogle(): Promise<AppUser>
+  signUpWithEmail(input: SignUpWithEmailInput): Promise<AppUser>
+  signInWithGoogle(input?: { locale?: 'ar' | 'en'; termsAccepted?: boolean; termsVersion?: string }): Promise<AppUser>
+  provisionProfile?(input?: { displayName?: string; locale?: 'ar' | 'en'; termsAccepted?: boolean; termsVersion?: string }): Promise<AppUser>
   sendPasswordReset(email: string): Promise<void>
   requestEmailVerification(email: string): Promise<{ success: boolean; status?: string; expiresAt?: string; error?: string; testCode?: string }>
   verifyEmailCode(email: string, code: string): Promise<{ success: boolean; status?: string; verifiedAt?: string; error?: string }>
@@ -102,6 +144,7 @@ export type AuthAdapter = {
 
 export type AccountAdapter = {
   getSubscription(): Promise<AccountSubscription>
+  getSubscriptionProjection?(): Promise<SubscriptionProjection | null>
   updateProfile(input: { displayName: string }): Promise<AppUser>
   sendPasswordReset(): Promise<void>
 }

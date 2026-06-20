@@ -13,6 +13,7 @@
     "lint:new-ui": "eslint src/new-ui --ignore-pattern dist --ignore-pattern dist-production",
     "test:new-ui:production": "node scripts/check-new-ui-production-runtime.mjs",
     "test:new-ui:round3b": "node scripts/check-new-ui-production-runtime.mjs && node scripts/check-round3b-production-integration.mjs",
+    "test:phase-b": "node scripts/check-phase-b-production-rollout.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "preview:new-ui": "vite preview --config src/new-ui/vite.config.ts",

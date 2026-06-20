@@ -8,7 +8,7 @@ import {
   signOut,
   updateProfile,
 } from 'firebase/auth'
-import { fetchAccountSubscription } from '../../api/account'
+import { fetchAccountSubscription, provisionAccountProfile } from '../../api/account'
 import {
   createSubscription,
   fetchAdminDashboard,
@@ -52,7 +52,7 @@ import { firebaseAuth } from '../../lib/firebase'
 import { publicCopy } from '../content/publicCopy'
 import { getJson } from './apiClient'
 import { isProductionFeatureEnabled, productionFeatureFlags } from './productionFeatureFlags'
-import type { AppAdapters, AppUser, PlanInfo, ReleaseInfo } from './contracts'
+import type { AppAdapters, AppUser, AuthState, PlanInfo, ReleaseInfo, SignUpWithEmailInput } from './contracts'
 
 function userFromFirebase(user: typeof firebaseAuth.currentUser): AppUser {
   if (!user?.email) throw new Error('auth_user_missing_email')
@@ -62,6 +62,111 @@ function userFromFirebase(user: typeof firebaseAuth.currentUser): AppUser {
     displayName: user.displayName,
     emailVerified: user.emailVerified,
   }
+}
+
+function mapFirebaseAuthError(error: unknown): Error {
+  const raw = String((error as { code?: string; message?: string })?.code || (error as { message?: string })?.message || error || '').toLowerCase()
+  if (raw.includes('email-already-in-use')) return new Error('AUTH_EMAIL_ALREADY_USED')
+  if (raw.includes('weak-password')) return new Error('AUTH_WEAK_PASSWORD')
+  if (raw.includes('invalid-email')) return new Error('AUTH_INVALID_EMAIL')
+  if (raw.includes('too-many-requests')) return new Error('AUTH_TOO_MANY_ATTEMPTS')
+  if (raw.includes('account-exists-with-different-credential')) return new Error('AUTH_PROVIDER_COLLISION')
+  if (raw.includes('wrong-password') || raw.includes('invalid-credential') || raw.includes('user-not-found')) return new Error('AUTH_INVALID_CREDENTIALS')
+  if (raw.includes('network')) return new Error('NETWORK_UNAVAILABLE')
+  return error instanceof Error ? error : new Error('REQUEST_FAILED')
+}
+
+async function provisionCurrentFirebaseUser(input: {
+  displayName?: string
+  locale?: 'ar' | 'en'
+  termsAccepted?: boolean
+  termsVersion?: string
+} = {}): Promise<AppUser> {
+  const user = firebaseAuth.currentUser
+  if (!user) throw new Error('not_authenticated')
+  if (input.displayName !== undefined && input.displayName.trim() !== (user.displayName || '')) {
+    await updateProfile(user, { displayName: input.displayName.trim() || null })
+  }
+  const token = await user.getIdToken(true)
+  const provisioned = await provisionAccountProfile(token, {
+    displayName: input.displayName ?? user.displayName ?? undefined,
+    locale: input.locale,
+    termsAccepted: input.termsAccepted,
+    termsVersion: input.termsVersion,
+    termsAcceptedAt: input.termsAccepted ? new Date().toISOString() : undefined,
+  })
+  if (!provisioned.success || !provisioned.profile) throw new Error(provisioned.error || 'PROFILE_PROVISIONING_FAILED')
+  return { ...userFromFirebase(user), profile: provisioned.profile, emailVerified: Boolean(provisioned.profile.email_verified) }
+}
+
+const authSubscribers = new Set<(state: AuthState) => void>()
+let authUnsubscribe: (() => void) | null = null
+let currentAuthState: AuthState = {
+  ready: false,
+  user: null,
+  status: 'initializing',
+  profileState: 'missing',
+  emailVerificationState: 'not_required',
+  sessionState: 'refresh_required',
+  error: null,
+}
+
+function publishAuthState(state: AuthState) {
+  currentAuthState = state
+  authSubscribers.forEach((subscriber) => subscriber(state))
+}
+
+function ensureAuthListener() {
+  if (authUnsubscribe) return
+  authUnsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
+    if (!user?.email) {
+      publishAuthState({
+        ready: true,
+        user: null,
+        status: 'unauthenticated',
+        profileState: 'missing',
+        emailVerificationState: 'not_required',
+        sessionState: 'expired',
+        error: null,
+      })
+      return
+    }
+    const baseUser = userFromFirebase(user)
+    publishAuthState({
+      ready: false,
+      user: baseUser,
+      status: 'refreshing',
+      profileState: 'provisioning',
+      emailVerificationState: 'verification_pending',
+      sessionState: 'refresh_required',
+      error: null,
+    })
+    user.getIdToken(true)
+      .then((token) => fetchAccountSubscription(token))
+      .then((account) => {
+        const profile = account.user?.profile || null
+        publishAuthState({
+          ready: true,
+          user: { ...baseUser, profile, emailVerified: Boolean(profile?.email_verified) },
+          status: 'authenticated',
+          profileState: profile?.account_status === 'suspended' ? 'disabled' : profile ? 'ready' : 'missing',
+          emailVerificationState: profile?.email_verified ? 'verified' : 'unverified',
+          sessionState: 'valid',
+          error: null,
+        })
+      })
+      .catch((error) => {
+        publishAuthState({
+          ready: true,
+          user: baseUser,
+          status: 'authenticated',
+          profileState: 'failed_recoverable',
+          emailVerificationState: 'unverified',
+          sessionState: 'refresh_required',
+          error: String(error instanceof Error ? error.message : error || 'PROFILE_PROVISIONING_FAILED'),
+        })
+      })
+  })
 }
 
 function latestReleaseUrl(channel: 'stable' | 'beta') {
@@ -125,20 +230,51 @@ export const productionAdapters: AppAdapters = {
   mode: 'production',
   auth: {
     subscribe(callback) {
-      callback({ ready: Boolean(firebaseAuth.currentUser), user: firebaseAuth.currentUser?.email ? userFromFirebase(firebaseAuth.currentUser) : null })
-      return onAuthStateChanged(firebaseAuth, (user) => callback({ ready: true, user: user?.email ? userFromFirebase(user) : null }))
+      ensureAuthListener()
+      authSubscribers.add(callback)
+      callback(currentAuthState)
+      return () => {
+        authSubscribers.delete(callback)
+      }
     },
     async signInWithEmail(email, password) {
-      const result = await signInWithEmailAndPassword(firebaseAuth, email.trim(), password)
-      return userFromFirebase(result.user)
+      try {
+        const result = await signInWithEmailAndPassword(firebaseAuth, email.trim(), password)
+        return userFromFirebase(result.user)
+      } catch (error) {
+        throw mapFirebaseAuthError(error)
+      }
     },
-    async signUpWithEmail(email, password) {
-      const result = await createUserWithEmailAndPassword(firebaseAuth, email.trim(), password)
-      return userFromFirebase(result.user)
+    async signUpWithEmail(input: SignUpWithEmailInput) {
+      try {
+        const result = await createUserWithEmailAndPassword(firebaseAuth, input.email.trim(), input.password)
+        if (input.displayName.trim()) await updateProfile(result.user, { displayName: input.displayName.trim() })
+        return provisionCurrentFirebaseUser({
+          displayName: input.displayName,
+          locale: input.locale,
+          termsAccepted: input.termsAccepted,
+          termsVersion: input.termsVersion || '2026-06',
+        })
+      } catch (error) {
+        throw mapFirebaseAuthError(error)
+      }
     },
-    async signInWithGoogle() {
-      const result = await signInWithPopup(firebaseAuth, new GoogleAuthProvider())
-      return userFromFirebase(result.user)
+    async signInWithGoogle(input = {}) {
+      try {
+        const result = await signInWithPopup(firebaseAuth, new GoogleAuthProvider())
+        const shouldProvisionWithTerms = Boolean(input.termsAccepted)
+        if (!shouldProvisionWithTerms) return userFromFirebase(result.user)
+        return provisionCurrentFirebaseUser({
+          locale: input.locale,
+          termsAccepted: input.termsAccepted,
+          termsVersion: input.termsVersion || '2026-06',
+        })
+      } catch (error) {
+        throw mapFirebaseAuthError(error)
+      }
+    },
+    async provisionProfile(input = {}) {
+      return provisionCurrentFirebaseUser(input)
     },
     async sendPasswordReset(email) {
       await sendPasswordResetEmail(firebaseAuth, email.trim())
@@ -156,6 +292,7 @@ export const productionAdapters: AppAdapters = {
       return { success: result.success, status: result.status, verifiedAt: result.verified_at, error: result.error }
     },
     async signOut() {
+      publishAuthState({ ...currentAuthState, status: 'signing_out' })
       setAdminBearerToken(null)
       await signOut(firebaseAuth)
     },
@@ -168,6 +305,12 @@ export const productionAdapters: AppAdapters = {
       const token = await productionAdapters.auth.getIdToken(true)
       if (!token) return { success: false, error: 'not_authenticated' }
       return fetchAccountSubscription(token)
+    },
+    async getSubscriptionProjection() {
+      const token = await productionAdapters.auth.getIdToken(true)
+      if (!token) return null
+      const result = await fetchAccountSubscription(token)
+      return result.subscription_projection || null
     },
     async updateProfile(input) {
       if (!firebaseAuth.currentUser) throw new Error('not_authenticated')

@@ -163,8 +163,8 @@ export const EMAIL_CATALOG: Record<string, EmailCatalogItem> = {
     requires_backend_event: true,
     admin_test_allowed: true,
   }),
-  "auth.email_verification_requested": item({
-    event_type: "auth.email_verification_requested",
+  "auth.email_verification": item({
+    event_type: "auth.email_verification",
     template_key: "auth_email_verification",
     category: "auth",
     sender_identity: "security",
@@ -180,6 +180,24 @@ export const EMAIL_CATALOG: Record<string, EmailCatalogItem> = {
     essential: true,
     requires_backend_event: true,
     admin_test_allowed: true,
+  }),
+  "auth.verification_resend": item({
+    event_type: "auth.verification_resend",
+    template_key: "auth_email_verification",
+    category: "auth",
+    sender_identity: "security",
+    title_en: "Resent email verification code",
+    title_ar: "إعادة إرسال رمز تأكيد البريد الإلكتروني",
+    description_en: "Server-side resend of a SaturnWS email verification code.",
+    description_ar: "إعادة إرسال رمز تأكيد البريد من خادم SaturnWS.",
+    default_subject_en: "Your SaturnWS verification code",
+    default_subject_ar: "رمز تأكيد SaturnWS",
+    integration_status: "linked",
+    user_can_disable: false,
+    retry_allowed: true,
+    essential: true,
+    requires_backend_event: true,
+    admin_test_allowed: false,
   }),
   "auth.password_reset_requested": item({
     event_type: "auth.password_reset_requested",
@@ -352,6 +370,7 @@ export const EMAIL_EVENT_ALIASES: Record<string, string> = {
   support_closed: "support.status_changed",
   support_resolved: "support.status_changed",
   admin_test: "admin.email_test",
+  "auth.email_verification_requested": "auth.email_verification",
 }
 
 export const RESEND_KNOWN_EVENTS = new Set([

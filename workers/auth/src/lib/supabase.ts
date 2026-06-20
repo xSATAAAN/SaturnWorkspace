@@ -1,4 +1,4 @@
-import type { AppSessionRow, DeviceLoginRow, Env, SubscriptionRow } from "../types"
+import type { AccountProfileRow, AppSessionRow, DeviceLoginRow, Env, SubscriptionRow } from "../types"
 
 function normalizeEmail(value: string | null | undefined): string {
   return String(value || "").trim().toLowerCase()
@@ -98,6 +98,116 @@ export async function getActiveSubscriptionForUser(env: Env, userId: string, ema
   return [...rows].sort((left, right) =>
     scoreSubscription(right, userId, email).localeCompare(scoreSubscription(left, userId, email)),
   )[0] || null
+}
+
+export async function getLatestSubscriptionForUser(env: Env, userId: string, email: string): Promise<SubscriptionRow | null> {
+  const filters = [`firebase_user_id.eq.${encodeURIComponent(userId)}`]
+  if (email) filters.push(`user_email.ilike.${encodeURIComponent(email)}`)
+  const rows = await supabaseJson<SubscriptionRow[]>(
+    env,
+    `/account_subscriptions?or=(${filters.join(",")})&select=*&order=created_at.desc&limit=50`,
+  )
+  if (!Array.isArray(rows) || !rows.length) return null
+  return [...rows].sort((left, right) =>
+    scoreSubscription(right, userId, email).localeCompare(scoreSubscription(left, userId, email)),
+  )[0] || null
+}
+
+export async function getAccountProfileByFirebaseUid(env: Env, firebaseUid: string): Promise<AccountProfileRow | null> {
+  const rows = await supabaseJson<AccountProfileRow[]>(
+    env,
+    `/account_profiles?firebase_uid=eq.${encodeURIComponent(firebaseUid)}&select=*&limit=1`,
+  )
+  return rows[0] || null
+}
+
+export async function getAccountProfileByEmail(env: Env, email: string): Promise<AccountProfileRow | null> {
+  const rows = await supabaseJson<AccountProfileRow[]>(
+    env,
+    `/account_profiles?normalized_email=eq.${encodeURIComponent(normalizeEmail(email))}&select=*&limit=1`,
+  )
+  return rows[0] || null
+}
+
+export async function upsertAccountProfile(
+  env: Env,
+  payload: {
+    firebase_uid: string
+    display_name?: string | null
+    normalized_email: string
+    email_verified?: boolean
+    email_verified_at?: string | null
+    verification_source?: "firebase_google" | "saturnws_otp" | "admin" | "legacy_unknown" | string | null
+    auth_providers?: string[]
+    locale?: string | null
+    account_status?: string
+    terms_version?: string | null
+    terms_accepted_at?: string | null
+    metadata?: Record<string, unknown>
+  },
+): Promise<AccountProfileRow> {
+  const firebaseUid = String(payload.firebase_uid || "").trim()
+  const normalizedEmail = normalizeEmail(payload.normalized_email)
+  if (!firebaseUid || !normalizedEmail) throw new Error("profile_identity_incomplete")
+
+  const existing = await getAccountProfileByFirebaseUid(env, firebaseUid)
+  const byEmail = existing ? null : await getAccountProfileByEmail(env, normalizedEmail)
+  if (byEmail && byEmail.firebase_uid !== firebaseUid) {
+    throw new Error("profile_email_already_linked")
+  }
+
+  const emailVerified = Boolean(payload.email_verified || existing?.email_verified)
+  const verifiedAt = emailVerified
+    ? payload.email_verified_at || existing?.email_verified_at || new Date().toISOString()
+    : null
+  const verificationSource =
+    emailVerified
+      ? payload.verification_source || existing?.verification_source || "legacy_unknown"
+      : null
+
+  const body: Record<string, unknown> = {
+    firebase_uid: firebaseUid,
+    normalized_email: normalizedEmail,
+    display_name: String(payload.display_name || existing?.display_name || "").trim() || null,
+    email_verified: emailVerified,
+    email_verified_at: verifiedAt,
+    verification_source: verificationSource,
+    auth_providers: payload.auth_providers || (Array.isArray(existing?.auth_providers) ? existing.auth_providers.map(String) : []),
+    locale: String(payload.locale || existing?.locale || "ar").trim().toLowerCase() || "ar",
+    account_status: payload.account_status || existing?.account_status || "active",
+    terms_version: payload.terms_version ?? existing?.terms_version ?? null,
+    terms_accepted_at: payload.terms_accepted_at ?? existing?.terms_accepted_at ?? null,
+    metadata: { ...(existing?.metadata || {}), ...(payload.metadata || {}) },
+  }
+
+  const path = existing
+    ? `/account_profiles?firebase_uid=eq.${encodeURIComponent(firebaseUid)}&select=*`
+    : "/account_profiles?select=*"
+  const rows = await supabaseJson<AccountProfileRow[]>(env, path, {
+    method: existing ? "PATCH" : "POST",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify(body),
+  })
+  if (!rows[0]) throw new Error("profile_upsert_empty")
+  return rows[0]
+}
+
+export async function markAccountProfileEmailVerified(
+  env: Env,
+  firebaseUid: string | null,
+  email: string,
+  source: "firebase_google" | "saturnws_otp" | "admin" | "legacy_unknown" = "saturnws_otp",
+): Promise<AccountProfileRow | null> {
+  const normalizedEmail = normalizeEmail(email)
+  const filters = firebaseUid
+    ? `firebase_uid=eq.${encodeURIComponent(firebaseUid)}`
+    : `normalized_email=eq.${encodeURIComponent(normalizedEmail)}`
+  const rows = await supabaseJson<AccountProfileRow[]>(env, `/account_profiles?${filters}&select=*`, {
+    method: "PATCH",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({ email_verified: true, email_verified_at: new Date().toISOString(), verification_source: source }),
+  })
+  return rows[0] || null
 }
 
 export async function attachSubscriptionToUser(
@@ -325,5 +435,63 @@ export async function revokeAppSession(env: Env, tokenHash: string): Promise<voi
     method: "PATCH",
     headers: { Prefer: "return=minimal" },
     body: JSON.stringify({ revoked_at: new Date().toISOString() }),
+  })
+}
+
+export async function getLatestEmailVerification(
+  env: Env,
+  input: { email: string; firebaseUserId?: string | null; purpose?: string; status?: string },
+): Promise<Record<string, any> | null> {
+  const email = normalizeEmail(input.email)
+  const purpose = String(input.purpose || "email_verification").trim()
+  const filters = [`email=eq.${encodeURIComponent(email)}`, `purpose=eq.${encodeURIComponent(purpose)}`]
+  if (input.status) filters.push(`status=eq.${encodeURIComponent(input.status)}`)
+  if (input.firebaseUserId) filters.push(`firebase_user_id=eq.${encodeURIComponent(input.firebaseUserId)}`)
+  const rows = await supabaseJson<Record<string, any>[]>(
+    env,
+    `/account_email_verifications?${filters.join("&")}&select=*&order=created_at.desc&limit=1`,
+  )
+  return rows[0] || null
+}
+
+export async function createEmailVerification(
+  env: Env,
+  payload: Record<string, unknown>,
+): Promise<Record<string, any>> {
+  const rows = await supabaseJson<Record<string, any>[]>(env, "/account_email_verifications", {
+    method: "POST",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify(payload),
+  })
+  if (!rows[0]) throw new Error("email_verification_insert_empty")
+  return rows[0]
+}
+
+export async function updateEmailVerification(
+  env: Env,
+  id: string,
+  patch: Record<string, unknown>,
+): Promise<Record<string, any>> {
+  const rows = await supabaseJson<Record<string, any>[]>(
+    env,
+    `/account_email_verifications?id=eq.${encodeURIComponent(id)}&select=*`,
+    {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({ ...patch, updated_at: new Date().toISOString() }),
+    },
+  )
+  if (!rows[0]) throw new Error("email_verification_update_empty")
+  return rows[0]
+}
+
+export async function insertEmailVerificationAudit(
+  env: Env,
+  payload: Record<string, unknown>,
+): Promise<void> {
+  await supabaseJson<unknown>(env, "/account_email_verification_audit", {
+    method: "POST",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify(payload),
   })
 }

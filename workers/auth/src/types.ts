@@ -9,8 +9,35 @@ export interface Env {
   FIREBASE_AUTH_HELPER_ORIGIN?: string
   DEVICE_LOGIN_URL?: string
   VERIFY_RATE_LIMIT_PER_MIN?: string
+  EMAIL_VERIFICATION_PEPPER?: string
+  EMAIL_VERIFICATION_TEST_TRANSPORT?: string
+  EMAIL_VERIFICATION_CODE_TTL_MINUTES?: string
+  EMAIL_VERIFICATION_ALLOW_UNAUTHENTICATED_TEST?: string
+  EMAIL_AUTH_ENABLED?: string
+  AUTH_EMAIL_ENQUEUE_URL?: string
+  AUTH_EMAIL_ENQUEUE_TOKEN?: string
+  ACCOUNT_TERMS_VERSION?: string
+  PROFILE_DEFAULT_LOCALE?: string
   ALLOW_ORIGIN?: string
   APP_ENV?: string
+}
+
+export interface AccountProfileRow {
+  id: string
+  firebase_uid: string
+  display_name: string | null
+  normalized_email: string
+  email_verified: boolean
+  email_verified_at: string | null
+  verification_source: "firebase_google" | "saturnws_otp" | "admin" | "legacy_unknown" | string | null
+  auth_providers: unknown[] | null
+  locale: string | null
+  account_status: "active" | "suspended" | "pending_deletion" | "deleted" | string
+  terms_version: string | null
+  terms_accepted_at: string | null
+  created_at: string
+  updated_at: string | null
+  metadata?: Record<string, unknown> | null
 }
 
 export interface SubscriptionRow {

@@ -1,9 +1,17 @@
 export type AppErrorCode =
+  | 'AUTH_EMAIL_ALREADY_USED'
+  | 'AUTH_WEAK_PASSWORD'
+  | 'AUTH_INVALID_EMAIL'
+  | 'AUTH_TOO_MANY_ATTEMPTS'
   | 'AUTH_INVALID_CREDENTIALS'
   | 'AUTH_SESSION_EXPIRED'
-  | 'EMAIL_CODE_INVALID'
-  | 'EMAIL_CODE_EXPIRED'
-  | 'EMAIL_RESEND_LIMITED'
+  | 'PROFILE_PROVISIONING_FAILED'
+  | 'VERIFICATION_CODE_INVALID'
+  | 'VERIFICATION_CODE_EXPIRED'
+  | 'VERIFICATION_RATE_LIMITED'
+  | 'VERIFICATION_DELIVERY_DISABLED'
+  | 'VERIFICATION_DELIVERY_NOT_CONFIGURED'
+  | 'VERIFICATION_DELIVERY_FAILED'
   | 'SUBSCRIPTION_INACTIVE'
   | 'DOWNLOAD_NOT_ENTITLED'
   | 'SUPPORT_TICKET_FORBIDDEN'
@@ -13,13 +21,25 @@ export type AppErrorCode =
   | 'REQUEST_FAILED'
 
 const rawToCode: Record<string, AppErrorCode> = {
+  auth_email_already_used: 'AUTH_EMAIL_ALREADY_USED',
+  auth_weak_password: 'AUTH_WEAK_PASSWORD',
+  auth_invalid_email: 'AUTH_INVALID_EMAIL',
+  auth_too_many_attempts: 'AUTH_TOO_MANY_ATTEMPTS',
+  profile_provisioning_failed: 'PROFILE_PROVISIONING_FAILED',
+  profile_terms_required: 'PROFILE_PROVISIONING_FAILED',
+  verification_code_invalid: 'VERIFICATION_CODE_INVALID',
+  verification_code_expired: 'VERIFICATION_CODE_EXPIRED',
+  verification_rate_limited: 'VERIFICATION_RATE_LIMITED',
+  verification_delivery_disabled: 'VERIFICATION_DELIVERY_DISABLED',
+  verification_delivery_not_configured: 'VERIFICATION_DELIVERY_NOT_CONFIGURED',
+  verification_delivery_failed: 'VERIFICATION_DELIVERY_FAILED',
   invalid_credentials: 'AUTH_INVALID_CREDENTIALS',
   auth_invalid_credentials: 'AUTH_INVALID_CREDENTIALS',
   not_authenticated: 'AUTH_SESSION_EXPIRED',
   unauthorized: 'AUTH_SESSION_EXPIRED',
-  email_code_invalid: 'EMAIL_CODE_INVALID',
-  email_code_expired: 'EMAIL_CODE_EXPIRED',
-  email_resend_limited: 'EMAIL_RESEND_LIMITED',
+  email_code_invalid: 'VERIFICATION_CODE_INVALID',
+  email_code_expired: 'VERIFICATION_CODE_EXPIRED',
+  email_resend_limited: 'VERIFICATION_RATE_LIMITED',
   subscription_inactive: 'SUBSCRIPTION_INACTIVE',
   subscription_expired: 'SUBSCRIPTION_INACTIVE',
   download_not_entitled: 'DOWNLOAD_NOT_ENTITLED',
@@ -43,6 +63,18 @@ export function normalizeAppErrorCode(raw: unknown, status?: number): AppErrorCo
 export function userSafeErrorMessage(raw: unknown, status?: number): string {
   const code = normalizeAppErrorCode(raw, status)
   switch (code) {
+    case 'AUTH_EMAIL_ALREADY_USED':
+    case 'AUTH_WEAK_PASSWORD':
+    case 'AUTH_INVALID_EMAIL':
+    case 'AUTH_TOO_MANY_ATTEMPTS':
+    case 'PROFILE_PROVISIONING_FAILED':
+    case 'VERIFICATION_CODE_INVALID':
+    case 'VERIFICATION_CODE_EXPIRED':
+    case 'VERIFICATION_RATE_LIMITED':
+    case 'VERIFICATION_DELIVERY_DISABLED':
+    case 'VERIFICATION_DELIVERY_NOT_CONFIGURED':
+    case 'VERIFICATION_DELIVERY_FAILED':
+      return code
     case 'AUTH_INVALID_CREDENTIALS':
       return 'AUTH_INVALID_CREDENTIALS'
     case 'AUTH_SESSION_EXPIRED':
