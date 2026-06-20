@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import {
   ArrowLeft,
   ArrowRight,
@@ -53,10 +53,72 @@ import { useAuthState } from '../../hooks/useAuthState'
 type AsyncState<T> = { loading: boolean; data: T | null; error: string | null }
 const PENDING_EMAIL_VERIFICATION_KEY = 'saturnws.production.pendingEmailVerification.v1'
 const LOCAL_EMAIL_VERIFICATION_TEST_CODE_KEY = 'saturnws.production.localEmailVerificationCode.v1'
-const EMAIL_SUPPORT_ENABLED = false
+const ACTIVATION_STORAGE_KEY = 'saturnws.activation.payload.v1'
+const AUTH_BASE = 'https://auth.saturnws.com'
+const EMAIL_SUPPORT_ENABLED = true
+
+type ActivationPayload = {
+  ticket: string
+  legacyCode?: string
+}
 
 function copyByLocale(locale: 'ar' | 'en', en: string, ar: string) {
   return locale === 'ar' ? ar : en
+}
+
+function loadActivationPayload(routeState?: string): ActivationPayload | null {
+  if (typeof window === 'undefined') return null
+  const params = new URLSearchParams(routeState?.startsWith('?') ? routeState.slice(1) : routeState || window.location.search.slice(1))
+  const ticket = String(params.get('ticket') || params.get('device_code') || '').trim()
+  const legacyCode = String(params.get('code') || '').trim().toUpperCase()
+  if (ticket || legacyCode) {
+    const payload = { ticket, legacyCode: legacyCode || undefined }
+    window.sessionStorage.setItem(ACTIVATION_STORAGE_KEY, JSON.stringify(payload))
+    if (window.location.pathname === '/activate') {
+      params.delete('ticket')
+      params.delete('device_code')
+      params.delete('code')
+      const next = params.toString()
+      window.history.replaceState({}, document.title, `/account/signin${next ? `?${next}` : ''}${window.location.hash}`)
+    }
+    return payload
+  }
+  try {
+    const raw = window.sessionStorage.getItem(ACTIVATION_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<ActivationPayload>
+    const storedTicket = String(parsed.ticket || '').trim()
+    const storedLegacyCode = String(parsed.legacyCode || '').trim().toUpperCase()
+    if (!storedTicket && !storedLegacyCode) return null
+    return { ticket: storedTicket, legacyCode: storedLegacyCode || undefined }
+  } catch {
+    return null
+  }
+}
+
+function clearActivationPayload() {
+  if (typeof window === 'undefined') return
+  window.sessionStorage.removeItem(ACTIVATION_STORAGE_KEY)
+}
+
+async function completeDeviceActivation(idToken: string, activation: ActivationPayload) {
+  const response = await fetch(`${AUTH_BASE}/device/complete`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${idToken}`,
+    },
+    body: JSON.stringify({
+      id_token: idToken,
+      ticket: activation.ticket,
+      device_code: activation.ticket,
+      user_code: activation.legacyCode || undefined,
+    }),
+  })
+  const payload = await response.json().catch(() => null) as { success?: boolean; error?: string } | null
+  if (!response.ok || !payload?.success) throw new Error(String(payload?.error || `device_link_failed_${response.status}`))
+  clearActivationPayload()
+  return payload
 }
 
 function stableTicketNumber(id: string, createdAt?: string | null, updatedAt?: string | null) {
@@ -86,6 +148,39 @@ function supportStatusLabel(status: string | undefined, locale: 'ar' | 'en') {
   }
   const item = labels[normalized] || labels.open
   return locale === 'ar' ? item.ar : item.en
+}
+
+function supportErrorMessage(error: unknown, locale: 'ar' | 'en') {
+  const raw = String(error instanceof Error ? error.message : error || '').trim()
+  const key = raw.toLowerCase()
+  if (key === 'auth_session_expired' || key === 'not_authenticated' || key === 'missing_id_token' || key === 'unauthorized') {
+    return copyByLocale(locale, 'Your session expired. Sign in again and retry.', 'انتهت جلسة تسجيل الدخول. سجّل الدخول مرة أخرى ثم أعد المحاولة.')
+  }
+  if (key === 'support_ticket_forbidden' || key === 'thread_not_found') {
+    return copyByLocale(locale, 'This ticket is unavailable or no longer belongs to this account.', 'هذه التذكرة غير متاحة أو لم تعد مرتبطة بهذا الحساب.')
+  }
+  if (key === 'support_rate_limited') {
+    return copyByLocale(locale, 'Daily support message limit reached. Try again later.', 'تم الوصول إلى الحد اليومي لرسائل الدعم. حاول لاحقًا.')
+  }
+  if (key === 'network_unavailable' || key.includes('failed to fetch') || key.includes('network')) {
+    return copyByLocale(locale, 'Unable to reach the server right now. Check the connection and retry.', 'تعذر الوصول إلى الخادم حاليًا. تحقق من الاتصال ثم أعد المحاولة.')
+  }
+  return copyByLocale(locale, 'The request could not be completed. Try again.', 'تعذر تنفيذ الطلب. حاول مرة أخرى.')
+}
+
+function deviceActivationErrorMessage(error: unknown, locale: 'ar' | 'en') {
+  const raw = String(error instanceof Error ? error.message : error || '').trim()
+  const key = raw.toLowerCase()
+  if (key.includes('network') || key.includes('failed to fetch')) {
+    return copyByLocale(locale, 'Unable to reach the account linking server. Try again from the desktop app.', 'تعذر الوصول إلى خادم ربط الحساب. حاول مرة أخرى من أداة سطح المكتب.')
+  }
+  if (key.includes('subscription')) {
+    return copyByLocale(locale, 'This account does not have an active subscription for the desktop app.', 'هذا الحساب لا يملك اشتراكًا نشطًا لاستخدام أداة سطح المكتب.')
+  }
+  if (key.includes('device_code_expired') || key.includes('not_found')) {
+    return copyByLocale(locale, 'This desktop linking session expired. Start sign-in again from the desktop app.', 'انتهت صلاحية جلسة ربط الأداة. ابدأ تسجيل الدخول مرة أخرى من أداة سطح المكتب.')
+  }
+  return copyByLocale(locale, 'The desktop app could not be linked to this account. Try again from the desktop app.', 'تعذر ربط أداة سطح المكتب بهذا الحساب. حاول مرة أخرى من الأداة.')
 }
 
 function emailJobTone(status?: string) {
@@ -284,6 +379,7 @@ function LegalSection({ page }: { page: string }) {
 }
 
 export function AuthProductionPages({ page, routeState, navigate }: { page: string; routeState?: string; navigate: Navigate }) {
+  if (page === 'linked') return <DeviceLinkedProductionPage navigate={navigate} />
   if (page === 'verify') return <EmailVerificationProductionPage routeState={routeState} navigate={navigate} />
   return <EmailPasswordProductionPage page={page} routeState={routeState} navigate={navigate} />
 }
@@ -301,9 +397,15 @@ function destinationAfterAuth(routeState?: string) {
   return destination
 }
 
+function DeviceLinkedProductionPage({ navigate }: { navigate: Navigate }) {
+  const { t, locale } = useExperience()
+  return <ProductionAuthShell navigate={navigate}><div className="auth-card"><div className="auth-form auth-form--center"><span className="auth-icon"><Check size={23} /></span><header><h1>{copyByLocale(locale, 'Desktop app linked', 'تم ربط أداة سطح المكتب')}</h1><p>{copyByLocale(locale, 'You can now return to Saturn Workspace or close this page.', 'يمكنك الآن الرجوع إلى Saturn Workspace أو إغلاق هذه الصفحة.')}</p></header><Button variant="primary" size="lg" fullWidth onClick={() => navigate({ surface: 'portal', page: 'overview' })}>{t('continue')}</Button></div></div></ProductionAuthShell>
+}
+
 function EmailPasswordProductionPage({ page, routeState, navigate }: { page: string; routeState?: string; navigate: Navigate }) {
   const { t, locale } = useExperience()
   const { auth } = useAdapters()
+  const authState = useAuthState()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -312,8 +414,31 @@ function EmailPasswordProductionPage({ page, routeState, navigate }: { page: str
   const [notice, setNotice] = useState('')
   const [loading, setLoading] = useState(false)
   const signup = page === 'signup'
+  const activationPayload = useMemo(() => loadActivationPayload(routeState), [routeState])
+  const completionStartedRef = useRef(false)
   const passwordLongEnough = password.length >= 6
   const passwordsMatch = Boolean(confirmPassword) && password === confirmPassword
+  const finishActivationIfNeeded = async () => {
+    if (!activationPayload) return false
+    if (completionStartedRef.current) return true
+    completionStartedRef.current = true
+    const token = await auth.getIdToken(true)
+    if (!token) throw new Error('not_authenticated')
+    await completeDeviceActivation(token, activationPayload)
+    navigate({ surface: 'auth', page: 'linked' })
+    return true
+  }
+  useEffect(() => {
+    if (!activationPayload || !authState.ready || !authState.user || completionStartedRef.current) return
+    setLoading(true)
+    setError('')
+    finishActivationIfNeeded()
+      .catch((err) => {
+        completionStartedRef.current = false
+        setError(deviceActivationErrorMessage(err, locale))
+      })
+      .finally(() => setLoading(false))
+  }, [activationPayload, authState.ready, authState.user?.id, locale])
   const submit = async (event: FormEvent) => {
     event.preventDefault()
     setError('')
@@ -344,9 +469,10 @@ function EmailPasswordProductionPage({ page, routeState, navigate }: { page: str
       } else {
         await auth.signInWithEmail(email, password)
       }
+      if (await finishActivationIfNeeded()) return
       navigate(destinationAfterAuth(routeState))
     } catch (err) {
-      setError(authErrorMessage(err, t))
+      setError(activationPayload ? deviceActivationErrorMessage(err, locale) : authErrorMessage(err, t))
     } finally {
       setLoading(false)
     }
@@ -367,7 +493,7 @@ function EmailPasswordProductionPage({ page, routeState, navigate }: { page: str
       setLoading(false)
     }
   }
-  return <ProductionAuthShell navigate={navigate}><div className={`auth-card auth-card--${signup ? 'signup' : 'signin'}`}><div className="auth-form"><header><span>{signup ? copyByLocale(locale, 'Create your workspace access', 'ابدأ إعداد مساحة عملك') : copyByLocale(locale, 'Secure account access', 'دخول آمن للحساب')}</span><h1>{signup ? t('signUpTitle') : t('signInTitle')}</h1><p>{signup ? copyByLocale(locale, 'Create one account for subscriptions, downloads, support, and your desktop sign-in.', 'أنشئ حسابًا واحدًا للاشتراك والتنزيلات والدعم وتسجيل الدخول إلى الأداة.') : t('signInBody')}</p></header><form className="stack" onSubmit={submit} noValidate><FormField label={t('email')} htmlFor="auth-email" required><Input id="auth-email" type="email" autoComplete="email" placeholder={locale === 'ar' ? 'name@example.com' : 'name@example.com'} value={email} onChange={(event) => setEmail(event.target.value)} required /></FormField><FormField label={t('password')} htmlFor="auth-password" required><PasswordInput id="auth-password" autoComplete={signup ? 'new-password' : 'current-password'} value={password} onChange={(event) => setPassword(event.target.value)} required /></FormField>{signup ? <><FormField label={t('confirmPassword')} htmlFor="auth-confirm-password" required error={confirmPassword && !passwordsMatch ? (locale === 'ar' ? 'كلمتا المرور غير متطابقتين.' : 'Passwords do not match.') : undefined}><PasswordInput id="auth-confirm-password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required /></FormField><div className="password-requirements" aria-live="polite"><strong>{locale === 'ar' ? 'متطلبات كلمة المرور' : 'Password requirements'}</strong><span className={passwordLongEnough ? 'is-valid' : ''}><Check size={14} />{locale === 'ar' ? '6 أحرف على الأقل' : 'At least 6 characters'}</span><span className={passwordsMatch ? 'is-valid' : ''}><Check size={14} />{locale === 'ar' ? 'تطابق كلمتي المرور' : 'Both passwords match'}</span></div><Checkbox checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} required label={<span>{locale === 'ar' ? 'أوافق على ' : 'I agree to the '}<a href="/terms">{t('terms')}</a>{locale === 'ar' ? ' و' : ' and the '}<a href="/privacy">{t('privacy')}</a></span>} /></> : <div className="auth-form__options"><Button type="button" variant="text" onClick={reset}>{t('forgotPassword')}</Button></div>}{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}<Button type="submit" variant="primary" size="lg" fullWidth loading={loading}>{signup ? t('signUp') : t('signIn')}</Button></form><div className="auth-divider"><span>{t('orContinue')}</span></div><Button type="button" fullWidth size="lg" leadingIcon={<GoogleIcon />} onClick={async () => { setLoading(true); setError(''); try { await auth.signInWithGoogle(); navigate(destinationAfterAuth(routeState)) } catch (err) { setError(authErrorMessage(err, t)) } finally { setLoading(false) } }}>{t('continueGoogle')}</Button><p className="auth-switch">{signup ? t('haveAccount') : t('noAccount')} <button type="button" onClick={() => navigate({ surface: 'auth', page: signup ? 'signin' : 'signup', state: routeState })}>{signup ? t('signIn') : t('signUp')}</button></p></div></div></ProductionAuthShell>
+  return <ProductionAuthShell navigate={navigate}><div className={`auth-card auth-card--${signup ? 'signup' : 'signin'}`}><div className="auth-form"><header><span>{signup ? copyByLocale(locale, 'Create your workspace access', 'ابدأ إعداد مساحة عملك') : copyByLocale(locale, 'Secure account access', 'دخول آمن للحساب')}</span><h1>{signup ? t('signUpTitle') : t('signInTitle')}</h1><p>{activationPayload ? copyByLocale(locale, 'Sign in to link this desktop app session to your account.', 'سجّل الدخول لربط جلسة أداة سطح المكتب بحسابك.') : signup ? copyByLocale(locale, 'Create one account for subscriptions, downloads, support, and your desktop sign-in.', 'أنشئ حسابًا واحدًا للاشتراك والتنزيلات والدعم وتسجيل الدخول إلى الأداة.') : t('signInBody')}</p></header>{activationPayload ? <Alert title={copyByLocale(locale, 'Desktop linking', 'ربط أداة سطح المكتب')} tone="info">{copyByLocale(locale, 'After sign-in, Saturn Workspace will be linked automatically.', 'بعد تسجيل الدخول سيتم ربط Saturn Workspace تلقائيًا.')}</Alert> : null}<form className="stack" onSubmit={submit} noValidate><FormField label={t('email')} htmlFor="auth-email" required><Input id="auth-email" type="email" autoComplete="email" placeholder={locale === 'ar' ? 'name@example.com' : 'name@example.com'} value={email} onChange={(event) => setEmail(event.target.value)} required /></FormField><FormField label={t('password')} htmlFor="auth-password" required><PasswordInput id="auth-password" autoComplete={signup ? 'new-password' : 'current-password'} value={password} onChange={(event) => setPassword(event.target.value)} required /></FormField>{signup ? <><FormField label={t('confirmPassword')} htmlFor="auth-confirm-password" required error={confirmPassword && !passwordsMatch ? (locale === 'ar' ? 'كلمتا المرور غير متطابقتين.' : 'Passwords do not match.') : undefined}><PasswordInput id="auth-confirm-password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required /></FormField><div className="password-requirements" aria-live="polite"><strong>{locale === 'ar' ? 'متطلبات كلمة المرور' : 'Password requirements'}</strong><span className={passwordLongEnough ? 'is-valid' : ''}><Check size={14} />{locale === 'ar' ? '6 أحرف على الأقل' : 'At least 6 characters'}</span><span className={passwordsMatch ? 'is-valid' : ''}><Check size={14} />{locale === 'ar' ? 'تطابق كلمتي المرور' : 'Both passwords match'}</span></div><Checkbox checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} required label={<span>{locale === 'ar' ? 'أوافق على ' : 'I agree to the '}<a href="/terms">{t('terms')}</a>{locale === 'ar' ? ' و' : ' and the '}<a href="/privacy">{t('privacy')}</a></span>} /></> : <div className="auth-form__options"><Button type="button" variant="text" onClick={reset}>{t('forgotPassword')}</Button></div>}{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}<Button type="submit" variant="primary" size="lg" fullWidth loading={loading}>{signup ? t('signUp') : t('signIn')}</Button></form><div className="auth-divider"><span>{t('orContinue')}</span></div><Button type="button" fullWidth size="lg" leadingIcon={<GoogleIcon />} onClick={async () => { setLoading(true); setError(''); try { await auth.signInWithGoogle(); if (await finishActivationIfNeeded()) return; navigate(destinationAfterAuth(routeState)) } catch (err) { setError(activationPayload ? deviceActivationErrorMessage(err, locale) : authErrorMessage(err, t)) } finally { setLoading(false) } }}>{t('continueGoogle')}</Button><p className="auth-switch">{signup ? t('haveAccount') : t('noAccount')} <button type="button" onClick={() => navigate({ surface: 'auth', page: signup ? 'signin' : 'signup', state: routeState })}>{signup ? t('signIn') : t('signUp')}</button></p></div></div></ProductionAuthShell>
 }
 
 function EmailVerificationProductionPage({ routeState, navigate }: { routeState?: string; navigate: Navigate }) {
@@ -526,7 +652,7 @@ function PortalSupport() {
       threads.reload()
       if (result.threadId) setSelected({ id: result.threadId, subject, status: 'open', updatedAt: new Date().toISOString() })
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'support_ticket_failed')
+      setError(supportErrorMessage(err, locale))
     } finally {
       setBusy(false)
     }
@@ -545,7 +671,7 @@ function PortalSupport() {
       thread.reload()
       threads.reload()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'support_reply_failed')
+      setError(supportErrorMessage(err, locale))
     } finally {
       setBusy(false)
     }
@@ -563,7 +689,7 @@ function PortalSupport() {
       thread.reload()
       threads.reload()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'support_status_failed')
+      setError(supportErrorMessage(err, locale))
     } finally {
       setBusy(false)
     }
@@ -577,7 +703,7 @@ function PortalSupport() {
     { key: 'updated', header: t('date'), render: (row) => row.updatedAt || '—' },
   ]
 
-  return <><PageHeader title={t('support')} description={t('recentSupport')} /><div className="portal-two-column"><Card><SectionHeader title={t('createTicket')} description={copyByLocale(locale, 'Support replies appear in this portal. Email delivery is not enabled yet.', 'ستظهر ردود الدعم داخل هذه البوابة. إرسال البريد غير مفعّل حاليًا.')} /><form className="settings-form" onSubmit={createTicket}><FormField label={t('details')} htmlFor="support-subject" required><Input id="support-subject" value={subject} maxLength={160} onChange={(event) => setSubject(event.target.value)} required /></FormField><FormField label={t('support')} htmlFor="support-body" required><Textarea id="support-body" value={body} maxLength={4000} onChange={(event) => setBody(event.target.value)} required /></FormField><Button type="submit" variant="primary" loading={busy}>{t('createTicket')}</Button></form></Card><Card><SectionHeader title={t('recentSupport')} /><TableToolbar searchLabel={t('search')} searchValue={search} onSearch={setSearch} filters={<Select aria-label={t('status')} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">{t('status')}</option><option value="open">{supportStatusLabel('open', locale)}</option><option value="waiting_for_support">{supportStatusLabel('waiting_for_support', locale)}</option><option value="waiting_for_customer">{supportStatusLabel('waiting_for_customer', locale)}</option><option value="resolved">{supportStatusLabel('resolved', locale)}</option><option value="closed">{supportStatusLabel('closed', locale)}</option></Select>} />{threads.error ? <ErrorBlock error={threads.error} onRetry={threads.reload} /> : <DataTable columns={columns} rows={visibleThreads} loading={threads.loading} rowKey={(row) => row.id} emptyTitle={t('tableEmpty')} emptyBody={t('support')} onRowClick={(row) => { setSelected(row); setError(''); setNotice('') }} />}</Card></div>{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}<Drawer open={Boolean(selected)} onClose={() => setSelected(null)} title={selected ? stableTicketNumber(selected.id, selected.updatedAt) : t('support')} description={selected?.subject} closeLabel={t('close')}><div className="support-ticket-meta"><Badge tone={supportStatusTone(thread.data?.thread?.status || selected?.status)}>{supportStatusLabel(thread.data?.thread?.status || selected?.status, locale)}</Badge><span>{thread.data?.thread?.updatedAt || selected?.updatedAt || ''}</span></div><div className="support-thread">{thread.loading ? <LoadingBlock label={t('loading')} /> : thread.data?.messages.filter((message) => message.sender !== 'internal').map((message) => <article key={message.id} className={message.sender === 'admin' ? 'is-admin' : message.sender === 'system' ? 'is-system' : ''}><strong>{message.sender === 'admin' ? t('messageFromAdmin') : message.sender === 'system' ? copyByLocale(locale, 'System', 'النظام') : t('account')}</strong><p>{message.body}</p><small>{message.createdAt}</small></article>)}</div>{(thread.data?.thread?.status || selected?.status) === 'closed' ? <Alert title={supportStatusLabel('closed', locale)} tone="info" action={<Button size="sm" onClick={() => setSelectedStatus('open')} loading={busy}>{copyByLocale(locale, 'Reopen', 'إعادة فتح')}</Button>}>{copyByLocale(locale, 'This ticket is closed. Reopen it if you need to add another reply.', 'هذه التذكرة مغلقة. أعد فتحها إذا كنت تريد إضافة رد جديد.')}</Alert> : <form className="settings-form" onSubmit={sendReply}><FormField label={t('reply')} htmlFor="support-reply"><Textarea id="support-reply" value={reply} maxLength={4000} onChange={(event) => setReply(event.target.value)} required /></FormField><div className="cluster"><Button type="submit" variant="primary" loading={busy}>{t('reply')}</Button>{selected ? <Button type="button" onClick={() => setSelectedStatus('closed')} loading={busy}>{t('close')}</Button> : null}</div></form>}</Drawer></>
+  return <><PageHeader title={t('support')} description={t('recentSupport')} /><div className="portal-two-column"><Card><SectionHeader title={t('createTicket')} description={copyByLocale(locale, 'Support replies appear in this portal and may also be delivered by email.', 'ستظهر ردود الدعم داخل هذه البوابة وقد تصلك أيضًا عبر البريد الإلكتروني.')} /><form className="settings-form" onSubmit={createTicket}><FormField label={t('details')} htmlFor="support-subject" required><Input id="support-subject" value={subject} maxLength={160} onChange={(event) => setSubject(event.target.value)} required /></FormField><FormField label={t('support')} htmlFor="support-body" required><Textarea id="support-body" value={body} maxLength={4000} onChange={(event) => setBody(event.target.value)} required /></FormField><Button type="submit" variant="primary" loading={busy}>{t('createTicket')}</Button></form></Card><Card><SectionHeader title={t('recentSupport')} /><TableToolbar searchLabel={t('search')} searchValue={search} onSearch={setSearch} filters={<Select aria-label={t('status')} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">{t('status')}</option><option value="open">{supportStatusLabel('open', locale)}</option><option value="waiting_for_support">{supportStatusLabel('waiting_for_support', locale)}</option><option value="waiting_for_customer">{supportStatusLabel('waiting_for_customer', locale)}</option><option value="resolved">{supportStatusLabel('resolved', locale)}</option><option value="closed">{supportStatusLabel('closed', locale)}</option></Select>} />{threads.error ? <ErrorBlock error={supportErrorMessage(threads.error, locale)} onRetry={threads.reload} /> : <DataTable columns={columns} rows={visibleThreads} loading={threads.loading} rowKey={(row) => row.id} emptyTitle={t('tableEmpty')} emptyBody={t('support')} onRowClick={(row) => { setSelected(row); setError(''); setNotice('') }} />}</Card></div>{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}<Drawer open={Boolean(selected)} onClose={() => setSelected(null)} title={selected ? stableTicketNumber(selected.id, selected.updatedAt) : t('support')} description={selected?.subject} closeLabel={t('close')}><div className="support-ticket-meta"><Badge tone={supportStatusTone(thread.data?.thread?.status || selected?.status)}>{supportStatusLabel(thread.data?.thread?.status || selected?.status, locale)}</Badge><span>{thread.data?.thread?.updatedAt || selected?.updatedAt || ''}</span></div>{thread.error ? <ErrorBlock error={supportErrorMessage(thread.error, locale)} onRetry={thread.reload} /> : null}<div className="support-thread">{thread.loading ? <LoadingBlock label={t('loading')} /> : thread.data?.messages.filter((message) => message.sender !== 'internal').map((message) => <article key={message.id} className={message.sender === 'admin' ? 'is-admin' : message.sender === 'system' ? 'is-system' : ''}><strong>{message.sender === 'admin' ? t('messageFromAdmin') : message.sender === 'system' ? copyByLocale(locale, 'System', 'النظام') : t('account')}</strong><p>{message.body}</p><small>{message.createdAt}</small></article>)}</div>{(thread.data?.thread?.status || selected?.status) === 'closed' ? <Alert title={supportStatusLabel('closed', locale)} tone="info" action={<Button size="sm" onClick={() => setSelectedStatus('open')} loading={busy}>{copyByLocale(locale, 'Reopen', 'إعادة فتح')}</Button>}>{copyByLocale(locale, 'This ticket is closed. Reopen it if you need to add another reply.', 'هذه التذكرة مغلقة. أعد فتحها إذا كنت تريد إضافة رد جديد.')}</Alert> : <form className="settings-form" onSubmit={sendReply}><FormField label={t('reply')} htmlFor="support-reply"><Textarea id="support-reply" value={reply} maxLength={4000} onChange={(event) => setReply(event.target.value)} required /></FormField><div className="cluster"><Button type="submit" variant="primary" loading={busy}>{t('reply')}</Button>{selected ? <Button type="button" onClick={() => setSelectedStatus('closed')} loading={busy}>{t('close')}</Button> : null}</div></form>}</Drawer></>
 }
 
 function PortalSettings() {
@@ -744,11 +870,11 @@ function AdminSupportV2() {
     try {
       await admin.sendSupportReply(selected.id, reply, { emailRequested: replyMode === 'portal_email' })
       setReply('')
-      setNotice(replyMode === 'portal_email' && !EMAIL_SUPPORT_ENABLED ? copyByLocale(locale, 'Portal reply saved. Email delivery is not configured yet.', 'تم حفظ الرد في البوابة. إرسال البريد غير مفعّل بعد.') : t('success'))
+      setNotice(t('success'))
       messages.reload()
       threads.reload()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'support_reply_failed')
+      setError(supportErrorMessage(err, locale))
     } finally {
       setBusy(false)
     }
@@ -765,7 +891,7 @@ function AdminSupportV2() {
       messages.reload()
       threads.reload()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'support_note_failed')
+      setError(supportErrorMessage(err, locale))
     } finally {
       setBusy(false)
     }
@@ -783,7 +909,7 @@ function AdminSupportV2() {
       messages.reload()
       threads.reload()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'support_status_failed')
+      setError(supportErrorMessage(err, locale))
     } finally {
       setBusy(false)
     }
@@ -803,12 +929,12 @@ function AdminSupportV2() {
       threads.reload()
       setNotice(t('success'))
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'support_block_failed')
+      setError(supportErrorMessage(err, locale))
     } finally {
       setBusy(false)
     }
   }
-  return <><PageHeader title={t('supportInbox')} description={copyByLocale(locale, 'Manage customer support threads, internal notes, status changes, and sender blocks.', 'إدارة تذاكر الدعم، الملاحظات الداخلية، تغييرات الحالة، وحظر المرسلين.')} /><TableToolbar searchLabel={t('search')} searchValue={search} onSearch={setSearch} filters={<Select aria-label={t('status')} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">{t('status')}</option><option value="open">{supportStatusLabel('open', locale)}</option><option value="waiting_for_support">{supportStatusLabel('waiting_for_support', locale)}</option><option value="waiting_for_customer">{supportStatusLabel('waiting_for_customer', locale)}</option><option value="resolved">{supportStatusLabel('resolved', locale)}</option><option value="closed">{supportStatusLabel('closed', locale)}</option></Select>} />{threads.error ? <ErrorBlock error={threads.error} onRetry={threads.reload} /> : <DataTable columns={columns} rows={visibleThreads} loading={threads.loading} rowKey={(row) => row.id} emptyTitle={t('tableEmpty')} emptyBody={t('supportInbox')} onRowClick={(row) => { setSelected(row); setError(''); setNotice(''); setReply(''); setInternalNote('') }} />}{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}<Drawer open={Boolean(selected)} onClose={() => setSelected(null)} title={selected ? stableTicketNumber(selected.id, selected.created_at, selected.updated_at) : t('support')} description={selected?.subject || t('support')} closeLabel={t('close')}><div className="support-admin-head"><div><Badge tone={supportStatusTone(selected?.status)}>{supportStatusLabel(selected?.status, locale)}</Badge><span>{selected?.email || '—'}</span><small>{selected?.app_version || selected?.platform || ''}</small></div><div className="cluster"><Button size="sm" leadingIcon={<Copy size={14} />} onClick={copyTicketNumber}>{copyByLocale(locale, 'Copy ticket number', 'نسخ رقم التذكرة')}</Button><Button size="sm" variant="secondary" onClick={toggleBlock} disabled={!selected || busy}>{selected?.support_blocked ? t('enabled') : t('blockSender')}</Button></div></div><div className="form-grid"><FormField label={t('status')} htmlFor="admin-ticket-status"><Select id="admin-ticket-status" value={selected?.status || 'open'} onChange={(event) => changeStatus(event.target.value)}><option value="open">{supportStatusLabel('open', locale)}</option><option value="waiting_for_support">{supportStatusLabel('waiting_for_support', locale)}</option><option value="waiting_for_customer">{supportStatusLabel('waiting_for_customer', locale)}</option><option value="resolved">{supportStatusLabel('resolved', locale)}</option><option value="closed">{supportStatusLabel('closed', locale)}</option></Select></FormField><FormField label={t('reason')} htmlFor="support-status-reason"><Input id="support-status-reason" value={statusReason} onChange={(event) => setStatusReason(event.target.value)} /></FormField></div><div className="support-thread">{messages.loading ? <LoadingBlock label={t('loading')} /> : messages.data?.map((message) => <article key={message.id} className={message.sender === 'admin' ? 'is-admin' : message.sender === 'internal' ? 'is-internal' : message.sender === 'system' ? 'is-system' : ''}><strong>{message.sender === 'internal' ? copyByLocale(locale, 'Internal note', 'ملاحظة داخلية') : message.sender === 'system' ? copyByLocale(locale, 'System', 'النظام') : message.sender === 'admin' ? t('messageFromAdmin') : t('account')}</strong><p>{message.body}</p><small>{message.created_at}</small></article>)}</div><form className="settings-form" onSubmit={sendReply}><div className="form-grid"><FormField label={t('type')} htmlFor="admin-support-mode"><Select id="admin-support-mode" value={replyMode} onChange={(event) => setReplyMode(event.target.value as 'portal' | 'portal_email')}><option value="portal">{copyByLocale(locale, 'Portal only', 'البوابة فقط')}</option><option value="portal_email">{copyByLocale(locale, 'Portal + email', 'البوابة + البريد')}</option></Select></FormField><FormField label={copyByLocale(locale, 'Assigned admin', 'المسؤول المعين')} htmlFor="assigned-admin"><Input id="assigned-admin" value={copyByLocale(locale, 'Unassigned', 'غير معيّن')} readOnly /></FormField></div>{replyMode === 'portal_email' && !EMAIL_SUPPORT_ENABLED ? <Alert title={copyByLocale(locale, 'Email provider required', 'يتطلب مزود بريد')} tone="warning">{copyByLocale(locale, 'The reply will be saved in the portal. Email sending stays off until a transactional email provider is configured.', 'سيتم حفظ الرد داخل البوابة فقط. إرسال البريد يظل متوقفًا حتى يتم إعداد مزود بريد للرسائل التشغيلية.')}</Alert> : null}<FormField label={t('reply')} htmlFor="admin-support-reply"><Textarea id="admin-support-reply" value={reply} maxLength={4000} onChange={(event) => setReply(event.target.value)} required /></FormField><Button type="submit" variant="primary" loading={busy}>{t('reply')}</Button></form><Card padding="sm"><SectionHeader title={copyByLocale(locale, 'Internal note', 'ملاحظة داخلية')} description={copyByLocale(locale, 'Visible only to administrators.', 'تظهر للمديرين فقط.')} /><FormField label={t('adminNote')} htmlFor="admin-internal-note"><Textarea id="admin-internal-note" value={internalNote} maxLength={4000} onChange={(event) => setInternalNote(event.target.value)} /></FormField><Button type="button" onClick={saveInternalNote} loading={busy}>{t('save')}</Button></Card></Drawer></>
+  return <><PageHeader title={t('supportInbox')} description={copyByLocale(locale, 'Manage customer support threads, internal notes, status changes, and sender blocks.', 'إدارة تذاكر الدعم، الملاحظات الداخلية، تغييرات الحالة، وحظر المرسلين.')} /><TableToolbar searchLabel={t('search')} searchValue={search} onSearch={setSearch} filters={<Select aria-label={t('status')} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">{t('status')}</option><option value="open">{supportStatusLabel('open', locale)}</option><option value="waiting_for_support">{supportStatusLabel('waiting_for_support', locale)}</option><option value="waiting_for_customer">{supportStatusLabel('waiting_for_customer', locale)}</option><option value="resolved">{supportStatusLabel('resolved', locale)}</option><option value="closed">{supportStatusLabel('closed', locale)}</option></Select>} />{threads.error ? <ErrorBlock error={supportErrorMessage(threads.error, locale)} onRetry={threads.reload} /> : <DataTable columns={columns} rows={visibleThreads} loading={threads.loading} rowKey={(row) => row.id} emptyTitle={t('tableEmpty')} emptyBody={t('supportInbox')} onRowClick={(row) => { setSelected(row); setError(''); setNotice(''); setReply(''); setInternalNote('') }} />}{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}<Drawer open={Boolean(selected)} onClose={() => setSelected(null)} title={selected ? stableTicketNumber(selected.id, selected.created_at, selected.updated_at) : t('support')} description={selected?.subject || t('support')} closeLabel={t('close')}><div className="support-admin-head"><div><Badge tone={supportStatusTone(selected?.status)}>{supportStatusLabel(selected?.status, locale)}</Badge><span>{selected?.email || '—'}</span><small>{selected?.app_version || selected?.platform || ''}</small></div><div className="cluster"><Button size="sm" leadingIcon={<Copy size={14} />} onClick={copyTicketNumber}>{copyByLocale(locale, 'Copy ticket number', 'نسخ رقم التذكرة')}</Button><Button size="sm" variant="secondary" onClick={toggleBlock} disabled={!selected || busy}>{selected?.support_blocked ? t('enabled') : t('blockSender')}</Button></div></div><div className="form-grid"><FormField label={t('status')} htmlFor="admin-ticket-status"><Select id="admin-ticket-status" value={selected?.status || 'open'} onChange={(event) => changeStatus(event.target.value)}><option value="open">{supportStatusLabel('open', locale)}</option><option value="waiting_for_support">{supportStatusLabel('waiting_for_support', locale)}</option><option value="waiting_for_customer">{supportStatusLabel('waiting_for_customer', locale)}</option><option value="resolved">{supportStatusLabel('resolved', locale)}</option><option value="closed">{supportStatusLabel('closed', locale)}</option></Select></FormField><FormField label={t('reason')} htmlFor="support-status-reason"><Input id="support-status-reason" value={statusReason} onChange={(event) => setStatusReason(event.target.value)} /></FormField></div>{messages.error ? <ErrorBlock error={supportErrorMessage(messages.error, locale)} onRetry={messages.reload} /> : null}<div className="support-thread">{messages.loading ? <LoadingBlock label={t('loading')} /> : messages.data?.map((message) => <article key={message.id} className={message.sender === 'admin' ? 'is-admin' : message.sender === 'internal' ? 'is-internal' : message.sender === 'system' ? 'is-system' : ''}><strong>{message.sender === 'internal' ? copyByLocale(locale, 'Internal note', 'ملاحظة داخلية') : message.sender === 'system' ? copyByLocale(locale, 'System', 'النظام') : message.sender === 'admin' ? t('messageFromAdmin') : t('account')}</strong><p>{message.body}</p><small>{message.created_at}</small></article>)}</div><form className="settings-form" onSubmit={sendReply}><div className="form-grid"><FormField label={t('type')} htmlFor="admin-support-mode"><Select id="admin-support-mode" value={replyMode} onChange={(event) => setReplyMode(event.target.value as 'portal' | 'portal_email')}><option value="portal">{copyByLocale(locale, 'Portal only', 'البوابة فقط')}</option><option value="portal_email">{copyByLocale(locale, 'Portal + email', 'البوابة + البريد')}</option></Select></FormField><FormField label={copyByLocale(locale, 'Assigned admin', 'المسؤول المعين')} htmlFor="assigned-admin"><Input id="assigned-admin" value={copyByLocale(locale, 'Unassigned', 'غير معيّن')} readOnly /></FormField></div>{replyMode === 'portal_email' && !EMAIL_SUPPORT_ENABLED ? <Alert title={copyByLocale(locale, 'Email provider required', 'يتطلب مزود بريد')} tone="warning">{copyByLocale(locale, 'The reply will be saved in the portal. Email sending stays off until a transactional email provider is configured.', 'سيتم حفظ الرد داخل البوابة فقط. إرسال البريد يظل متوقفًا حتى يتم إعداد مزود بريد للرسائل التشغيلية.')}</Alert> : null}<FormField label={t('reply')} htmlFor="admin-support-reply"><Textarea id="admin-support-reply" value={reply} maxLength={4000} onChange={(event) => setReply(event.target.value)} required /></FormField><Button type="submit" variant="primary" loading={busy}>{t('reply')}</Button></form><Card padding="sm"><SectionHeader title={copyByLocale(locale, 'Internal note', 'ملاحظة داخلية')} description={copyByLocale(locale, 'Visible only to administrators.', 'تظهر للمديرين فقط.')} /><FormField label={t('adminNote')} htmlFor="admin-internal-note"><Textarea id="admin-internal-note" value={internalNote} maxLength={4000} onChange={(event) => setInternalNote(event.target.value)} /></FormField><Button type="button" onClick={saveInternalNote} loading={busy}>{t('save')}</Button></Card></Drawer></>
 }
 
 export function AdminSupport() {

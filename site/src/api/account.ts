@@ -22,7 +22,7 @@ export type AccountSubscription = {
 export async function fetchAccountSubscription(idToken: string) {
   const response = await fetch(`${AUTH_BASE}/account/subscription`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
     body: JSON.stringify({ id_token: idToken }),
   })
   const payload = (await response.json().catch(() => null)) as AccountSubscription | null

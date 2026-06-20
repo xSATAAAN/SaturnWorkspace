@@ -7,6 +7,7 @@ export type AppErrorCode =
   | 'SUBSCRIPTION_INACTIVE'
   | 'DOWNLOAD_NOT_ENTITLED'
   | 'SUPPORT_TICKET_FORBIDDEN'
+  | 'SUPPORT_RATE_LIMITED'
   | 'ADMIN_PERMISSION_REQUIRED'
   | 'NETWORK_UNAVAILABLE'
   | 'REQUEST_FAILED'
@@ -24,6 +25,9 @@ const rawToCode: Record<string, AppErrorCode> = {
   download_not_entitled: 'DOWNLOAD_NOT_ENTITLED',
   thread_not_found: 'SUPPORT_TICKET_FORBIDDEN',
   support_blocked: 'SUPPORT_TICKET_FORBIDDEN',
+  support_rate_limited: 'SUPPORT_RATE_LIMITED',
+  missing_id_token: 'AUTH_SESSION_EXPIRED',
+  identity_incomplete: 'AUTH_SESSION_EXPIRED',
   admin_permission_required: 'ADMIN_PERMISSION_REQUIRED',
 }
 
@@ -49,6 +53,8 @@ export function userSafeErrorMessage(raw: unknown, status?: number): string {
       return 'DOWNLOAD_NOT_ENTITLED'
     case 'SUPPORT_TICKET_FORBIDDEN':
       return 'SUPPORT_TICKET_FORBIDDEN'
+    case 'SUPPORT_RATE_LIMITED':
+      return 'SUPPORT_RATE_LIMITED'
     case 'ADMIN_PERMISSION_REQUIRED':
       return 'ADMIN_PERMISSION_REQUIRED'
     case 'NETWORK_UNAVAILABLE':

@@ -12,7 +12,7 @@ function normalizePath(pathname: string) {
 
 export function routeToPath(route: AppRoute): string {
   let path: string
-  if (route.surface === 'auth') path = route.page === 'signup' ? '/account/signup' : route.page === 'verify' ? '/account/verify' : '/account/signin'
+  if (route.surface === 'auth') path = route.page === 'signup' ? '/account/signup' : route.page === 'verify' ? '/account/verify' : route.page === 'linked' ? '/account/linked' : '/account/signin'
   else if (route.surface === 'portal') path = route.page === 'overview' ? '/account' : `/account/${route.page}`
   else if (route.surface === 'admin') path = route.page === 'overview' ? '/admin' : `/admin/${route.page}`
   else if (route.surface === 'system') path = `/${route.page}`
@@ -34,7 +34,7 @@ export function routeFromInternalUrl(value: string): AppRoute {
   if (path === '/login' || path === '/account/signin' || path === '/activate') return { surface: 'auth', page: 'signin', state }
   if (path === '/account/signup') return { surface: 'auth', page: 'signup', state }
   if (path === '/account/verify') return { surface: 'auth', page: 'verify', state }
-  if (path === '/account/linked') return { surface: 'auth', page: 'signin', state: 'linked' }
+  if (path === '/account/linked') return { surface: 'auth', page: 'linked', state }
   if (path === '/account') return { surface: 'portal', page: 'overview', state }
   if (path.startsWith('/account/')) {
     const page = path.replace('/account/', '')

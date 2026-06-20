@@ -1,4 +1,4 @@
-import { postJson } from './http'
+import { postJson } from '../new-ui/adapters/apiClient'
 
 function policyBaseUrl() {
   const configured = String(import.meta.env.VITE_SATURN_POLICY_API_BASE || '').replace(/\/+$/, '')
@@ -11,6 +11,14 @@ function policyBaseUrl() {
 
 function policyPath(path: string) {
   return `${policyBaseUrl()}${path}`
+}
+
+function authHeaders(idToken: string): RequestInit {
+  return {
+    headers: {
+      Authorization: `Bearer ${idToken}`,
+    },
+  }
 }
 
 export type WebSupportThread = {
@@ -38,18 +46,18 @@ export async function createWebSupportTicket(idToken: string, input: { subject: 
     id_token: idToken,
     subject: input.subject,
     body: input.body,
-  })
+  }, authHeaders(idToken))
 }
 
 export async function fetchWebSupportThreads(idToken: string) {
-  return postJson<{ success: boolean; threads: WebSupportThread[] }>(policyPath('/v1/web/support/threads'), { id_token: idToken })
+  return postJson<{ success: boolean; threads: WebSupportThread[] }>(policyPath('/v1/web/support/threads'), { id_token: idToken }, authHeaders(idToken))
 }
 
 export async function fetchWebSupportThread(idToken: string, threadId: string) {
   return postJson<{ success: boolean; thread?: WebSupportThread; messages: WebSupportMessage[] }>(policyPath('/v1/web/support/thread'), {
     id_token: idToken,
     thread_id: threadId,
-  })
+  }, authHeaders(idToken))
 }
 
 export async function replyWebSupportThread(idToken: string, threadId: string, body: string) {
@@ -57,7 +65,7 @@ export async function replyWebSupportThread(idToken: string, threadId: string, b
     id_token: idToken,
     thread_id: threadId,
     body,
-  })
+  }, authHeaders(idToken))
 }
 
 export async function updateWebSupportStatus(idToken: string, threadId: string, status: 'open' | 'closed') {
@@ -65,5 +73,5 @@ export async function updateWebSupportStatus(idToken: string, threadId: string, 
     id_token: idToken,
     thread_id: threadId,
     status,
-  })
+  }, authHeaders(idToken))
 }

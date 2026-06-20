@@ -2283,12 +2283,18 @@ async function requireSupportUser(request: Request, env: Env, body: PolicyReques
   }
 }
 
+function bearerToken(request: Request): string {
+  const header = normalizeText(request.headers.get("Authorization"))
+  const match = /^Bearer\s+(.+)$/i.exec(header)
+  return normalizeText(match?.[1])
+}
+
 async function requireWebSupportUser(
   request: Request,
   env: Env,
   body: PolicyRequest & { id_token?: string }
 ): Promise<{ body: PolicyRequest; email: string; userId: string; installId: string; deviceId: string } | Response> {
-  const idToken = normalizeText(body.id_token)
+  const idToken = bearerToken(request) || normalizeText(body.id_token)
   if (!idToken) return json({ success: false, error: "missing_id_token" }, 401)
 
   const authRequest = new Request("https://auth.saturnws.com/account/identity", {
@@ -2924,6 +2930,7 @@ async function handleAdminSupportReply(request: Request, env: Env, ctx?: Executi
   const threadId = normalizeText(body.thread_id)
   const message = clampMultilineText(body.body || body.message, 4000)
   const internalNote = parseBooleanInput(body.internal_note)
+  const emailRequested = body.email_requested === undefined ? true : parseBooleanInput(body.email_requested)
   if (!threadId) return json({ success: false, error: "thread_id_required" }, 400)
   if (!message) return json({ success: false, error: "message_required" }, 400)
   const thread = await env.DB.prepare("SELECT * FROM support_threads WHERE id = ?1").bind(threadId).first<SupportThreadRow>()
@@ -2937,7 +2944,7 @@ async function handleAdminSupportReply(request: Request, env: Env, ctx?: Executi
     : "UPDATE support_threads SET status = 'waiting_for_customer', admin_last_read_at = datetime('now'), updated_at = datetime('now') WHERE id = ?1")
     .bind(threadId)
     .run()
-  if (!internalNote) await queueSupportAdminReplyEmail(env, thread, messageId, message, ctx)
+  if (!internalNote && emailRequested) await queueSupportAdminReplyEmail(env, thread, messageId, message, ctx)
   return json({ success: true })
 }
 

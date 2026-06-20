@@ -38,7 +38,7 @@ export async function requestEmailVerificationCode(idToken: string, email: strin
   return postJson<EmailVerificationRequestResult>(`${authApiBase()}/email-verification/request`, {
     id_token: idToken,
     email,
-  })
+  }, { headers: { Authorization: `Bearer ${idToken}` } })
 }
 
 export async function verifyEmailVerificationCode(idToken: string, email: string, code: string): Promise<EmailVerificationVerifyResult> {
@@ -46,12 +46,12 @@ export async function verifyEmailVerificationCode(idToken: string, email: string
     id_token: idToken,
     email,
     code,
-  })
+  }, { headers: { Authorization: `Bearer ${idToken}` } })
 }
 
 export async function fetchEmailVerificationStatus(idToken: string, email: string): Promise<EmailVerificationStatusResult> {
   return postJson<EmailVerificationStatusResult>(`${authApiBase()}/email-verification/status`, {
     id_token: idToken,
     email,
-  })
+  }, { headers: { Authorization: `Bearer ${idToken}` } })
 }
