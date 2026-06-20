@@ -28,6 +28,10 @@ const checks = [
     pass: productionPage.includes('PortalOverviewSkeleton') && productionPage.includes('PortalSupportSkeleton') && productionPage.includes('AdminEmailOperationsSkeleton') && !productionPage.includes('PageSkeleton cards'),
   },
   {
+    name: 'page skeletons avoid filler subtitles unless the final page has one',
+    pass: productionPage.includes('function PageHeaderSkeleton({ actions = false, description = false }') && productionPage.includes('function SectionHeaderSkeleton({ action = false, description = false }') && !productionPage.includes('function PortalSubscriptionSkeleton() {\n  return <><PageHeaderSkeleton /><SubscriptionSummarySkeleton /><Card>'),
+  },
+  {
     name: 'public contact page routes support to authenticated support center',
     pass: productionPage.includes("returnTo: '/account/support'") && !productionPage.includes('You are signed in') && !productionPage.includes('أنت مسجّل الدخول'),
   },
@@ -46,6 +50,14 @@ const checks = [
   {
     name: 'portal brand navigates to public home while admin brand stays admin',
     pass: workspaceShell.includes("admin ? { surface: 'admin', page: 'overview' } : { surface: 'public', page: 'home' }"),
+  },
+  {
+    name: 'Phase B.1 copy removes implementation-facing and redundant state narration',
+    pass: !messages.includes('Live plan names and prices') && !messages.includes('commercial source of truth') && !messages.includes('No invoice service is connected yet') && !messages.includes('Only the current session can be shown') && !messages.includes('A Windows session was verified') && !productionPage.includes("description={t('accountOverviewBody')}") && !productionPage.includes("description={t('downloadBody')}") && !productionPage.includes("description={t('adminConsole')}") && !productionPage.includes("description={t('payments')}"),
+  },
+  {
+    name: 'normal loading states do not show retry actions',
+    pass: productionPage.includes("title={t('loading')} body={copyByLocale(locale, 'Checking admin access.'") && !productionPage.includes("title={t('loading')} body={t('adminConsole')} primaryLabel={t('retry')}"),
   },
   {
     name: 'production adapter avoids forced token refresh for account/support reads',

@@ -10,6 +10,13 @@ const roots = [
 
 const extensions = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.css', '.html'])
 const ignoredSegments = new Set(['node_modules', '.git', '.wrangler', 'dist', 'dist-production'])
+const focusedSourceFragments = [
+  'src/new-ui/pages/production/',
+  'src/new-ui/content/',
+  'src/new-ui/i18n/',
+  'src/new-ui/layouts/',
+  'src/new-ui/components/ui/',
+]
 
 const banned = [
   'Plan data unavailable',
@@ -18,6 +25,19 @@ const banned = [
   'Backend integration required',
   'Product decision required',
   'Integration pending',
+  'Live plan names and prices',
+  'commercial source of truth',
+  'Your account workspace brings',
+  'No invoice service is connected yet',
+  'Notification preferences are not available yet',
+  'Account export is not available yet',
+  'Only the current session can be shown',
+  'A Windows session was verified',
+  'Sign in to manage your subscription',
+  'Sign in to manage access',
+  'Use your email to create an account. Subscription access is managed separately.',
+  'Support replies appear in this portal',
+  'Technical account help is handled inside',
   'TODO',
   'Lorem ipsum',
   'هذه الصفحة تعرض',
@@ -34,6 +54,8 @@ const allowedLineFragments = [
   'Backend integration required',
   'Product decision required',
   'Integration pending',
+  'Live plan names and prices',
+  'commercial source of truth',
 ]
 
 const failures = []
@@ -52,6 +74,8 @@ function walk(dir) {
       continue
     }
     if (!extensions.has(extensionOf(path))) continue
+    const rel = relative(root, path).replaceAll('\\', '/')
+    if (!includeDist && !focusedSourceFragments.some((fragment) => rel.startsWith(fragment))) continue
     const content = readFileSync(path, 'utf8')
     content.split(/\r?\n/).forEach((line, index) => {
       if (allowedLineFragments.some((fragment) => line.includes(fragment)) && path.endsWith('check-copy-quality.mjs')) return

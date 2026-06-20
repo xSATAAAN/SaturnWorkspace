@@ -52,16 +52,16 @@ export function PageSkeleton({ withHeader = true, cards = 3 }: { withHeader?: bo
   return <div className="ui-page-skeleton" aria-busy="true">{withHeader ? <div className="ui-page-skeleton__header"><Skeleton width="28%" height={30} /><Skeleton width="52%" height={15} /></div> : null}<div className="ui-page-skeleton__grid">{Array.from({ length: cards }).map((_, index) => <CardSkeleton key={index} rows={index === 0 ? 4 : 3} />)}</div></div>
 }
 
-export function FullPageState({ icon: Icon = AlertCircle, title, body, primaryLabel, onPrimary, secondaryLabel, onSecondary }: { icon?: LucideIcon; title: string; body: string; primaryLabel: string; onPrimary: () => void; secondaryLabel?: string; onSecondary?: () => void }) {
+export function FullPageState({ icon: Icon = AlertCircle, title, body, primaryLabel, onPrimary, secondaryLabel, onSecondary }: { icon?: LucideIcon; title: string; body?: string; primaryLabel?: string; onPrimary?: () => void; secondaryLabel?: string; onSecondary?: () => void }) {
   return (
     <main className="ui-full-state page-enter">
       <div className="ui-full-state__mark"><Icon size={32} /></div>
       <h1>{title}</h1>
-      <p>{body}</p>
-      <div className="cluster">
+      {body ? <p>{body}</p> : null}
+      {primaryLabel && onPrimary ? <div className="cluster">
         <Button variant="primary" onClick={onPrimary}>{primaryLabel}</Button>
         {secondaryLabel && onSecondary ? <Button onClick={onSecondary}>{secondaryLabel}</Button> : null}
-      </div>
+      </div> : null}
     </main>
   )
 }

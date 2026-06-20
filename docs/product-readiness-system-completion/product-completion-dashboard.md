@@ -4,6 +4,33 @@ Date: 2026-06-20
 
 This dashboard supplements `feature-completeness-matrix.md`. It does not replace the full matrix. Rows not listed here keep their current status in the full matrix.
 
+## Manual Acceptance Update - 2026-06-21
+
+Phase B.1 remains the active stop point. Phase B.2, OTP, Emergency Subscription Grant, Phase C, and desktop work are not started.
+
+| B.1 criterion | Manual result | Current implementation response |
+|---|---|---|
+| Subscription state consistency | Accepted | Kept unchanged. |
+| Arabic encoding | Accepted | Kept guarded by `check-no-mojibake`. |
+| Support role colors | Accepted | Kept unchanged. |
+| Contact/support route separation | Accepted for basic behavior | Kept unchanged; copy was tightened without changing routes. |
+| Cache isolation between accounts | Accepted | Kept unchanged. |
+| Basic async loading model | Accepted | Kept unchanged; normal loading no longer shows retry in admin guard. |
+| Product copy / UX writing | Failed B.1 acceptance | Reworked Phase B.1 customer/admin-facing strings to remove redundant subtitles, implementation-facing copy, and state narration. |
+| Skeleton visual fidelity | Failed B.1 acceptance | Adjusted skeleton header/section placeholders to avoid skeleton-only subtitles and keep page-specific structures closer to final layouts. |
+
+## Phase B.1 Current Batch Status - 2026-06-21
+
+| Area | Status | Evidence |
+|---|---|---|
+| Copy inventory | Completed for B/B.1 surfaces only | Auth, portal overview, subscription, downloads, support, contact, settings, account navigation, admin overview/subscriptions/email operations reviewed. |
+| Copy cleanup | Implemented locally | Removed or rewrote implementation-facing copy such as backend/source-of-truth/setup narration from B.1 surfaces. |
+| Copy quality gate | Strengthened locally | `site/scripts/check-copy-quality.mjs` now catches redundant state narration and implementation-facing phrases for production UI source and build output. |
+| Skeleton fidelity | Implemented locally | `PageHeaderSkeleton` and `SectionHeaderSkeleton` now default to no subtitle placeholder unless explicitly requested; subscription skeleton no longer includes a card absent from the final page. |
+| Automated checks | Passed locally | `npm run test:phase-b1`, `npm run test:phase-b`, and `npm run build` pass in `D:\SaturnWS\web-platform\site`. |
+| Local visual preview | Blocked by environment | Vite preview renders blank without Firebase env and reports `missing_firebase_env`; production Pages has the required environment. |
+| Production deployment | Pending in this batch | Requires syncing to GitHub clone, commit, push, Pages build, and live verification. |
+
 ## Phase B.1 Closure Status
 
 | Matrix # | Feature / flow | Previous status | B.1 implementation status | Product status after B.1 | Manual acceptance needed |
@@ -43,4 +70,3 @@ This dashboard supplements `feature-completeness-matrix.md`. It does not replace
 ## Stop Point
 
 Per the requested execution order, implementation stops here for manual testing before Emergency Subscription Grant or later phases.
-

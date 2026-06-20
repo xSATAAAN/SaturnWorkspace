@@ -4,6 +4,56 @@ Date: 2026-06-20
 
 Scope: website/customer portal/admin UI copy and support/contact semantics only. No backend, Worker, D1, Supabase, Cloudflare, or desktop code was changed in this pass.
 
+## Manual Acceptance Remediation - 2026-06-21
+
+Scope stays limited to Phase B/B.1 surfaces: sign in, sign up, auth loading/error states, account overview, subscription, downloads, support, contact, settings, account navigation, empty/error/success states, buttons, tooltips, admin overview, admin subscriptions, and admin email operations.
+
+### Copy Classification Rules
+
+| Classification | Keep? | Rule |
+|---|---:|---|
+| Required task copy | Yes | Labels, actions, form prompts, and recovery instructions needed to complete the task. |
+| Decision copy | Yes | Helps the user choose between meaningful options. |
+| Error copy | Yes | Explains what happened and the next useful action without raw backend codes. |
+| Constraint copy | Yes | States a real limitation that affects the user's next step. |
+| Help copy | Yes, sparingly | Progressive disclosure only when it reduces uncertainty. |
+| Redundant copy | No | Repeats the page title, button, or obvious state. |
+| Implementation-facing copy | No | Mentions backend, source of truth, integration pending, provider setup, contracts, or internal mechanics in customer UI. |
+| Marketing filler | No in B.1 surfaces | Adds trust claims or broad promises without helping the task. |
+| Placeholder/remove | No | TODO, demo, lorem ipsum, no-op explanations, raw codes, or unapproved production promises. |
+
+### Inventory Summary
+
+| Surface | Rewritten/removed | Left unchanged |
+|---|---|---|
+| Sign in / sign up | Reduced generic sign-in body to direct continuation copy; signup body now avoids subscription-management explanation. | Field labels, password requirements, terms acknowledgement, Google action. |
+| Auth loading/error | Admin normal loading no longer shows a retry action. Errors continue to use stable user-facing messages. | Email verification body remains because it explains a real action: enter the 6-digit code. |
+| Account overview | Removed generic overview subtitle; notification empty copy now describes where important messages appear. | Subscription/download cards and retry actions for real recoverable failures. |
+| Subscription | Removed generic account subtitle and product-decision alert. | Subscription state projection and no-active-subscription CTA. |
+| Downloads | Removed generic download subtitle from portal page. | Release unavailable/download errors because they are task-relevant constraints. |
+| Support / contact | Public contact now uses concise channel selection copy; support card states the sign-in requirement directly; ticket form copy is shortened. | Ticket creation form labels, reply controls, closed-ticket recovery instruction. |
+| Settings | Removed generic settings subtitle. | Profile/security form labels and password reset action. |
+| Admin overview/subscriptions | Removed generic admin subtitles. | Operational table labels and grant-subscription drawer description. |
+| Admin email operations | Left mostly unchanged in this batch because operational diagnostics are admin-facing and Phase B.1 only required skeleton fidelity there. | Send/receive/webhook status labels remain. |
+
+### Copy Moved To Progressive Disclosure / Later Phases
+
+| Copy topic | Destination |
+|---|---|
+| Full pricing/source-of-truth explanation | Phase E commercial/payment source-of-truth pass. |
+| Legal policy text | Separate legal/content pass. |
+| Full admin operational guidance | Phase F admin completion. |
+| Email provider rollout explanations | Email operations acceptance/Phase G. |
+
+### Copy Quality Gate Additions
+
+`site/scripts/check-copy-quality.mjs` now blocks B.1-facing production UI phrases that indicate:
+
+- State narration: "You are logged in", "A Windows session was verified", repeated title/subtitle patterns.
+- Implementation vocabulary: backend required, integration pending, commercial source of truth, provider setup wording in customer UI.
+- Placeholder/filler: TODO, lorem ipsum, demo placeholders.
+- Raw or weak production copy: plan-data placeholders and mojibake markers.
+
 ## Terminology Baseline
 
 | Concept | English | Arabic | Rule |
@@ -56,4 +106,3 @@ The production build also runs copy quality validation against the generated `di
 | Real pricing source copy | Not part of B.1 | Current plan copy still depends on approved commercial source of truth. |
 | Email support copy after live rollout | Pending manual acceptance | Support email/inbound remains an external integration area. |
 | Support attachments copy | Blocked by feature decision | Attachments are not implemented yet. |
-
