@@ -130,16 +130,25 @@ New tables:
 - `notification_schedule`
 - `notification_deliveries`
 - `email_domain_events`
+- `email_cron_locks`
 
 The Worker contains a `scheduled()` handler and the scheduling tables are ready.
 
-Cloudflare cron deployment is not active yet because the current Cloudflare account returned:
+The production Worker code is deployed with a locked cron/manual processing path. The account-level workers.dev subdomain prerequisite has been created as:
 
 ```text
-workers.dev subdomain required for schedules
+saturnws
 ```
 
-Until the Cloudflare account has a workers.dev subdomain or another approved schedule trigger, the scheduler can be run manually through the existing Admin Email Operations process route. It is still safe by default because:
+Follow-up Cloudflare API checks confirmed:
+
+- `saturnws-policy` Worker `workers.dev` route is disabled.
+- Preview URLs are disabled.
+- The `api.saturnws.com/*` route is active.
+- Cron schedule is active:
+  - `*/5 * * * *`
+
+The scheduler is still safe by default because:
 
 ```text
 EMAIL_SCHEDULER_ENABLED=false
@@ -172,8 +181,10 @@ Outbound sending still requires:
 
 ```text
 EMAIL_OUTBOUND_ENABLED=true
-RESEND_API_KEY
+RESEND_SEND_API_KEY
 ```
+
+Inbound received-email retrieval requires `EMAIL_INBOUND_ENABLED=true`, `RESEND_RECEIVE_API_KEY`, and valid signed Resend webhook events.
 
 ## Admin Operations
 
@@ -219,7 +230,8 @@ If an event is disabled or suppressed, the API returns a failure instead of pret
 
 Secrets required for live sending/receiving:
 
-- `RESEND_API_KEY`
+- `RESEND_SEND_API_KEY`
+- `RESEND_RECEIVE_API_KEY`
 - `RESEND_WEBHOOK_SECRET`
 
 Non-secret vars added/used:
@@ -256,7 +268,14 @@ Remote Worker deployment:
 - Policy Worker deployed: `saturnws-policy`
 - Admin Worker deployed: `saturnws-admin`
 
-Cloudflare cron trigger deployment is still pending the workers.dev subdomain requirement noted above.
+Cloudflare Cron trigger deployment is complete:
+
+- Account-level workers.dev subdomain: `saturnws`
+- `saturnws-policy` Worker workers.dev route: disabled
+- Preview URLs: disabled
+- Production route: `api.saturnws.com/*`
+- Cron schedule: `*/5 * * * *`
+- Current Policy Worker version: `cd25bb65-c703-4cb6-bab8-bc91d031c7c1`
 
 ## Remaining Production Steps
 
@@ -264,14 +283,13 @@ Before turning on live sending:
 
 1. Confirm Resend webhook is subscribed to the listed events.
 2. Set Cloudflare secrets:
-   - `RESEND_API_KEY`
+   - `RESEND_SEND_API_KEY`
+   - `RESEND_RECEIVE_API_KEY`
    - `RESEND_WEBHOOK_SECRET`
-3. Apply D1 migration `0009_transactional_email_catalog.sql` remotely after taking a D1 backup/export.
-4. Deploy policy/admin/site changes.
-5. Keep `EMAIL_OUTBOUND_ENABLED=false` for smoke verification.
-6. Send one admin test email after enabling outbound.
-7. Enable `EMAIL_INBOUND_ENABLED=true` only after Receiving is verified.
-8. Enable category flags one-by-one only after each event source is confirmed.
+3. Keep all email feature flags false for smoke verification.
+4. Send one admin test email only after enabling outbound in a controlled rollout.
+5. Enable `EMAIL_INBOUND_ENABLED=true` only after Receiving is verified.
+6. Enable category flags one-by-one only after each event source is confirmed.
 
 ## Explicit Non-Goals
 

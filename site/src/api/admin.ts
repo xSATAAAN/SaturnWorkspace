@@ -263,7 +263,8 @@ export type AdminEmailStatus = {
     inbound_enabled: boolean
     scheduler_enabled?: boolean
     category_flags?: Record<string, boolean>
-    has_resend_api_key: boolean
+    has_resend_send_api_key: boolean
+    has_resend_receive_api_key: boolean
     has_resend_webhook_secret: boolean
     from: string
     sender_identities?: Record<string, string>

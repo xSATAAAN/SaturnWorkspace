@@ -29,7 +29,8 @@ interface Env {
   APP_ENV?: string
   DEFAULT_TTL_SECONDS?: string
   ADMIN_TOKEN_SHA256?: string
-  RESEND_API_KEY?: string
+  RESEND_SEND_API_KEY?: string
+  RESEND_RECEIVE_API_KEY?: string
   RESEND_WEBHOOK_SECRET?: string
   EMAIL_OUTBOUND_ENABLED?: string
   EMAIL_INBOUND_ENABLED?: string
@@ -812,7 +813,7 @@ function envFlag(value: unknown, fallback = false): boolean {
 }
 
 function emailOutboundEnabled(env: Env): boolean {
-  return envFlag(env.EMAIL_OUTBOUND_ENABLED, false) && Boolean(normalizeText(env.RESEND_API_KEY))
+  return envFlag(env.EMAIL_OUTBOUND_ENABLED, false) && Boolean(normalizeText(env.RESEND_SEND_API_KEY))
 }
 
 function emailInboundEnabled(env: Env): boolean {
@@ -1108,8 +1109,8 @@ async function enqueueEmailJob(
 }
 
 async function resendSend(env: Env, message: EmailProviderMessage): Promise<{ id: string }> {
-  const apiKey = normalizeText(env.RESEND_API_KEY)
-  if (!apiKey) throw new Error("resend_api_key_missing")
+  const apiKey = normalizeText(env.RESEND_SEND_API_KEY)
+  if (!apiKey) throw new Error("resend_send_api_key_missing")
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -1144,6 +1145,35 @@ async function resetStuckEmailJobs(env: Env): Promise<void> {
     .catch(() => null)
 }
 
+function dbChanges(result: unknown): number {
+  return Number((result as { meta?: { changes?: number } } | null)?.meta?.changes || 0)
+}
+
+async function acquireEmailCronLock(env: Env): Promise<{ acquired: boolean; name: string; owner: string }> {
+  const name = "email-operations"
+  const owner = crypto.randomUUID()
+  await env.DB.prepare(
+    "INSERT OR IGNORE INTO email_cron_locks (name, owner, locked_until, created_at, updated_at) VALUES (?1, '', datetime('now', '-1 second'), datetime('now'), datetime('now'))"
+  )
+    .bind(name)
+    .run()
+  const result = await env.DB.prepare(
+    "UPDATE email_cron_locks SET owner = ?2, locked_until = datetime('now', ?3), updated_at = datetime('now') WHERE name = ?1 AND datetime(locked_until) <= datetime('now')"
+  )
+    .bind(name, owner, `+${EMAIL_CRON_LOCK_SECONDS} seconds`)
+    .run()
+  return { acquired: dbChanges(result) > 0, name, owner }
+}
+
+async function releaseEmailCronLock(env: Env, lock: { name: string; owner: string }): Promise<void> {
+  await env.DB.prepare(
+    "UPDATE email_cron_locks SET owner = NULL, locked_until = datetime('now', '-1 second'), updated_at = datetime('now') WHERE name = ?1 AND owner = ?2"
+  )
+    .bind(lock.name, lock.owner)
+    .run()
+    .catch(() => null)
+}
+
 function retryBackoffSeconds(attempt: number): number {
   return Math.min(3600, Math.max(60, 60 * 2 ** Math.max(0, attempt - 1)))
 }
@@ -1164,11 +1194,17 @@ async function processEmailOutbox(env: Env, limit = EMAIL_OUTBOX_BATCH_LIMIT): P
     .catch(() => ({ results: [] as EmailJobRow[] }))
   let sent = 0
   let processed = 0
+  let skipped = 0
   for (const job of rows.results || []) {
     processed += 1
-    await env.DB.prepare("UPDATE email_jobs SET status = 'processing', attempt_count = attempt_count + 1, last_attempt_at = datetime('now'), updated_at = datetime('now') WHERE id = ?1 AND status = 'queued'")
+    const claimed = await env.DB.prepare("UPDATE email_jobs SET status = 'processing', attempt_count = attempt_count + 1, last_attempt_at = datetime('now'), updated_at = datetime('now') WHERE id = ?1 AND status = 'queued'")
       .bind(job.id)
       .run()
+      .catch(() => ({ meta: { changes: 0 } }))
+    if (!dbChanges(claimed)) {
+      skipped += 1
+      continue
+    }
     try {
       const headers = parseJsonObject(job.headers_json, {}) as Record<string, string>
       const result = await resendSend(env, {
@@ -1202,7 +1238,7 @@ async function processEmailOutbox(env: Env, limit = EMAIL_OUTBOX_BATCH_LIMIT): P
       }
     }
   }
-  return { processed, sent, skipped: 0 }
+  return { processed, sent, skipped }
 }
 
 async function processScheduledEmailNotifications(env: Env, limit = 10): Promise<{ processed: number; queued: number; failed: number }> {
@@ -1274,10 +1310,20 @@ async function processScheduledEmailNotifications(env: Env, limit = 10): Promise
   return { processed: rows.results?.length || 0, queued, failed }
 }
 
-async function runEmailCron(env: Env): Promise<{ scheduled: { processed: number; queued: number; failed: number }; outbox: { processed: number; sent: number; skipped: number } }> {
-  const scheduled = await processScheduledEmailNotifications(env)
-  const outbox = await processEmailOutbox(env)
-  return { scheduled, outbox }
+async function runEmailCron(env: Env): Promise<{ skipped: boolean; reason?: string; scheduled: { processed: number; queued: number; failed: number }; outbox: { processed: number; sent: number; skipped: number } }> {
+  const empty = {
+    scheduled: { processed: 0, queued: 0, failed: 0 },
+    outbox: { processed: 0, sent: 0, skipped: 0 },
+  }
+  const lock = await acquireEmailCronLock(env)
+  if (!lock.acquired) return { skipped: true, reason: "cron_lock_held", ...empty }
+  try {
+    const scheduled = await processScheduledEmailNotifications(env)
+    const outbox = await processEmailOutbox(env)
+    return { skipped: false, scheduled, outbox }
+  } finally {
+    await releaseEmailCronLock(env, lock)
+  }
 }
 
 function scheduleEmailProcessing(env: Env, ctx?: ExecutionContext): void {
@@ -1563,8 +1609,8 @@ async function handleResendDeliveryEvent(env: Env, eventType: string, data: Reco
 }
 
 async function retrieveReceivedEmail(env: Env, emailId: string): Promise<Record<string, unknown>> {
-  const apiKey = normalizeText(env.RESEND_API_KEY)
-  if (!apiKey) throw new Error("resend_api_key_missing")
+  const apiKey = normalizeText(env.RESEND_RECEIVE_API_KEY)
+  if (!apiKey) throw new Error("resend_receive_api_key_missing")
   const response = await fetch(`https://api.resend.com/emails/receiving/${encodeURIComponent(emailId)}`, {
     method: "GET",
     headers: {
@@ -1785,7 +1831,8 @@ async function handleAdminEmailStatus(env: Env): Promise<Response> {
         release: envFlag(env.EMAIL_RELEASE_ENABLED, false),
         security: envFlag(env.EMAIL_SECURITY_ENABLED, false),
       },
-      has_resend_api_key: Boolean(normalizeText(env.RESEND_API_KEY)),
+      has_resend_send_api_key: Boolean(normalizeText(env.RESEND_SEND_API_KEY)),
+      has_resend_receive_api_key: Boolean(normalizeText(env.RESEND_RECEIVE_API_KEY)),
       has_resend_webhook_secret: Boolean(normalizeText(env.RESEND_WEBHOOK_SECRET)),
       from: emailFromSupport(env),
       sender_identities: {
@@ -1884,7 +1931,7 @@ async function handleAdminEmailPreview(request: Request, env: Env): Promise<Resp
 }
 
 async function handleAdminEmailProcess(env: Env): Promise<Response> {
-  return json({ success: true, processed: await processEmailOutbox(env) })
+  return json({ success: true, processed: await runEmailCron(env) })
 }
 
 
@@ -2267,6 +2314,7 @@ const SUPPORT_DAILY_MESSAGE_LIMIT = 5
 const SUPPORT_RATE_WINDOW_SECONDS = 24 * 60 * 60
 const EMAIL_MAX_ATTEMPTS = 5
 const EMAIL_OUTBOX_BATCH_LIMIT = 5
+const EMAIL_CRON_LOCK_SECONDS = 4 * 60
 const EMAIL_WEBHOOK_MAX_BYTES = 256 * 1024
 const EMAIL_WEBHOOK_TOLERANCE_SECONDS = 5 * 60
 const EMAIL_KNOWN_EVENTS = RESEND_KNOWN_EVENTS

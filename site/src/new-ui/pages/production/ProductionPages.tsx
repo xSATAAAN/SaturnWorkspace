@@ -976,6 +976,9 @@ function AdminEmailOperations() {
             <StatCard label={copyByLocale(locale, 'Outbound', 'الإرسال')} value={boolLabel(data.config.outbound_enabled, locale)} />
             <StatCard label={copyByLocale(locale, 'Inbound', 'الاستقبال')} value={boolLabel(data.config.inbound_enabled, locale)} />
             <StatCard label={copyByLocale(locale, 'Scheduler', 'الجدولة')} value={boolLabel(data.config.scheduler_enabled, locale)} />
+            <StatCard label={copyByLocale(locale, 'Send key', 'مفتاح الإرسال')} value={boolLabel(data.config.has_resend_send_api_key, locale)} />
+            <StatCard label={copyByLocale(locale, 'Receive key', 'مفتاح الاستقبال')} value={boolLabel(data.config.has_resend_receive_api_key, locale)} />
+            <StatCard label={copyByLocale(locale, 'Webhook secret', 'توقيع Webhook')} value={boolLabel(data.config.has_resend_webhook_secret, locale)} />
             <StatCard label={copyByLocale(locale, 'Linked', 'مربوط')} value={data.metrics?.catalog_linked ?? 0} />
             <StatCard label={copyByLocale(locale, 'Prepared', 'جاهز')} value={data.metrics?.catalog_prepared ?? 0} />
             <StatCard label={copyByLocale(locale, 'Disabled', 'معطل')} value={data.metrics?.catalog_disabled ?? 0} />

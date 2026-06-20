@@ -1337,7 +1337,8 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
                   {[
                     [isAr ? 'الإرسال' : 'Outbound', emailStatus?.config.outbound_enabled ? (isAr ? 'مفعل' : 'Enabled') : (isAr ? 'معطل' : 'Disabled')],
                     [isAr ? 'الاستقبال' : 'Inbound', emailStatus?.config.inbound_enabled ? (isAr ? 'مفعل' : 'Enabled') : (isAr ? 'معطل' : 'Disabled')],
-                    [isAr ? 'مفتاح Resend' : 'Resend key', emailStatus?.config.has_resend_api_key ? (isAr ? 'موجود' : 'Present') : (isAr ? 'غير موجود' : 'Missing')],
+                    [isAr ? 'مفتاح الإرسال' : 'Send key', emailStatus?.config.has_resend_send_api_key ? (isAr ? 'موجود' : 'Present') : (isAr ? 'غير موجود' : 'Missing')],
+                    [isAr ? 'مفتاح الاستقبال' : 'Receive key', emailStatus?.config.has_resend_receive_api_key ? (isAr ? 'موجود' : 'Present') : (isAr ? 'غير موجود' : 'Missing')],
                     [isAr ? 'توقيع Webhook' : 'Webhook secret', emailStatus?.config.has_resend_webhook_secret ? (isAr ? 'موجود' : 'Present') : (isAr ? 'غير موجود' : 'Missing')],
                     ['Scheduler', emailStatus?.config.scheduler_enabled ? 'Enabled' : 'Disabled'],
                     ['Catalog', `${emailStatus?.metrics?.catalog_total ?? emailCatalog.length} events`],

@@ -4,6 +4,8 @@ Updated transactional email catalog/scheduler details are documented in:
 
 ```text
 docs/production-integration/transactional-email-platform.md
+docs/production-integration/email-production-activation-report.md
+docs/production-integration/email-catalog-report.md
 ```
 
 ## Scope
@@ -23,7 +25,8 @@ Do not place secret values in source, `wrangler.jsonc`, frontend bundles, or doc
 
 Required Cloudflare Worker secrets:
 
-- `RESEND_API_KEY`
+- `RESEND_SEND_API_KEY`
+- `RESEND_RECEIVE_API_KEY`
 - `RESEND_WEBHOOK_SECRET`
 
 Non-secret Worker vars:
@@ -37,7 +40,8 @@ Non-secret Worker vars:
 Example setup commands, without values:
 
 ```bash
-wrangler secret put RESEND_API_KEY
+wrangler secret put RESEND_SEND_API_KEY
+wrangler secret put RESEND_RECEIVE_API_KEY
 wrangler secret put RESEND_WEBHOOK_SECRET
 ```
 
@@ -94,7 +98,9 @@ Tables:
 7. Failed sends retry with backoff until `max_attempts`.
 8. Resend delivery webhooks update job status and recipient flags.
 
-If `EMAIL_OUTBOUND_ENABLED=false` or `RESEND_API_KEY` is missing, jobs may be queued but are not sent.
+If `EMAIL_OUTBOUND_ENABLED=false` or `RESEND_SEND_API_KEY` is missing, jobs may be queued but are not sent.
+
+Inbound received-email retrieval uses `RESEND_RECEIVE_API_KEY` only.
 
 ## Inbound Reply Flow
 
