@@ -4,7 +4,13 @@ import process from 'node:process'
 
 const ROOT = process.cwd()
 const PLATFORM = path.resolve(ROOT, '..')
-const DESKTOP = path.resolve(PLATFORM, '..', '..', 'desktop-app')
+const desktopCandidates = [
+  process.env.SATURNWS_DESKTOP_APP_ROOT,
+  path.resolve(PLATFORM, '..', 'desktop-app'),
+  path.resolve(PLATFORM, '..', '..', 'desktop-app'),
+].filter(Boolean)
+const DESKTOP = desktopCandidates.find((candidate) => fs.existsSync(path.join(candidate, 'src/backend/security/device_auth.py')))
+if (!DESKTOP) throw new Error('desktop_app_root_not_found')
 const read = (root, relative) => fs.readFileSync(path.join(root, relative), 'utf8')
 const includes = (source, token, label) => { if (!source.includes(token)) throw new Error(`${label}: missing ${token}`) }
 const excludes = (source, token, label) => { if (source.includes(token)) throw new Error(`${label}: forbidden ${token}`) }
@@ -54,7 +60,7 @@ includes(deviceAuth, 'def begin_account_switch', 'desktop account switching')
 includes(deviceAuth, '"/session/refresh"', 'desktop session refresh')
 includes(bridge, 'def begin_account_switch', 'desktop account switch bridge')
 includes(desktopApi, 'begin_account_switch', 'desktop frontend API')
-includes(desktopApp, 'تبديل الحساب', 'desktop account switch UI')
+includes(desktopApp, 'handleAccountSwitch', 'desktop account switch UI')
 
 for (const source of [authWorker, authStore, policyWorker, accountApi, adapters, pages, deviceAuth, bridge, desktopApi, desktopApp]) {
   excludes(source, 'console.log(session_token', 'session token logging')
