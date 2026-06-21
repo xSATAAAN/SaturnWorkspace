@@ -17,6 +17,14 @@ function assertNotIncludes(source, token, label) {
   if (source.includes(token)) throw new Error(`${label}: forbidden ${token}`)
 }
 
+function sliceBetween(source, startToken, endToken, label) {
+  const start = source.indexOf(startToken)
+  if (start < 0) throw new Error(`${label}: missing start token ${startToken}`)
+  const end = source.indexOf(endToken, start + startToken.length)
+  if (end < 0) throw new Error(`${label}: missing end token ${endToken}`)
+  return source.slice(start, end)
+}
+
 const authWorker = read('workers/auth/src/index.ts')
 const authTypes = read('workers/auth/src/types.ts')
 const authSupabase = read('workers/auth/src/lib/supabase.ts')
@@ -28,6 +36,13 @@ const policyCatalog = read('workers/policy/src/email_catalog.ts')
 const policyMigration = read('workers/policy/migrations/0011_auth_email_verification_events.sql')
 const policySensitiveMigration = read('workers/policy/migrations/0012_email_sensitive_payloads.sql')
 const productionAdapters = read('site/src/new-ui/adapters/productionAdapters.ts')
+const productionPages = read('site/src/new-ui/pages/production/ProductionPages.tsx')
+const emailVerificationPage = sliceBetween(
+  productionPages,
+  'function EmailVerificationProductionPage',
+  'export function PortalProductionPages',
+  'email verification page block',
+)
 
 for (const token of ['email_verified_at', 'verification_source']) {
   assertIncludes(authTypes, token, `auth profile type ${token}`)
@@ -74,5 +89,12 @@ assertIncludes(policySensitiveMigration, 'sensitive_payload_purged_at', 'policy 
 assertNotIncludes(productionAdapters, 'baseUser.emailVerified || profile?.email_verified', 'frontend Firebase/profile verification drift')
 assertNotIncludes(productionAdapters, 'user.emailVerified || provisioned.profile.email_verified', 'frontend signup verification drift')
 assertIncludes(productionAdapters, "emailVerificationState: 'verification_pending'", 'frontend initial hydration state')
+assertIncludes(productionAdapters, 'async function refreshAuthenticatedAccountState', 'frontend shared auth refresh helper')
+assertIncludes(productionAdapters, 'await refreshAuthenticatedAccountState(true)', 'frontend OTP verification refreshes profile source of truth')
+assertIncludes(productionAdapters, 'clearAccountBootstrap()', 'frontend OTP verification clears stale account bootstrap cache')
+assertIncludes(productionPages, 'function emailRequiredMessage', 'frontend localized email-required message')
+assertIncludes(emailVerificationPage, 'setError(authErrorMessage(err, t))', 'frontend verification errors use stable user-safe copy')
+assertNotIncludes(productionPages, "setError('email_required')", 'frontend must not expose raw email_required')
+assertNotIncludes(emailVerificationPage, "setError(err instanceof Error ? err.message", 'frontend verification page must not expose raw provider errors')
 
 console.log('Phase B production rollout contract checks passed.')

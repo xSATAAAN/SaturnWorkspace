@@ -4,11 +4,15 @@ Date: 2026-06-20
 
 Scope: website/customer portal/admin UI copy and support/contact semantics only. No backend, Worker, D1, Supabase, Cloudflare, or desktop code was changed in this pass.
 
+Superseded execution note - 2026-06-21:
+
+The earlier `PHASE_B1_NEEDS_FIXES` gate is superseded. Current B.1 result is `PHASE_B1_ACCEPTED_WITH_NON_BLOCKING_UX_DEBT`, and manual acceptance is consolidated into Phase G.
+
 ## Manual Acceptance Remediation - 2026-06-21
 
 Scope stays limited to Phase B/B.1 surfaces: sign in, sign up, auth loading/error states, account overview, subscription, downloads, support, contact, settings, account navigation, empty/error/success states, buttons, tooltips, admin overview, admin subscriptions, and admin email operations.
 
-Latest manual result: `PHASE_B1_NEEDS_FIXES`. This matrix is updated for the focused fix batch and remains `IMPLEMENTED_PENDING_MANUAL_ACCEPTANCE` until the live sign-in copy and account skeleton are accepted manually.
+Latest manual result: `PHASE_B1_ACCEPTED_WITH_NON_BLOCKING_UX_DEBT`. This matrix is retained as evidence for the focused fix batch; remaining manual review is deferred to Phase G.
 
 ### Forensic Correction
 

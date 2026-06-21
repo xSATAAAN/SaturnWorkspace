@@ -67,6 +67,10 @@ function copyByLocale(locale: 'ar' | 'en', en: string, ar: string) {
   return locale === 'ar' ? ar : en
 }
 
+function emailRequiredMessage(locale: 'ar' | 'en') {
+  return copyByLocale(locale, 'Enter your email address.', 'اكتب البريد الإلكتروني.')
+}
+
 function loadActivationPayload(routeState?: string): ActivationPayload | null {
   if (typeof window === 'undefined') return null
   const params = new URLSearchParams(routeState?.startsWith('?') ? routeState.slice(1) : routeState || window.location.search.slice(1))
@@ -606,7 +610,7 @@ function EmailPasswordProductionPage({ page, routeState, navigate }: { page: str
   }
   const reset = async () => {
     if (!email.trim()) {
-      setError('email_required')
+      setError(emailRequiredMessage(locale))
       return
     }
     setLoading(true)
@@ -624,7 +628,7 @@ function EmailPasswordProductionPage({ page, routeState, navigate }: { page: str
 }
 
 function EmailVerificationProductionPage({ routeState, navigate }: { routeState?: string; navigate: Navigate }) {
-  const { t } = useExperience()
+  const { t, locale } = useExperience()
   const { auth } = useAdapters()
   const [email, setEmail] = useState(() => window.sessionStorage.getItem(PENDING_EMAIL_VERIFICATION_KEY) || '')
   const [code, setCode] = useState('')
@@ -636,7 +640,7 @@ function EmailVerificationProductionPage({ routeState, navigate }: { routeState?
   const [loading, setLoading] = useState(false)
   const verify = async () => {
     if (!email.trim()) {
-      setError('email_required')
+      setError(emailRequiredMessage(locale))
       return
     }
     setLoading(true)
@@ -648,14 +652,14 @@ function EmailVerificationProductionPage({ routeState, navigate }: { routeState?
       window.sessionStorage.removeItem(LOCAL_EMAIL_VERIFICATION_TEST_CODE_KEY)
       navigate(destinationAfterAuth(routeState))
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('codeInvalid'))
+      setError(authErrorMessage(err, t))
     } finally {
       setLoading(false)
     }
   }
   const resend = async () => {
     if (!email.trim()) {
-      setError('email_required')
+      setError(emailRequiredMessage(locale))
       return
     }
     setLoading(true)
@@ -671,7 +675,7 @@ function EmailVerificationProductionPage({ routeState, navigate }: { routeState?
         setNotice(t('success'))
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'EMAIL_RESEND_LIMITED')
+      setError(authErrorMessage(err, t))
     } finally {
       setLoading(false)
     }

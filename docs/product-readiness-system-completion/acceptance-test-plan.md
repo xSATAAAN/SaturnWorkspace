@@ -2,11 +2,26 @@
 
 This is the required regression plan before declaring product readiness.
 
+## Execution Policy
+
+Manual acceptance is consolidated into `Phase G - Final Product Acceptance`.
+
+Do not request manual acceptance after every workstream or deployment. Earlier phases must rely on automated tests, type checks, builds, security checks, migration preflight/postflight where relevant, deployment, and automated smoke verification.
+
+Stop before Phase G only for a real hard stop:
+
+- User-supplied secret required.
+- Destructive or irreversible operation.
+- High-risk production migration.
+- Real payment/refund.
+- Product decision that cannot be inferred safely.
+- Security/privacy/data-integrity blocker.
+
 ## Phase B.1 Manual Acceptance Checklist
 
 Phase B.1 manual decision: `PHASE_B1_ACCEPTED_WITH_NON_BLOCKING_UX_DEBT`.
 
-Current status: `ACCEPTED_WITH_NON_BLOCKING_UX_DEBT`. Phase B.2 can proceed. OTP, Phase C, and desktop work remain blocked until separate approval.
+Current status: `ACCEPTED_WITH_NON_BLOCKING_UX_DEBT`. Continue Phase B without another manual gate.
 
 ### Deferred Phase G Visual Consistency Debt
 
@@ -64,6 +79,8 @@ The following is accepted as non-blocking for Phase B.2 but blocking for final r
 
 ## Phase B: Critical Authentication
 
+Phase B acceptance is automated until Phase G.
+
 1. Fresh visit to `/account/signin` while signed out.
 2. Sign up with email/password.
 3. Confirm password mismatch validation.
@@ -106,6 +123,16 @@ The following is accepted as non-blocking for Phase B.2 but blocking for final r
 
 ## Phase E: Subscription, Downloads, Pricing & Checkout
 
+Subscription truth normalization must cover:
+
+1. New account with no subscription shows `No subscription`.
+2. No plan, expiry, or active status is shown for no-subscription accounts.
+3. History-only users are not projected as currently subscribed.
+4. Active users show exactly one correct current subscription.
+5. Customer portal and Admin agree.
+6. No frontend or backend fallback shows fake `monthly`.
+7. Tests cover no rows, history only, active, duplicates, and same email with different UID.
+
 1. Public pricing renders correct visible plans.
 2. Pricing data source is documented and not frontend-only before production checkout.
 3. Checkout disabled state is clean when provider disabled.
@@ -121,16 +148,57 @@ The following is accepted as non-blocking for Phase B.2 but blocking for final r
 
 1. Admin dashboard loads structured KPIs and structured recent activity.
 2. Admin user list is separate from subscription list.
-3. Admin user detail shows identity, subscription, sessions, crashes, support.
-4. Grant subscription handles weekly/monthly/yearly/lifetime/trialing/cancel states as approved.
-5. HWID reset revokes affected sessions when requested.
-6. Release upload/publish/rollback works for stable and beta in staging.
-7. Targeted OTA fields are visible and validated.
-8. Policies page has global policy, disabled versions, plan features, invite codes if supported.
-9. Old floating Policy Controls is absent.
-10. Audit log records admin actions.
+3. Users page lists users, identity, status, created date, last activity, subscription presence, devices/sessions, and user details link.
+4. Subscriptions page lists real subscription rows only and does not create fake rows for users without subscriptions.
+5. Admin user detail shows identity, subscription, sessions, crashes, support.
+6. Manual Grant uses a user picker instead of requiring manual Firebase UID entry.
+7. Manual Grant uses reason codes with optional note; `other` requires a note.
+8. Manual Grant hides internal operation labels from primary copy.
+9. Subscription recovery is moved to Advanced actions -> Subscription recovery.
+10. Grant subscription handles weekly/monthly/yearly/lifetime/trialing/cancel states as approved.
+11. HWID reset revokes affected sessions when requested.
+12. Release upload/publish/rollback works for stable and beta in staging.
+13. Targeted OTA fields are visible and validated.
+14. Policies page has global policy, disabled versions, plan features, invite codes if supported.
+15. Old floating Policy Controls is absent.
+16. Audit log records admin actions.
 
 ## Phase G: Full Regression
+
+Manual Grant:
+
+1. Search/select user.
+2. Grant 5 days.
+3. Extend one day.
+4. Reject zero/negative.
+5. Exact expiry.
+6. Lifetime.
+7. Audit.
+8. No payment/order/invoice.
+9. Idempotency.
+10. Duplicate subscription warning.
+
+Subscription truth:
+
+1. New account has no subscription.
+2. Expired history is not current.
+3. Active account appears correctly.
+4. Customer/Admin consistency.
+
+Admin IA:
+
+1. Users and Subscriptions are separate.
+2. No fake subscription rows.
+3. User detail is coherent.
+4. Operational copy is natural.
+
+Existing deferred UX:
+
+1. Site-wide skeleton title/body vertical spacing.
+2. Visual regression.
+3. RTL/LTR.
+4. Mobile/desktop.
+5. Copy quality final sweep.
 
 1. Web site build.
 2. Worker type checks/tests.

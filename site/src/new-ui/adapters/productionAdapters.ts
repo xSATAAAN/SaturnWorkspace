@@ -106,6 +106,44 @@ function currentPerformanceNow() {
   return typeof performance !== 'undefined' ? performance.now() : Date.now()
 }
 
+async function refreshAuthenticatedAccountState(forceRefresh = true): Promise<void> {
+  const user = firebaseAuth.currentUser
+  if (!user?.email) return
+  const baseUser = userFromFirebase(user)
+  publishAuthState({
+    ready: false,
+    user: baseUser,
+    status: 'refreshing',
+    profileState: 'provisioning',
+    emailVerificationState: 'verification_pending',
+    sessionState: 'refresh_required',
+    error: null,
+  })
+  try {
+    const account = await loadAccountBootstrap(forceRefresh)
+    const profile = account.user.profile || null
+    publishAuthState({
+      ready: true,
+      user: account.user,
+      status: 'authenticated',
+      profileState: profile?.account_status === 'suspended' ? 'disabled' : profile ? 'ready' : 'missing',
+      emailVerificationState: profile?.email_verified ? 'verified' : 'unverified',
+      sessionState: 'valid',
+      error: null,
+    })
+  } catch (error) {
+    publishAuthState({
+      ready: true,
+      user: baseUser,
+      status: 'authenticated',
+      profileState: 'failed_recoverable',
+      emailVerificationState: 'unverified',
+      sessionState: 'refresh_required',
+      error: String(error instanceof Error ? error.message : error || 'PROFILE_PROVISIONING_FAILED'),
+    })
+  }
+}
+
 async function loadAccountBootstrap(forceRefresh = false): Promise<AccountBootstrap> {
   const user = firebaseAuth.currentUser
   if (!user?.email) throw new Error('not_authenticated')
@@ -202,30 +240,7 @@ function ensureAuthListener() {
       sessionState: 'refresh_required',
       error: null,
     })
-    loadAccountBootstrap(false)
-      .then((account) => {
-        const profile = account.user.profile || null
-        publishAuthState({
-          ready: true,
-          user: account.user,
-          status: 'authenticated',
-          profileState: profile?.account_status === 'suspended' ? 'disabled' : profile ? 'ready' : 'missing',
-          emailVerificationState: profile?.email_verified ? 'verified' : 'unverified',
-          sessionState: 'valid',
-          error: null,
-        })
-      })
-      .catch((error) => {
-        publishAuthState({
-          ready: true,
-          user: baseUser,
-          status: 'authenticated',
-          profileState: 'failed_recoverable',
-          emailVerificationState: 'unverified',
-          sessionState: 'refresh_required',
-          error: String(error instanceof Error ? error.message : error || 'PROFILE_PROVISIONING_FAILED'),
-        })
-      })
+    refreshAuthenticatedAccountState(false)
   })
 }
 
@@ -342,13 +357,17 @@ export const productionAdapters: AppAdapters = {
     async requestEmailVerification(email) {
       const token = await productionAdapters.auth.getIdToken(false)
       if (!token) return { success: false, error: 'not_authenticated' }
-      const result = await requestEmailVerificationCode(token, email)
+      const result = await requestEmailVerificationCode(token, email.trim())
       return { success: result.success, status: result.status, expiresAt: result.expires_at, error: result.error, testCode: result.test_code }
     },
     async verifyEmailCode(email, code) {
       const token = await productionAdapters.auth.getIdToken(false)
       if (!token) return { success: false, error: 'not_authenticated' }
-      const result = await verifyEmailVerificationCode(token, email, code)
+      const result = await verifyEmailVerificationCode(token, email.trim(), code)
+      if (result.success) {
+        clearAccountBootstrap()
+        await refreshAuthenticatedAccountState(true)
+      }
       return { success: result.success, status: result.status, verifiedAt: result.verified_at, error: result.error }
     },
     async signOut() {

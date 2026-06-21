@@ -4,7 +4,16 @@
 
 Current execution has moved past Phase B.1 remediation. The following were accepted and must not be reopened unless a regression is found: subscription state consistency, Arabic encoding, support role colors, basic contact/support route separation, cache isolation between accounts, and the basic async loading model.
 
-Latest manual result: `PHASE_B1_ACCEPTED_WITH_NON_BLOCKING_UX_DEBT`. Phase B.1 is not a blocker for Phase B.2. Do not start OTP, Phase C, or desktop work.
+Latest manual result: `PHASE_B1_ACCEPTED_WITH_NON_BLOCKING_UX_DEBT`. Phase B.1 is not a blocker.
+
+Execution policy update:
+
+- Do not create more manual acceptance gates after each workstream, deployment, or feature.
+- Continue through the major phases only: Phase A, Phase B, Phase C, Phase D, Phase E, Phase F, and Phase G.
+- Each phase must include the relevant automated tests, type checks, build, security checks, migration preflight/postflight, deployment, and automated smoke verification.
+- Consolidate deferred manual checks into Phase G - Final Product Acceptance.
+- Stop before Phase G only for a real hard stop: user-supplied secret, destructive/irreversible operation, high-risk production migration, real payment/refund, unsafe product decision, or security/privacy/data-integrity blocker.
+- Do not create B.3, B.4, or a new manual gate for every feature.
 
 The failed B.1 criteria are tracked as one organized remediation batch:
 
@@ -49,7 +58,20 @@ Future observations found while reviewing B.1 should be logged by phase instead 
 | Desktop linking, OTA, installer, or app runtime issues | Phase C/G | Requires explicit desktop scope approval. |
 | Legal/public marketing copy outside B.1 | Phase E/F | Requires production content review, not B.1 remediation. |
 
-Phase B.2 is allowed to start. OTP, Phase C, and desktop work remain blocked until explicitly accepted later.
+Phase B.2 Emergency Subscription Grant status: `IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED`.
+
+- The implementation is deployed and protected, but it must not be treated as `COMPLETE_AND_VERIFIED`.
+- Do not use it automatically on real users during ongoing implementation.
+- Operational manual checks are deferred to Phase G.
+- Its UX and IA issues are recorded under Phase F and do not block the rest of Phase B.
+
+Current roadmap continuation:
+
+1. Continue the rest of Phase B: email/password signup, email verification OTP, auth recovery/error flows, and automated Phase B regression.
+2. Do not request manual acceptance before continuing.
+3. Move to Phase C when Phase B has no hard blocker.
+4. Continue D, E, and F in order.
+5. Perform consolidated manual product acceptance in Phase G.
 
 | ID | Issue | Severity | Root cause | Recommended phase | Required migration? |
 |---|---|---|---|---|---|
@@ -79,12 +101,129 @@ Phase B.2 is allowed to start. OTP, Phase C, and desktop work remain blocked unt
 | PR-024 | Admin payment management page is shell only. | Medium | `AdminCommerce` returns decision-required empty state. | E/F | Depends on provider |
 | PR-025 | Policy admin state is accessible through old and new paths. | Medium | New Admin Policies page plus old injected panel/proxy endpoints. | F | No |
 | PR-026 | Product readiness requires tests for desktop auth paths but current phase did not run desktop E2E. | High | Audit-only phase; desktop build/test excluded from implementation. | G | No |
+| PR-027 | New/no-subscription users can appear as `monthly` in admin projections. | Critical | `account_subscriptions` schema and several API/UI adapters still use `monthly` as a fallback/default; current subscription, history, entitlement, plan catalog, manual grants, and payments are not fully separated. | E | Possibly |
+| PR-028 | Admin users and subscriptions IA are conflated. | High | Production admin routes map `users` and `subscriptions` to the same subscription-centered surface, so users can look like subscription rows. | F | No |
+| PR-029 | Manual Grant UI is implemented but too operational for daily admin use. | Medium | The current drawer requires manual Firebase UID entry, exposes internal operation labels, and requires free-text reason for routine actions. | F | No |
+| PR-030 | Subscription recovery is exposed as a normal grant operation. | Medium | `restore_remaining_time` is available in the primary grant operation selector, but it should be an advanced recovery action only when recovery context exists. | F | No |
 
 ## Phase ordering recommendation
 
-1. Phase B: Fix auth readiness and account status vocabulary at web/auth boundary.
+1. Phase B: Finish critical authentication: email/password signup, email verification OTP, recovery/error flows, and automated auth regression.
 2. Phase C: Decouple desktop link/session from subscription entitlement.
 3. Phase D: Stabilize support/contact and confirm email operations after auth is stable.
-4. Phase E: Normalize pricing/plans/checkout/download gates.
-5. Phase F: Complete admin users/subscription/policy/dashboard surfaces.
-6. Phase G: Full regression including desktop installed app, policy, support, email, checkout, OTA, and downloads.
+4. Phase E: Normalize subscription truth, plan lifecycle, pricing/plans/checkout/download gates.
+5. Phase F: Complete admin IA and operational UX: users vs subscriptions, manual grant simplification, recovery actions, policy/dashboard surfaces.
+6. Phase G: Consolidated manual product acceptance and full regression including desktop installed app, policy, support, email, checkout, OTA, downloads, skeleton rhythm, RTL/LTR, and visual regression.
+
+## Phase E - Subscription Truth and Lifecycle Normalization
+
+High-priority item: a new user with no current subscription must never appear as `monthly`.
+
+Rule when no current subscription exists:
+
+- `current_subscription = null`
+- `plan = null`
+- `status = null`
+- `expires_at = null`
+- `entitlement = no_subscription`
+
+Forbidden fallbacks:
+
+- `monthly` as a default plan.
+- `expired` as a replacement for no subscription.
+- An old date from a historical row.
+- First row matching an email address.
+- Frontend fallback implying a subscription exists.
+
+Scope to review in Phase E:
+
+- Supabase `account_subscriptions`.
+- Canonical current-subscription resolver.
+- Admin Worker API.
+- API adapters.
+- Admin Users UI.
+- Admin Subscriptions UI.
+- Default/fallback plan values.
+- Legacy compatibility fields.
+- Caches.
+
+Acceptance criteria:
+
+- New account with no subscription shows `No subscription`.
+- No plan, expiry, or active status is shown.
+- Expired historical subscriptions are not shown as current.
+- Active users show exactly the correct active subscription.
+- Customer portal and Admin agree.
+- No fake fallback plan.
+- Tests cover no rows, history only, active, duplicates, and same email with different UID.
+
+## Phase F - Admin Information Architecture and Operational UX
+
+Phase F must split Users from Subscriptions.
+
+Users page:
+
+- Lists users, name, email, status, created date, last activity, subscription presence, devices/sessions, and user details link.
+- Must not represent every user as a subscription row.
+
+Subscriptions page:
+
+- Lists real subscription rows only: linked user, plan, status, start, expiry, source, current/history, manual/provider, and integrity warnings.
+- Accounts without subscriptions must not appear as fake subscription records.
+
+Manual Grant simplification:
+
+- Admin must select a user by name/email/optional UID search and user picker.
+- Firebase UID is used internally and can appear only in details or copy action.
+- Normal form shows user, plan, duration, unit, action, prepared reason, preview, and confirm.
+- Audit reason remains required, but routine use should use reason codes: admin grant, compensation, trial, technical support, subscription replacement, subscription recovery, and other.
+- `other` requires a note; other codes can have an optional note.
+- Audit must store `reason_code` and optional `reason_note`.
+- UI must use human copy such as: choose user, choose subscription duration, review changes, confirm grant, subscription extended until..., and operation could not be completed.
+- Internal labels such as `start_from_now`, `extend_current`, `replace_current`, `restore_remaining_time`, Firebase UID required, source of truth, Supabase write, and operation mode must not appear as primary admin copy.
+
+Recovery mode:
+
+- Move `restore_remaining_time` to Advanced actions -> Subscription recovery.
+- Display as "Restore previous subscription time" / "استعادة مدة اشتراك سابقة".
+- Show only with suitable recovery ledger or history, sufficient admin permission, and explicit recovery mode.
+- Explain only inside the recovery screen: it restores documented time after an error or data loss.
+
+## Phase G - Consolidated Manual Acceptance
+
+Manual acceptance items are consolidated here and must not block earlier phases unless a hard stop appears.
+
+Manual Grant:
+
+- Search/select user.
+- Grant 5 days.
+- Extend one day.
+- Reject zero/negative.
+- Exact expiry.
+- Lifetime.
+- Audit.
+- No payment/order/invoice.
+- Idempotency.
+- Duplicate subscription warning.
+
+Subscription truth:
+
+- New account has no subscription.
+- Expired history is not current.
+- Active account appears correctly.
+- Customer/Admin consistency.
+
+Admin IA:
+
+- Users and Subscriptions are separate.
+- No fake subscription rows.
+- User detail is coherent.
+- Operational copy is natural.
+
+Existing deferred UX:
+
+- Site-wide skeleton title/body vertical spacing.
+- Visual regression.
+- RTL/LTR.
+- Mobile/desktop.
+- Copy quality final sweep.

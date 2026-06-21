@@ -1,12 +1,16 @@
 # Phase B.1 Closure Report
 
+Superseded execution note - 2026-06-21:
+
+The earlier stop condition in this historical report is superseded by the current roadmap policy. Manual acceptance is consolidated into Phase G. Continue Phase B automated work unless a real hard stop appears.
+
 Date: 2026-06-20
 
 Phase: `Phase B.1 — Production State Consistency, Skeleton Fidelity, Content System, Contact/Support Separation`
 
-Result: `READY_FOR_MANUAL_ACCEPTANCE`
+Historical result: `READY_FOR_MANUAL_ACCEPTANCE`
 
-Stop condition: fulfilled. Do not proceed to Emergency Subscription Grant until manual acceptance is completed.
+Current execution status: superseded by the 2026-06-21 roadmap policy. Do not use this historical stop condition to block Phase B.
 
 ## Features Closed In This Phase
 
@@ -22,7 +26,7 @@ Stop condition: fulfilled. Do not proceed to Emergency Subscription Grant until 
 
 | Item | Reason |
 |---|---|
-| Emergency Subscription Grant | Explicitly deferred until after manual testing. |
+| Emergency Subscription Grant | Historical note superseded. Implemented, deployed, not operationally accepted; Phase G will cover manual acceptance. |
 | Support backend E2E | This phase changed UI/product semantics only; support APIs were not changed. |
 | Support attachments | Not implemented and still requires a feature/security decision. |
 | Reply-by-email support | Still depends on email operations rollout state. |

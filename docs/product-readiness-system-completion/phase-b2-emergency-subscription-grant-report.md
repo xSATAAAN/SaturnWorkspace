@@ -1,12 +1,16 @@
 # Phase B.2 - Emergency Subscription Grant
 
-Status: `IMPLEMENTED_DEPLOYED_PENDING_MANUAL_ACCEPTANCE`
+Status: `IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED`
 
 Date: 2026-06-21
 
 ## Scope
 
-Phase B.2 implements an administrative manual subscription grant flow only. OTP, Phase C, desktop-app, payments, invoices, and provider billing were not started.
+Phase B.2 implements an administrative manual subscription grant flow only. It is deployed and protected, but it is not operationally accepted and must not be marked `COMPLETE_AND_VERIFIED`.
+
+Manual acceptance is deferred to Phase G. Do not request a separate B.2 manual acceptance gate, and do not use this flow on real users as part of automated implementation.
+
+OTP, Phase C, desktop-app, payments, invoices, and provider billing were not started by this workstream.
 
 ## Architecture Findings
 
@@ -111,6 +115,14 @@ The Admin Subscriptions drawer now uses:
 
 The UI does not expose raw JSON, stack traces, provider internals, or database/source-of-truth copy.
 
+Known UX debt assigned to Phase F:
+
+- The current implementation still asks the admin to enter Firebase UID manually.
+- The normal form exposes too many fields for daily use.
+- Reason capture is free-text instead of reason-code-first.
+- `restore_remaining_time` appears in the main operation selector instead of Advanced actions -> Subscription recovery.
+- Phase F must redesign this as user-picker-first with progressive fields and human operation labels.
+
 ## Audit
 
 Execute records `subscription_manual_grant` with:
@@ -194,9 +206,11 @@ Deployed on 2026-06-21.
 - `https://admin.saturnws.com/api/admin/preauth/state` returned `success=true` and `authenticated=false`.
 - Unauthenticated `POST /api/admin/subscriptions/manual-grant/preview` returned `401`, confirming the new endpoint is not open.
 
-Implementation stops here for manual acceptance before OTP or Phase C.
+Implementation does not stop here for manual acceptance. Continue the roadmap through Phase B automated work. Operational acceptance for this grant flow is deferred to Phase G.
 
 ## Manual Acceptance Checklist
+
+Deferred to Phase G.
 
 1. Search for a user.
 2. Preview a 5-day grant.
