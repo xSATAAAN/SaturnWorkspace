@@ -530,9 +530,28 @@ async function resolveEmailVerificationUser(
   throw new Error("auth_required")
 }
 
+function emailVerificationResolveError(request: Request, error: unknown): Response | null {
+  const code = String(error instanceof Error ? error.message : error || "").trim()
+  if (code === "email_required") {
+    return errorJson(request, "EMAIL_REQUIRED", 400, false, { email: "required" })
+  }
+  if (code === "auth_required" || code === "firebase_token_invalid") {
+    return errorJson(request, "AUTH_SESSION_EXPIRED", 401, true)
+  }
+  if (code === "firebase_not_configured") {
+    return errorJson(request, "AUTH_PROVIDER_UNAVAILABLE", 503, true)
+  }
+  return null
+}
+
 async function handleEmailVerificationRequest(request: Request, env: Env): Promise<Response> {
   const body = await request.json<any>().catch(() => null)
-  const user = await resolveEmailVerificationUser(request, env, body)
+  const user = await resolveEmailVerificationUser(request, env, body).catch((error) => {
+    const response = emailVerificationResolveError(request, error)
+    if (response) return response
+    throw error
+  })
+  if (user instanceof Response) return user
   const canReturnTestCode = emailVerificationTestMode(env) && String(env.EMAIL_VERIFICATION_TEST_TRANSPORT || "").trim() === "response"
   if (!canReturnTestCode && String(env.EMAIL_AUTH_ENABLED || "").trim().toLowerCase() !== "true") {
     await auditEmailVerification(env, { firebaseUserId: user.userId, email: user.email, action: "request", result: "delivery_disabled", request })
@@ -639,7 +658,12 @@ async function handleEmailVerificationRequest(request: Request, env: Env): Promi
 
 async function handleEmailVerificationVerify(request: Request, env: Env): Promise<Response> {
   const body = await request.json<any>().catch(() => null)
-  const user = await resolveEmailVerificationUser(request, env, body)
+  const user = await resolveEmailVerificationUser(request, env, body).catch((error) => {
+    const response = emailVerificationResolveError(request, error)
+    if (response) return response
+    throw error
+  })
+  if (user instanceof Response) return user
   const code = String(body?.code || "").replace(/\D/g, "").slice(0, 6)
   if (code.length !== 6) return errorJson(request, "VERIFICATION_CODE_INVALID", 400)
   const row = await getLatestEmailVerification(env, {
@@ -676,7 +700,12 @@ async function handleEmailVerificationVerify(request: Request, env: Env): Promis
 
 async function handleEmailVerificationStatus(request: Request, env: Env): Promise<Response> {
   const body = await request.json<any>().catch(() => null)
-  const user = await resolveEmailVerificationUser(request, env, body)
+  const user = await resolveEmailVerificationUser(request, env, body).catch((error) => {
+    const response = emailVerificationResolveError(request, error)
+    if (response) return response
+    throw error
+  })
+  if (user instanceof Response) return user
   const row = await getLatestEmailVerification(env, { email: user.email, firebaseUserId: user.userId, purpose: "email_verification" })
   return json({
     success: true,

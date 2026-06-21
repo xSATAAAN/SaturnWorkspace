@@ -62,6 +62,10 @@ assertIncludes(authWorker, 'AUTH_EMAIL_ENQUEUE_TOKEN', 'auth email enqueue token
 assertIncludes(authWorker, 'auth.email_verification', 'auth email verification event')
 assertIncludes(authWorker, 'auth.verification_resend', 'auth verification resend event')
 assertNotIncludes(authWorker, 'auth.email_verification_requested', 'legacy auth verification event must not be emitted')
+assertIncludes(authWorker, 'function emailVerificationResolveError', 'auth worker email verification error normalizer')
+assertIncludes(authWorker, 'AUTH_SESSION_EXPIRED', 'auth worker unauthenticated verification response')
+assertIncludes(authWorker, 'EMAIL_REQUIRED', 'auth worker email-required verification response')
+assertIncludes(authWorker, 'if (user instanceof Response) return user', 'auth worker verification handlers return normalized resolve errors')
 
 assertIncludes(authWrangler, 'EMAIL_AUTH_ENABLED = "false"', 'auth production email flag default')
 assertNotIncludes(authWrangler, 'EMAIL_VERIFICATION_TEST_TRANSPORT', 'auth production test transport')
