@@ -3,6 +3,15 @@ const CHANNELS = ["stable", "beta"];
 const ARTIFACT_TYPES = ["portable", "installed"];
 const UPDATE_MODES = ["optional", "force", "required", "silent"];
 const UNLIMITED_SUBSCRIPTION_EXPIRY = "9999-12-31T23:59:59.000Z";
+const MANUAL_GRANT_OPERATIONS = ["extend_current", "replace_current", "start_from_now", "restore_remaining_time"];
+const MANUAL_GRANT_UNITS = ["hours", "days", "weeks", "months"];
+const MANUAL_GRANT_PLAN_INTENTS = ["weekly", "monthly", "annual", "lifetime", "custom", "manual"];
+const MANUAL_GRANT_SOURCES = {
+  extend_current: "admin_manual",
+  replace_current: "admin_manual",
+  start_from_now: "admin_manual",
+  restore_remaining_time: "admin_recovery",
+};
 const CRASH_PAYLOAD_REDACTED = "[redacted]";
 const CRASH_SENSITIVE_KEYS = new Set([
   "access_token",
@@ -334,6 +343,14 @@ export default {
       if ((url.pathname === "/api/admin/subscriptions" || url.pathname === "/api/admin/licenses") && request.method === "GET") {
         await requireAdmin(request, env);
         return json(await listSubscriptions(url, env), 200, corsHeaders(request, env));
+      }
+      if (url.pathname === "/api/admin/subscriptions/manual-grant/preview" && request.method === "POST") {
+        const adminEmail = await requireAdmin(request, env);
+        return json(await previewManualSubscriptionGrant(request, env, adminEmail), 200, corsHeaders(request, env));
+      }
+      if (url.pathname === "/api/admin/subscriptions/manual-grant/execute" && request.method === "POST") {
+        const adminEmail = await requireAdmin(request, env);
+        return json(await executeManualSubscriptionGrant(request, env, adminEmail), 200, corsHeaders(request, env));
       }
       if (url.pathname === "/api/admin/access-requests" && request.method === "GET") {
         await requireAdmin(request, env);
@@ -1896,6 +1913,396 @@ async function listSubscriptions(url, env) {
   }
   const offset = (page - 1) * limit;
   return { success: true, items: items.slice(offset, offset + limit), total: items.length, page, limit };
+}
+
+function manualGrantRequestId() {
+  return typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `req_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+function normalizeManualGrantOperation(value) {
+  const operation = String(value || "").trim().toLowerCase();
+  if (!MANUAL_GRANT_OPERATIONS.includes(operation)) throw new Error("invalid_operation");
+  return operation;
+}
+
+function normalizeManualGrantPlan(value) {
+  const plan = String(value || "monthly").trim().toLowerCase();
+  if (!MANUAL_GRANT_PLAN_INTENTS.includes(plan)) throw new Error("invalid_plan");
+  return plan;
+}
+
+function dbPlanForManualGrant(planIntent) {
+  return planIntent === "annual" ? "yearly" : "monthly";
+}
+
+function addManualGrantDuration(startIso, amount, unit) {
+  const start = new Date(startIso || new Date().toISOString());
+  if (!Number.isFinite(start.getTime())) throw new Error("invalid_start");
+  const output = new Date(start);
+  if (unit === "hours") output.setUTCHours(output.getUTCHours() + amount);
+  else if (unit === "days") output.setUTCDate(output.getUTCDate() + amount);
+  else if (unit === "weeks") output.setUTCDate(output.getUTCDate() + amount * 7);
+  else if (unit === "months") output.setUTCMonth(output.getUTCMonth() + amount);
+  else throw new Error("invalid_duration_unit");
+  return output.toISOString();
+}
+
+function normalizeManualGrantInput(raw, { requireReason = false, requireIdempotency = false } = {}) {
+  const body = raw && typeof raw === "object" ? raw : {};
+  const operation = normalizeManualGrantOperation(body.operation_type || body.operation);
+  const plan = normalizeManualGrantPlan(body.plan || body.plan_intent);
+  const targetFirebaseUid = String(body.target_firebase_uid || body.firebase_user_id || body.user_id || "").trim();
+  const targetEmail = normalizeEmail(body.target_email || body.user_email || body.email);
+  if (!targetFirebaseUid && !targetEmail) throw new Error("missing_target_user");
+  if (requireIdempotency && !targetFirebaseUid) throw new Error("firebase_uid_required");
+  const durationMode = String(body.duration_mode || (body.exact_expiry || body.exact_expiry_iso ? "exact" : "duration")).trim().toLowerCase();
+  const durationUnit = String(body.duration_unit || body.unit || "days").trim().toLowerCase();
+  const durationValue = Number(body.duration_value ?? body.duration ?? 0);
+  const exactExpiryRaw = String(body.exact_expiry || body.exact_expiry_iso || body.expires_at || "").trim();
+  const timezone = String(body.timezone || "UTC").trim().slice(0, 80) || "UTC";
+  const reason = String(body.reason || "").trim();
+  const idempotencyKey = String(body.idempotency_key || "").trim();
+  const previewHash = String(body.preview_hash || body.preview_reference || "").trim();
+  if (requireReason && reason.length < 3) throw new Error("missing_reason");
+  if (requireIdempotency && idempotencyKey.length < 8) throw new Error("missing_idempotency_key");
+  if (!["duration", "exact", "lifetime"].includes(durationMode)) throw new Error("invalid_duration_mode");
+  if (durationMode === "duration") {
+    if (!MANUAL_GRANT_UNITS.includes(durationUnit)) throw new Error("invalid_duration_unit");
+    if (!Number.isFinite(durationValue) || durationValue <= 0) throw new Error("invalid_duration");
+  }
+  if (durationMode === "exact") {
+    const exactTs = Date.parse(exactExpiryRaw);
+    if (!Number.isFinite(exactTs)) throw new Error("invalid_exact_expiry");
+    if (exactTs <= Date.now() && operation !== "restore_remaining_time") throw new Error("past_expiry");
+  }
+  return {
+    operation,
+    plan,
+    target_firebase_uid: targetFirebaseUid,
+    target_email: targetEmail,
+    duration_mode: plan === "lifetime" ? "lifetime" : durationMode,
+    duration_unit: durationUnit,
+    duration_value: durationValue,
+    exact_expiry: exactExpiryRaw,
+    timezone,
+    reason,
+    idempotency_key: idempotencyKey,
+    preview_hash: previewHash,
+  };
+}
+
+function rowIsUsableSubscription(row) {
+  const status = String(row?.status || "").trim().toLowerCase();
+  if (!["active", "trialing"].includes(status)) return false;
+  if (isUnlimitedExpiry(row?.expires_at)) return true;
+  return !isExpiredIso(row?.expires_at);
+}
+
+function manualGrantSortRows(rows) {
+  return [...(Array.isArray(rows) ? rows : [])].sort((left, right) => {
+    const lUsable = rowIsUsableSubscription(left) ? "1" : "0";
+    const rUsable = rowIsUsableSubscription(right) ? "1" : "0";
+    const lUnlimited = isUnlimitedExpiry(left?.expires_at) ? "1" : "0";
+    const rUnlimited = isUnlimitedExpiry(right?.expires_at) ? "1" : "0";
+    const l = `${lUsable}|${lUnlimited}|${String(left?.expires_at || "")}|${String(left?.updated_at || "")}|${String(left?.created_at || "")}`;
+    const r = `${rUsable}|${rUnlimited}|${String(right?.expires_at || "")}|${String(right?.updated_at || "")}|${String(right?.created_at || "")}`;
+    return r.localeCompare(l);
+  });
+}
+
+function summarizeSubscriptionRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id || null,
+    firebase_user_id: row.firebase_user_id || null,
+    user_email: normalizeEmail(row.user_email) || null,
+    plan: row.plan || null,
+    tier: row.tier || null,
+    status: row.status || null,
+    starts_at: row.starts_at || null,
+    expires_at: row.expires_at || null,
+    provider: row.provider || null,
+    is_lifetime: isUnlimitedExpiry(row.expires_at) || Boolean(row?.metadata?.is_unlimited),
+    usable: rowIsUsableSubscription(row),
+  };
+}
+
+function detectManualGrantDuplicateGroups(rows) {
+  const byUid = new Map();
+  const byEmail = new Map();
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const uid = String(row?.firebase_user_id || "").trim();
+    const email = normalizeEmail(row?.user_email);
+    if (uid) byUid.set(uid, (byUid.get(uid) || 0) + 1);
+    if (email) byEmail.set(email, (byEmail.get(email) || 0) + 1);
+  }
+  return {
+    firebase_uid: [...byUid.entries()].filter(([, count]) => count > 1).map(([key, count]) => ({ key, count })),
+    email: [...byEmail.entries()].filter(([, count]) => count > 1).map(([key, count]) => ({ key, count })),
+  };
+}
+
+async function resolveManualGrantTarget(env, input) {
+  const filters = [];
+  if (input.target_firebase_uid) filters.push(`firebase_user_id.eq.${encodeURIComponent(input.target_firebase_uid)}`);
+  if (input.target_email) filters.push(`user_email.ilike.${encodeURIComponent(input.target_email)}`);
+  const rows = filters.length
+    ? await safeSupabaseRead(
+        env,
+        "account_subscriptions",
+        `select=*&or=(${filters.join(",")})&order=created_at.desc&limit=100`,
+      )
+    : [];
+  const candidates = Array.isArray(rows)
+    ? rows.filter((row) => {
+        const uidMatches = input.target_firebase_uid && String(row?.firebase_user_id || "").trim() === input.target_firebase_uid;
+        const emailMatches = input.target_email && normalizeEmail(row?.user_email) === input.target_email;
+        return uidMatches || emailMatches;
+      })
+    : [];
+  const sorted = manualGrantSortRows(candidates);
+  const usable = sorted.filter(rowIsUsableSubscription);
+  const warnings = [];
+  const duplicateGroups = detectManualGrantDuplicateGroups(sorted);
+  if (sorted.length > 1) warnings.push("historical_rows_found");
+  if (usable.length > 1) warnings.push("multiple_usable_subscriptions");
+  if (duplicateGroups.firebase_uid.length || duplicateGroups.email.length) warnings.push("duplicate_identity_rows");
+  if (input.target_firebase_uid) {
+    const conflictingEmail = sorted.find((row) => normalizeEmail(row?.user_email) && input.target_email && normalizeEmail(row.user_email) !== input.target_email);
+    if (conflictingEmail) warnings.push("target_email_differs_from_existing_row");
+  }
+  return {
+    target: {
+      firebase_user_id: input.target_firebase_uid || sorted.find((row) => row?.firebase_user_id)?.firebase_user_id || null,
+      user_email: input.target_email || normalizeEmail(sorted.find((row) => row?.user_email)?.user_email) || null,
+    },
+    current: usable.length === 1 ? usable[0] : null,
+    fallback_latest: usable.length ? null : sorted[0] || null,
+    rows: sorted,
+    usable,
+    duplicate_groups: duplicateGroups,
+    warnings,
+    blocked: usable.length > 1,
+  };
+}
+
+function computeManualGrantProposal(input, resolved) {
+  const nowIso = new Date().toISOString();
+  const current = resolved.current || (resolved.blocked && resolved.usable.length ? resolved.usable[0] : null);
+  if (input.operation === "extend_current" && !current) throw new Error("current_subscription_required");
+  if (input.operation === "replace_current" && !current && resolved.usable.length > 0) throw new Error("ambiguous_current_subscription");
+  if (input.operation === "restore_remaining_time" && input.duration_mode !== "duration" && input.duration_mode !== "exact") throw new Error("restore_duration_required");
+  const startBase = input.operation === "extend_current" && current && !isExpiredIso(current.expires_at) && !isUnlimitedExpiry(current.expires_at)
+    ? current.expires_at
+    : nowIso;
+  const startsAt = input.operation === "extend_current" ? (current?.starts_at || nowIso) : nowIso;
+  const expiresAt = input.duration_mode === "lifetime" || input.plan === "lifetime"
+    ? UNLIMITED_SUBSCRIPTION_EXPIRY
+    : input.duration_mode === "exact"
+      ? new Date(input.exact_expiry).toISOString()
+      : addManualGrantDuration(startBase, input.duration_value, input.duration_unit);
+  return {
+    operation: input.operation,
+    source: MANUAL_GRANT_SOURCES[input.operation] || "admin_manual",
+    plan_intent: input.plan,
+    db_plan: dbPlanForManualGrant(input.plan),
+    tier: "public",
+    starts_at: startsAt,
+    expires_at: expiresAt,
+    is_lifetime: isUnlimitedExpiry(expiresAt),
+    duration: input.duration_mode === "duration" ? { value: input.duration_value, unit: input.duration_unit } : null,
+    exact: input.duration_mode === "exact" ? { expires_at: expiresAt, timezone: input.timezone } : null,
+    resulting_entitlement: isUnlimitedExpiry(expiresAt) || Date.parse(expiresAt) > Date.now() ? "entitled" : "not_entitled",
+    affected_rows: current ? [current.id] : [],
+  };
+}
+
+async function buildManualGrantPreview(env, rawInput, adminEmail, options = {}) {
+  const input = normalizeManualGrantInput(rawInput, options);
+  const resolved = await resolveManualGrantTarget(env, input);
+  const warnings = [...resolved.warnings];
+  if (resolved.blocked) warnings.push("operation_blocked_until_duplicate_usable_rows_are_resolved");
+  const proposal = computeManualGrantProposal(input, resolved);
+  const previewPayload = {
+    target: resolved.target,
+    current_subscription: summarizeSubscriptionRow(resolved.current),
+    latest_subscription: summarizeSubscriptionRow(resolved.fallback_latest),
+    history_summary: {
+      total_rows: resolved.rows.length,
+      usable_rows: resolved.usable.length,
+      historical_rows: Math.max(0, resolved.rows.length - resolved.usable.length),
+      duplicate_groups: resolved.duplicate_groups,
+    },
+    requested_operation: {
+      operation: input.operation,
+      plan: input.plan,
+      duration_mode: input.duration_mode,
+      duration_value: input.duration_value || null,
+      duration_unit: input.duration_unit || null,
+      exact_expiry: input.exact_expiry || null,
+      timezone: input.timezone,
+      source: proposal.source,
+    },
+    proposed_state: proposal,
+    affected_rows: proposal.affected_rows,
+    warnings,
+    blocked: resolved.blocked,
+    admin: adminEmail || null,
+  };
+  const previewHash = await sha256Hex(stableStringify({
+    target: previewPayload.target,
+    current_id: previewPayload.current_subscription?.id || null,
+    latest_id: previewPayload.latest_subscription?.id || null,
+    requested_operation: previewPayload.requested_operation,
+    proposed_state: previewPayload.proposed_state,
+    affected_rows: previewPayload.affected_rows,
+    blocked: previewPayload.blocked,
+  }));
+  return { input, resolved, preview: { ...previewPayload, preview_hash: previewHash } };
+}
+
+async function previewManualSubscriptionGrant(request, env, adminEmail) {
+  const body = await request.json();
+  const { preview } = await buildManualGrantPreview(env, body, adminEmail);
+  return { success: true, preview };
+}
+
+async function loadManualGrantIdempotency(env, keyHash) {
+  if (!hasOtaBucket(env)) return null;
+  const stored = await env.OTA_BUCKET.get(`admin/manual-grants/idempotency/${keyHash}.json`);
+  if (!stored) return null;
+  try {
+    return await stored.json();
+  } catch {
+    return null;
+  }
+}
+
+async function saveManualGrantIdempotency(env, keyHash, payload) {
+  if (!hasOtaBucket(env)) return;
+  await env.OTA_BUCKET.put(`admin/manual-grants/idempotency/${keyHash}.json`, JSON.stringify(payload, null, 2), {
+    httpMetadata: { contentType: "application/json; charset=utf-8" },
+  });
+}
+
+function manualGrantMetadata(input, preview, adminEmail, requestId) {
+  return {
+    manual_grant: {
+      request_id: requestId,
+      operation: input.operation,
+      source: preview.proposed_state.source,
+      plan_intent: input.plan,
+      duration_mode: input.duration_mode,
+      duration_value: input.duration_value || null,
+      duration_unit: input.duration_unit || null,
+      exact_expiry: input.exact_expiry || null,
+      timezone: input.timezone,
+      reason: input.reason,
+      preview_hash: input.preview_hash,
+      applied_by: adminEmail,
+      applied_at: new Date().toISOString(),
+    },
+    is_unlimited: preview.proposed_state.is_lifetime,
+  };
+}
+
+async function executeManualSubscriptionGrant(request, env, adminEmail) {
+  const requestId = manualGrantRequestId();
+  const body = await request.json();
+  const normalizedForIdempotency = normalizeManualGrantInput(body, { requireReason: true, requireIdempotency: true });
+  const keyHash = await sha256Hex(`manual-grant:${normalizedForIdempotency.idempotency_key}`);
+  const existingIdempotent = await loadManualGrantIdempotency(env, keyHash);
+  if (existingIdempotent?.success) return { ...existingIdempotent, idempotent_replay: true };
+  const { input, resolved, preview } = await buildManualGrantPreview(env, body, adminEmail, { requireReason: true, requireIdempotency: true });
+  if (preview.blocked) throw new Error("multiple_usable_subscriptions");
+  if (input.preview_hash && input.preview_hash !== preview.preview_hash) throw new Error("preview_changed");
+
+  const targetUid = input.target_firebase_uid || resolved.target.firebase_user_id;
+  if (!targetUid) throw new Error("firebase_uid_required");
+  const targetEmail = input.target_email || resolved.target.user_email;
+  if (!targetEmail) throw new Error("target_email_required");
+  const current = resolved.current;
+  const metadataPatch = manualGrantMetadata(input, preview, adminEmail, requestId);
+  const existingMetadata = current?.metadata && typeof current.metadata === "object" ? current.metadata : {};
+  let changed = null;
+
+  if (input.operation === "extend_current") {
+    if (!current?.id) throw new Error("current_subscription_required");
+    changed = await supabaseRequest(env, "account_subscriptions", "PATCH", {
+      query: `id=eq.${encodeURIComponent(current.id)}&select=*`,
+      body: {
+        status: "active",
+        expires_at: preview.proposed_state.expires_at,
+        metadata: { ...existingMetadata, ...metadataPatch },
+        updated_at: new Date().toISOString(),
+      },
+      prefer: "return=representation",
+    });
+  } else {
+    const payload = {
+      firebase_user_id: targetUid,
+      user_email: targetEmail,
+      plan: preview.proposed_state.db_plan,
+      tier: preview.proposed_state.tier,
+      status: "active",
+      starts_at: preview.proposed_state.starts_at,
+      expires_at: preview.proposed_state.expires_at,
+      hwid: current?.hwid || null,
+      bound_at: current?.bound_at || null,
+      provider: "manual",
+      provider_customer_id: null,
+      provider_subscription_id: null,
+      feature_payload: current?.feature_payload && typeof current.feature_payload === "object" ? current.feature_payload : {},
+      metadata: metadataPatch,
+    };
+    changed = await supabaseRequest(env, "account_subscriptions", "POST", {
+      body: payload,
+      prefer: "return=representation",
+    });
+  }
+
+  const item = Array.isArray(changed) ? changed[0] : changed;
+  const autoAuthorized = isActiveSubscription(item)
+    ? await authorizeMatchingAccessRequests(env, item).catch(() => 0)
+    : 0;
+  const result = {
+    success: true,
+    request_id: requestId,
+    item,
+    preview,
+    auto_authorized_requests: autoAuthorized,
+  };
+  await appendAudit(env, {
+    type: "subscription_manual_grant",
+    entity: "account_subscriptions",
+    entity_id: item?.id || null,
+    actor: adminEmail,
+    payload: {
+      request_id: requestId,
+      idempotency_key_hash: keyHash,
+      target_firebase_uid: targetUid,
+      target_email: targetEmail,
+      operation: input.operation,
+      source: preview.proposed_state.source,
+      reason: input.reason,
+      old_canonical_state: preview.current_subscription,
+      proposed_state: preview.proposed_state,
+      final_state: summarizeSubscriptionRow(item),
+      affected_row_ids: preview.affected_rows,
+      old_expiry: preview.current_subscription?.expires_at || null,
+      new_expiry: item?.expires_at || null,
+      plan: input.plan,
+      duration: preview.requested_operation.duration_value
+        ? { value: preview.requested_operation.duration_value, unit: preview.requested_operation.duration_unit }
+        : null,
+      warnings: preview.warnings,
+      result: "success",
+      auto_authorized_requests: autoAuthorized,
+    },
+    at: new Date().toISOString(),
+  });
+  await saveManualGrantIdempotency(env, keyHash, result);
+  return result;
 }
 
 async function createSubscription(request, env, adminEmail) {

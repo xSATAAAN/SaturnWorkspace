@@ -25,7 +25,7 @@ import {
   Users,
   WalletCards,
 } from 'lucide-react'
-import type { AdminAuditLogItem, AdminCrashGroup, AdminCrashLog, AdminEmailCatalogItem, AdminEmailJob, AdminEmailProviderEvent, AdminEmailRecipientFlag, AdminEmailStatus, AdminInboundEmailMessage, AdminRemoteControls, AdminScheduledEmail, AdminSubscription, AdminSupportThread } from '../../../api/admin'
+import type { AdminAuditLogItem, AdminCrashGroup, AdminCrashLog, AdminEmailCatalogItem, AdminEmailJob, AdminEmailProviderEvent, AdminEmailRecipientFlag, AdminEmailStatus, AdminInboundEmailMessage, AdminRemoteControls, AdminScheduledEmail, AdminSubscription, AdminSupportThread, ManualGrantPreview } from '../../../api/admin'
 import type { AccountSubscription } from '../../../api/account'
 import { useAdapters } from '../../adapters/AdapterProvider'
 import type { CustomerSupportThread, PlanInfo, ReleaseInfo, SupportSenderRole } from '../../adapters/contracts'
@@ -962,15 +962,70 @@ function AdminSubscriptions() {
 }
 
 function GrantSubscriptionDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { t } = useExperience()
+  const { t, locale } = useExperience()
   const { admin } = useAdapters()
   const [email, setEmail] = useState('')
-  const [plan, setPlan] = useState<'monthly' | 'yearly'>('monthly')
-  const [tier, setTier] = useState<'public' | 'private'>('public')
-  const [expires, setExpires] = useState('')
-  const [unlimited, setUnlimited] = useState(false)
+  const [uid, setUid] = useState('')
+  const [plan, setPlan] = useState<'weekly' | 'monthly' | 'annual' | 'lifetime' | 'custom' | 'manual'>('monthly')
+  const [operation, setOperation] = useState<'extend_current' | 'replace_current' | 'start_from_now' | 'restore_remaining_time'>('start_from_now')
+  const [durationMode, setDurationMode] = useState<'duration' | 'exact' | 'lifetime'>('duration')
+  const [durationValue, setDurationValue] = useState('5')
+  const [durationUnit, setDurationUnit] = useState<'hours' | 'days' | 'weeks' | 'months'>('days')
+  const [exactExpiry, setExactExpiry] = useState('')
+  const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC')
+  const [reason, setReason] = useState('')
+  const [preview, setPreview] = useState<ManualGrantPreview | null>(null)
+  const [result, setResult] = useState<{ request_id?: string; expires_at?: string; replay?: boolean } | null>(null)
   const [error, setError] = useState('')
-  return <Drawer open={open} onClose={onClose} title={t('grantTitle')} description={t('grantBody')} closeLabel={t('close')} footer={<Button variant="primary" onClick={async () => { setError(''); try { await admin.createSubscription({ user_email: email, plan, tier, expires_at: expires || undefined, is_unlimited: unlimited }); onClose() } catch (err) { setError(err instanceof Error ? err.message : 'grant_failed') } }}>{t('confirmGrant')}</Button>}><div className="stack"><FormField label={t('email')} htmlFor="grant-email"><Input id="grant-email" value={email} onChange={(event) => setEmail(event.target.value)} /></FormField><div className="form-grid"><FormField label={t('plan')} htmlFor="grant-plan"><Select id="grant-plan" value={plan} onChange={(event) => setPlan(event.target.value as 'monthly' | 'yearly')}><option value="monthly">monthly</option><option value="yearly">yearly</option></Select></FormField><FormField label={t('type')} htmlFor="grant-tier"><Select id="grant-tier" value={tier} onChange={(event) => setTier(event.target.value as 'public' | 'private')}><option value="public">public</option><option value="private">private</option></Select></FormField></div><FormField label={t('expiryDate')} htmlFor="grant-expires"><Input id="grant-expires" type="datetime-local" value={expires} onChange={(event) => setExpires(event.target.value)} /></FormField><label className="ui-checkbox"><input type="checkbox" checked={unlimited} onChange={(event) => setUnlimited(event.target.checked)} />Unlimited</label>{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}</div></Drawer>
+  const [busy, setBusy] = useState(false)
+  const [idempotencyKey, setIdempotencyKey] = useState(() => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`))
+  const exactIso = exactExpiry ? new Date(exactExpiry).toISOString() : undefined
+  const grantInput = {
+    target_email: email.trim() || undefined,
+    target_firebase_uid: uid.trim() || undefined,
+    operation_type: operation,
+    plan,
+    duration_mode: plan === 'lifetime' ? 'lifetime' as const : durationMode,
+    duration_value: durationMode === 'duration' ? Number(durationValue) : undefined,
+    duration_unit: durationUnit,
+    exact_expiry: durationMode === 'exact' ? exactIso : undefined,
+    timezone,
+    reason: reason.trim() || undefined,
+  }
+  const resetOutcome = () => { setPreview(null); setResult(null); setError('') }
+  const runPreview = async () => {
+    setBusy(true); setError(''); setResult(null)
+    try {
+      const next = await admin.previewManualGrant(grantInput)
+      setPreview(next)
+    } catch (err) {
+      setPreview(null)
+      setError(err instanceof Error ? err.message : 'preview_failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+  const execute = async () => {
+    if (!preview) return
+    setBusy(true); setError('')
+    try {
+      const data = await admin.executeManualGrant({ ...grantInput, reason: reason.trim(), idempotency_key: idempotencyKey, preview_hash: preview.preview_hash })
+      setResult({ request_id: data.request_id, expires_at: data.item?.expires_at, replay: data.idempotent_replay })
+      setPreview(data.preview)
+      setIdempotencyKey(typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'grant_failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+  const close = () => {
+    resetOutcome()
+    onClose()
+  }
+  const hasRequiredTarget = Boolean(uid.trim() || email.trim())
+  const canExecute = Boolean(preview && !preview.blocked && reason.trim().length >= 3 && uid.trim())
+  return <Drawer open={open} onClose={close} title={t('grantTitle')} description={copyByLocale(locale, 'Review the change before confirming it.', 'راجع التغييرات قبل التأكيد.')} closeLabel={t('close')} footer={<div className="cluster"><Button onClick={runPreview} loading={busy} disabled={!hasRequiredTarget}>{copyByLocale(locale, 'Preview', 'معاينة')}</Button><Button variant="primary" onClick={execute} loading={busy} disabled={!canExecute}>{t('confirmGrant')}</Button></div>}><div className="stack"><div className="form-grid"><FormField label={copyByLocale(locale, 'Firebase UID', 'معرّف Firebase')} htmlFor="grant-uid" required><Input id="grant-uid" value={uid} onChange={(event) => { setUid(event.target.value); resetOutcome() }} /></FormField><FormField label={t('email')} htmlFor="grant-email"><Input id="grant-email" value={email} onChange={(event) => { setEmail(event.target.value); resetOutcome() }} /></FormField></div><div className="form-grid"><FormField label={t('plan')} htmlFor="grant-plan"><Select id="grant-plan" value={plan} onChange={(event) => { setPlan(event.target.value as typeof plan); resetOutcome() }}><option value="weekly">weekly</option><option value="monthly">monthly</option><option value="annual">annual</option><option value="lifetime">lifetime</option><option value="custom">custom</option><option value="manual">manual</option></Select></FormField><FormField label={copyByLocale(locale, 'Operation', 'الإجراء')} htmlFor="grant-operation"><Select id="grant-operation" value={operation} onChange={(event) => { setOperation(event.target.value as typeof operation); resetOutcome() }}><option value="extend_current">{copyByLocale(locale, 'Extend current subscription', 'تمديد الاشتراك الحالي')}</option><option value="replace_current">{copyByLocale(locale, 'Replace subscription', 'استبدال الاشتراك')}</option><option value="start_from_now">{copyByLocale(locale, 'Start from now', 'بدء اشتراك من الآن')}</option><option value="restore_remaining_time">{copyByLocale(locale, 'Restore remaining time', 'استعادة المدة المتبقية')}</option></Select></FormField></div>{plan !== 'lifetime' ? <div className="form-grid"><FormField label={copyByLocale(locale, 'Duration mode', 'طريقة تحديد المدة')} htmlFor="grant-duration-mode"><Select id="grant-duration-mode" value={durationMode} onChange={(event) => { setDurationMode(event.target.value as typeof durationMode); resetOutcome() }}><option value="duration">{copyByLocale(locale, 'Duration', 'مدة')}</option><option value="exact">{copyByLocale(locale, 'Exact expiry', 'تاريخ انتهاء محدد')}</option></Select></FormField>{durationMode === 'duration' ? <><FormField label={copyByLocale(locale, 'Value', 'القيمة')} htmlFor="grant-duration-value"><Input id="grant-duration-value" type="number" min="1" value={durationValue} onChange={(event) => { setDurationValue(event.target.value); resetOutcome() }} /></FormField><FormField label={copyByLocale(locale, 'Unit', 'الوحدة')} htmlFor="grant-duration-unit"><Select id="grant-duration-unit" value={durationUnit} onChange={(event) => { setDurationUnit(event.target.value as typeof durationUnit); resetOutcome() }}><option value="hours">{copyByLocale(locale, 'Hours', 'ساعات')}</option><option value="days">{copyByLocale(locale, 'Days', 'أيام')}</option><option value="weeks">{copyByLocale(locale, 'Weeks', 'أسابيع')}</option><option value="months">{copyByLocale(locale, 'Months', 'شهور')}</option></Select></FormField></> : <><FormField label={t('expiryDate')} htmlFor="grant-exact"><Input id="grant-exact" type="datetime-local" value={exactExpiry} onChange={(event) => { setExactExpiry(event.target.value); resetOutcome() }} /></FormField><FormField label={copyByLocale(locale, 'Timezone', 'المنطقة الزمنية')} htmlFor="grant-timezone"><Input id="grant-timezone" value={timezone} onChange={(event) => { setTimezone(event.target.value); resetOutcome() }} /></FormField></>}</div> : null}<FormField label={t('reason')} htmlFor="grant-reason" required><Textarea id="grant-reason" value={reason} onChange={(event) => { setReason(event.target.value); setResult(null) }} /></FormField>{preview ? <Card padding="sm"><SectionHeader title={copyByLocale(locale, 'Preview', 'المعاينة')} description={preview.blocked ? copyByLocale(locale, 'Resolve the warnings before confirming.', 'عالج التحذيرات قبل التأكيد.') : copyByLocale(locale, 'Confirm only after reviewing the result.', 'أكّد فقط بعد مراجعة النتيجة.')} /><dl className="detail-list"><div><dt>{copyByLocale(locale, 'Current status', 'الحالة الحالية')}</dt><dd>{preview.current_subscription?.status || copyByLocale(locale, 'No active subscription', 'لا يوجد اشتراك نشط')}</dd></div><div><dt>{copyByLocale(locale, 'New expiry', 'تاريخ الانتهاء الجديد')}</dt><dd>{formatDisplayDate(preview.proposed_state.expires_at, locale)}</dd></div><div><dt>{t('plan')}</dt><dd>{preview.proposed_state.plan_intent}</dd></div><div><dt>{copyByLocale(locale, 'Affected rows', 'السجلات المتأثرة')}</dt><dd>{preview.affected_rows.length || 1}</dd></div></dl>{preview.warnings.length ? <Alert title={copyByLocale(locale, 'Needs review', 'تحتاج مراجعة')} tone={preview.blocked ? 'danger' : 'warning'}>{preview.warnings.join(', ')}</Alert> : null}{!uid.trim() ? <Alert title={copyByLocale(locale, 'Firebase UID required', 'معرّف Firebase مطلوب')} tone="warning">{copyByLocale(locale, 'Execution requires the user UID, even if email is used for search.', 'التنفيذ يتطلب معرّف المستخدم حتى لو استُخدم البريد في البحث.')}</Alert> : null}</Card> : null}{result ? <Alert title={t('success')} tone="success">{copyByLocale(locale, `Grant applied. Reference: ${result.request_id || '—'}`, `تم منح الاشتراك. المرجع: ${result.request_id || '—'}`)}</Alert> : null}{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}</div></Drawer>
 }
 
 function AdminReleases() {

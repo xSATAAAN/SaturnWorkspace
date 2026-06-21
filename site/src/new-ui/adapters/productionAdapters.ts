@@ -11,6 +11,7 @@ import {
 import { fetchAccountSubscription, provisionAccountProfile } from '../../api/account'
 import {
   createSubscription,
+  executeManualSubscriptionGrant,
   fetchAdminDashboard,
   fetchAdminPreauthState,
   fetchAdminSession,
@@ -37,6 +38,7 @@ import {
   updateRemoteControls,
   uploadReleaseBinary,
   patchSubscriptionStatus,
+  previewManualSubscriptionGrant,
   type AdminReleaseManifest,
 } from '../../api/admin'
 import { createPaymentIntent } from '../../api/payments'
@@ -504,6 +506,13 @@ export const productionAdapters: AppAdapters = {
     async createSubscription(input) {
       const data = await createSubscription(input)
       return data.item
+    },
+    async previewManualGrant(input) {
+      const data = await previewManualSubscriptionGrant(input)
+      return data.preview
+    },
+    async executeManualGrant(input) {
+      return executeManualSubscriptionGrant(input)
     },
     async updateSubscriptionStatus(id, status) {
       const data = await patchSubscriptionStatus(id, status)

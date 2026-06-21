@@ -6,9 +6,9 @@ This dashboard supplements `feature-completeness-matrix.md`. It does not replace
 
 ## Manual Acceptance Update - 2026-06-21
 
-Phase B.1 remains the active stop point. Phase B.2, OTP, Emergency Subscription Grant, Phase C, and desktop work are not started.
+Phase B.1 is no longer the active stop point. Phase B.2 can start. OTP, Phase C, and desktop work are not started.
 
-Latest manual result: `PHASE_B1_NEEDS_FIXES`. The previous B.1 report overstated readiness because the live sign-in route still rendered an auth eyebrow from the active production component and the skeleton geometry still differed from the loaded account overview.
+Latest manual result: `PHASE_B1_ACCEPTED_WITH_NON_BLOCKING_UX_DEBT`. The B.1 sign-in copy and core skeleton fidelity fixes were accepted for progression, with one low-severity design-system debt deferred to Phase G.
 
 | B.1 criterion | Manual result | Current implementation response |
 |---|---|---|
@@ -23,13 +23,26 @@ Latest manual result: `PHASE_B1_NEEDS_FIXES`. The previous B.1 report overstated
 
 ## Phase B.1 Fix Batch - 2026-06-21
 
-Status: `IMPLEMENTED_PENDING_MANUAL_ACCEPTANCE`.
+Status: `ACCEPTED_WITH_NON_BLOCKING_UX_DEBT`.
 
 | Failed criterion | Root cause found | Fix in this batch | Acceptance state |
 |---|---|---|---|
 | Sign-in copy | Active route `/account/signin` renders `EmailPasswordProductionPage` from `site/src/new-ui/pages/production/ProductionPages.tsx`; the rejected eyebrow was hardcoded there and not covered by the previous gate. | Removed the sign-in eyebrow instead of replacing it with another trust claim. Strengthened copy gate for Arabic and English auth trust claims in source and generated dist. | Pending manual check on live `/account/signin`. |
 | Copy gate false confidence | The gate checked selected English/internal phrases and missed the Arabic hardcoded auth surface. | Expanded gate coverage across runtime new-ui pages/components/layouts/app/content/i18n and added explicit Arabic/English rejected phrase fixtures. | Pending manual check after deploy. |
 | Skeleton geometry mismatch | Skeleton headers/cards used separate placeholder DOM instead of the final page primitives. | Skeleton headers now use the shared `PageHeader`/`SectionHeader`; subscription/download skeletons now use the same card components as loaded content with skeleton values inside. | Pending manual desktop/mobile review. |
+
+## Accepted Non-blocking UX Debt - Phase G Target
+
+| Debt | Type | Severity | Blocking now | Blocking final release | Target phase |
+|---|---|---|---|---|---|
+| Some skeleton title/subtitle/paragraph placeholder groups have inconsistent vertical rhythm in selected cards. | UX debt / design-system consistency | Low | No | Yes | Phase G - visual consistency and regression |
+
+Final release acceptance:
+
+- Skeleton text spacing matches the vertical rhythm of final content.
+- No title/subtitle collision or unnatural proximity.
+- Shared Skeleton/Typography tokens solve this centrally across Public, Account, and Admin.
+- Desktop/mobile and RTL/LTR screenshots are included in visual regression evidence.
 
 ## Phase B.1 Current Batch Status - 2026-06-21
 

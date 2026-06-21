@@ -33,6 +33,65 @@ export type AdminSubscription = {
   created_at: string
 }
 
+export type ManualGrantOperation = 'extend_current' | 'replace_current' | 'start_from_now' | 'restore_remaining_time'
+export type ManualGrantPlan = 'weekly' | 'monthly' | 'annual' | 'lifetime' | 'custom' | 'manual'
+export type ManualGrantDurationUnit = 'hours' | 'days' | 'weeks' | 'months'
+
+export type ManualGrantPreviewInput = {
+  target_firebase_uid?: string
+  target_email?: string
+  operation_type: ManualGrantOperation
+  plan: ManualGrantPlan
+  duration_mode: 'duration' | 'exact' | 'lifetime'
+  duration_value?: number
+  duration_unit?: ManualGrantDurationUnit
+  exact_expiry?: string
+  timezone?: string
+  reason?: string
+}
+
+export type ManualGrantExecuteInput = ManualGrantPreviewInput & {
+  reason: string
+  idempotency_key: string
+  preview_hash?: string
+}
+
+export type ManualGrantPreview = {
+  target: { firebase_user_id?: string | null; user_email?: string | null }
+  current_subscription?: Partial<AdminSubscription> | null
+  latest_subscription?: Partial<AdminSubscription> | null
+  history_summary: {
+    total_rows: number
+    usable_rows: number
+    historical_rows: number
+    duplicate_groups?: Record<string, unknown>
+  }
+  requested_operation: Record<string, unknown>
+  proposed_state: {
+    operation: ManualGrantOperation
+    source: 'admin_manual' | 'admin_recovery'
+    plan_intent: ManualGrantPlan
+    db_plan: 'monthly' | 'yearly'
+    starts_at: string
+    expires_at: string
+    is_lifetime: boolean
+    resulting_entitlement: string
+  }
+  affected_rows: string[]
+  warnings: string[]
+  blocked: boolean
+  preview_hash: string
+}
+
+export type ManualGrantResult = {
+  success: boolean
+  request_id: string
+  item: AdminSubscription
+  preview: ManualGrantPreview
+  auto_authorized_requests?: number
+  idempotent_replay?: boolean
+}
+
 export type AdminAccessRequest = {
   id: string
   user_id?: string | null
@@ -510,6 +569,20 @@ export async function uploadReleaseBinary(payload: {
   return adminFetch<{ success: boolean; release: AdminReleaseUpload; artifact_type: 'portable' | 'installed' }>('/upload', {
     method: 'POST',
     body: form,
+  })
+}
+
+export async function previewManualSubscriptionGrant(payload: ManualGrantPreviewInput) {
+  return adminFetch<{ success: boolean; preview: ManualGrantPreview }>('/subscriptions/manual-grant/preview', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function executeManualSubscriptionGrant(payload: ManualGrantExecuteInput) {
+  return adminFetch<ManualGrantResult>('/subscriptions/manual-grant/execute', {
+    method: 'POST',
+    body: JSON.stringify(payload),
   })
 }
 

@@ -2,9 +2,9 @@
 
 ## Roadmap Update - 2026-06-21
 
-Current execution is limited to Phase B.1 remediation after manual acceptance. The following were accepted and must not be reopened in this batch unless a regression is found: subscription state consistency, Arabic encoding, support role colors, basic contact/support route separation, cache isolation between accounts, and the basic async loading model.
+Current execution has moved past Phase B.1 remediation. The following were accepted and must not be reopened unless a regression is found: subscription state consistency, Arabic encoding, support role colors, basic contact/support route separation, cache isolation between accounts, and the basic async loading model.
 
-Latest manual result: `PHASE_B1_NEEDS_FIXES`. Do not start Phase B.2, OTP, Emergency Subscription Grant, Phase C, or desktop work before the new B.1 fix batch is manually accepted.
+Latest manual result: `PHASE_B1_ACCEPTED_WITH_NON_BLOCKING_UX_DEBT`. Phase B.1 is not a blocker for Phase B.2. Do not start OTP, Phase C, or desktop work.
 
 The failed B.1 criteria are tracked as one organized remediation batch:
 
@@ -22,7 +22,22 @@ The failed B.1 criteria are tracked as one organized remediation batch:
 | The previous copy gate missed Arabic hardcoded customer-facing strings. | Gate must scan runtime new-ui source plus generated dist and include Arabic/English fixtures. |
 | Account skeleton used a separate approximation of the final structure. | Skeletons should reuse shared layout/card primitives and swap content for skeleton values. |
 
-Current B.1 status after implementation: `IMPLEMENTED_PENDING_MANUAL_ACCEPTANCE`.
+Current B.1 status after manual decision: `ACCEPTED_WITH_NON_BLOCKING_UX_DEBT`.
+
+### Non-blocking UX debt accepted from B.1
+
+| Debt | Type | Severity | Blocking now | Blocking final release | Target phase |
+|---|---|---|---|---|---|
+| Some skeleton text groups have inconsistent vertical rhythm: title placeholders can sit too close to subtitle or paragraph placeholders in selected cards. | UX debt / design-system consistency | Low | No | Yes | Phase G - visual consistency and regression |
+
+Final acceptance criteria for this debt:
+
+- Skeleton title, subtitle, and paragraph spacing follows the same vertical rhythm as final content.
+- No title/subtitle collision or visually unnatural proximity.
+- Fix is centralized in shared Skeleton/Typography tokens, not per-page margins.
+- Coverage includes Public, Account, and Admin surfaces.
+- Coverage includes desktop/mobile and RTL/LTR.
+- Visual regression screenshots are captured.
 
 Future observations found while reviewing B.1 should be logged by phase instead of patched immediately:
 
@@ -34,7 +49,7 @@ Future observations found while reviewing B.1 should be logged by phase instead 
 | Desktop linking, OTA, installer, or app runtime issues | Phase C/G | Requires explicit desktop scope approval. |
 | Legal/public marketing copy outside B.1 | Phase E/F | Requires production content review, not B.1 remediation. |
 
-Phase B.2, OTP, Emergency Subscription Grant, Phase C, and desktop work remain blocked until Phase B.1 is manually accepted.
+Phase B.2 is allowed to start. OTP, Phase C, and desktop work remain blocked until explicitly accepted later.
 
 | ID | Issue | Severity | Root cause | Recommended phase | Required migration? |
 |---|---|---|---|---|---|

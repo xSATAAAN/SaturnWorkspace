@@ -4,9 +4,17 @@ This is the required regression plan before declaring product readiness.
 
 ## Phase B.1 Manual Acceptance Checklist
 
-Run this checklist before allowing Phase B.2, OTP, Emergency Subscription Grant, Phase C, or any desktop work.
+Phase B.1 manual decision: `PHASE_B1_ACCEPTED_WITH_NON_BLOCKING_UX_DEBT`.
 
-Current status: `IMPLEMENTED_PENDING_MANUAL_ACCEPTANCE` after the `PHASE_B1_NEEDS_FIXES` follow-up. The next manual pass must verify the live route/component/bundle, not only local build output.
+Current status: `ACCEPTED_WITH_NON_BLOCKING_UX_DEBT`. Phase B.2 can proceed. OTP, Phase C, and desktop work remain blocked until separate approval.
+
+### Deferred Phase G Visual Consistency Debt
+
+The following is accepted as non-blocking for Phase B.2 but blocking for final release:
+
+- Skeleton title placeholders can sit too close to subtitle or paragraph placeholders in selected cards.
+- Fix must be centralized in shared Skeleton/Typography tokens, not per-page margins.
+- Final acceptance requires Public, Account, and Admin coverage; desktop/mobile; RTL/LTR; and visual regression screenshots.
 
 ### Product Copy / UX Writing
 
@@ -39,6 +47,7 @@ Current status: `IMPLEMENTED_PENDING_MANUAL_ACCEPTANCE` after the `PHASE_B1_NEED
 8. Admin email operations skeleton keeps the same metric strip, status panels, form, and table area as the loaded page.
 9. Skeletons do not introduce subtitles, cards, columns, or buttons absent from the final page.
 10. Manual visual check at desktop width confirms no obvious layout jump after auth/bootstrap loading completes.
+11. Phase G final release check: skeleton title/subtitle/paragraph groups match final content vertical rhythm and have no title/subtitle collision.
 
 ### Automated Gates For B.1
 

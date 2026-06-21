@@ -10,6 +10,10 @@ import type {
   AdminSupportThread,
   AdminUserDetail,
   AdminEmailStatus,
+  ManualGrantExecuteInput,
+  ManualGrantPreview,
+  ManualGrantPreviewInput,
+  ManualGrantResult,
 } from '../../api/admin'
 import type { AccountProfileProjection, AccountSubscription, SubscriptionProjection } from '../../api/account'
 
@@ -189,6 +193,8 @@ export type AdminAdapter = {
     expires_at?: string
     is_unlimited?: boolean
   }): Promise<AdminSubscription>
+  previewManualGrant(input: ManualGrantPreviewInput): Promise<ManualGrantPreview>
+  executeManualGrant(input: ManualGrantExecuteInput): Promise<ManualGrantResult>
   updateSubscriptionStatus(id: string, status: AdminSubscription['status']): Promise<AdminSubscription>
   resetHwid(id: string): Promise<AdminSubscription>
   listPromoCodes(): Promise<AdminPromoCode[]>
