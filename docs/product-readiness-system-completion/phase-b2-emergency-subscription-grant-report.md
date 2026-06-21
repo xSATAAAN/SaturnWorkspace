@@ -1,6 +1,6 @@
 # Phase B.2 - Emergency Subscription Grant
 
-Status: `IMPLEMENTED_PENDING_MANUAL_ACCEPTANCE`
+Status: `IMPLEMENTED_DEPLOYED_PENDING_MANUAL_ACCEPTANCE`
 
 Date: 2026-06-21
 
@@ -183,7 +183,18 @@ Not production-verified yet:
 
 ## Deployment
 
-Pending at report creation. Worker and site must be deployed, then manual acceptance must stop before OTP or Phase C.
+Deployed on 2026-06-21.
+
+- Git commit: `6602106`.
+- Admin Worker: `saturnws-admin`.
+- Admin Worker version: `06894084-1c56-46de-9e79-d4c0b533845e`.
+- Worker routes preserved: `admin.saturnws.com/*`, `saturnws.com/admin`, `saturnws.com/admin/*`, `saturnws.com/updates/*`, `updates.saturnws.com/*`, and `admin-api.saturnws.com/api/*`.
+- GitHub Pages workflow for commit `6602106` completed successfully.
+- Live Admin SPA bundle contains the Phase B.2 manual grant UI contracts.
+- `https://admin.saturnws.com/api/admin/preauth/state` returned `success=true` and `authenticated=false`.
+- Unauthenticated `POST /api/admin/subscriptions/manual-grant/preview` returned `401`, confirming the new endpoint is not open.
+
+Implementation stops here for manual acceptance before OTP or Phase C.
 
 ## Manual Acceptance Checklist
 

@@ -90,8 +90,17 @@ Final release acceptance:
 - Support attachments.
 - Reply by email and inbound email acceptance.
 - Real notification backend.
-- Emergency Subscription Grant.
 
-## Stop Point
+## Phase B.2 - Emergency Subscription Grant
 
-Per the requested execution order, implementation stops here for manual testing before Emergency Subscription Grant or later phases.
+Status: `IMPLEMENTED_DEPLOYED_PENDING_MANUAL_ACCEPTANCE`.
+
+Deployment evidence:
+
+- Git commit: `6602106`.
+- Admin Worker version: `06894084-1c56-46de-9e79-d4c0b533845e`.
+- GitHub Pages workflow for `6602106` completed successfully.
+- Live Admin SPA bundle includes the manual grant UI contracts.
+- Unauthenticated access to the manual grant preview endpoint returns `401`.
+
+Phase B.2 stops here for manual acceptance. OTP, Phase C, and desktop work remain not started.
