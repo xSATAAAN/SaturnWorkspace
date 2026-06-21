@@ -330,7 +330,7 @@ export async function createAppSession(
     session_token_hash: string
     user_id: string
     user_email: string | null
-    subscription_id: string
+    subscription_id: string | null
     hwid: string
     expires_at: string
     metadata?: Record<string, unknown>
@@ -355,6 +355,28 @@ export async function createAppSession(
       throw error
     }
 
+    if (missingMetadata && !missingSubscriptionId && !mentionsLicenseNull) {
+      const rows = await supabaseJson<AppSessionRow[]>(env, "/app_sessions", {
+        method: "POST",
+        headers: { Prefer: "return=representation" },
+        body: JSON.stringify({
+          session_token_hash: payload.session_token_hash,
+          user_id: payload.user_id,
+          user_email: payload.user_email,
+          subscription_id: payload.subscription_id,
+          license_id: null,
+          hwid: payload.hwid,
+          expires_at: payload.expires_at,
+        }),
+      })
+      if (!rows[0]) throw new Error("app_session_insert_empty")
+      return rows[0]
+    }
+
+    if (!payload.subscription_id) {
+      throw new Error("app_session_schema_outdated")
+    }
+
     const legacyRows = await supabaseJson<AppSessionRow[]>(env, "/app_sessions", {
       method: "POST",
       headers: { Prefer: "return=representation" },
@@ -370,6 +392,37 @@ export async function createAppSession(
     if (!legacyRows[0]) throw new Error("app_session_insert_empty")
     return legacyRows[0]
   }
+}
+
+export async function authorizePendingDeviceLoginRow(
+  env: Env,
+  id: string,
+  patch: Record<string, unknown>,
+): Promise<DeviceLoginRow | null> {
+  const rows = await supabaseJson<DeviceLoginRow[]>(
+    env,
+    `/device_login_sessions?id=eq.${encodeURIComponent(id)}&status=eq.pending&select=*`,
+    {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({ ...patch, status: "authorized" }),
+    },
+  )
+  return rows[0] || null
+}
+
+export async function claimAuthorizedDeviceLogin(env: Env, id: string): Promise<DeviceLoginRow | null> {
+  const claimedAt = new Date().toISOString()
+  const rows = await supabaseJson<DeviceLoginRow[]>(
+    env,
+    `/device_login_sessions?id=eq.${encodeURIComponent(id)}&status=eq.authorized&consumed_at=is.null&select=*`,
+    {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({ consumed_at: claimedAt }),
+    },
+  )
+  return rows[0] || null
 }
 
 export async function revokeActiveAppSessionsForSubscription(env: Env, subscriptionId: string): Promise<void> {
@@ -413,6 +466,94 @@ export async function touchAppSession(env: Env, sessionId: string): Promise<void
     headers: { Prefer: "return=minimal" },
     body: JSON.stringify({ last_seen_at: new Date().toISOString() }),
   })
+}
+
+export async function getAppSessionByIdForUser(
+  env: Env,
+  sessionId: string,
+  firebaseUserId: string,
+): Promise<AppSessionRow | null> {
+  const rows = await supabaseJson<AppSessionRow[]>(
+    env,
+    `/app_sessions?id=eq.${encodeURIComponent(sessionId)}&user_id=eq.${encodeURIComponent(firebaseUserId)}&select=*&limit=1`,
+  )
+  return rows[0] || null
+}
+
+export async function listAppSessionsForUser(env: Env, firebaseUserId: string): Promise<AppSessionRow[]> {
+  const rows = await supabaseJson<AppSessionRow[]>(
+    env,
+    `/app_sessions?user_id=eq.${encodeURIComponent(firebaseUserId)}&select=*&order=last_seen_at.desc.nullslast,created_at.desc&limit=100`,
+  )
+  return Array.isArray(rows) ? rows : []
+}
+
+export async function revokeAppSessionByIdForUser(
+  env: Env,
+  sessionId: string,
+  firebaseUserId: string,
+): Promise<AppSessionRow | null> {
+  const rows = await supabaseJson<AppSessionRow[]>(
+    env,
+    `/app_sessions?id=eq.${encodeURIComponent(sessionId)}&user_id=eq.${encodeURIComponent(firebaseUserId)}&revoked_at=is.null&select=*`,
+    {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({ revoked_at: new Date().toISOString() }),
+    },
+  )
+  return rows[0] || null
+}
+
+export async function revokeAppSessionsForUser(env: Env, firebaseUserId: string): Promise<void> {
+  await supabaseJson<unknown>(
+    env,
+    `/app_sessions?user_id=eq.${encodeURIComponent(firebaseUserId)}&revoked_at=is.null`,
+    {
+      method: "PATCH",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({ revoked_at: new Date().toISOString() }),
+    },
+  )
+}
+
+export async function revokeAppSessionsForDevice(
+  env: Env,
+  firebaseUserId: string,
+  hwid: string,
+): Promise<void> {
+  await supabaseJson<unknown>(
+    env,
+    `/app_sessions?user_id=eq.${encodeURIComponent(firebaseUserId)}&hwid=eq.${encodeURIComponent(hwid)}&revoked_at=is.null`,
+    {
+      method: "PATCH",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({ revoked_at: new Date().toISOString() }),
+    },
+  )
+}
+
+export async function rotateAppSessionToken(
+  env: Env,
+  sessionId: string,
+  currentTokenHash: string,
+  nextTokenHash: string,
+  expiresAt: string,
+): Promise<AppSessionRow | null> {
+  const rows = await supabaseJson<AppSessionRow[]>(
+    env,
+    `/app_sessions?id=eq.${encodeURIComponent(sessionId)}&session_token_hash=eq.${encodeURIComponent(currentTokenHash)}&revoked_at=is.null&select=*`,
+    {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({
+        session_token_hash: nextTokenHash,
+        expires_at: expiresAt,
+        last_seen_at: new Date().toISOString(),
+      }),
+    },
+  )
+  return rows[0] || null
 }
 
 export async function updateAppSessionExpiry(env: Env, sessionId: string, expiresAt: string): Promise<void> {

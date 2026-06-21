@@ -26,7 +26,7 @@ import {
   WalletCards,
 } from 'lucide-react'
 import type { AdminAuditLogItem, AdminCrashGroup, AdminCrashLog, AdminEmailCatalogItem, AdminEmailJob, AdminEmailProviderEvent, AdminEmailRecipientFlag, AdminEmailStatus, AdminInboundEmailMessage, AdminRemoteControls, AdminScheduledEmail, AdminSubscription, AdminSupportThread, ManualGrantPreview } from '../../../api/admin'
-import type { AccountSubscription } from '../../../api/account'
+import type { AccountSession, AccountSubscription } from '../../../api/account'
 import { useAdapters } from '../../adapters/AdapterProvider'
 import type { CustomerSupportThread, PlanInfo, ReleaseInfo, SupportSenderRole } from '../../adapters/contracts'
 import { useExperience } from '../../app/ExperienceProvider'
@@ -39,7 +39,7 @@ import { Card, DataTable, PageHeader, SectionHeader, StatCard, TableToolbar, typ
 import { Alert, Badge, CardSkeleton, EmptyState, FullPageState, Skeleton, SkeletonStack } from '../../components/ui/Feedback'
 import { Checkbox, FormField, Input, OTPInput, PasswordInput, Select, Textarea } from '../../components/ui/FormControls'
 import { Accordion, Tabs } from '../../components/ui/Navigation'
-import { Drawer } from '../../components/ui/Overlays'
+import { ConfirmDialog, Drawer } from '../../components/ui/Overlays'
 import { DownloadCard, PricingCard, SubscriptionCard } from '../../components/ui/ProductCards'
 import { publicCopy } from '../../content/publicCopy'
 import { isProductionFeatureEnabled } from '../../adapters/productionFeatureFlags'
@@ -757,8 +757,31 @@ function PortalPayments() {
 }
 
 function PortalDevices() {
-  const { t } = useExperience()
-  return <><PageHeader title={t('devices')} /><Alert title={t('currentDevice')} tone="info">{t('noSessions')}</Alert></>
+  const { t, locale } = useExperience()
+  const adapters = useAdapters()
+  const resource = useAsyncData(() => adapters.account.listSessions(), [adapters])
+  const [target, setTarget] = useState<{ scope: 'session' | 'device' | 'all'; session?: AccountSession } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const runRevoke = async () => {
+    if (!target) return
+    setBusy(true)
+    setError('')
+    try {
+      if (target.scope === 'all') await adapters.account.revokeAllSessions()
+      else if (target.session) await adapters.account.revokeSession(target.session.id, target.scope)
+      setTarget(null)
+      resource.reload()
+    } catch (err) {
+      setError(String(err instanceof Error ? err.message : err || 'REQUEST_FAILED'))
+    } finally {
+      setBusy(false)
+    }
+  }
+  const sessions = resource.data?.sessions || []
+  const devices = resource.data?.devices || []
+  const activeSessions = sessions.filter((session) => session.status === 'active')
+  return <><PageHeader title={t('devices')} />{error ? <ErrorBlock error={error} onRetry={() => setError('')} /> : null}{resource.loading ? <div className="portal-mini-grid"><CardSkeleton rows={4} /><CardSkeleton rows={4} /></div> : resource.error ? <ErrorBlock error={resource.error} onRetry={resource.reload} /> : sessions.length === 0 ? <EmptyState icon={Monitor} title={copyByLocale(locale, 'No linked desktop sessions', 'لا توجد جلسات سطح مكتب مرتبطة')} body={copyByLocale(locale, 'Link Saturn Workspace from the desktop app to see it here.', 'اربط Saturn Workspace من أداة سطح المكتب لتظهر الجلسة هنا.')} /> : <div className="stack"><Card><SectionHeader title={copyByLocale(locale, 'Linked devices', 'الأجهزة المرتبطة')} action={activeSessions.length ? <Button size="sm" variant="danger" onClick={() => setTarget({ scope: 'all' })}>{copyByLocale(locale, 'End all desktop sessions', 'إنهاء كل جلسات سطح المكتب')}</Button> : undefined} /><div className="settings-list">{devices.map((device) => { const representative = sessions.find((session) => session.device_key === device.device_key); return <div key={device.device_key} className="device-row device-row--large"><span><Monitor size={20} /></span><div><strong>{device.device_name}</strong><small>{[device.platform, device.os_version].filter(Boolean).join(' · ') || copyByLocale(locale, 'Desktop device', 'جهاز سطح مكتب')} · {copyByLocale(locale, 'Last activity', 'آخر نشاط')}: {formatDisplayDate(device.last_activity_at, locale)}</small></div><Badge tone={device.active_sessions ? 'success' : 'neutral'}>{device.active_sessions ? copyByLocale(locale, 'Connected', 'متصل') : copyByLocale(locale, 'Inactive', 'غير نشط')}</Badge>{representative && device.active_sessions ? <Button size="sm" variant="secondary" onClick={() => setTarget({ scope: 'device', session: representative })}>{copyByLocale(locale, 'Revoke device', 'إلغاء الجهاز')}</Button> : null}</div> })}</div></Card><Card><SectionHeader title={copyByLocale(locale, 'Desktop sessions', 'جلسات سطح المكتب')} /><div className="settings-list">{sessions.map((session) => <div key={session.id} className="device-row device-row--large"><span><Monitor size={20} /></span><div><strong>{session.device_name}</strong><small>{copyByLocale(locale, 'Last activity', 'آخر نشاط')}: {formatDisplayDate(session.last_activity_at, locale)}{session.app_version ? ` · ${session.app_version}` : ''}</small></div><Badge tone={session.status === 'active' ? 'success' : session.status === 'expired' ? 'warning' : 'neutral'}>{session.status === 'active' ? copyByLocale(locale, 'Connected', 'متصل') : session.status === 'expired' ? copyByLocale(locale, 'Expired', 'منتهية') : copyByLocale(locale, 'Revoked', 'ملغاة')}</Badge>{session.status === 'active' ? <Button size="sm" variant="secondary" onClick={() => setTarget({ scope: 'session', session })}>{copyByLocale(locale, 'End session', 'إنهاء الجلسة')}</Button> : null}</div>)}</div></Card></div>}<ConfirmDialog open={Boolean(target)} onClose={() => { if (!busy) setTarget(null) }} title={target?.scope === 'all' ? copyByLocale(locale, 'End all desktop sessions?', 'إنهاء كل جلسات سطح المكتب؟') : target?.scope === 'device' ? copyByLocale(locale, 'Revoke this device?', 'إلغاء هذا الجهاز؟') : copyByLocale(locale, 'End this session?', 'إنهاء هذه الجلسة؟')} body={copyByLocale(locale, 'Saturn Workspace will require sign-in again on the affected device.', 'سيطلب Saturn Workspace تسجيل الدخول من جديد على الجهاز المتأثر.')} confirmLabel={busy ? copyByLocale(locale, 'Ending…', 'جارٍ الإنهاء…') : copyByLocale(locale, 'Confirm', 'تأكيد')} cancelLabel={t('cancel')} destructive onConfirm={() => { void runRevoke() }} /></>
 }
 
 function PortalNotifications() {

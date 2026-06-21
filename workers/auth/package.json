@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "check": "tsc --noEmit",
+    "test:phase-c": "node scripts/check-phase-c-device-linking.mjs",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy"
   },

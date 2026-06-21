@@ -6,6 +6,8 @@ Current execution has moved past Phase B.1 remediation. The following were accep
 
 Latest manual result: `PHASE_B1_ACCEPTED_WITH_NON_BLOCKING_UX_DEBT`. Phase B.1 is not a blocker.
 
+Phase B final automated status: `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE`. Phase B is closed. There is no B.3, B.4, or additional dependency gate.
+
 Execution policy update:
 
 - Do not create more manual acceptance gates after each workstream, deployment, or feature.
@@ -67,11 +69,12 @@ Phase B.2 Emergency Subscription Grant status: `IMPLEMENTED_NOT_OPERATIONALLY_AC
 
 Current roadmap continuation:
 
-1. Continue the rest of Phase B: email/password signup, email verification OTP, auth recovery/error flows, and automated Phase B regression.
-2. Do not request manual acceptance before continuing.
-3. Move to Phase C when Phase B has no hard blocker.
-4. Continue D, E, and F in order.
-5. Perform consolidated manual product acceptance in Phase G.
+1. Phase B is closed after automated verification; retain the documented OTP/Auth state.
+2. Execute Phase C account and desktop linking without another manual gate.
+3. Continue D, E, and F in order.
+4. Perform consolidated manual product acceptance in Phase G.
+
+Phase C implementation note: automated Auth/Policy/portal/desktop checks pass. The additive `010_account_session_subscription_independence.sql` migration is prepared and pending a valid Supabase database credential; this is a deployment prerequisite, not a new manual acceptance gate.
 
 | ID | Issue | Severity | Root cause | Recommended phase | Required migration? |
 |---|---|---|---|---|---|
@@ -101,15 +104,15 @@ Current roadmap continuation:
 | PR-024 | Admin payment management page is shell only. | Medium | `AdminCommerce` returns decision-required empty state. | E/F | Depends on provider |
 | PR-025 | Policy admin state is accessible through old and new paths. | Medium | New Admin Policies page plus old injected panel/proxy endpoints. | F | No |
 | PR-026 | Product readiness requires tests for desktop auth paths but current phase did not run desktop E2E. | High | Audit-only phase; desktop build/test excluded from implementation. | G | No |
-| PR-027 | New/no-subscription users can appear as `monthly` in admin projections. | Critical | `account_subscriptions` schema and several API/UI adapters still use `monthly` as a fallback/default; current subscription, history, entitlement, plan catalog, manual grants, and payments are not fully separated. | E | Possibly |
+| PR-027 | New/no-subscription users can appear as `monthly` in admin projections. Type: subscription truth/projection defect. Blocking Phase C now: No. Final acceptance: Phase G. | Critical for final correctness | Root-cause investigation is intentionally deferred. Phase E must produce `No subscription`, no default plan, no fake expiry/status, separate current/history, unified Customer/Admin projection, Firebase UID identity, and no email/default-row-order current selection. | E | Decision deferred to Phase E |
 | PR-028 | Admin users and subscriptions IA are conflated. | High | Production admin routes map `users` and `subscriptions` to the same subscription-centered surface, so users can look like subscription rows. | F | No |
 | PR-029 | Manual Grant UI is implemented but too operational for daily admin use. | Medium | The current drawer requires manual Firebase UID entry, exposes internal operation labels, and requires free-text reason for routine actions. | F | No |
 | PR-030 | Subscription recovery is exposed as a normal grant operation. | Medium | `restore_remaining_time` is available in the primary grant operation selector, but it should be an advanced recovery action only when recovery context exists. | F | No |
 
 ## Phase ordering recommendation
 
-1. Phase B: Finish critical authentication: email/password signup, email verification OTP, recovery/error flows, and automated auth regression.
-2. Phase C: Decouple desktop link/session from subscription entitlement.
+1. Phase B: Closed as `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE`.
+2. Phase C: Active. Decouple desktop link/session from subscription entitlement.
 3. Phase D: Stabilize support/contact and confirm email operations after auth is stable.
 4. Phase E: Normalize subscription truth, plan lifecycle, pricing/plans/checkout/download gates.
 5. Phase F: Complete admin IA and operational UX: users vs subscriptions, manual grant simplification, recovery actions, policy/dashboard surfaces.
@@ -117,7 +120,7 @@ Current roadmap continuation:
 
 ## Phase E - Subscription Truth and Lifecycle Normalization
 
-High-priority item: a new user with no current subscription must never appear as `monthly`.
+Phase E critical item: a new user with no current subscription must never appear as `monthly`. It does not block Phase C and must not be investigated before Phase E.
 
 Rule when no current subscription exists:
 

@@ -1,32 +1,34 @@
 import { hmacSha256Hex, randomBase64Url, randomUserCode, sha256Hex, timingSafeEqualHex } from "./lib/crypto"
 import { allowRateLimit } from "./lib/rateLimit"
 import {
-  attachSubscriptionToUser,
   createAppSession,
   createDeviceLogin,
   createEmailVerification,
+  authorizePendingDeviceLoginRow,
+  claimAuthorizedDeviceLogin,
   getAccountProfileByFirebaseUid,
-  getActiveSubscriptionForUser,
   getAppSessionByHash,
+  getAppSessionByIdForUser,
   getDeviceLoginByCode,
   getLatestEmailVerification,
+  getLatestSubscriptionForUser,
   getPendingDeviceLoginByUserCode,
-  getSubscriptionById,
   getSubscriptionRowsForUser,
   insertEmailVerificationAudit,
+  listAppSessionsForUser,
   markAccountProfileEmailVerified,
   revokeAppSession,
-  revokeActiveAppSessionsForSubscription,
+  revokeAppSessionByIdForUser,
+  revokeAppSessionsForDevice,
+  revokeAppSessionsForUser,
+  rotateAppSessionToken,
   touchAppSession,
-  touchSubscription,
   upsertAccountProfile,
-  updateAppSessionExpiry,
-  updateAppSessionSubscription,
   updateDeviceLogin,
   updateEmailVerification,
 } from "./lib/supabase"
 import { isIsoExpired, isValidHwid, normalizeHwid } from "./lib/validators"
-import type { AccountProfileRow, Env, SubscriptionRow } from "./types"
+import type { AccountProfileRow, AppSessionRow, Env, SubscriptionRow } from "./types"
 
 function json(data: unknown, status = 200, extraHeaders: HeadersInit = {}): Response {
   return new Response(JSON.stringify(data), {
@@ -143,27 +145,61 @@ async function handleVerify(request: Request, env: Env): Promise<Response> {
   return json({ success: false, error: "account_session_required" }, 410)
 }
 
-function buildSubscriptionRuntime(row: { [key: string]: any }, status: string): Record<string, unknown> {
-  const tier = String(row.tier || "public").trim().toLowerCase() === "private" ? "private" : "public"
-  const featurePayload = row.feature_payload && typeof row.feature_payload === "object" ? row.feature_payload : {}
-  const metadata = row.metadata && typeof row.metadata === "object" ? row.metadata : {}
+type AccountConnectionState = "signed_out" | "link_pending" | "linked" | "session_expired" | "revoked" | "offline" | "error"
+type DesktopEntitlementState = "unknown" | "no_subscription" | "active" | "trial" | "grace" | "expired" | "suspended" | "lifetime"
+
+function appSessionTtlMs(env: Env): number {
+  const configuredDays = Number(String(env.APP_SESSION_TTL_DAYS || "30").trim())
+  const days = Math.max(1, Math.min(Number.isFinite(configuredDays) ? configuredDays : 30, 90))
+  return days * 24 * 60 * 60 * 1000
+}
+
+function desktopEntitlementState(row: SubscriptionRow | null): DesktopEntitlementState {
+  if (!row) return "no_subscription"
+  const lifecycle = subscriptionLifecycle(row)
+  if (lifecycle === "suspended") return "suspended"
+  if (lifecycle === "expired") return "expired"
+  if (planTerm(row) === "lifetime" && isActiveUsableSubscription(row)) return "expired"
+  if (planTerm(row) === "lifetime") return "lifetime"
+  if (lifecycle === "trialing") return "trial"
+  if (lifecycle === "past_due") return "grace"
+  if (lifecycle === "active" || lifecycle === "cancelled") return "active"
+  return "unknown"
+}
+
+function entitlementAllowsPaidAccess(state: DesktopEntitlementState): boolean {
+  return state === "active" || state === "trial" || state === "grace" || state === "lifetime"
+}
+
+function buildSubscriptionRuntime(
+  row: SubscriptionRow | null,
+  status: string,
+  user: { userId?: string | null; email?: string | null; displayName?: string | null; photoUrl?: string | null; authProvider?: string | null } = {},
+): Record<string, unknown> {
+  const tier = row ? (String(row.tier || "public").trim().toLowerCase() === "private" ? "private" : "public") : null
+  const featurePayload = row?.feature_payload && typeof row.feature_payload === "object" ? row.feature_payload : {}
+  const metadata = row?.metadata && typeof row.metadata === "object" ? row.metadata : {}
+  const entitlementState = desktopEntitlementState(row)
   return {
     success: true,
     status,
+    connection_state: "linked" satisfies AccountConnectionState,
+    entitlement_state: entitlementState,
+    entitlement: subscriptionProjection(row),
     tier,
-    subscription_id: row.id,
-    license_id: row.id,
-    user_id: row.firebase_user_id || row.user_id || null,
-    user_email: row.user_email || null,
-    display_name: metadata.display_name || null,
-    avatar_url: metadata.avatar_url || null,
-    auth_provider: metadata.auth_provider || null,
-    plan: row.plan || null,
-    expires_at: row.expires_at || null,
+    subscription_id: row?.id || null,
+    license_id: row?.id || null,
+    user_id: user.userId || row?.firebase_user_id || null,
+    user_email: user.email || row?.user_email || null,
+    display_name: user.displayName || metadata.display_name || null,
+    avatar_url: user.photoUrl || metadata.avatar_url || null,
+    auth_provider: user.authProvider || metadata.auth_provider || null,
+    plan: row?.plan || null,
+    expires_at: row?.expires_at || null,
     runtime_payload: tier === "private" ? featurePayload : {},
     policy: {
-      allow: true,
-      allow_offline: true,
+      allow: entitlementAllowsPaidAccess(entitlementState),
+      allow_offline: entitlementAllowsPaidAccess(entitlementState),
       blocked_actions: [],
     },
   }
@@ -780,71 +816,35 @@ async function authorizePendingDeviceLogin(
   firebaseUser: {
     userId: string
     email: string
+    emailVerified?: boolean
     displayName?: string | null
     photoUrl?: string | null
     authProvider?: string | null
+    authProviders?: string[]
   },
-): Promise<{ success: true; subscription: any; runtime: Record<string, unknown> } | { success: false; error: string; status: number }> {
-  const subscription = await getActiveSubscriptionForUser(env, firebaseUser.userId, firebaseUser.email)
-  const subscriptionError = isActiveUsableSubscription(subscription)
-  if (subscriptionError || !subscription) {
-    const error = subscriptionError === "subscription_not_found" ? "subscription_required" : subscriptionError
-    await updateDeviceLogin(env, pending.id, {
-      status: error,
-      user_id: firebaseUser.userId,
-      user_email: firebaseUser.email,
-      metadata: {
-        ...(typeof pending?.metadata === "object" && pending?.metadata ? pending.metadata : {}),
-        display_name: firebaseUser.displayName || null,
-        avatar_url: firebaseUser.photoUrl || null,
-        auth_provider: firebaseUser.authProvider || null,
-      },
-    })
-    return { success: false, error, status: 403 }
+): Promise<{ success: true; subscription: SubscriptionRow | null; runtime: Record<string, unknown> } | { success: false; error: string; status: number }> {
+  if (String(pending?.status || "").trim().toLowerCase() !== "pending") {
+    return { success: false, error: "device_code_already_used", status: 409 }
   }
 
-  const subscriptionUserId = String(subscription.firebase_user_id || "").trim()
-  const subscriptionEmail = String(subscription.user_email || "").trim().toLowerCase()
-  if (subscriptionUserId && subscriptionUserId !== firebaseUser.userId) {
-    await updateDeviceLogin(env, pending.id, {
-      status: "subscription_user_mismatch",
-      user_id: firebaseUser.userId,
-      user_email: firebaseUser.email,
-      subscription_id: subscription.id,
-      metadata: {
-        ...(typeof pending?.metadata === "object" && pending?.metadata ? pending.metadata : {}),
-        display_name: firebaseUser.displayName || null,
-        avatar_url: firebaseUser.photoUrl || null,
-        auth_provider: firebaseUser.authProvider || null,
-      },
-    })
-    return { success: false, error: "subscription_user_mismatch", status: 403 }
-  }
-  if (subscriptionEmail && subscriptionEmail !== firebaseUser.email) {
-    await updateDeviceLogin(env, pending.id, {
-      status: "subscription_email_mismatch",
-      user_id: firebaseUser.userId,
-      user_email: firebaseUser.email,
-      subscription_id: subscription.id,
-      metadata: {
-        ...(typeof pending?.metadata === "object" && pending?.metadata ? pending.metadata : {}),
-        display_name: firebaseUser.displayName || null,
-        avatar_url: firebaseUser.photoUrl || null,
-        auth_provider: firebaseUser.authProvider || null,
-      },
-    })
-    return { success: false, error: "subscription_email_mismatch", status: 403 }
-  }
-  const attached = await attachSubscriptionToUser(env, subscription.id, {
+  const profile = await provisionProfile(env, {
     userId: firebaseUser.userId,
     email: firebaseUser.email,
-    hwid: pending.hwid,
+    emailVerified: Boolean(firebaseUser.emailVerified),
+    displayName: firebaseUser.displayName || null,
+    photoUrl: firebaseUser.photoUrl || null,
+    authProvider: firebaseUser.authProvider || null,
+    authProviders: firebaseUser.authProviders?.length ? firebaseUser.authProviders : firebaseUser.authProvider ? [firebaseUser.authProvider] : [],
   })
-  await updateDeviceLogin(env, pending.id, {
-    status: "authorized",
+  if (["suspended", "pending_deletion", "deleted"].includes(String(profile.account_status || "").trim().toLowerCase())) {
+    return { success: false, error: "account_disabled", status: 403 }
+  }
+
+  const subscription = await getLatestSubscriptionForUser(env, firebaseUser.userId, firebaseUser.email)
+  const authorized = await authorizePendingDeviceLoginRow(env, pending.id, {
     user_id: firebaseUser.userId,
     user_email: firebaseUser.email,
-    subscription_id: attached.id,
+    subscription_id: subscription?.id || null,
     license_id: null,
     authorized_at: new Date().toISOString(),
     metadata: {
@@ -854,25 +854,15 @@ async function authorizePendingDeviceLogin(
       auth_provider: firebaseUser.authProvider || null,
     },
   })
-  const runtime = buildSubscriptionRuntime(
-    {
-      ...attached,
-      metadata: {
-        ...(typeof attached?.metadata === "object" && attached?.metadata ? attached.metadata : {}),
-        display_name: firebaseUser.displayName || null,
-        avatar_url: firebaseUser.photoUrl || null,
-        auth_provider: firebaseUser.authProvider || null,
-      },
-    },
-    "authorized",
-  )
-  return { success: true, subscription: attached, runtime }
+  if (!authorized) return { success: false, error: "device_code_already_used", status: 409 }
+  const runtime = buildSubscriptionRuntime(subscription, "authorized", firebaseUser)
+  return { success: true, subscription, runtime }
 }
 
 async function issueDesktopSession(
   env: Env,
   pending: any,
-  subscription: any,
+  subscription: SubscriptionRow | null,
   user: {
     userId: string
     email: string
@@ -881,43 +871,37 @@ async function issueDesktopSession(
     authProvider?: string | null
   },
 ): Promise<Response> {
+  const claimed = await claimAuthorizedDeviceLogin(env, pending.id)
+  if (!claimed) return json({ success: false, error: "device_code_already_used" }, 409)
+  pending = claimed
   try {
     const sessionToken = `stk_${randomBase64Url(32)}`
     const tokenHash = await sha256Hex(sessionToken)
-    const sessionExpiresAt = String(subscription.expires_at || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString())
-    await revokeActiveAppSessionsForSubscription(env, subscription.id)
+    const sessionExpiresAt = new Date(Date.now() + appSessionTtlMs(env)).toISOString()
     await createAppSession(env, {
       session_token_hash: tokenHash,
       user_id: user.userId,
       user_email: user.email,
-      subscription_id: subscription.id,
+      subscription_id: subscription?.id || null,
       hwid: pending.hwid,
       expires_at: sessionExpiresAt,
       metadata: {
         display_name: user.displayName || null,
         avatar_url: user.photoUrl || null,
         auth_provider: user.authProvider || null,
+        device_name: String(pending?.metadata?.device_name || "").trim() || null,
+        platform: String(pending?.metadata?.platform || "").trim() || null,
+        os_version: String(pending?.metadata?.os_version || "").trim() || null,
+        app_version: String(pending?.metadata?.app_version || "").trim() || null,
       },
     })
     await updateDeviceLogin(env, pending.id, {
       status: "consumed",
-      consumed_at: new Date().toISOString(),
-      subscription_id: subscription.id,
+      subscription_id: subscription?.id || null,
       user_id: user.userId,
       user_email: user.email,
     })
-    const runtime = buildSubscriptionRuntime(
-      {
-        ...subscription,
-        metadata: {
-          ...(typeof subscription?.metadata === "object" && subscription?.metadata ? subscription.metadata : {}),
-          display_name: user.displayName || null,
-          avatar_url: user.photoUrl || null,
-          auth_provider: user.authProvider || null,
-        },
-      },
-      "verified",
-    )
+    const runtime = buildSubscriptionRuntime(subscription, "verified", user)
     return json({
       success: true,
       status: "authorized",
@@ -926,12 +910,17 @@ async function issueDesktopSession(
       display_name: user.displayName || null,
       avatar_url: user.photoUrl || null,
       auth_provider: user.authProvider || null,
-      subscription: runtime,
-      license: runtime,
+      connection_state: "linked",
+      entitlement_state: runtime.entitlement_state,
+      entitlement: runtime.entitlement,
+      subscription: subscription ? runtime : null,
+      license: subscription ? runtime : null,
+      session_expires_at: sessionExpiresAt,
     })
   } catch (error: any) {
     await updateDeviceLogin(env, pending.id, {
-      status: "session_store_failed",
+      status: "authorized",
+      consumed_at: null,
       subscription_id: subscription?.id || pending?.subscription_id || null,
       user_id: user.userId,
       user_email: user.email,
@@ -954,37 +943,14 @@ async function resolveSessionSubscription(
   if (!session) return { session: null, subscription: null, error: "session_not_found" }
   if (session.revoked_at) return { session, subscription: null, error: "session_revoked" }
   if (session.hwid !== hwid) return { session, subscription: null, error: "session_hwid_mismatch" }
-  const subscriptionId = String(session.subscription_id || session.license_id || "").trim()
-  if (!subscriptionId) return { session, subscription: null, error: "subscription_missing" }
-  let subscription = await getSubscriptionById(env, subscriptionId)
-  let subscriptionError = isActiveUsableSubscription(subscription)
-  if (subscriptionError || !subscription) {
-    const replacement = await getActiveSubscriptionForUser(
-      env,
-      String(session.user_id || subscription?.firebase_user_id || ""),
-      String(session.user_email || subscription?.user_email || ""),
-    )
-    const replacementError = isActiveUsableSubscription(replacement)
-    if (!replacement || replacementError) {
-      return { session, subscription, error: subscriptionError || replacementError || "subscription_not_found" }
-    }
-    if (replacement.hwid && replacement.hwid !== hwid) {
-      return { session, subscription: replacement, error: "subscription_hwid_mismatch" }
-    }
-    const nextSessionExpiry = String(replacement.expires_at || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString())
-    await updateAppSessionSubscription(env, session.id, replacement.id, nextSessionExpiry)
-    session.subscription_id = replacement.id
-    session.license_id = null
-    session.expires_at = nextSessionExpiry
-    subscription = replacement
-    subscriptionError = ""
-  }
-  if (subscription?.hwid && subscription.hwid !== hwid) return { session, subscription, error: "subscription_hwid_mismatch" }
   if (isIsoExpired(session.expires_at)) {
-    const nextSessionExpiry = String(subscription.expires_at || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString())
-    await updateAppSessionExpiry(env, session.id, nextSessionExpiry)
-    session.expires_at = nextSessionExpiry
+    return { session, subscription: null, error: "session_expired" }
   }
+  const subscription = await getLatestSubscriptionForUser(
+    env,
+    String(session.user_id || ""),
+    String(session.user_email || ""),
+  )
   return { session, subscription }
 }
 
@@ -1007,6 +973,9 @@ async function handleDeviceStart(request: Request, env: Env): Promise<Response> 
     expires_at: expiresAt,
     metadata: {
       app_version: body?.app_version || null,
+      device_name: String(body?.device_name || "").trim().slice(0, 120) || null,
+      platform: String(body?.platform || "").trim().slice(0, 80) || null,
+      os_version: String(body?.os_version || "").trim().slice(0, 160) || null,
       user_agent: request.headers.get("User-Agent") || null,
       ip,
     },
@@ -1032,6 +1001,9 @@ async function handleDeviceComplete(request: Request, env: Env): Promise<Respons
   const firebaseUser = await verifyFirebaseUser(idToken, env)
   const pending = ticket ? await getDeviceLoginByCode(env, ticket) : await getPendingDeviceLoginByUserCode(env, userCode)
   if (!pending) return json({ success: false, error: "device_code_not_found" }, 404)
+  if (String(pending.status || "").trim().toLowerCase() !== "pending") {
+    return json({ success: false, error: "device_code_already_used" }, 409)
+  }
   if (isIsoExpired(pending.expires_at)) {
     await updateDeviceLogin(env, pending.id, { status: "expired" })
     return json({ success: false, error: "device_code_expired" }, 410)
@@ -1048,8 +1020,11 @@ async function handleDeviceComplete(request: Request, env: Env): Promise<Respons
     display_name: firebaseUser.displayName || null,
     avatar_url: firebaseUser.photoUrl || null,
     auth_provider: firebaseUser.authProvider || null,
-    subscription: authorization.runtime,
-    license: authorization.runtime,
+    connection_state: "linked",
+    entitlement_state: authorization.runtime.entitlement_state,
+    entitlement: authorization.runtime.entitlement,
+    subscription: authorization.subscription ? authorization.runtime : null,
+    license: authorization.subscription ? authorization.runtime : null,
   })
 }
 
@@ -1068,6 +1043,9 @@ async function handleDevicePasswordComplete(request: Request, env: Env): Promise
 
   const pending = await getDeviceLoginByCode(env, deviceCode)
   if (!pending) return json({ success: false, error: "device_code_not_found" }, 404)
+  if (String(pending.status || "").trim().toLowerCase() !== "pending") {
+    return json({ success: false, error: "device_code_already_used" }, 409)
+  }
   if (isIsoExpired(pending.expires_at)) {
     await updateDeviceLogin(env, pending.id, { status: "expired" })
     return json({ success: false, error: "device_code_expired" }, 410)
@@ -1102,26 +1080,12 @@ async function handleDevicePoll(request: Request, env: Env): Promise<Response> {
   }
   if (row.status === "pending") return json({ success: true, status: "pending" })
   if (row.status !== "authorized") {
-    const authFailureStatuses = new Set([
-      "subscription_required",
-      "subscription_expired",
-      "subscription_inactive",
-      "subscription_missing",
-      "subscription_hwid_mismatch",
-      "subscription_user_mismatch",
-      "subscription_email_mismatch",
-    ])
     const status = String(row.status || "")
-    return json(
-      { success: false, status, error: authFailureStatuses.has(status) ? status : `device_${status}` },
-      authFailureStatuses.has(status) ? 403 : 409,
-    )
+    return json({ success: false, status, error: status === "consumed" ? "device_code_already_used" : `device_${status}` }, 409)
   }
-  if (!row.subscription_id || !row.user_id) return json({ success: false, error: "device_authorization_incomplete" }, 409)
+  if (!row.user_id) return json({ success: false, error: "device_authorization_incomplete" }, 409)
 
-  const subscription = await getSubscriptionById(env, row.subscription_id)
-  const subscriptionError = isActiveUsableSubscription(subscription)
-  if (subscriptionError || !subscription) return json({ success: false, error: subscriptionError || "subscription_not_found" }, 403)
+  const subscription = await getLatestSubscriptionForUser(env, String(row.user_id || ""), String(row.user_email || ""))
   return await issueDesktopSession(env, row, subscription, {
     userId: String(row.user_id || ""),
     email: String(row.user_email || ""),
@@ -1137,24 +1101,19 @@ async function handleSessionVerify(request: Request, env: Env): Promise<Response
   const hwid = normalizeHwid(body?.hwid)
   if (!sessionToken || !isValidHwid(hwid)) return json({ success: false, error: "invalid_payload" }, 400)
   const resolved = await resolveSessionSubscription(env, sessionToken, hwid)
-  if (resolved.error || !resolved.session || !resolved.subscription) {
+  if (resolved.error || !resolved.session) {
     return json({ success: false, error: resolved.error || "session_invalid" }, 401)
   }
   await touchAppSession(env, resolved.session.id)
-  await touchSubscription(env, resolved.subscription.id)
+  const user = {
+    userId: String(resolved.session.user_id || ""),
+    email: String(resolved.session.user_email || ""),
+    displayName: String(resolved.session.metadata?.display_name || "").trim() || null,
+    photoUrl: String(resolved.session.metadata?.avatar_url || "").trim() || null,
+    authProvider: String(resolved.session.metadata?.auth_provider || "").trim() || null,
+  }
   return json({
-    ...buildSubscriptionRuntime(
-      {
-        ...resolved.subscription,
-        metadata: {
-          ...(typeof resolved.subscription?.metadata === "object" && resolved.subscription?.metadata
-            ? resolved.subscription.metadata
-            : {}),
-          ...(typeof resolved.session?.metadata === "object" && resolved.session?.metadata ? resolved.session.metadata : {}),
-        },
-      },
-      "verified",
-    ),
+    ...buildSubscriptionRuntime(resolved.subscription, "verified", user),
     user_email: resolved.session.user_email,
     display_name: resolved.session.metadata?.display_name || null,
     avatar_url: resolved.session.metadata?.avatar_url || null,
@@ -1163,11 +1122,112 @@ async function handleSessionVerify(request: Request, env: Env): Promise<Response
   })
 }
 
+async function handleSessionRefresh(request: Request, env: Env): Promise<Response> {
+  const body = await request.json<any>().catch(() => null)
+  const sessionToken = String(body?.session_token || "").trim()
+  const hwid = normalizeHwid(body?.hwid)
+  if (!sessionToken || !isValidHwid(hwid)) return errorJson(request, "SESSION_REFRESH_INVALID", 400)
+  const currentTokenHash = await sha256Hex(sessionToken)
+  const session = await getAppSessionByHash(env, currentTokenHash)
+  if (!session) return errorJson(request, "SESSION_NOT_FOUND", 401)
+  if (session.revoked_at) return errorJson(request, "SESSION_REVOKED", 401)
+  if (session.hwid !== hwid) return errorJson(request, "SESSION_DEVICE_MISMATCH", 403)
+  if (isIsoExpired(session.expires_at)) return errorJson(request, "SESSION_EXPIRED", 401)
+
+  const nextToken = `stk_${randomBase64Url(32)}`
+  const nextTokenHash = await sha256Hex(nextToken)
+  const expiresAt = new Date(Date.now() + appSessionTtlMs(env)).toISOString()
+  const rotated = await rotateAppSessionToken(env, session.id, currentTokenHash, nextTokenHash, expiresAt)
+  if (!rotated) return errorJson(request, "SESSION_REFRESH_CONFLICT", 409, true)
+  return json({ success: true, connection_state: "linked", session_token: nextToken, session_expires_at: expiresAt })
+}
+
 async function handleSessionLogout(request: Request, env: Env): Promise<Response> {
   const body = await request.json<any>().catch(() => null)
   const sessionToken = String(body?.session_token || "").trim()
   if (sessionToken) await revokeAppSession(env, await sha256Hex(sessionToken))
   return json({ success: true })
+}
+
+function firebaseTokenFromRequest(request: Request, body: Record<string, any> | null): string {
+  const authorization = String(request.headers.get("Authorization") || "").trim()
+  const bearer = /^Bearer\s+(.+)$/i.exec(authorization)?.[1] || ""
+  return String(bearer || body?.id_token || "").trim()
+}
+
+async function accountSessionProjection(session: AppSessionRow) {
+  const metadata = session.metadata && typeof session.metadata === "object" ? session.metadata : {}
+  const status = session.revoked_at ? "revoked" : isIsoExpired(session.expires_at) ? "expired" : "active"
+  const deviceKey = (await sha256Hex(`saturnws-device:${String(session.hwid || "")}`)).slice(0, 16)
+  return {
+    id: session.id,
+    device_key: deviceKey,
+    device_name: String(metadata.device_name || "").trim() || "Saturn Workspace",
+    platform: String(metadata.platform || "").trim() || null,
+    os_version: String(metadata.os_version || "").trim() || null,
+    app_version: String(metadata.app_version || "").trim() || null,
+    status,
+    created_at: session.created_at,
+    last_activity_at: session.last_seen_at || session.created_at,
+    expires_at: session.expires_at,
+    revoked_at: session.revoked_at,
+  }
+}
+
+async function handleAccountSessions(request: Request, env: Env): Promise<Response> {
+  const body = await request.json<any>().catch(() => null)
+  const idToken = firebaseTokenFromRequest(request, body)
+  if (!idToken) return errorJson(request, "AUTH_SESSION_EXPIRED", 401, true)
+  const firebaseUser = await verifyFirebaseUser(idToken, env)
+  const rows = await listAppSessionsForUser(env, firebaseUser.userId)
+  const sessions = await Promise.all(rows.map(accountSessionProjection))
+  const grouped = new Map<string, { device_key: string; device_name: string; platform: string | null; os_version: string | null; active_sessions: number; total_sessions: number; last_activity_at: string }>()
+  for (const session of sessions) {
+    const existing = grouped.get(session.device_key)
+    if (!existing) {
+      grouped.set(session.device_key, {
+        device_key: session.device_key,
+        device_name: session.device_name,
+        platform: session.platform,
+        os_version: session.os_version,
+        active_sessions: session.status === "active" ? 1 : 0,
+        total_sessions: 1,
+        last_activity_at: session.last_activity_at,
+      })
+      continue
+    }
+    existing.total_sessions += 1
+    if (session.status === "active") existing.active_sessions += 1
+    if (String(session.last_activity_at || "") > String(existing.last_activity_at || "")) existing.last_activity_at = session.last_activity_at
+  }
+  return json({ success: true, sessions, devices: [...grouped.values()] })
+}
+
+async function handleAccountSessionRevoke(request: Request, env: Env): Promise<Response> {
+  const body = await request.json<any>().catch(() => null)
+  const idToken = firebaseTokenFromRequest(request, body)
+  const sessionId = String(body?.session_id || "").trim()
+  const scope = String(body?.scope || "session").trim().toLowerCase()
+  if (!idToken) return errorJson(request, "AUTH_SESSION_EXPIRED", 401, true)
+  if (!sessionId || !["session", "device"].includes(scope)) return errorJson(request, "SESSION_REVOKE_INVALID", 400)
+  const firebaseUser = await verifyFirebaseUser(idToken, env)
+  const owned = await getAppSessionByIdForUser(env, sessionId, firebaseUser.userId)
+  if (!owned) return errorJson(request, "SESSION_NOT_FOUND", 404)
+  if (scope === "device") {
+    await revokeAppSessionsForDevice(env, firebaseUser.userId, owned.hwid)
+  } else if (!owned.revoked_at) {
+    await revokeAppSessionByIdForUser(env, sessionId, firebaseUser.userId)
+  }
+  return json({ success: true, revoked_scope: scope })
+}
+
+async function handleAccountSessionsRevokeAll(request: Request, env: Env): Promise<Response> {
+  const body = await request.json<any>().catch(() => null)
+  const idToken = firebaseTokenFromRequest(request, body)
+  if (!idToken) return errorJson(request, "AUTH_SESSION_EXPIRED", 401, true)
+  const firebaseUser = await verifyFirebaseUser(idToken, env)
+  await revokeAppSessionsForUser(env, firebaseUser.userId)
+  return json({ success: true, revoked_scope: "all" })
 }
 
 async function handleAccountProvision(request: Request, env: Env): Promise<Response> {
@@ -1289,8 +1349,24 @@ export default {
         const res = await handleSessionVerify(request, env)
         return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
       }
+      if (request.method === "POST" && apiPath === "/session/refresh") {
+        const res = await handleSessionRefresh(request, env)
+        return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
+      }
       if (request.method === "POST" && apiPath === "/session/logout") {
         const res = await handleSessionLogout(request, env)
+        return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
+      }
+      if (request.method === "POST" && apiPath === "/account/sessions") {
+        const res = await handleAccountSessions(request, env)
+        return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
+      }
+      if (request.method === "POST" && apiPath === "/account/sessions/revoke") {
+        const res = await handleAccountSessionRevoke(request, env)
+        return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
+      }
+      if (request.method === "POST" && apiPath === "/account/sessions/revoke-all") {
+        const res = await handleAccountSessionsRevokeAll(request, env)
         return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
       }
       if (request.method === "POST" && apiPath === "/account/subscription") {
@@ -1326,8 +1402,17 @@ export default {
       }
       return json({ success: false, error: "not_found" }, 404, cors)
     } catch (err: any) {
+      const code = String(err?.message || err || "").trim()
+      if (code === "firebase_token_invalid" || code === "firebase_user_not_verified") {
+        const res = errorJson(request, "AUTH_SESSION_EXPIRED", 401, true)
+        return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
+      }
+      if (code === "firebase_not_configured") {
+        const res = errorJson(request, "AUTH_PROVIDER_UNAVAILABLE", 503, true)
+        return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
+      }
       console.error("auth_worker_unhandled_error", {
-        message: String(err?.message || err || "error"),
+        message: code || "error",
         stack: String(err?.stack || ""),
       })
       return json({ success: false, error: "internal_error", message: "Internal server error" }, 500, cors)

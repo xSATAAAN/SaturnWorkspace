@@ -6,7 +6,9 @@ This dashboard supplements `feature-completeness-matrix.md`. It does not replace
 
 ## Manual Acceptance Update - 2026-06-21
 
-Phase B.1 is no longer the active stop point. Do not add another manual acceptance gate after each workstream. Manual acceptance is consolidated into Phase G unless a hard stop appears.
+Phase B is closed with status `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE`.
+
+Phase B.1 is no longer the active stop point. Do not add another manual acceptance gate after each workstream. Manual acceptance for all Phase B work is consolidated into Phase G unless a hard stop appears. Do not create Phase B.3 or B.4.
 
 Latest manual result: `PHASE_B1_ACCEPTED_WITH_NON_BLOCKING_UX_DEBT`. The B.1 sign-in copy and core skeleton fidelity fixes were accepted for progression, with one low-severity design-system debt deferred to Phase G.
 
@@ -115,7 +117,7 @@ Operational acceptance is deferred to Phase G. Do not execute grants against rea
 
 | Item | Owner phase | Severity now | Current execution effect |
 |---|---|---|---|
-| New/no-subscription user appears as `monthly` | Phase E | Critical | Track as subscription truth/projection defect; do not patch during Phase B unless data-integrity risk escalates. |
+| New/no-subscription user appears as `monthly` | Phase E | Critical for final correctness | Subscription truth/projection defect. It does not block Phase C and has no additional dependency gate. Do not investigate or patch it before Phase E. Final acceptance is Phase G. |
 | Users and Subscriptions are conflated in Admin IA | Phase F | High | Track for Admin IA; current Phase B continues. |
 | Manual Grant form is too operational and requires too many inputs | Phase F | Medium | Track for Admin operational UX; current deployed function remains not operationally accepted. |
 | Recovery action appears as a normal grant action | Phase F | Medium | Move to Advanced actions -> Subscription recovery in Phase F. |
@@ -123,13 +125,22 @@ Operational acceptance is deferred to Phase G. Do not execute grants against rea
 
 ## Current Roadmap Continuation
 
-Active phase: `Phase B - Critical Authentication`.
+Closed phase: `Phase B - Critical Authentication`.
 
-Continue without manual acceptance gate:
+Phase B status: `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE`.
 
-- Email/password signup.
-- Email verification OTP.
-- Auth recovery and clean error flows.
-- Automated Phase B regression.
+- OTP/Auth implementation and automated evidence retain their documented status.
+- Emergency Subscription Grant remains `IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED` and must not be used automatically on real users.
+- No additional Phase B workstream or manual test request is required before progression.
 
-Proceed to Phase C after Phase B automated checks, build, deployment, and smoke verification pass, unless a hard stop appears.
+Active phase: `Phase C - Account and Desktop Linking`.
+
+Phase C separates account connection from subscription entitlement. A user may link an account without a subscription; paid functionality remains controlled by canonical entitlement and policy checks.
+
+Phase C implementation status: `IMPLEMENTED_AUTOMATED_VERIFICATION_PENDING_SCHEMA_ROLLOUT_AND_PHASE_G_MANUAL_ACCEPTANCE`.
+
+- Auth, Policy, portal session management, and desktop connection state changes pass automated checks.
+- `workers/auth/migrations/010_account_session_subscription_independence.sql` is prepared but not applied because no Supabase database credential is available in the current environment.
+- Auth Worker deployed version: `2e68b33a-ab02-4b25-bab0-ae5c11ebdafb`; live `/health` returned `200` and invalid account-session access returned the stable `401 AUTH_SESSION_EXPIRED` contract.
+- Policy Worker deployed version: `2b3b5f7c-2089-41f0-af4f-38a9de70b0dd`; live `/health` returned `200` and an invalid app session remained denied.
+- No manual acceptance is requested here; consolidated acceptance remains in Phase G.

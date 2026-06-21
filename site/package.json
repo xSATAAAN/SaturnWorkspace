@@ -15,6 +15,7 @@
     "test:new-ui:round3b": "node scripts/check-new-ui-production-runtime.mjs && node scripts/check-round3b-production-integration.mjs",
     "test:phase-b": "node scripts/check-phase-b-production-rollout.mjs",
     "test:phase-b1": "node scripts/check-no-mojibake.mjs && node scripts/check-copy-quality.mjs && node scripts/check-phase-b1-baseline.mjs",
+    "test:phase-c": "node scripts/check-phase-c-account-linking.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "preview:new-ui": "vite preview --config src/new-ui/vite.config.ts",

@@ -18,6 +18,7 @@ export interface Env {
   AUTH_EMAIL_ENQUEUE_TOKEN?: string
   ACCOUNT_TERMS_VERSION?: string
   PROFILE_DEFAULT_LOCALE?: string
+  APP_SESSION_TTL_DAYS?: string
   ALLOW_ORIGIN?: string
   APP_ENV?: string
 }
@@ -85,7 +86,7 @@ export interface AppSessionRow {
   user_email: string | null
   metadata?: Record<string, unknown> | null
   license_id?: string | null
-  subscription_id?: string | null
+  subscription_id: string | null
   hwid: string
   expires_at: string
   revoked_at: string | null

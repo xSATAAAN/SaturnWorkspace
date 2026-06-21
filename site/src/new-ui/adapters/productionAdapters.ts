@@ -8,7 +8,7 @@ import {
   signOut,
   updateProfile,
 } from 'firebase/auth'
-import { fetchAccountSubscription, provisionAccountProfile } from '../../api/account'
+import { fetchAccountSessions, fetchAccountSubscription, provisionAccountProfile, revokeAccountSession, revokeAllAccountSessions } from '../../api/account'
 import {
   createSubscription,
   executeManualSubscriptionGrant,
@@ -398,6 +398,21 @@ export const productionAdapters: AppAdapters = {
       const email = firebaseAuth.currentUser?.email
       if (!email) throw new Error('not_authenticated')
       await sendPasswordResetEmail(firebaseAuth, email)
+    },
+    async listSessions() {
+      const token = await productionAdapters.auth.getIdToken(false)
+      if (!token) throw new Error('not_authenticated')
+      return fetchAccountSessions(token)
+    },
+    async revokeSession(sessionId, scope) {
+      const token = await productionAdapters.auth.getIdToken(true)
+      if (!token) throw new Error('not_authenticated')
+      await revokeAccountSession(token, sessionId, scope)
+    },
+    async revokeAllSessions() {
+      const token = await productionAdapters.auth.getIdToken(true)
+      if (!token) throw new Error('not_authenticated')
+      await revokeAllAccountSessions(token)
     },
   },
   releases: {

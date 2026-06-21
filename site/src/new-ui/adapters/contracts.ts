@@ -15,7 +15,7 @@ import type {
   ManualGrantPreviewInput,
   ManualGrantResult,
 } from '../../api/admin'
-import type { AccountProfileProjection, AccountSubscription, SubscriptionProjection } from '../../api/account'
+import type { AccountProfileProjection, AccountSessionsResult, AccountSubscription, SubscriptionProjection } from '../../api/account'
 
 export type RuntimeMode = 'preview' | 'production'
 
@@ -154,6 +154,9 @@ export type AccountAdapter = {
   getSubscriptionProjection?(): Promise<SubscriptionProjection | null>
   updateProfile(input: { displayName: string }): Promise<AppUser>
   sendPasswordReset(): Promise<void>
+  listSessions(): Promise<AccountSessionsResult>
+  revokeSession(sessionId: string, scope: 'session' | 'device'): Promise<void>
+  revokeAllSessions(): Promise<void>
 }
 
 export type ReleaseAdapter = {

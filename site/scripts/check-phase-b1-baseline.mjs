@@ -67,7 +67,11 @@ const checks = [
   },
   {
     name: 'production adapter avoids forced token refresh for account/support reads',
-    pass: !adapters.includes('getIdToken(true)') && adapters.includes('accountBootstrapInflight') && adapters.includes('saturnws:account_bootstrap'),
+    pass:
+      /async listSessions\(\)\s*{[\s\S]*?getIdToken\(false\)[\s\S]*?fetchAccountSessions\(token\)[\s\S]*?}/.test(adapters) &&
+      /async revokeSession\([\s\S]*?getIdToken\(true\)[\s\S]*?revokeAccountSession\(/.test(adapters) &&
+      adapters.includes('accountBootstrapInflight') &&
+      adapters.includes('saturnws:account_bootstrap'),
   },
   {
     name: 'auth worker exposes current_subscription and history summary',

@@ -79,7 +79,7 @@ The following is accepted as non-blocking for Phase B.2 but blocking for final r
 
 ## Phase B: Critical Authentication
 
-Phase B acceptance is automated until Phase G.
+Phase B is closed as `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE`. OTP/Auth implementation retains its documented state. Do not add B.3/B.4 or request another Phase B manual test; all manual acceptance is deferred to Phase G.
 
 1. Fresh visit to `/account/signin` while signed out.
 2. Sign up with email/password.
@@ -96,16 +96,29 @@ Phase B acceptance is automated until Phase G.
 
 ## Phase C: Account & Desktop Linking
 
+Phase C is active and has no dependency gate on the deferred `monthly` projection defect.
+
+Automated implementation evidence is complete locally and the Auth/Policy Workers have passed live smoke checks. The additive Supabase session-independence migration remains a rollout prerequisite; manual workflow acceptance remains deferred to Phase G.
+
+Account connection states: `signed_out`, `link_pending`, `linked`, `session_expired`, `revoked`, `offline`, `error`.
+
+Entitlement states: `unknown`, `no_subscription`, `active`, `trial`, `grace`, `expired`, `suspended`, `lifetime`.
+
 1. Desktop starts login and shows device/user code.
 2. New account without subscription signs in through web activation.
 3. Desktop becomes linked to account but shows `No active subscription`, not `Expired`.
 4. Existing active subscriber links desktop and gets authorized state.
 5. Expired subscriber links desktop and gets `Expired subscription`.
 6. Subscription renewal changes desktop state from expired/no-subscription to authorized.
-7. Session verify renews expiry from canonical subscription.
+7. Session verification and refresh are independent from subscription expiry and retain canonical entitlement projection.
 8. Logout revokes local session and returns to login-required state.
 9. HWID mismatch returns clean message.
 10. Offline/network failure returns offline/unavailable state without corrupting session.
+11. Wrong code, expired code, replay, and wrong-device polling are rejected deterministically.
+12. Revoking a session or device requires Firebase identity ownership.
+13. Account switching replaces local identity state without leaking the previous account cache/session.
+14. Multiple devices remain independently visible and revocable; linking one device does not silently revoke unrelated sessions.
+15. Logs and responses contain no session token, Firebase token, password, or full secret values.
 
 ## Phase D: Support & Contact
 

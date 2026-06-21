@@ -79,6 +79,36 @@ export type AccountProvisionResult = {
   field_errors?: Record<string, string>
 }
 
+export type AccountSession = {
+  id: string
+  device_key: string
+  device_name: string
+  platform: string | null
+  os_version: string | null
+  app_version: string | null
+  status: 'active' | 'expired' | 'revoked'
+  created_at: string
+  last_activity_at: string
+  expires_at: string
+  revoked_at: string | null
+}
+
+export type AccountDevice = {
+  device_key: string
+  device_name: string
+  platform: string | null
+  os_version: string | null
+  active_sessions: number
+  total_sessions: number
+  last_activity_at: string
+}
+
+export type AccountSessionsResult = {
+  success: boolean
+  sessions: AccountSession[]
+  devices: AccountDevice[]
+}
+
 export async function fetchAccountSubscription(idToken: string) {
   const response = await fetch(`${AUTH_BASE}/account/subscription`, {
     method: 'POST',
@@ -119,4 +149,35 @@ export async function provisionAccountProfile(
     throw new Error(payload?.error || payload?.code || `account_provision_failed_${response.status}`)
   }
   return payload || { success: false, error: 'empty_response' }
+}
+
+export async function fetchAccountSessions(idToken: string): Promise<AccountSessionsResult> {
+  const response = await fetch(`${AUTH_BASE}/account/sessions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+    body: JSON.stringify({}),
+  })
+  const payload = (await response.json().catch(() => null)) as AccountSessionsResult & { error?: string } | null
+  if (!response.ok || !payload?.success) throw new Error(payload?.error || `account_sessions_failed_${response.status}`)
+  return { success: true, sessions: payload.sessions || [], devices: payload.devices || [] }
+}
+
+export async function revokeAccountSession(idToken: string, sessionId: string, scope: 'session' | 'device'): Promise<void> {
+  const response = await fetch(`${AUTH_BASE}/account/sessions/revoke`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+    body: JSON.stringify({ session_id: sessionId, scope }),
+  })
+  const payload = (await response.json().catch(() => null)) as { success?: boolean; error?: string } | null
+  if (!response.ok || !payload?.success) throw new Error(payload?.error || `account_session_revoke_failed_${response.status}`)
+}
+
+export async function revokeAllAccountSessions(idToken: string): Promise<void> {
+  const response = await fetch(`${AUTH_BASE}/account/sessions/revoke-all`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+    body: JSON.stringify({}),
+  })
+  const payload = (await response.json().catch(() => null)) as { success?: boolean; error?: string } | null
+  if (!response.ok || !payload?.success) throw new Error(payload?.error || `account_sessions_revoke_failed_${response.status}`)
 }

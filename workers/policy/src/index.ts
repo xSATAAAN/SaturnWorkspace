@@ -12,6 +12,7 @@ import {
 type Decision =
   | "allow"
   | "deny_user"
+  | "subscription_required"
   | "subscription_expired"
   | "mandatory_update"
   | "disabled_version"
@@ -230,6 +231,8 @@ interface AuthResolved {
   user_id?: string
   email?: string
   plan_id?: string
+  subscription_id?: string | null
+  entitlement_state?: string
   expires_at?: string | null
   features?: Record<string, unknown>
   limits?: Record<string, unknown>
@@ -250,6 +253,7 @@ interface FirebaseWebIdentity {
 const DECISIONS = new Set<Decision>([
   "allow",
   "deny_user",
+  "subscription_required",
   "subscription_expired",
   "mandatory_update",
   "disabled_version",
@@ -2200,7 +2204,8 @@ function decisionResponse(input: {
 
 function mapAuthError(error: string): Decision {
   const key = normalizeLower(error)
-  if (["subscription_expired", "subscription_inactive", "subscription_required", "subscription_not_found", "license_expired", "license_inactive"].includes(key)) {
+  if (["subscription_required", "subscription_not_found"].includes(key)) return "subscription_required"
+  if (["subscription_expired", "subscription_inactive", "license_expired", "license_inactive"].includes(key)) {
     return "subscription_expired"
   }
   if (/^auth_5\d\d$/.test(key) || ["auth_522", "auth_523", "auth_524", "auth_520", "auth_521", "auth_403"].includes(key)) {
@@ -2251,12 +2256,15 @@ async function verifyAuthSession(request: Request, env: Env, body: PolicyRequest
       return { ok: false, decision: mapAuthError(error), reason: error }
     }
     const policy = payload.policy && typeof payload.policy === "object" ? payload.policy : {}
+    const entitlementState = normalizeLower(payload.entitlement_state || payload.entitlement?.entitlement || "unknown") || "unknown"
     return {
       ok: true,
       user_id: normalizeText(payload.user_id || payload.license_id || body.user_id),
       email: normalizeLower(payload.user_email || body.email),
-      plan_id: normalizeLower(payload.tier || payload.plan || "default") || "default",
-      expires_at: normalizeText(payload.session_expires_at || payload.expires_at) || null,
+      plan_id: entitlementState === "no_subscription" ? "" : normalizeLower(payload.tier || payload.plan || "default") || "default",
+      subscription_id: normalizeText(payload.subscription_id) || null,
+      entitlement_state: entitlementState,
+      expires_at: normalizeText(payload.expires_at) || null,
       features: policy.runtime_payload || {},
       limits: {},
     }
@@ -2290,6 +2298,17 @@ async function lookupUser(env: Env, body: PolicyRequest, auth: AuthResolved): Pr
 
 async function lookupSubscription(env: Env, user: UserRow | null, auth: AuthResolved): Promise<SubscriptionRow | null> {
   if (!user) return null
+  const entitlementState = normalizeLower(auth.entitlement_state || "unknown")
+  if (auth.ok && entitlementState === "no_subscription") return null
+  if (auth.ok && ["expired", "suspended", "unknown"].includes(entitlementState)) {
+    return {
+      id: normalizeText(auth.subscription_id) || `auth:${user.id}`,
+      user_id: user.id,
+      plan_id: normalizeLower(auth.plan_id || user.plan_id || "default") || "default",
+      status: entitlementState === "suspended" ? "suspended" : "expired",
+      expires_at: auth.expires_at || null,
+    }
+  }
   const rows = await env.DB.prepare(
     "SELECT * FROM subscriptions WHERE user_id = ?1 ORDER BY CASE WHEN status IN ('active', 'trialing') AND (expires_at IS NULL OR datetime(expires_at) > datetime('now')) THEN 1 ELSE 0 END DESC, datetime(COALESCE(expires_at, '9999-12-31T00:00:00Z')) DESC, datetime(updated_at) DESC LIMIT 20"
   )
@@ -2297,7 +2316,7 @@ async function lookupSubscription(env: Env, user: UserRow | null, auth: AuthReso
     .all<SubscriptionRow>()
   const existing = rows.results || []
   const usable = existing.find(subscriptionIsUsable)
-  if (auth.ok) {
+  if (auth.ok && normalizeText(auth.subscription_id) && ["active", "trial", "grace", "lifetime"].includes(entitlementState)) {
     const id = `auth:${user.id}`
     await env.DB.prepare(
       "INSERT INTO subscriptions (id, user_id, plan_id, status, expires_at, updated_at) VALUES (?1, ?2, ?3, 'active', ?4, datetime('now')) ON CONFLICT(id) DO UPDATE SET plan_id = excluded.plan_id, status = 'active', expires_at = excluded.expires_at, updated_at = datetime('now')"
@@ -2435,7 +2454,10 @@ async function evaluatePolicy(request: Request, env: Env, body: PolicyRequest): 
   }
 
   const subscription = await lookupSubscription(env, user, auth)
-  if (!subscription || !["active", "trialing"].includes(normalizeLower(subscription.status))) {
+  if (!subscription) {
+    return decisionResponse({ decision: "subscription_required", reason: "subscription_required", ttlSeconds, sticky: true })
+  }
+  if (!["active", "trialing"].includes(normalizeLower(subscription.status))) {
     return decisionResponse({ decision: "subscription_expired", reason: "subscription_inactive", ttlSeconds, sticky: true })
   }
   if (!subscriptionIsUsable(subscription)) {

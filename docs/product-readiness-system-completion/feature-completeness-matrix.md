@@ -4,6 +4,8 @@ Legend:
 - `COMPLETE_AND_VERIFIED`: implemented and locally/live verified with evidence.
 - `IMPLEMENTED_NOT_VERIFIED`: code exists but current audit did not execute E2E proof.
 - `IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED`: code is deployed/protected but manual operational acceptance is deferred to Phase G; do not treat as complete.
+
+Phase B status: `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE`. OTP/Auth rows keep their implementation evidence; all Phase B manual acceptance is deferred to Phase G. Phase C is active. No B.3/B.4 or dependency gate exists.
 - `PARTIALLY_IMPLEMENTED`: UI/API exists but behavior, state model, or edge cases are incomplete.
 - `BROKEN`: current implementation contradicts required product behavior or known production errors.
 - `UI_ONLY`: visual shell exists without real production backend.
@@ -51,20 +53,20 @@ Legend:
 | 35 | Password reset | Auth page | N/A | N/A | Firebase reset | IMPLEMENTED_NOT_VERIFIED | Medium | B |
 | 36 | Email verification request | `/account/verify` | N/A | N/A | Auth Worker `account_email_verifications` | IMPLEMENTED_NOT_VERIFIED | High | B |
 | 37 | Email verification status | Verify page | N/A | N/A | Auth Worker `/email-verification/status` | IMPLEMENTED_NOT_VERIFIED | Medium | B |
-| 38 | Auth hydration/session persistence | `useAuthState`, production adapter | Admin guard | N/A | Firebase `onAuthStateChanged` | BROKEN | Critical | B |
-| 39 | Route protection loading state | `RequireAuth` | `AdminGuard` | N/A | Adapter readiness | BROKEN | Critical | B |
+| 38 | Auth hydration/session persistence | `useAuthState`, production adapter | Admin guard | N/A | Firebase `onAuthStateChanged`; canonical account refresh after OTP | IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED | Critical | G |
+| 39 | Route protection loading state | `RequireAuth` | `AdminGuard` | N/A | Adapter readiness; automated Phase B regression | IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED | Critical | G |
 | 40 | Account portal overview | `/account` | N/A | N/A | Auth Worker subscription endpoint | PARTIALLY_IMPLEMENTED | High | B/C |
-| 41 | Account profile identity | Portal settings | Admin user detail | Desktop runtime | Firebase + Auth Worker identity endpoint | PARTIALLY_IMPLEMENTED | High | C |
-| 42 | Account devices page | `/account/devices` | Admin user detail sessions | Desktop app session | Supabase `app_sessions` | UI_ONLY | Medium | C |
-| 43 | Desktop device start | N/A | Access requests | Desktop login gate | Auth Worker `device_login_sessions` | IMPLEMENTED_NOT_VERIFIED | High | C |
-| 44 | Desktop device complete via web | `/activate`, auth state | Access requests | Pending login | Auth Worker `/device/complete` | BROKEN | Critical | C |
-| 45 | Desktop password complete | N/A | Access requests | Inline login/signup | Auth Worker `/device/password-complete` | BROKEN | Critical | C |
-| 46 | Desktop poll | N/A | Access requests | Pending login | Auth Worker `/device/poll` | BROKEN | Critical | C |
-| 47 | Desktop session verify | N/A | Admin user detail sessions | Startup gate | Auth Worker `/session/verify` | PARTIALLY_IMPLEMENTED | Critical | C |
-| 48 | Desktop logout | Account sign out | N/A | Desktop logout | Auth Worker `/session/logout` | IMPLEMENTED_NOT_VERIFIED | Medium | C |
-| 49 | No-subscription account state | Account portal | Admin subscriptions | Desktop startup | Missing explicit state | BROKEN | Critical | B/C |
-| 50 | Expired subscription state | Portal subscription | Admin subscriptions | Desktop startup | Auth/Supabase status + desktop mapping | BROKEN | Critical | B/C |
-| 51 | Trialing state | Pricing/signup/portal | Admin grant | Desktop entitlement | Not in Auth enum | NOT_IMPLEMENTED | High | E |
+| 41 | Account profile identity | Portal settings | Admin user detail | Desktop runtime | Firebase UID + Auth Worker identity endpoint | IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED | High | C/G |
+| 42 | Account devices page | `/account/devices` | Admin user detail sessions | Desktop app session | Auth Worker ownership checks + Supabase `app_sessions` | IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED | Medium | C/G |
+| 43 | Desktop device start | N/A | Access requests | Desktop login gate | Auth Worker `device_login_sessions` | IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED | High | C/G |
+| 44 | Desktop device complete via web | `/activate`, auth state | Access requests | Pending login | Auth Worker `/device/complete` | IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED | Critical | C/G |
+| 45 | Desktop password complete | N/A | Access requests | Inline login/signup | Auth Worker `/device/password-complete` | IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED | Critical | C/G |
+| 46 | Desktop poll | N/A | Access requests | Pending login | Auth Worker `/device/poll`; atomic consume/replay guard | IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED | Critical | C/G |
+| 47 | Desktop session verify/refresh | Portal devices/sessions | Admin user detail sessions | Startup gate | Auth Worker `/session/verify`, `/session/refresh` | IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED | Critical | C/G |
+| 48 | Desktop logout/revoke | Account devices/sessions | N/A | Desktop logout/account switch | Auth Worker session logout and owned revoke endpoints | IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED | Medium | C/G |
+| 49 | No-subscription account state | Account portal | Admin subscriptions | Desktop startup | Explicit `linked` + `no_subscription`; policy denies paid access | IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED | Critical | C/G |
+| 50 | Expired subscription state | Portal subscription | Admin subscriptions | Desktop startup | Explicit connection/entitlement split | IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED | Critical | C/G |
+| 51 | Trialing/grace state | Pricing/signup/portal | Admin grant | Desktop entitlement | Explicit Auth/desktop states; broader subscription truth remains Phase E | PARTIALLY_IMPLEMENTED | High | E/G |
 | 52 | Cancel-at-period-end state | Portal billing | Admin subscriptions | Desktop entitlement | Not in Auth enum | NOT_IMPLEMENTED | High | E |
 | 53 | Lifetime subscription | Portal subscription | Admin grant | Desktop entitlement | `is_unlimited` metadata only | PARTIALLY_IMPLEMENTED | High | E/F |
 | 54 | Subscription grant | N/A | Admin create subscription/manual grant | Desktop entitlement | Supabase `account_subscriptions`; deployed manual grant preview/execute | IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED | Critical | F/G |
@@ -101,15 +103,15 @@ Legend:
 | 85 | Desktop crash reporting | N/A | Diagnostics | Crash reporter | Admin Worker `/crash-logs` ingestion | IMPLEMENTED_NOT_VERIFIED | High | G |
 | 86 | Product readiness coverage page | N/A | Admin `coverage` route exists in router only | N/A | No production backing | UI_ONLY | Low | F |
 | 87 | Static legacy public pages | Root HTML files | N/A | N/A | Static files in web-platform root | DEPRECATED_OR_DEAD | Medium | E |
-| 88 | No-subscription user projected as `monthly` | Customer portal subscription summary | Admin users/subscriptions projections | Desktop entitlement later | Supabase `account_subscriptions`; fallback/default plan values; adapters and caches | BROKEN | Critical | E |
+| 88 | No-subscription user projected as `monthly` | Customer portal subscription summary | Admin users/subscriptions projections | Desktop entitlement later | Subscription truth/projection defect; root cause intentionally deferred | BROKEN_NON_BLOCKING_PHASE_C | Critical for final correctness | E/G |
 | 89 | Manual Grant daily admin UX | N/A | Grant subscription drawer | N/A | Admin Worker manual grant preview/execute | PARTIALLY_IMPLEMENTED | Medium | F |
 | 90 | Subscription recovery action placement | N/A | Manual grant operation selector | N/A | `restore_remaining_time` operation | PARTIALLY_IMPLEMENTED | Medium | F |
 
 Highest priority blockers:
 1. Auth readiness/hydration can route signed-in users to the auth gate during refresh.
-2. Desktop account linking requires subscription before link; required model says link first, then entitlement.
-3. Desktop startup maps new/no-subscription accounts to `expired`.
-4. No-subscription users can be projected as `monthly`; this belongs to Phase E subscription truth normalization.
+2. Phase C account linking no longer requires a subscription in local automated verification; production acceptance remains deferred to Phase G.
+3. Desktop startup now separates `linked` from `no_subscription`; the Supabase session-independence migration is prepared but not yet applied.
+4. No-subscription users can be projected as `monthly`; this belongs exclusively to Phase E subscription truth normalization, does not block Phase C, and has no separate dependency gate.
 5. Subscription source of truth is split between Supabase/Auth/Admin and D1/Policy.
 6. Subscription status vocabulary is incomplete for planned production states.
 7. Admin Users and Subscriptions IA are conflated; this belongs to Phase F.
