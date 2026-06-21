@@ -1,5 +1,20 @@
 # Discovered Issues, Severity, Root Cause and Recommended Phase
 
+## Current Phase Ownership - 2026-06-21
+
+| Item | Current state | Owner / next action |
+|---|---|---|
+| Phase B | `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE` | Manual acceptance in Phase G only. |
+| Emergency Subscription Grant | `IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED` | Operational acceptance in Phase G; UX/IA remains Phase F. |
+| Phase C account/desktop linking | `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE` | Supabase migration 010 applied and postflight verified. No Setup was rebuilt. |
+| Phase D support/contact/notifications/email | `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE` | Production Workers and D1 deployed; full human workflow acceptance remains Phase G. |
+| False `monthly` projection | Critical final correctness; not blocking C/D | Phase E only. Do not infer a current plan from email/default row order. |
+| Support attachments | `NOT_IMPLEMENTED` | No UI promise; optional future product decision, not a Phase D blocker. |
+| OTP production delivery | Prepared but disabled | Auth/Policy `EMAIL_AUTH_ENABLED=false`; activate only after required secret/config readiness and a dedicated rollout. |
+| Desktop binary coverage | Source newer than latest Setup | Phase G installed-app packaging/acceptance. Launcher/Updater/Installer/OTA were not touched. |
+
+Phase D fixed the previous customer notification `UI_ONLY` gap. The canonical source is D1 `portal_notifications`; support state/audit is stored in `support_threads`, `support_messages`, and `support_audit_events`. The existing email source remains D1 `email_jobs`, `email_events`, `inbound_email_messages`, recipient flags, and cron locks.
+
 ## Roadmap Update - 2026-06-21
 
 Current execution has moved past Phase B.1 remediation. The following were accepted and must not be reopened unless a regression is found: subscription state consistency, Arabic encoding, support role colors, basic contact/support route separation, cache isolation between accounts, and the basic async loading model.

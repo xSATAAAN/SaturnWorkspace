@@ -482,6 +482,7 @@ async function deliverEmailVerificationCode(
   env: Env,
   input: {
     email: string
+    userId?: string | null
     code: string
     expiresAt: string
     displayName?: string | null
@@ -511,6 +512,8 @@ async function deliverEmailVerificationCode(
       event_type: input.resend ? "auth.verification_resend" : "auth.email_verification",
       idempotency_key: input.idempotencyKey,
       verification_request_id: input.verificationId,
+      user_id: input.userId || null,
+      purpose: "email_verification",
       recipient: input.email,
       locale: "ar",
       payload: {
@@ -633,6 +636,7 @@ async function handleEmailVerificationRequest(request: Request, env: Env): Promi
     try {
       const delivery = await deliverEmailVerificationCode(env, {
         email: user.email,
+        userId: user.userId,
         code,
         expiresAt,
         displayName: user.displayName,
@@ -670,6 +674,7 @@ async function handleEmailVerificationRequest(request: Request, env: Env): Promi
   try {
     const delivery = await deliverEmailVerificationCode(env, {
       email: user.email,
+      userId: user.userId,
       code,
       expiresAt,
       displayName: user.displayName,

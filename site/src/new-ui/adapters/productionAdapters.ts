@@ -34,6 +34,7 @@ import {
   processEmailOutbox as processEmailOutboxRequest,
   retryEmailJob as retryEmailJobRequest,
   updateAdminSupportStatus,
+  updateAdminSupportPriority,
   submitAdminPreauth,
   updateRemoteControls,
   uploadReleaseBinary,
@@ -42,6 +43,7 @@ import {
   type AdminReleaseManifest,
 } from '../../api/admin'
 import { createPaymentIntent } from '../../api/payments'
+import { archivePortalNotification, fetchPortalNotifications, markAllPortalNotificationsRead, markPortalNotificationRead } from '../../api/notifications'
 import { requestEmailVerificationCode, verifyEmailVerificationCode } from '../../api/emailVerification'
 import {
   createWebSupportTicket,
@@ -457,7 +459,7 @@ export const productionAdapters: AppAdapters = {
     async createTicket(input) {
       const token = await productionAdapters.auth.getIdToken(false)
       if (!token) return { success: false, error: 'not_authenticated' }
-      const result = await createWebSupportTicket(token, input)
+      const result = await createWebSupportTicket(token, { ...input, idempotencyKey: crypto.randomUUID() })
       return { success: result.success, threadId: result.thread_id, error: result.error }
     },
     async listThreads() {
@@ -502,12 +504,53 @@ export const productionAdapters: AppAdapters = {
     async replyThread(threadId, body) {
       const token = await productionAdapters.auth.getIdToken(false)
       if (!token) return { success: false, error: 'not_authenticated' }
-      return replyWebSupportThread(token, threadId, body)
+      return replyWebSupportThread(token, threadId, body, crypto.randomUUID())
     },
     async setThreadStatus(threadId, status) {
       const token = await productionAdapters.auth.getIdToken(false)
       if (!token) return { success: false, error: 'not_authenticated' }
       return updateWebSupportStatus(token, threadId, status)
+    },
+  },
+  notifications: {
+    async list(input = {}) {
+      const token = await productionAdapters.auth.getIdToken(false)
+      if (!token) throw new Error('not_authenticated')
+      const data = await fetchPortalNotifications(token, input)
+      return {
+        items: (data.items || []).map((item) => ({
+          id: item.id,
+          type: item.type,
+          title: item.title,
+          body: item.body,
+          titleAr: item.title_ar || undefined,
+          bodyAr: item.body_ar || undefined,
+          linkedResourceType: item.linked_resource_type || undefined,
+          linkedResourceId: item.linked_resource_id || undefined,
+          portalStatus: item.portal_status,
+          emailStatus: item.email_status,
+          readAt: item.read_at || undefined,
+          createdAt: item.created_at,
+        })),
+        unreadCount: Number(data.unread_count || 0),
+        nextCursor: data.next_cursor || undefined,
+      }
+    },
+    async markRead(notificationId) {
+      const token = await productionAdapters.auth.getIdToken(false)
+      if (!token) throw new Error('not_authenticated')
+      await markPortalNotificationRead(token, notificationId)
+    },
+    async markAllRead() {
+      const token = await productionAdapters.auth.getIdToken(false)
+      if (!token) throw new Error('not_authenticated')
+      const result = await markAllPortalNotificationsRead(token)
+      return Number(result.updated || 0)
+    },
+    async archive(notificationId) {
+      const token = await productionAdapters.auth.getIdToken(false)
+      if (!token) throw new Error('not_authenticated')
+      await archivePortalNotification(token, notificationId)
     },
   },
   admin: {
@@ -595,14 +638,22 @@ export const productionAdapters: AppAdapters = {
       const data = await fetchSupportMessages(threadId)
       return data.messages || []
     },
+    async listSupportAudit(threadId) {
+      const data = await fetchSupportMessages(threadId)
+      return data.audit || []
+    },
     async sendSupportReply(threadId, body, options = {}) {
       await sendSupportReply({ thread_id: threadId, body, internal_note: options.internal, email_requested: options.emailRequested })
     },
     async updateSupportStatus(threadId, status, reason) {
       await updateAdminSupportStatus({ thread_id: threadId, status, reason })
     },
+    async updateSupportPriority(threadId, priority) {
+      await updateAdminSupportPriority({ thread_id: threadId, priority })
+    },
     async setSupportBlocked(threadId, blocked, reason) {
-      await setSupportBlocked({ thread_id: threadId, blocked, reason })
+      const result = await setSupportBlocked({ thread_id: threadId, blocked, reason })
+      return { blocked: Boolean(result.blocked), status: result.status }
     },
     getEmailOperations() {
       return fetchAdminEmailOperations()

@@ -7,6 +7,7 @@ import type {
   AdminRemoteControls,
   AdminSubscription,
   AdminSupportMessage,
+  AdminSupportAuditEvent,
   AdminSupportThread,
   AdminUserDetail,
   AdminEmailStatus,
@@ -134,7 +135,7 @@ export type CustomerSupportMessage = {
   createdAt?: string
 }
 
-export type SupportSenderRole = 'customer' | 'support_agent' | 'internal_note' | 'system'
+export type SupportSenderRole = 'customer' | 'support_agent' | 'internal_note' | 'system' | 'email_inbound'
 
 export type AuthAdapter = {
   subscribe(callback: (state: AuthState) => void): () => void
@@ -181,6 +182,34 @@ export type SupportAdapter = {
   setThreadStatus(threadId: string, status: 'open' | 'closed'): Promise<{ success: boolean; status?: string; error?: string }>
 }
 
+export type AccountNotification = {
+  id: string
+  type: string
+  title: string
+  body: string
+  titleAr?: string
+  bodyAr?: string
+  linkedResourceType?: string
+  linkedResourceId?: string
+  portalStatus: string
+  emailStatus: string
+  readAt?: string
+  createdAt: string
+}
+
+export type NotificationPage = {
+  items: AccountNotification[]
+  unreadCount: number
+  nextCursor?: string
+}
+
+export type NotificationsAdapter = {
+  list(input?: { cursor?: string; limit?: number }): Promise<NotificationPage>
+  markRead(notificationId: string): Promise<void>
+  markAllRead(): Promise<number>
+  archive(notificationId: string): Promise<void>
+}
+
 export type AdminAdapter = {
   getPreauthState(): Promise<{ authenticated: boolean }>
   submitPreauth(input: { username: string; password: string }): Promise<{ authenticated: boolean }>
@@ -216,9 +245,11 @@ export type AdminAdapter = {
   updateRemoteControls(input: AdminRemoteControls & { channel: string }): Promise<AdminRemoteControls>
   listSupportThreads(): Promise<AdminSupportThread[]>
   listSupportMessages(threadId: string): Promise<AdminSupportMessage[]>
+  listSupportAudit(threadId: string): Promise<AdminSupportAuditEvent[]>
   sendSupportReply(threadId: string, body: string, options?: { internal?: boolean; emailRequested?: boolean }): Promise<void>
   updateSupportStatus(threadId: string, status: string, reason?: string): Promise<void>
-  setSupportBlocked(threadId: string, blocked: boolean, reason?: string): Promise<void>
+  updateSupportPriority(threadId: string, priority: 'low' | 'normal' | 'high' | 'urgent'): Promise<void>
+  setSupportBlocked(threadId: string, blocked: boolean, reason?: string): Promise<{ blocked: boolean; status?: string }>
   getEmailOperations(): Promise<AdminEmailStatus>
   processEmailOutbox(): Promise<{ processed: number; sent: number; skipped: number }>
   retryEmailJob(jobId: string): Promise<{ processed?: number; sent?: number; skipped?: number }>
@@ -241,6 +272,7 @@ export type AppAdapters = {
   plans: PlansAdapter
   payments: PaymentsAdapter
   support: SupportAdapter
+  notifications: NotificationsAdapter
   admin: AdminAdapter
   content: ContentAdapter
 }

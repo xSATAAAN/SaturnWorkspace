@@ -41,12 +41,16 @@ export type WebSupportMessage = {
   created_at?: string
 }
 
-export async function createWebSupportTicket(idToken: string, input: { subject: string; body: string }) {
+export async function createWebSupportTicket(idToken: string, input: { subject: string; body: string; idempotencyKey: string }) {
   return postJson<{ success: boolean; thread_id?: string; error?: string }>(policyPath('/v1/web/support/messages'), {
     id_token: idToken,
     subject: input.subject,
     body: input.body,
-  }, authHeaders(idToken))
+    idempotency_key: input.idempotencyKey,
+  }, {
+    ...authHeaders(idToken),
+    headers: { Authorization: `Bearer ${idToken}`, 'Idempotency-Key': input.idempotencyKey },
+  })
 }
 
 export async function fetchWebSupportThreads(idToken: string) {
@@ -60,12 +64,16 @@ export async function fetchWebSupportThread(idToken: string, threadId: string) {
   }, authHeaders(idToken))
 }
 
-export async function replyWebSupportThread(idToken: string, threadId: string, body: string) {
+export async function replyWebSupportThread(idToken: string, threadId: string, body: string, idempotencyKey: string) {
   return postJson<{ success: boolean; error?: string }>(policyPath('/v1/web/support/reply'), {
     id_token: idToken,
     thread_id: threadId,
     body,
-  }, authHeaders(idToken))
+    idempotency_key: idempotencyKey,
+  }, {
+    ...authHeaders(idToken),
+    headers: { Authorization: `Bearer ${idToken}`, 'Idempotency-Key': idempotencyKey },
+  })
 }
 
 export async function updateWebSupportStatus(idToken: string, threadId: string, status: 'open' | 'closed') {

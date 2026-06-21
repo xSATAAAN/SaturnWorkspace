@@ -1,6 +1,34 @@
 # Product Completion Dashboard
 
-Date: 2026-06-20
+Date: 2026-06-21
+
+## Current Production Reconciliation - 2026-06-21
+
+- Phase B remains closed as `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE`.
+- Emergency Subscription Grant remains `IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED`.
+- Phase C is closed as `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE` after Supabase migration `010_account_session_subscription_independence` was applied and verified. Account connection and entitlement remain separate.
+- Phase D is implemented and deployed with automated verification; manual workflow acceptance remains consolidated in Phase G.
+- The false `monthly` projection defect remains owned exclusively by Phase E. It was not investigated or patched during C/D.
+- No B.3/B.4 or additional dependency gate was created.
+
+Current deployed Worker versions:
+
+- Auth: `7b886b15-71e7-4578-9c39-fe89c6d85e5c`
+- Policy: `3b81a537-e485-4af4-8ff9-576d75b1896f`
+- Admin: `91e248e9-ec88-4b68-ad93-5615be26379a`
+
+Phase D production state:
+
+- D1 migration `0013_support_notifications_phase_d.sql` applied with preflight backup and postflight verification.
+- Support lifecycle is normalized to `open`, `awaiting_support`, `awaiting_customer`, `closed`, `reopened`, and `blocked`, while legacy values remain readable.
+- Customer ownership uses Firebase UID as the primary key; email is auxiliary for delivery and compatibility only.
+- Ticket/message mutations have idempotency keys, read tracking, priority, audit history, and deterministic transitions.
+- Portal notifications now have a real D1 source, ownership, unread count, read-all, archive, pagination, linked resources, and portal/email delivery state.
+- Reply-by-email verifies webhook signatures, token state/expiry, sender ownership, block state, replay, and automated replies. Attachments remain `NOT_IMPLEMENTED` and are not retained; the UI makes no attachment promise.
+- Email queue retries, exponential backoff, final failure, locking, provider events, suppression, recipient flags, inbound retry, and retention cleanup are automated and tested.
+- Production email flags remain: outbound/inbound/support `true`; auth/billing/release/security/scheduler/admin-alerts `false`.
+- OTP production delivery remains prepared but disabled: `EMAIL_AUTH_ENABLED=false` in Auth and Policy. Required Auth delivery secrets are not all configured, so no activation was attempted.
+- Desktop Phase C source is committed, but no new Setup/installed binary was built; installed-app acceptance is deferred to Phase G.
 
 This dashboard supplements `feature-completeness-matrix.md`. It does not replace the full matrix. Rows not listed here keep their current status in the full matrix.
 

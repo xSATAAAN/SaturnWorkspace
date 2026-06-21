@@ -23,6 +23,7 @@ type Decision =
 interface Env {
   DB: D1Database
   AUTH_SERVICE?: Fetcher
+  RESEND_SERVICE?: Fetcher
   POLICY_SIGNING_SEED_B64: string
   POLICY_STAGING_TOKEN?: string
   AUTH_VERIFY_URL?: string
@@ -33,6 +34,7 @@ interface Env {
   RESEND_SEND_API_KEY?: string
   RESEND_RECEIVE_API_KEY?: string
   RESEND_WEBHOOK_SECRET?: string
+  RESEND_API_BASE?: string
   EMAIL_OUTBOUND_ENABLED?: string
   EMAIL_INBOUND_ENABLED?: string
   EMAIL_SUPPORT_ENABLED?: string
@@ -147,6 +149,14 @@ interface SupportThreadRow {
   admin_last_read_at: string | null
   created_at: string
   updated_at: string
+  priority?: string | null
+  assigned_admin_id?: string | null
+  last_customer_reply_at?: string | null
+  last_support_reply_at?: string | null
+  closed_at?: string | null
+  reopened_at?: string | null
+  blocked_at?: string | null
+  status_before_block?: string | null
   last_message_body?: string | null
   last_message_sender?: string | null
   last_message_at?: string | null
@@ -160,8 +170,70 @@ interface SupportMessageRow {
   sender: string
   body: string
   created_at: string
+  sender_role?: string | null
+  delivery_mode?: string | null
+  idempotency_key?: string | null
   source?: string | null
   provider_message_id?: string | null
+}
+
+type CanonicalSupportStatus = "open" | "awaiting_support" | "awaiting_customer" | "closed" | "reopened" | "blocked"
+type SupportSenderRole = "customer" | "support_agent" | "internal_note" | "system" | "email_inbound"
+type SupportDeliveryMode = "portal_only" | "portal_and_email"
+
+const SUPPORT_STATUS_ALIASES: Record<string, CanonicalSupportStatus> = {
+  open: "open",
+  waiting_for_support: "awaiting_support",
+  awaiting_support: "awaiting_support",
+  waiting_for_customer: "awaiting_customer",
+  awaiting_customer: "awaiting_customer",
+  resolved: "closed",
+  closed: "closed",
+  reopened: "reopened",
+  blocked: "blocked",
+}
+
+function canonicalSupportStatus(value: unknown): CanonicalSupportStatus {
+  return SUPPORT_STATUS_ALIASES[normalizeLower(value)] || "open"
+}
+
+function canonicalSupportSenderRole(sender: unknown, senderRole?: unknown): SupportSenderRole {
+  const explicit = normalizeLower(senderRole)
+  if (["customer", "support_agent", "internal_note", "system", "email_inbound"].includes(explicit)) {
+    return explicit as SupportSenderRole
+  }
+  const legacy = normalizeLower(sender)
+  if (legacy === "admin") return "support_agent"
+  if (legacy === "internal") return "internal_note"
+  if (legacy === "system") return "system"
+  return legacy === "email_inbound" ? "email_inbound" : "customer"
+}
+
+function canonicalSupportDeliveryMode(value: unknown): SupportDeliveryMode {
+  return normalizeLower(value) === "portal_and_email" ? "portal_and_email" : "portal_only"
+}
+
+function supportStatusCanTransition(from: CanonicalSupportStatus, to: CanonicalSupportStatus, actor: "customer" | "support_agent"): boolean {
+  if (from === to) return true
+  if (actor === "customer") {
+    if (to === "closed") return from !== "blocked"
+    return (from === "closed" && to === "reopened") || (["open", "reopened", "awaiting_customer"].includes(from) && to === "awaiting_support")
+  }
+  if (to === "blocked") return from !== "blocked"
+  if (from === "blocked") return true
+  return ["open", "awaiting_support", "awaiting_customer", "closed", "reopened"].includes(to)
+}
+
+function normalizeSupportThread<T extends SupportThreadRow>(thread: T): T & { status: CanonicalSupportStatus } {
+  return { ...thread, status: canonicalSupportStatus(thread.support_blocked ? "blocked" : thread.status) }
+}
+
+function normalizeSupportMessage<T extends SupportMessageRow>(message: T): T & { sender_role: SupportSenderRole; delivery_mode: SupportDeliveryMode } {
+  return {
+    ...message,
+    sender_role: canonicalSupportSenderRole(message.sender, message.sender_role),
+    delivery_mode: canonicalSupportDeliveryMode(message.delivery_mode),
+  }
 }
 
 interface EmailJobRow {
@@ -202,6 +274,7 @@ interface SupportReplyTokenRow {
   created_at: string
   last_used_at: string | null
   revoked_at: string | null
+  expires_at?: string | null
 }
 
 interface EmailProviderMessage {
@@ -980,7 +1053,7 @@ async function createSupportReplyAddress(env: Env, threadId: string): Promise<st
   const token = randomHex(32)
   const tokenHash = await sha256Hex(token)
   await env.DB.prepare(
-    "INSERT INTO support_reply_tokens (id, thread_id, token_hash, active, created_at) VALUES (?1, ?2, ?3, 1, datetime('now'))"
+    "INSERT INTO support_reply_tokens (id, thread_id, token_hash, active, created_at, expires_at) VALUES (?1, ?2, ?3, 1, datetime('now'), datetime('now', '+90 days'))"
   )
     .bind(crypto.randomUUID(), threadId, tokenHash)
     .run()
@@ -1161,7 +1234,10 @@ async function enqueueEmailJob(
       .bind(...baseBind)
       .run()
   }
-  return jobId
+  const stored = await env.DB.prepare("SELECT id FROM email_jobs WHERE idempotency_key = ?1 LIMIT 1")
+    .bind(clampText(input.idempotencyKey, 240))
+    .first<{ id: string }>()
+  return stored?.id || null
 }
 
 async function requireInternalAuthEmailToken(request: Request, env: Env): Promise<Response | null> {
@@ -1186,12 +1262,11 @@ async function readLimitedJson(request: Request, maxBytes: number): Promise<Reco
   }
 }
 
-function sqliteLikeContains(value: string): string {
-  return `%${value.replace(/[\\%_]/g, (match) => `\\${match}`)}%`
-}
-
-async function cancelSupersededAuthEmailJobs(env: Env, verificationRequestId: string, currentIdempotencyKey: string): Promise<void> {
-  if (!verificationRequestId) return
+async function cancelSupersededAuthEmailJobs(
+  env: Env,
+  input: { userId: string; recipient: string; purpose: string; currentIdempotencyKey: string }
+): Promise<void> {
+  if ((!input.userId && !input.recipient) || input.purpose !== "email_verification") return
   await env.DB.prepare(
     `UPDATE email_jobs
      SET status = 'cancelled',
@@ -1202,9 +1277,9 @@ async function cancelSupersededAuthEmailJobs(env: Env, verificationRequestId: st
      WHERE email_type IN ('auth.email_verification', 'auth.verification_resend')
        AND status IN ('queued', 'processing')
        AND idempotency_key <> ?1
-       AND template_data_json LIKE ?2 ESCAPE '\\'`
+       AND ((?2 <> '' AND linked_user_id = ?2) OR (?3 <> '' AND lower(recipient) = ?3))`
   )
-    .bind(currentIdempotencyKey, sqliteLikeContains(`"verification_request_id":"${verificationRequestId}"`))
+    .bind(input.currentIdempotencyKey, input.userId, input.recipient)
     .run()
     .catch(() => null)
 }
@@ -1228,6 +1303,8 @@ async function handleInternalAuthEmailEnqueue(request: Request, env: Env): Promi
   if (!recipient) return json({ success: false, error: "recipient_required" }, 400)
   const idempotencyKey = clampText(body.idempotency_key, 240)
   const verificationRequestId = clampText(body.verification_request_id, 120)
+  const userId = clampText(body.user_id, 160)
+  const purpose = normalizeLower(body.purpose || "email_verification")
   if (!idempotencyKey || !verificationRequestId) {
     return json({ success: false, error: "idempotency_or_verification_id_required" }, 400)
   }
@@ -1243,7 +1320,8 @@ async function handleInternalAuthEmailEnqueue(request: Request, env: Env): Promi
 
   const locale = normalizeLower(body.locale).startsWith("en") ? "en" : "ar"
   const displayName = clampText(payload.display_name, 120)
-  await cancelSupersededAuthEmailJobs(env, verificationRequestId, idempotencyKey)
+  if (purpose !== "email_verification") return json({ success: false, error: "verification_purpose_invalid" }, 400)
+  await cancelSupersededAuthEmailJobs(env, { userId, recipient, purpose, currentIdempotencyKey: idempotencyKey })
   const catalog = EMAIL_CATALOG[eventType]
   const subject = locale === "ar" ? catalog.default_subject_ar : catalog.default_subject_en
   let jobId: string | null = null
@@ -1255,9 +1333,10 @@ async function handleInternalAuthEmailEnqueue(request: Request, env: Env): Promi
       subject,
       html: "",
       text: "",
-      linkedUserId: clampText(body.user_id, 120) || null,
+      linkedUserId: userId || null,
       templateData: {
         verification_request_id: verificationRequestId,
+        purpose,
         expires_at: expiresAt,
         locale,
         code_redacted: true,
@@ -1294,7 +1373,7 @@ async function handleInternalAuthEmailEnqueue(request: Request, env: Env): Promi
 async function resendSend(env: Env, message: EmailProviderMessage): Promise<{ id: string }> {
   const apiKey = normalizeText(env.RESEND_SEND_API_KEY)
   if (!apiKey) throw new Error("resend_send_api_key_missing")
-  const response = await fetch("https://api.resend.com/emails", {
+  const request = new Request(`${normalizeText(env.RESEND_API_BASE) || "https://api.resend.com"}/emails`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -1312,6 +1391,7 @@ async function resendSend(env: Env, message: EmailProviderMessage): Promise<{ id
       tags: message.tags,
     }),
   })
+  const response = env.RESEND_SERVICE ? await env.RESEND_SERVICE.fetch(request) : await fetch(request)
   const payload = (await response.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
   if (!response.ok) {
     const reason = normalizeText(payload?.message || payload?.error || `resend_${response.status}`)
@@ -1327,6 +1407,14 @@ async function purgeSensitiveEmailPayload(env: Env, jobId: string): Promise<void
     "UPDATE email_jobs SET sensitive_payload_ciphertext = NULL, sensitive_payload_purged_at = datetime('now'), updated_at = datetime('now') WHERE id = ?1 AND sensitive_payload_ciphertext IS NOT NULL"
   )
     .bind(jobId)
+    .run()
+    .catch(() => null)
+}
+
+async function updatePortalNotificationEmailStatus(env: Env, emailJobId: string, status: string): Promise<void> {
+  if (!emailJobId) return
+  await env.DB.prepare("UPDATE portal_notifications SET email_status = ?1, updated_at = datetime('now') WHERE email_job_id = ?2")
+    .bind(clampText(status, 40), emailJobId)
     .run()
     .catch(() => null)
 }
@@ -1439,6 +1527,7 @@ async function processEmailOutbox(env: Env, limit = EMAIL_OUTBOX_BATCH_LIMIT): P
       await env.DB.prepare("UPDATE email_jobs SET status = 'sent', provider_message_id = ?1, sent_at = datetime('now'), updated_at = datetime('now'), last_error = NULL WHERE id = ?2")
         .bind(result.id, job.id)
         .run()
+      await updatePortalNotificationEmailStatus(env, job.id, "sent")
       await purgeSensitiveEmailPayload(env, job.id)
       sent += 1
     } catch (error) {
@@ -1447,15 +1536,25 @@ async function processEmailOutbox(env: Env, limit = EMAIL_OUTBOX_BATCH_LIMIT): P
         continue
       }
       const attempts = Number(job.attempt_count || 0) + 1
+      if (job.linked_ticket_id) {
+        await auditSupportEvent(env, {
+          threadId: job.linked_ticket_id,
+          eventType: attempts >= Number(job.max_attempts || EMAIL_MAX_ATTEMPTS) ? "email_delivery_failed" : "email_delivery_retry_scheduled",
+          actorRole: "system",
+          metadata: { email_job_id: job.id, attempt: attempts },
+        }).catch(() => null)
+      }
       if (attempts >= Number(job.max_attempts || EMAIL_MAX_ATTEMPTS)) {
         await env.DB.prepare("UPDATE email_jobs SET status = 'failed', last_error = ?1, updated_at = datetime('now') WHERE id = ?2")
           .bind(message, job.id)
           .run()
+        await updatePortalNotificationEmailStatus(env, job.id, "failed")
         await purgeSensitiveEmailPayload(env, job.id)
       } else {
         await env.DB.prepare("UPDATE email_jobs SET status = 'queued', last_error = ?1, next_attempt_at = datetime('now', ?2), updated_at = datetime('now') WHERE id = ?3")
           .bind(message, `+${retryBackoffSeconds(attempts)} seconds`, job.id)
           .run()
+        await updatePortalNotificationEmailStatus(env, job.id, "retrying")
       }
     }
   }
@@ -1531,17 +1630,35 @@ async function processScheduledEmailNotifications(env: Env, limit = 10): Promise
   return { processed: rows.results?.length || 0, queued, failed }
 }
 
-async function runEmailCron(env: Env): Promise<{ skipped: boolean; reason?: string; scheduled: { processed: number; queued: number; failed: number }; outbox: { processed: number; sent: number; skipped: number } }> {
+async function cleanupEmailOperations(env: Env): Promise<{ sensitivePurged: number; eventsDeleted: number; inboundDeleted: number; notificationsDeleted: number }> {
+  const sensitive = await env.DB.prepare(
+    "UPDATE email_jobs SET sensitive_payload_ciphertext = NULL, sensitive_payload_purged_at = datetime('now'), updated_at = datetime('now') WHERE sensitive_payload_ciphertext IS NOT NULL AND sensitive_payload_expires_at IS NOT NULL AND datetime(sensitive_payload_expires_at) <= datetime('now')"
+  ).run()
+  const events = await env.DB.prepare("DELETE FROM email_events WHERE processed_at IS NOT NULL AND datetime(created_at) < datetime('now', '-180 days')").run()
+  const inbound = await env.DB.prepare("DELETE FROM inbound_email_messages WHERE datetime(created_at) < datetime('now', '-90 days')").run()
+  const notifications = await env.DB.prepare("DELETE FROM portal_notifications WHERE archived_at IS NOT NULL AND datetime(archived_at) < datetime('now', '-90 days')").run()
+  await env.DB.prepare("UPDATE support_reply_tokens SET active = 0, revoked_at = COALESCE(revoked_at, datetime('now')) WHERE active = 1 AND expires_at IS NOT NULL AND datetime(expires_at) <= datetime('now')").run()
+  return {
+    sensitivePurged: dbChanges(sensitive),
+    eventsDeleted: dbChanges(events),
+    inboundDeleted: dbChanges(inbound),
+    notificationsDeleted: dbChanges(notifications),
+  }
+}
+
+async function runEmailCron(env: Env): Promise<{ skipped: boolean; reason?: string; scheduled: { processed: number; queued: number; failed: number }; outbox: { processed: number; sent: number; skipped: number }; cleanup: { sensitivePurged: number; eventsDeleted: number; inboundDeleted: number; notificationsDeleted: number } }> {
   const empty = {
     scheduled: { processed: 0, queued: 0, failed: 0 },
     outbox: { processed: 0, sent: 0, skipped: 0 },
+    cleanup: { sensitivePurged: 0, eventsDeleted: 0, inboundDeleted: 0, notificationsDeleted: 0 },
   }
   const lock = await acquireEmailCronLock(env)
   if (!lock.acquired) return { skipped: true, reason: "cron_lock_held", ...empty }
   try {
     const scheduled = await processScheduledEmailNotifications(env)
     const outbox = await processEmailOutbox(env)
-    return { skipped: false, scheduled, outbox }
+    const cleanup = await cleanupEmailOperations(env)
+    return { skipped: false, scheduled, outbox, cleanup }
   } finally {
     await releaseEmailCronLock(env, lock)
   }
@@ -1560,10 +1677,10 @@ async function queueSupportTicketConfirmation(
   userId: string | null,
   messageId: string,
   ctx?: ExecutionContext
-): Promise<void> {
+): Promise<string | null> {
   try {
     const recipient = normalizeEmailAddress(thread.email)
-    if (!recipient) return
+    if (!recipient) return null
     const ticketNumber = supportTicketNumber(thread)
     const ticketUrl = supportTicketUrl(env, thread.id)
     const replyTo = await createSupportReplyAddress(env, thread.id)
@@ -1574,7 +1691,7 @@ async function queueSupportTicketConfirmation(
       ticket_id: thread.id,
       ticket_url: ticketUrl,
     }, "ar", replyTo)
-    await enqueueEmailJob(env, {
+    const jobId = await enqueueEmailJob(env, {
       idempotencyKey: `support-confirmation:${thread.id}:${messageId}`,
       emailType: rendered.event_type,
       recipient,
@@ -1591,8 +1708,10 @@ async function queueSupportTicketConfirmation(
       },
     })
     scheduleEmailProcessing(env, ctx)
+    return jobId
   } catch (error) {
     console.error(JSON.stringify({ event: "support_confirmation_enqueue_failed", error: error instanceof Error ? error.message : String(error) }))
+    return null
   }
 }
 
@@ -1602,10 +1721,10 @@ async function queueSupportAdminReplyEmail(
   messageId: string,
   message: string,
   ctx?: ExecutionContext
-): Promise<void> {
+): Promise<string | null> {
   try {
     const recipient = normalizeEmailAddress(thread.email)
-    if (!recipient) return
+    if (!recipient) return null
     const ticketNumber = supportTicketNumber(thread)
     const ticketUrl = supportTicketUrl(env, thread.id)
     const replyTo = await createSupportReplyAddress(env, thread.id)
@@ -1617,7 +1736,7 @@ async function queueSupportAdminReplyEmail(
       ticket_url: ticketUrl,
       message,
     }, "ar", replyTo)
-    await enqueueEmailJob(env, {
+    const jobId = await enqueueEmailJob(env, {
       idempotencyKey: `support-admin-reply:${thread.id}:${messageId}`,
       emailType: rendered.event_type,
       recipient,
@@ -1635,17 +1754,19 @@ async function queueSupportAdminReplyEmail(
       },
     })
     scheduleEmailProcessing(env, ctx)
+    return jobId
   } catch (error) {
     console.error(JSON.stringify({ event: "support_reply_enqueue_failed", error: error instanceof Error ? error.message : String(error) }))
+    return null
   }
 }
 
-async function queueSupportStatusEmail(env: Env, thread: SupportThreadRow, status: string, ctx?: ExecutionContext): Promise<void> {
+async function queueSupportStatusEmail(env: Env, thread: SupportThreadRow, status: string, ctx?: ExecutionContext): Promise<string | null> {
   try {
     const recipient = normalizeEmailAddress(thread.email)
-    if (!recipient) return
+    if (!recipient) return null
     const normalized = normalizeLower(status)
-    if (!["open", "closed", "resolved"].includes(normalized)) return
+    if (!["open", "closed", "reopened"].includes(normalized)) return null
     const ticketNumber = supportTicketNumber(thread)
     const ticketUrl = supportTicketUrl(env, thread.id)
     const replyTo = await createSupportReplyAddress(env, thread.id)
@@ -1656,7 +1777,7 @@ async function queueSupportStatusEmail(env: Env, thread: SupportThreadRow, statu
       ticket_url: ticketUrl,
       status: normalized,
     }, "ar", replyTo)
-    await enqueueEmailJob(env, {
+    const jobId = await enqueueEmailJob(env, {
       idempotencyKey: `support-status:${thread.id}:${normalized}:${Date.now()}`,
       emailType: rendered.event_type,
       recipient,
@@ -1674,8 +1795,10 @@ async function queueSupportStatusEmail(env: Env, thread: SupportThreadRow, statu
       },
     })
     scheduleEmailProcessing(env, ctx)
+    return jobId
   } catch (error) {
     console.error(JSON.stringify({ event: "support_status_enqueue_failed", error: error instanceof Error ? error.message : String(error) }))
+    return null
   }
 }
 
@@ -1770,6 +1893,7 @@ async function handleResendDeliveryEvent(env: Env, eventType: string, data: Reco
     )
       .bind(providerMessageId)
       .run()
+    if (job?.id) await updatePortalNotificationEmailStatus(env, job.id, "sent")
     return
   }
 
@@ -1779,6 +1903,7 @@ async function handleResendDeliveryEvent(env: Env, eventType: string, data: Reco
     )
       .bind(providerMessageId)
       .run()
+    if (job?.id) await updatePortalNotificationEmailStatus(env, job.id, "delivered")
     return
   }
 
@@ -1788,6 +1913,7 @@ async function handleResendDeliveryEvent(env: Env, eventType: string, data: Reco
     await env.DB.prepare("UPDATE email_jobs SET status = ?1, updated_at = datetime('now'), last_error = ?2 WHERE provider_message_id = ?3")
       .bind(status, reason, providerMessageId)
       .run()
+    if (job?.id) await updatePortalNotificationEmailStatus(env, job.id, status)
     if (recipient) {
       await env.DB.prepare(
         "INSERT INTO email_recipient_flags (email, status, reason, provider_message_id, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, datetime('now'), datetime('now')) ON CONFLICT(email) DO UPDATE SET status = excluded.status, reason = excluded.reason, provider_message_id = excluded.provider_message_id, updated_at = datetime('now')"
@@ -1803,6 +1929,7 @@ async function handleResendDeliveryEvent(env: Env, eventType: string, data: Reco
     await env.DB.prepare("UPDATE email_jobs SET status = 'suppressed', updated_at = datetime('now'), last_error = ?1 WHERE provider_message_id = ?2")
       .bind(reason, providerMessageId)
       .run()
+    if (job?.id) await updatePortalNotificationEmailStatus(env, job.id, "suppressed")
     if (recipient) {
       await env.DB.prepare(
         "INSERT INTO email_recipient_flags (email, status, reason, provider_message_id, created_at, updated_at) VALUES (?1, 'suppressed', ?2, ?3, datetime('now'), datetime('now')) ON CONFLICT(email) DO UPDATE SET status = 'suppressed', reason = excluded.reason, provider_message_id = excluded.provider_message_id, updated_at = datetime('now')"
@@ -1818,6 +1945,7 @@ async function handleResendDeliveryEvent(env: Env, eventType: string, data: Reco
     await env.DB.prepare("UPDATE email_jobs SET status = 'failed', updated_at = datetime('now'), last_error = ?1 WHERE provider_message_id = ?2")
       .bind(reason, providerMessageId)
       .run()
+    if (job?.id) await updatePortalNotificationEmailStatus(env, job.id, "failed")
     return
   }
 
@@ -1832,13 +1960,14 @@ async function handleResendDeliveryEvent(env: Env, eventType: string, data: Reco
 async function retrieveReceivedEmail(env: Env, emailId: string): Promise<Record<string, unknown>> {
   const apiKey = normalizeText(env.RESEND_RECEIVE_API_KEY)
   if (!apiKey) throw new Error("resend_receive_api_key_missing")
-  const response = await fetch(`https://api.resend.com/emails/receiving/${encodeURIComponent(emailId)}`, {
+  const request = new Request(`${normalizeText(env.RESEND_API_BASE) || "https://api.resend.com"}/emails/receiving/${encodeURIComponent(emailId)}`, {
     method: "GET",
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "User-Agent": "SaturnWS-Policy-Worker/1.0",
     },
   })
+  const response = env.RESEND_SERVICE ? await env.RESEND_SERVICE.fetch(request) : await fetch(request)
   const payload = (await response.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
   if (!response.ok) {
     throw new Error(normalizeText(payload.message || payload.error || `resend_receive_${response.status}`) || "received_email_fetch_failed")
@@ -1859,7 +1988,7 @@ function extractReplyTokenFromRecipients(recipients: string[]): string {
 async function findSupportReplyToken(env: Env, token: string): Promise<SupportReplyTokenRow | null> {
   if (!token) return null
   const tokenHash = await sha256Hex(token)
-  return await env.DB.prepare("SELECT * FROM support_reply_tokens WHERE token_hash = ?1 AND active = 1 LIMIT 1")
+  return await env.DB.prepare("SELECT * FROM support_reply_tokens WHERE token_hash = ?1 LIMIT 1")
     .bind(tokenHash)
     .first<SupportReplyTokenRow>()
     .catch(() => null)
@@ -1870,6 +1999,17 @@ function emailBodyFromReceivedEmail(message: Record<string, unknown>): { text: s
   const rawHtml = stripDangerousHtml(message.html || message.html_body || message.body_html || "")
   const text = trimQuotedEmailHistory(rawText || htmlToText(rawHtml))
   return { text, html: rawHtml }
+}
+
+function inboundEmailIsAutomated(message: Record<string, unknown>): boolean {
+  const headers = getObject(message.headers)
+  const value = (name: string) => normalizeLower(message[name] || headers[name] || headers[name.toLowerCase()])
+  const autoSubmitted = value("auto_submitted") || value("auto-submitted")
+  const precedence = value("precedence")
+  const suppress = value("x_auto_response_suppress") || value("x-auto-response-suppress")
+  return (autoSubmitted && autoSubmitted !== "no")
+    || ["bulk", "junk", "list", "auto_reply"].includes(precedence)
+    || Boolean(suppress)
 }
 
 async function processInboundSupportReply(
@@ -1891,19 +2031,34 @@ async function processInboundSupportReply(
   const providerMessageId = normalizeText(message.message_id || message.messageId || message.id)
   const references = clampText(message.references || message.references_header, 1000)
   const inReplyTo = clampText(message.in_reply_to || message.inReplyTo, 500)
-  const attachments = Array.isArray(message.attachments) ? message.attachments : []
+  const attachmentCount = Array.isArray(message.attachments) ? message.attachments.length : 0
+  const attachmentSummary = { count: attachmentCount, stored: false }
   const body = emailBodyFromReceivedEmail(message)
   const inboundId = crypto.randomUUID()
 
-  if (!token) {
+  const storeRejected = async (reason: string, threadId?: string | null, replyTokenId?: string | null): Promise<void> => {
     await env.DB.prepare(
       `INSERT OR IGNORE INTO inbound_email_messages
-       (id, provider_email_id, provider_event_id, sender_email, recipient_email, subject, message_id, in_reply_to, references_header, text_body, html_sanitized, attachments_json, status, rejection_reason, received_at, processed_at, created_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, 'rejected', 'reply_token_not_found', datetime('now'), datetime('now'), datetime('now'))`
+       (id, provider_email_id, provider_event_id, thread_id, reply_token_id, sender_email, recipient_email, subject, message_id, in_reply_to, references_header, text_body, html_sanitized, attachments_json, status, rejection_reason, received_at, processed_at, created_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, 'rejected', ?15, datetime('now'), datetime('now'), datetime('now'))`
     )
-      .bind(inboundId, input.emailId || null, input.providerEventId, from || null, recipient || null, subject || null, providerMessageId || null, inReplyTo || null, references || null, body.text || null, body.html || null, toJsonText(attachments, []))
+      .bind(inboundId, input.emailId || null, input.providerEventId, threadId || null, replyTokenId || null, from || null, recipient || null, subject || null, providerMessageId || null, inReplyTo || null, references || null, body.text || null, body.html || null, toJsonText(attachmentSummary, {}), reason)
       .run()
+  }
+
+  if (!token) {
+    await storeRejected("reply_token_not_found")
     return { status: "rejected", reason: "reply_token_not_found" }
+  }
+
+  if (!Number(token.active) || token.revoked_at) {
+    await storeRejected("reply_token_revoked", token.thread_id, token.id)
+    return { status: "rejected", thread_id: token.thread_id, reason: "reply_token_revoked" }
+  }
+  const tokenExpiry = Date.parse(normalizeText(token.expires_at))
+  if (token.expires_at && Number.isFinite(tokenExpiry) && tokenExpiry <= Date.now()) {
+    await storeRejected("reply_token_expired", token.thread_id, token.id)
+    return { status: "rejected", thread_id: token.thread_id, reason: "reply_token_expired" }
   }
 
   const thread = await env.DB.prepare("SELECT * FROM support_threads WHERE id = ?1 LIMIT 1")
@@ -1911,45 +2066,56 @@ async function processInboundSupportReply(
     .first<SupportThreadRow>()
   if (!thread) return { status: "rejected", reason: "thread_not_found" }
 
+  if (inboundEmailIsAutomated(message)) {
+    await storeRejected("automated_reply_rejected", thread.id, token.id)
+    await auditSupportEvent(env, { threadId: thread.id, eventType: "inbound_auto_reply_rejected", actorRole: "email_inbound", metadata: { provider_event_id: input.providerEventId } })
+    return { status: "rejected", thread_id: thread.id, reason: "automated_reply_rejected" }
+  }
+
+  const supportBlock = await queryActiveSupportBlock(env, {
+    userId: normalizeText(thread.user_id),
+    email: normalizeLower(thread.email),
+    installId: normalizeText(thread.install_id),
+    deviceId: normalizeText(thread.device_id),
+  })
+  if (supportBlock) {
+    await storeRejected("support_blocked", thread.id, token.id)
+    await auditSupportEvent(env, { threadId: thread.id, eventType: "inbound_blocked", actorRole: "email_inbound" })
+    return { status: "rejected", thread_id: thread.id, reason: "support_blocked" }
+  }
+
   const expectedSender = normalizeEmailAddress(thread.email)
-  if (expectedSender && from && expectedSender !== from) {
-    await env.DB.prepare(
-      `INSERT OR IGNORE INTO inbound_email_messages
-       (id, provider_email_id, provider_event_id, thread_id, reply_token_id, sender_email, recipient_email, subject, message_id, in_reply_to, references_header, text_body, html_sanitized, attachments_json, status, rejection_reason, received_at, processed_at, created_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, 'rejected', 'sender_mismatch', datetime('now'), datetime('now'), datetime('now'))`
-    )
-      .bind(inboundId, input.emailId || null, input.providerEventId, thread.id, token.id, from || null, recipient || null, subject || null, providerMessageId || null, inReplyTo || null, references || null, body.text || null, body.html || null, toJsonText(attachments, []))
-      .run()
+  if (!expectedSender || !from || expectedSender !== from) {
+    await storeRejected("sender_mismatch", thread.id, token.id)
     return { status: "rejected", thread_id: thread.id, reason: "sender_mismatch" }
   }
 
   if (!body.text) {
-    await env.DB.prepare(
-      `INSERT OR IGNORE INTO inbound_email_messages
-       (id, provider_email_id, provider_event_id, thread_id, reply_token_id, sender_email, recipient_email, subject, message_id, in_reply_to, references_header, html_sanitized, attachments_json, status, rejection_reason, received_at, processed_at, created_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, 'rejected', 'empty_body', datetime('now'), datetime('now'), datetime('now'))`
-    )
-      .bind(inboundId, input.emailId || null, input.providerEventId, thread.id, token.id, from || null, recipient || null, subject || null, providerMessageId || null, inReplyTo || null, references || null, body.html || null, toJsonText(attachments, []))
-      .run()
+    await storeRejected("empty_body", thread.id, token.id)
     return { status: "rejected", thread_id: thread.id, reason: "empty_body" }
   }
 
-  await env.DB.prepare(
+  const inboundInsert = await env.DB.prepare(
     `INSERT OR IGNORE INTO inbound_email_messages
      (id, provider_email_id, provider_event_id, thread_id, reply_token_id, sender_email, recipient_email, subject, message_id, in_reply_to, references_header, text_body, html_sanitized, attachments_json, status, received_at, processed_at, created_at)
      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, 'processed', datetime('now'), datetime('now'), datetime('now'))`
   )
-    .bind(inboundId, input.emailId || null, input.providerEventId, thread.id, token.id, from || null, recipient || null, subject || null, providerMessageId || null, inReplyTo || null, references || null, body.text, body.html || null, toJsonText(attachments, []))
+    .bind(inboundId, input.emailId || null, input.providerEventId, thread.id, token.id, from || null, recipient || null, subject || null, providerMessageId || null, inReplyTo || null, references || null, body.text, body.html || null, toJsonText(attachmentSummary, {}))
     .run()
-  await env.DB.prepare("INSERT INTO support_messages (id, thread_id, sender, body, created_at) VALUES (?1, ?2, 'user', ?3, datetime('now'))")
-    .bind(crypto.randomUUID(), thread.id, body.text)
-    .run()
-  await env.DB.prepare("UPDATE support_threads SET status = 'waiting_for_support', updated_at = datetime('now') WHERE id = ?1")
-    .bind(thread.id)
-    .run()
-  await env.DB.prepare("UPDATE support_reply_tokens SET last_used_at = datetime('now') WHERE id = ?1")
-    .bind(token.id)
-    .run()
+  if (!dbChanges(inboundInsert)) return { status: "duplicate", thread_id: thread.id }
+
+  const supportMessageId = crypto.randomUUID()
+  const nextStatus: CanonicalSupportStatus = canonicalSupportStatus(thread.status) === "closed" ? "reopened" : "awaiting_support"
+  await env.DB.batch([
+    env.DB.prepare("INSERT OR IGNORE INTO support_messages (id, thread_id, sender, sender_role, delivery_mode, idempotency_key, source, provider_message_id, body, created_at) VALUES (?1, ?2, 'user', 'email_inbound', 'portal_only', ?3, 'email', ?4, ?5, datetime('now'))")
+      .bind(supportMessageId, thread.id, `inbound:${input.providerEventId}`, providerMessageId || null, body.text),
+    env.DB.prepare("UPDATE support_threads SET status = ?1, reopened_at = CASE WHEN ?1 = 'reopened' THEN datetime('now') ELSE reopened_at END, last_customer_reply_at = datetime('now'), updated_at = datetime('now') WHERE id = ?2")
+      .bind(nextStatus, thread.id),
+    env.DB.prepare("UPDATE support_reply_tokens SET last_used_at = datetime('now') WHERE id = ?1")
+      .bind(token.id),
+    env.DB.prepare("INSERT INTO support_audit_events (id, thread_id, event_type, actor_role, actor_id, message_id, metadata_json, created_at) VALUES (?1, ?2, 'inbound_email_processed', 'email_inbound', ?3, ?4, ?5, datetime('now'))")
+      .bind(crypto.randomUUID(), thread.id, thread.user_id || null, supportMessageId, toJsonText({ provider_event_id: input.providerEventId, attachment_count: attachmentCount, attachments_stored: false }, {})),
+  ])
   return { status: "processed", thread_id: thread.id }
 }
 
@@ -1982,15 +2148,29 @@ async function handleResendWebhook(request: Request, env: Env): Promise<Response
     eventType,
     providerMessageId,
     emailJobId: job?.id || null,
-    payload,
+    payload: {
+      event_type: eventType,
+      provider_message_id: providerMessageId || null,
+      provider_created_at: normalizeText(payload.created_at || data.created_at) || null,
+    },
   })
-  if (stored === "duplicate") return json({ success: true, duplicate: true })
+  if (stored === "duplicate") {
+    const existing = await env.DB.prepare("SELECT processed_at FROM email_events WHERE provider_event_id = ?1 LIMIT 1")
+      .bind(signature.eventId)
+      .first<{ processed_at: string | null }>()
+    if (eventType !== "email.received" || existing?.processed_at) return json({ success: true, duplicate: true })
+  }
 
   if (eventType === "email.received") {
     if (!emailInboundEnabled(env)) return json({ success: true, inbound_enabled: false })
     const emailId = providerMessageIdFromPayload(data)
     if (!emailId) return json({ success: false, error: "received_email_id_missing" }, 400)
-    const message = await retrieveReceivedEmail(env, emailId)
+    let message: Record<string, unknown>
+    try {
+      message = await retrieveReceivedEmail(env, emailId)
+    } catch {
+      return json({ success: false, error: "received_email_fetch_failed", retryable: true }, 503)
+    }
     const result = await processInboundSupportReply(env, { providerEventId: signature.eventId, emailId, message })
     await env.DB.prepare("UPDATE email_events SET processed_at = datetime('now') WHERE provider_event_id = ?1").bind(signature.eventId).run()
     return json({ success: true, inbound_enabled: true, ...result })
@@ -2088,11 +2268,26 @@ async function handleAdminEmailRetry(request: Request, env: Env): Promise<Respon
   const body = (await request.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
   const jobId = normalizeText(body.job_id || body.id)
   if (!jobId) return json({ success: false, error: "job_id_required" }, 400)
-  await env.DB.prepare(
-    "UPDATE email_jobs SET status = 'queued', next_attempt_at = datetime('now'), last_error = NULL, updated_at = datetime('now') WHERE id = ?1"
-  )
+  const job = await env.DB.prepare("SELECT id, status, recipient, linked_ticket_id FROM email_jobs WHERE id = ?1 LIMIT 1")
     .bind(jobId)
-    .run()
+    .first<{ id: string; status: string; recipient: string; linked_ticket_id: string | null }>()
+  if (!job) return json({ success: false, error: "email_job_not_found" }, 404)
+  if (!["failed", "bounced", "complained"].includes(normalizeLower(job.status))) {
+    return json({ success: false, error: "email_job_not_retryable" }, 409)
+  }
+  const recipientFlag = await env.DB.prepare("SELECT status FROM email_recipient_flags WHERE email = ?1 LIMIT 1")
+    .bind(normalizeEmailAddress(job.recipient))
+    .first<{ status: string }>()
+  if (recipientFlag && ["bounced", "complained", "suppressed"].includes(normalizeLower(recipientFlag.status))) {
+    return json({ success: false, error: "recipient_suppressed" }, 409)
+  }
+  await env.DB.prepare(
+    "UPDATE email_jobs SET status = 'queued', attempt_count = 0, next_attempt_at = datetime('now'), provider_message_id = NULL, sent_at = NULL, delivered_at = NULL, last_error = NULL, updated_at = datetime('now') WHERE id = ?1"
+  ).bind(jobId).run()
+  await updatePortalNotificationEmailStatus(env, jobId, "retrying")
+  if (job.linked_ticket_id) {
+    await auditSupportEvent(env, { threadId: job.linked_ticket_id, eventType: "email_retry_requested", actorRole: "admin", metadata: { email_job_id: jobId } })
+  }
   const processed = await processEmailOutbox(env, 1)
   return json({ success: true, processed })
 }
@@ -2563,6 +2758,88 @@ const EMAIL_CRON_LOCK_SECONDS = 4 * 60
 const EMAIL_WEBHOOK_MAX_BYTES = 256 * 1024
 const EMAIL_WEBHOOK_TOLERANCE_SECONDS = 5 * 60
 const EMAIL_KNOWN_EVENTS = RESEND_KNOWN_EVENTS
+const SUPPORT_IDEMPOTENCY_KEY_MAX_LENGTH = 160
+const NOTIFICATION_PAGE_MAX = 50
+
+function supportIdempotencyKey(value: unknown): string {
+  return clampText(value, SUPPORT_IDEMPOTENCY_KEY_MAX_LENGTH).replace(/[^a-zA-Z0-9:_-]/g, "")
+}
+
+async function auditSupportEvent(
+  env: Env,
+  input: {
+    threadId: string
+    eventType: string
+    actorRole: SupportSenderRole | "admin"
+    actorId?: string | null
+    messageId?: string | null
+    metadata?: Record<string, unknown>
+  }
+): Promise<void> {
+  await env.DB.prepare(
+    `INSERT INTO support_audit_events
+      (id, thread_id, event_type, actor_role, actor_id, message_id, metadata_json, created_at)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, datetime('now'))`
+  )
+    .bind(
+      crypto.randomUUID(),
+      input.threadId,
+      clampText(input.eventType, 80),
+      input.actorRole,
+      input.actorId || null,
+      input.messageId || null,
+      toJsonText(input.metadata || {}, {})
+    )
+    .run()
+}
+
+async function createPortalNotification(
+  env: Env,
+  input: {
+    idempotencyKey: string
+    userId?: string | null
+    type: string
+    title: string
+    body: string
+    titleAr?: string
+    bodyAr?: string
+    linkedResourceType?: string | null
+    linkedResourceId?: string | null
+    payload?: Record<string, unknown>
+    emailStatus?: string
+    emailJobId?: string | null
+  }
+): Promise<string | null> {
+  const userId = clampText(input.userId, 160)
+  const idempotencyKey = supportIdempotencyKey(input.idempotencyKey)
+  if (!userId || !idempotencyKey) return null
+  const id = crypto.randomUUID()
+  await env.DB.prepare(
+    `INSERT OR IGNORE INTO portal_notifications
+      (id, idempotency_key, user_id, type, title, body, title_ar, body_ar, linked_resource_type, linked_resource_id, payload_json, portal_status, email_status, email_job_id, created_at, updated_at)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 'delivered', ?12, ?13, datetime('now'), datetime('now'))`
+  )
+    .bind(
+      id,
+      idempotencyKey,
+      userId,
+      clampText(input.type, 80),
+      clampText(input.title, 180),
+      clampMultilineText(input.body, 800),
+      clampText(input.titleAr, 180) || null,
+      clampMultilineText(input.bodyAr, 800) || null,
+      clampText(input.linkedResourceType, 80) || null,
+      clampText(input.linkedResourceId, 160) || null,
+      toJsonText(input.payload || {}, {}),
+      clampText(input.emailStatus || "not_requested", 40),
+      input.emailJobId || null
+    )
+    .run()
+  const row = await env.DB.prepare("SELECT id FROM portal_notifications WHERE idempotency_key = ?1 LIMIT 1")
+    .bind(idempotencyKey)
+    .first<{ id: string }>()
+  return row?.id || null
+}
 
 function supportScopeSql(prefix = "t", startIndex = 2): string {
   const field = (name: string) => (prefix ? `${prefix}.${name}` : name)
@@ -2570,7 +2847,17 @@ function supportScopeSql(prefix = "t", startIndex = 2): string {
   const emailIndex = startIndex + 1
   const installIndex = startIndex + 2
   const deviceIndex = startIndex + 3
-  return `((?${userIndex} <> '' AND ${field("user_id")} = ?${userIndex}) OR (?${emailIndex} <> '' AND lower(${field("email")}) = ?${emailIndex}) OR (?${installIndex} <> '' AND ${field("install_id")} = ?${installIndex}) OR (?${deviceIndex} <> '' AND ${field("device_id")} = ?${deviceIndex}))`
+  return `(
+    (?${userIndex} <> '' AND ${field("user_id")} = ?${userIndex})
+    OR (
+      ?${userIndex} = ''
+      AND (
+        (?${emailIndex} <> '' AND lower(${field("email")}) = ?${emailIndex})
+        OR (?${installIndex} <> '' AND ${field("install_id")} = ?${installIndex})
+        OR (?${deviceIndex} <> '' AND ${field("device_id")} = ?${deviceIndex})
+      )
+    )
+  )`
 }
 
 function supportBlockMatchSql(threadAlias = "t", blockAlias = "b"): string {
@@ -2603,7 +2890,7 @@ async function querySupportRateLimit(
     `SELECT COUNT(*) AS count, MIN(m.created_at) AS oldest_created_at
      FROM support_messages m
      JOIN support_threads t ON t.id = m.thread_id
-     WHERE m.sender = 'user'
+     WHERE (m.sender_role IN ('customer', 'email_inbound') OR (m.sender_role IS NULL AND m.sender = 'user'))
        AND datetime(m.created_at) > datetime('now', '-24 hours')
        AND ${supportScopeSql("t", 1)}`
   )
@@ -2623,10 +2910,10 @@ async function querySupportThreadsForUser(env: Env, scope: { userId: string; ema
   const [userId, email, installId, deviceId] = supportScopeBinds(scope)
   const rows = await env.DB.prepare(
     `SELECT t.*,
-      (SELECT body FROM support_messages m WHERE m.thread_id = t.id AND m.sender <> 'internal' ORDER BY datetime(m.created_at) DESC LIMIT 1) AS last_message_body,
-      (SELECT sender FROM support_messages m WHERE m.thread_id = t.id AND m.sender <> 'internal' ORDER BY datetime(m.created_at) DESC LIMIT 1) AS last_message_sender,
-      (SELECT created_at FROM support_messages m WHERE m.thread_id = t.id AND m.sender <> 'internal' ORDER BY datetime(m.created_at) DESC LIMIT 1) AS last_message_at,
-      (SELECT COUNT(*) FROM support_messages m WHERE m.thread_id = t.id AND m.sender = 'admin' AND (t.user_last_read_at IS NULL OR datetime(m.created_at) > datetime(t.user_last_read_at))) AS unread_count,
+      (SELECT body FROM support_messages m WHERE m.thread_id = t.id AND COALESCE(m.sender_role, CASE m.sender WHEN 'internal' THEN 'internal_note' ELSE m.sender END) <> 'internal_note' ORDER BY datetime(m.created_at) DESC LIMIT 1) AS last_message_body,
+      (SELECT COALESCE(sender_role, sender) FROM support_messages m WHERE m.thread_id = t.id AND COALESCE(m.sender_role, CASE m.sender WHEN 'internal' THEN 'internal_note' ELSE m.sender END) <> 'internal_note' ORDER BY datetime(m.created_at) DESC LIMIT 1) AS last_message_sender,
+      (SELECT created_at FROM support_messages m WHERE m.thread_id = t.id AND COALESCE(m.sender_role, CASE m.sender WHEN 'internal' THEN 'internal_note' ELSE m.sender END) <> 'internal_note' ORDER BY datetime(m.created_at) DESC LIMIT 1) AS last_message_at,
+      (SELECT COUNT(*) FROM support_messages m WHERE m.thread_id = t.id AND (m.sender_role = 'support_agent' OR (m.sender_role IS NULL AND m.sender = 'admin')) AND (t.user_last_read_at IS NULL OR datetime(m.created_at) > datetime(t.user_last_read_at))) AS unread_count,
       EXISTS(SELECT 1 FROM support_message_blocks b WHERE b.active = 1 AND ${supportBlockMatchSql("t", "b")} LIMIT 1) AS support_blocked
      FROM support_threads t
      WHERE ${supportScopeSql("t")}
@@ -2636,7 +2923,7 @@ async function querySupportThreadsForUser(env: Env, scope: { userId: string; ema
     .bind("_scope", userId, email, installId, deviceId)
     .all<SupportThreadRow>()
     .catch(() => ({ results: [] as SupportThreadRow[] }))
-  return rows.results || []
+  return (rows.results || []).map(normalizeSupportThread)
 }
 
 async function queryAdminSupportThreads(env: Env): Promise<SupportThreadRow[]> {
@@ -2645,19 +2932,21 @@ async function queryAdminSupportThreads(env: Env): Promise<SupportThreadRow[]> {
       (SELECT body FROM support_messages m WHERE m.thread_id = t.id ORDER BY datetime(m.created_at) DESC LIMIT 1) AS last_message_body,
       (SELECT sender FROM support_messages m WHERE m.thread_id = t.id ORDER BY datetime(m.created_at) DESC LIMIT 1) AS last_message_sender,
       (SELECT created_at FROM support_messages m WHERE m.thread_id = t.id ORDER BY datetime(m.created_at) DESC LIMIT 1) AS last_message_at,
-      (SELECT COUNT(*) FROM support_messages m WHERE m.thread_id = t.id AND m.sender = 'user' AND (t.admin_last_read_at IS NULL OR datetime(m.created_at) > datetime(t.admin_last_read_at))) AS unread_count,
+      (SELECT COUNT(*) FROM support_messages m WHERE m.thread_id = t.id AND (m.sender_role IN ('customer', 'email_inbound') OR (m.sender_role IS NULL AND m.sender = 'user')) AND (t.admin_last_read_at IS NULL OR datetime(m.created_at) > datetime(t.admin_last_read_at))) AS unread_count,
       EXISTS(SELECT 1 FROM support_message_blocks b WHERE b.active = 1 AND ${supportBlockMatchSql("t", "b")} LIMIT 1) AS support_blocked
      FROM support_threads t
-     ORDER BY datetime(t.updated_at) DESC
+     ORDER BY CASE t.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END,
+              CASE WHEN unread_count > 0 THEN 0 ELSE 1 END,
+              datetime(t.updated_at) DESC
      LIMIT 100`
   )
     .all<SupportThreadRow>()
     .catch(() => ({ results: [] as SupportThreadRow[] }))
-  return rows.results || []
+  return (rows.results || []).map(normalizeSupportThread)
 }
 
 async function handleSupportCreate(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
-  const body = await request.json<PolicyRequest & { subject?: string; body?: string; message?: string }>().catch(() => null)
+  const body = await request.json<PolicyRequest & { subject?: string; body?: string; message?: string; idempotency_key?: string }>().catch(() => null)
   if (!body || typeof body !== "object") return json({ success: false, error: "invalid_payload" }, 400)
   const scope = await requireSupportUser(request, env, body)
   if (scope instanceof Response) return scope
@@ -2665,6 +2954,11 @@ async function handleSupportCreate(request: Request, env: Env, ctx?: ExecutionCo
   const message = clampMultilineText(body.body || body.message, 4000)
   if (!subject) return json({ success: false, error: "subject_required" }, 400)
   if (!message) return json({ success: false, error: "message_required" }, 400)
+  const idempotencyKey = supportIdempotencyKey(body.idempotency_key || request.headers.get("Idempotency-Key")) || crypto.randomUUID()
+  const existing = await env.DB.prepare("SELECT thread_id FROM support_messages WHERE idempotency_key = ?1 LIMIT 1")
+    .bind(idempotencyKey)
+    .first<{ thread_id: string }>()
+  if (existing?.thread_id) return json({ success: true, thread_id: existing.thread_id, duplicate: true })
   const activeBlock = await queryActiveSupportBlock(env, scope)
   if (activeBlock) return json({ success: false, error: "support_blocked" }, 403)
   const rateLimit = await querySupportRateLimit(env, scope)
@@ -2681,10 +2975,11 @@ async function handleSupportCreate(request: Request, env: Env, ctx?: ExecutionCo
   }
   const threadId = crypto.randomUUID()
   const messageId = crypto.randomUUID()
-  await env.DB.prepare(
-    "INSERT INTO support_threads (id, user_id, email, install_id, device_id, app_version, app_build_id, channel, platform, subject, status, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'open', datetime('now'), datetime('now'))"
-  )
-    .bind(
+  try {
+    await env.DB.batch([
+    env.DB.prepare(
+      "INSERT INTO support_threads (id, user_id, email, install_id, device_id, app_version, app_build_id, channel, platform, subject, status, last_customer_reply_at, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'awaiting_support', datetime('now'), datetime('now'), datetime('now'))"
+    ).bind(
       threadId,
       scope.userId || null,
       scope.email || null,
@@ -2695,11 +2990,17 @@ async function handleSupportCreate(request: Request, env: Env, ctx?: ExecutionCo
       normalizeLower(body.channel) || null,
       normalizeLower(body.platform) || null,
       subject
-    )
-    .run()
-  await env.DB.prepare("INSERT INTO support_messages (id, thread_id, sender, body, created_at) VALUES (?1, ?2, 'user', ?3, datetime('now'))")
-    .bind(messageId, threadId, message)
-    .run()
+    ),
+    env.DB.prepare("INSERT INTO support_messages (id, thread_id, sender, sender_role, delivery_mode, idempotency_key, source, body, created_at) VALUES (?1, ?2, 'user', 'customer', 'portal_only', ?3, 'portal', ?4, datetime('now'))")
+      .bind(messageId, threadId, idempotencyKey, message),
+    env.DB.prepare("INSERT INTO support_audit_events (id, thread_id, event_type, actor_role, actor_id, message_id, metadata_json, created_at) VALUES (?1, ?2, 'ticket_created', 'customer', ?3, ?4, '{}', datetime('now'))")
+      .bind(crypto.randomUUID(), threadId, scope.userId || null, messageId),
+    ])
+  } catch (error) {
+    const raced = await env.DB.prepare("SELECT thread_id FROM support_messages WHERE idempotency_key = ?1 LIMIT 1").bind(idempotencyKey).first<{ thread_id: string }>()
+    if (raced?.thread_id) return json({ success: true, thread_id: raced.thread_id, duplicate: true })
+    throw error
+  }
   const thread = await env.DB.prepare("SELECT * FROM support_threads WHERE id = ?1").bind(threadId).first<SupportThreadRow>()
   if (thread) await queueSupportTicketConfirmation(env, thread, scope.userId || null, messageId, ctx)
   return json({ success: true, thread_id: threadId })
@@ -2725,12 +3026,12 @@ async function handleSupportMessages(request: Request, env: Env): Promise<Respon
     .bind(threadId, userId, email, installId, deviceId)
     .first<SupportThreadRow>()
   if (!thread) return json({ success: false, error: "thread_not_found" }, 404)
-  const messages = await env.DB.prepare("SELECT id, thread_id, sender, body, created_at FROM support_messages WHERE thread_id = ?1 AND sender <> 'internal' ORDER BY datetime(created_at) ASC")
+  const messages = await env.DB.prepare("SELECT id, thread_id, sender, sender_role, delivery_mode, source, provider_message_id, body, created_at FROM support_messages WHERE thread_id = ?1 AND COALESCE(sender_role, CASE sender WHEN 'internal' THEN 'internal_note' ELSE sender END) <> 'internal_note' ORDER BY datetime(created_at) ASC")
     .bind(threadId)
     .all<SupportMessageRow>()
     .catch(() => ({ results: [] as SupportMessageRow[] }))
   await env.DB.prepare("UPDATE support_threads SET user_last_read_at = datetime('now') WHERE id = ?1").bind(threadId).run()
-  return json({ success: true, thread, messages: messages.results || [] })
+  return json({ success: true, thread: normalizeSupportThread(thread), messages: (messages.results || []).map(normalizeSupportMessage) })
 }
 
 async function handleSupportRead(request: Request, env: Env): Promise<Response> {
@@ -2757,7 +3058,7 @@ async function handleSupportRequest(request: Request, env: Env, ctx?: ExecutionC
 }
 
 async function handleWebSupportCreate(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
-  const body = await request.json<PolicyRequest & { id_token?: string; subject?: string; body?: string; message?: string }>().catch(() => null)
+  const body = await request.json<PolicyRequest & { id_token?: string; subject?: string; body?: string; message?: string; idempotency_key?: string }>().catch(() => null)
   if (!body || typeof body !== "object") return json({ success: false, error: "invalid_payload" }, 400)
   const scope = await requireWebSupportUser(request, env, body)
   if (scope instanceof Response) return scope
@@ -2765,6 +3066,11 @@ async function handleWebSupportCreate(request: Request, env: Env, ctx?: Executio
   const message = clampMultilineText(body.body || body.message, 4000)
   if (!subject) return json({ success: false, error: "subject_required" }, 400)
   if (!message) return json({ success: false, error: "message_required" }, 400)
+  const idempotencyKey = supportIdempotencyKey(body.idempotency_key || request.headers.get("Idempotency-Key")) || crypto.randomUUID()
+  const existing = await env.DB.prepare("SELECT thread_id FROM support_messages WHERE idempotency_key = ?1 LIMIT 1")
+    .bind(idempotencyKey)
+    .first<{ thread_id: string }>()
+  if (existing?.thread_id) return json({ success: true, thread_id: existing.thread_id, duplicate: true })
   const activeBlock = await queryActiveSupportBlock(env, scope)
   if (activeBlock) return json({ success: false, error: "support_blocked" }, 403)
   const rateLimit = await querySupportRateLimit(env, scope)
@@ -2773,14 +3079,23 @@ async function handleWebSupportCreate(request: Request, env: Env, ctx?: Executio
   }
   const threadId = crypto.randomUUID()
   const messageId = crypto.randomUUID()
-  await env.DB.prepare(
-    "INSERT INTO support_threads (id, user_id, email, install_id, device_id, app_version, app_build_id, channel, platform, subject, status, created_at, updated_at) VALUES (?1, ?2, ?3, NULL, NULL, NULL, NULL, 'web', 'web', ?4, 'open', datetime('now'), datetime('now'))"
-  )
-    .bind(threadId, scope.userId, scope.email, subject)
-    .run()
-  await env.DB.prepare("INSERT INTO support_messages (id, thread_id, sender, body, created_at) VALUES (?1, ?2, 'user', ?3, datetime('now'))")
-    .bind(messageId, threadId, message)
-    .run()
+  try {
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO support_threads (id, user_id, email, install_id, device_id, app_version, app_build_id, channel, platform, subject, status, last_customer_reply_at, created_at, updated_at) VALUES (?1, ?2, ?3, NULL, NULL, NULL, NULL, 'web', 'web', ?4, 'awaiting_support', datetime('now'), datetime('now'), datetime('now'))"
+      ).bind(threadId, scope.userId, scope.email, subject),
+      env.DB.prepare("INSERT INTO support_messages (id, thread_id, sender, sender_role, delivery_mode, idempotency_key, source, body, created_at) VALUES (?1, ?2, 'user', 'customer', 'portal_only', ?3, 'portal', ?4, datetime('now'))")
+        .bind(messageId, threadId, idempotencyKey, message),
+      env.DB.prepare("INSERT INTO support_audit_events (id, thread_id, event_type, actor_role, actor_id, message_id, metadata_json, created_at) VALUES (?1, ?2, 'ticket_created', 'customer', ?3, ?4, '{}', datetime('now'))")
+        .bind(crypto.randomUUID(), threadId, scope.userId, messageId),
+    ])
+  } catch (error) {
+    const raced = await env.DB.prepare("SELECT thread_id FROM support_messages WHERE idempotency_key = ?1 LIMIT 1")
+      .bind(idempotencyKey)
+      .first<{ thread_id: string }>()
+    if (raced?.thread_id) return json({ success: true, thread_id: raced.thread_id, duplicate: true })
+    throw error
+  }
   const thread = await env.DB.prepare("SELECT * FROM support_threads WHERE id = ?1").bind(threadId).first<SupportThreadRow>()
   if (thread) await queueSupportTicketConfirmation(env, thread, scope.userId || null, messageId, ctx)
   return json({ success: true, thread_id: threadId })
@@ -2806,16 +3121,16 @@ async function handleWebSupportMessages(request: Request, env: Env): Promise<Res
     .bind(threadId, userId, email, installId, deviceId)
     .first<SupportThreadRow>()
   if (!thread) return json({ success: false, error: "thread_not_found" }, 404)
-  const messages = await env.DB.prepare("SELECT id, thread_id, sender, body, created_at FROM support_messages WHERE thread_id = ?1 AND sender <> 'internal' ORDER BY datetime(created_at) ASC")
+  const messages = await env.DB.prepare("SELECT id, thread_id, sender, sender_role, delivery_mode, source, provider_message_id, body, created_at FROM support_messages WHERE thread_id = ?1 AND COALESCE(sender_role, CASE sender WHEN 'internal' THEN 'internal_note' ELSE sender END) <> 'internal_note' ORDER BY datetime(created_at) ASC")
     .bind(threadId)
     .all<SupportMessageRow>()
     .catch(() => ({ results: [] as SupportMessageRow[] }))
   await env.DB.prepare("UPDATE support_threads SET user_last_read_at = datetime('now') WHERE id = ?1").bind(threadId).run()
-  return json({ success: true, thread, messages: messages.results || [] })
+  return json({ success: true, thread: normalizeSupportThread(thread), messages: (messages.results || []).map(normalizeSupportMessage) })
 }
 
 async function handleWebSupportReply(request: Request, env: Env): Promise<Response> {
-  const body = await request.json<PolicyRequest & { id_token?: string; thread_id?: string; body?: string; message?: string }>().catch(() => null)
+  const body = await request.json<PolicyRequest & { id_token?: string; thread_id?: string; body?: string; message?: string; idempotency_key?: string }>().catch(() => null)
   if (!body || typeof body !== "object") return json({ success: false, error: "invalid_payload" }, 400)
   const scope = await requireWebSupportUser(request, env, body)
   if (scope instanceof Response) return scope
@@ -2823,23 +3138,37 @@ async function handleWebSupportReply(request: Request, env: Env): Promise<Respon
   const message = clampMultilineText(body.body || body.message, 4000)
   if (!threadId) return json({ success: false, error: "thread_id_required" }, 400)
   if (!message) return json({ success: false, error: "message_required" }, 400)
+  const idempotencyKey = supportIdempotencyKey(body.idempotency_key || request.headers.get("Idempotency-Key")) || crypto.randomUUID()
+  const duplicate = await env.DB.prepare("SELECT id FROM support_messages WHERE idempotency_key = ?1 AND thread_id = ?2 LIMIT 1")
+    .bind(idempotencyKey, threadId)
+    .first<{ id: string }>()
+  if (duplicate?.id) return json({ success: true, duplicate: true })
   const activeBlock = await queryActiveSupportBlock(env, scope)
   if (activeBlock) return json({ success: false, error: "support_blocked" }, 403)
   const [userId, email, installId, deviceId] = supportScopeBinds(scope)
-  const thread = await env.DB.prepare(`SELECT id FROM support_threads t WHERE t.id = ?1 AND ${supportScopeSql("t")} LIMIT 1`)
+  const thread = await env.DB.prepare(`SELECT * FROM support_threads t WHERE t.id = ?1 AND ${supportScopeSql("t")} LIMIT 1`)
     .bind(threadId, userId, email, installId, deviceId)
-    .first<{ id: string }>()
+    .first<SupportThreadRow>()
   if (!thread) return json({ success: false, error: "thread_not_found" }, 404)
+  const currentStatus = canonicalSupportStatus(thread.status)
+  if (currentStatus === "blocked") return json({ success: false, error: "support_blocked" }, 403)
+  if (currentStatus === "closed") return json({ success: false, error: "ticket_closed" }, 409)
+  if (!supportStatusCanTransition(currentStatus, "awaiting_support", "customer")) {
+    return json({ success: false, error: "invalid_status_transition" }, 409)
+  }
   const rateLimit = await querySupportRateLimit(env, scope)
   if (rateLimit.limited) {
     return json({ success: false, error: "support_rate_limited", retry_after_seconds: rateLimit.retryAfterSeconds, limit: SUPPORT_DAILY_MESSAGE_LIMIT }, 429)
   }
-  await env.DB.prepare("INSERT INTO support_messages (id, thread_id, sender, body, created_at) VALUES (?1, ?2, 'user', ?3, datetime('now'))")
-    .bind(crypto.randomUUID(), threadId, message)
-    .run()
-  await env.DB.prepare("UPDATE support_threads SET status = 'open', updated_at = datetime('now'), user_last_read_at = datetime('now') WHERE id = ?1")
-    .bind(threadId)
-    .run()
+  const messageId = crypto.randomUUID()
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO support_messages (id, thread_id, sender, sender_role, delivery_mode, idempotency_key, source, body, created_at) VALUES (?1, ?2, 'user', 'customer', 'portal_only', ?3, 'portal', ?4, datetime('now'))")
+      .bind(messageId, threadId, idempotencyKey, message),
+    env.DB.prepare("UPDATE support_threads SET status = 'awaiting_support', last_customer_reply_at = datetime('now'), updated_at = datetime('now'), user_last_read_at = datetime('now') WHERE id = ?1")
+      .bind(threadId),
+    env.DB.prepare("INSERT INTO support_audit_events (id, thread_id, event_type, actor_role, actor_id, message_id, metadata_json, created_at) VALUES (?1, ?2, 'customer_reply', 'customer', ?3, ?4, '{}', datetime('now'))")
+      .bind(crypto.randomUUID(), threadId, scope.userId, messageId),
+  ])
   return json({ success: true })
 }
 
@@ -2849,14 +3178,28 @@ async function handleWebSupportStatus(request: Request, env: Env): Promise<Respo
   const scope = await requireWebSupportUser(request, env, body)
   if (scope instanceof Response) return scope
   const threadId = normalizeText(body.thread_id)
-  const status = normalizeLower(body.status)
+  const requestedStatus = normalizeLower(body.status)
   if (!threadId) return json({ success: false, error: "thread_id_required" }, 400)
-  if (!["open", "closed"].includes(status)) return json({ success: false, error: "invalid_status" }, 400)
+  if (!["open", "closed", "reopened"].includes(requestedStatus)) return json({ success: false, error: "invalid_status" }, 400)
   const [userId, email, installId, deviceId] = supportScopeBinds(scope)
-  await env.DB.prepare(`UPDATE support_threads SET status = ?1, updated_at = datetime('now') WHERE id = ?2 AND ${supportScopeSql("", 3)}`)
-    .bind(status, threadId, userId, email, installId, deviceId)
-    .run()
-  return json({ success: true, status })
+  const thread = await env.DB.prepare(`SELECT * FROM support_threads WHERE id = ?1 AND ${supportScopeSql("", 2)} LIMIT 1`)
+    .bind(threadId, userId, email, installId, deviceId)
+    .first<SupportThreadRow>()
+  if (!thread) return json({ success: false, error: "thread_not_found" }, 404)
+  const currentStatus = canonicalSupportStatus(thread.status)
+  const nextStatus: CanonicalSupportStatus = requestedStatus === "closed"
+    ? "closed"
+    : currentStatus === "closed" ? "reopened" : "open"
+  if (!supportStatusCanTransition(currentStatus, nextStatus, "customer")) {
+    return json({ success: false, error: "invalid_status_transition" }, 409)
+  }
+  await env.DB.batch([
+    env.DB.prepare("UPDATE support_threads SET status = ?1, closed_at = CASE WHEN ?1 = 'closed' THEN datetime('now') ELSE closed_at END, reopened_at = CASE WHEN ?1 = 'reopened' THEN datetime('now') ELSE reopened_at END, updated_at = datetime('now') WHERE id = ?2")
+      .bind(nextStatus, threadId),
+    env.DB.prepare("INSERT INTO support_audit_events (id, thread_id, event_type, actor_role, actor_id, metadata_json, created_at) VALUES (?1, ?2, ?3, 'customer', ?4, ?5, datetime('now'))")
+      .bind(crypto.randomUUID(), threadId, nextStatus === "closed" ? "ticket_closed" : "ticket_reopened", scope.userId, toJsonText({ from: currentStatus, to: nextStatus }, {})),
+  ])
+  return json({ success: true, status: nextStatus })
 }
 
 async function handleWebSupportRequest(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
@@ -2867,6 +3210,108 @@ async function handleWebSupportRequest(request: Request, env: Env, ctx?: Executi
   if (request.method === "POST" && url.pathname === "/v1/web/support/reply") return handleWebSupportReply(request, env)
   if (request.method === "POST" && url.pathname === "/v1/web/support/status") return handleWebSupportStatus(request, env)
   return json({ success: false, error: "support_not_found" }, 404)
+}
+
+type NotificationCursor = { createdAt: string; id: string }
+
+function encodeNotificationCursor(cursor: NotificationCursor): string {
+  return btoa(JSON.stringify(cursor))
+}
+
+function decodeNotificationCursor(value: unknown): NotificationCursor | null {
+  const raw = normalizeText(value)
+  if (!raw || raw.length > 500) return null
+  try {
+    const parsed = JSON.parse(atob(raw)) as Record<string, unknown>
+    const createdAt = normalizeText(parsed.createdAt)
+    const id = normalizeText(parsed.id)
+    return createdAt && id ? { createdAt, id } : null
+  } catch {
+    return null
+  }
+}
+
+async function handleWebNotificationsList(request: Request, env: Env): Promise<Response> {
+  const body = await request.json<PolicyRequest & { id_token?: string; cursor?: string; limit?: number }>().catch(() => null)
+  if (!body || typeof body !== "object") return json({ success: false, error: "invalid_payload" }, 400)
+  const scope = await requireWebSupportUser(request, env, body)
+  if (scope instanceof Response) return scope
+  const limit = Math.max(1, Math.min(NOTIFICATION_PAGE_MAX, Number(body.limit || 20)))
+  const cursor = decodeNotificationCursor(body.cursor)
+  const rows = cursor
+    ? await env.DB.prepare(
+        `SELECT id, type, title, body, title_ar, body_ar, linked_resource_type, linked_resource_id, payload_json, portal_status, email_status, read_at, created_at, updated_at
+         FROM portal_notifications
+         WHERE user_id = ?1 AND archived_at IS NULL
+           AND (datetime(created_at) < datetime(?2) OR (datetime(created_at) = datetime(?2) AND id < ?3))
+         ORDER BY datetime(created_at) DESC, id DESC
+         LIMIT ?4`
+      ).bind(scope.userId, cursor.createdAt, cursor.id, limit + 1).all<Record<string, unknown>>()
+    : await env.DB.prepare(
+        `SELECT id, type, title, body, title_ar, body_ar, linked_resource_type, linked_resource_id, payload_json, portal_status, email_status, read_at, created_at, updated_at
+         FROM portal_notifications
+         WHERE user_id = ?1 AND archived_at IS NULL
+         ORDER BY datetime(created_at) DESC, id DESC
+         LIMIT ?2`
+      ).bind(scope.userId, limit + 1).all<Record<string, unknown>>()
+  const allItems = rows.results || []
+  const items = allItems.slice(0, limit)
+  const last = items.at(-1)
+  const nextCursor = allItems.length > limit && last
+    ? encodeNotificationCursor({ createdAt: normalizeText(last.created_at), id: normalizeText(last.id) })
+    : null
+  const unread = await env.DB.prepare("SELECT COUNT(*) AS count FROM portal_notifications WHERE user_id = ?1 AND archived_at IS NULL AND read_at IS NULL")
+    .bind(scope.userId)
+    .first<{ count: number }>()
+  return json({ success: true, items, unread_count: Number(unread?.count || 0), next_cursor: nextCursor })
+}
+
+async function handleWebNotificationRead(request: Request, env: Env): Promise<Response> {
+  const body = await request.json<PolicyRequest & { id_token?: string; notification_id?: string }>().catch(() => null)
+  if (!body || typeof body !== "object") return json({ success: false, error: "invalid_payload" }, 400)
+  const scope = await requireWebSupportUser(request, env, body)
+  if (scope instanceof Response) return scope
+  const notificationId = clampText(body.notification_id, 160)
+  if (!notificationId) return json({ success: false, error: "notification_id_required" }, 400)
+  const result = await env.DB.prepare("UPDATE portal_notifications SET read_at = COALESCE(read_at, datetime('now')), updated_at = datetime('now') WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL")
+    .bind(notificationId, scope.userId)
+    .run()
+  if (!dbChanges(result)) return json({ success: false, error: "notification_not_found" }, 404)
+  return json({ success: true })
+}
+
+async function handleWebNotificationsReadAll(request: Request, env: Env): Promise<Response> {
+  const body = await request.json<PolicyRequest & { id_token?: string }>().catch(() => null)
+  if (!body || typeof body !== "object") return json({ success: false, error: "invalid_payload" }, 400)
+  const scope = await requireWebSupportUser(request, env, body)
+  if (scope instanceof Response) return scope
+  const result = await env.DB.prepare("UPDATE portal_notifications SET read_at = COALESCE(read_at, datetime('now')), updated_at = datetime('now') WHERE user_id = ?1 AND archived_at IS NULL AND read_at IS NULL")
+    .bind(scope.userId)
+    .run()
+  return json({ success: true, updated: dbChanges(result) })
+}
+
+async function handleWebNotificationArchive(request: Request, env: Env): Promise<Response> {
+  const body = await request.json<PolicyRequest & { id_token?: string; notification_id?: string }>().catch(() => null)
+  if (!body || typeof body !== "object") return json({ success: false, error: "invalid_payload" }, 400)
+  const scope = await requireWebSupportUser(request, env, body)
+  if (scope instanceof Response) return scope
+  const notificationId = clampText(body.notification_id, 160)
+  if (!notificationId) return json({ success: false, error: "notification_id_required" }, 400)
+  const result = await env.DB.prepare("UPDATE portal_notifications SET archived_at = datetime('now'), read_at = COALESCE(read_at, datetime('now')), updated_at = datetime('now') WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL")
+    .bind(notificationId, scope.userId)
+    .run()
+  if (!dbChanges(result)) return json({ success: false, error: "notification_not_found" }, 404)
+  return json({ success: true })
+}
+
+async function handleWebNotificationsRequest(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url)
+  if (request.method === "POST" && url.pathname === "/v1/web/notifications/list") return handleWebNotificationsList(request, env)
+  if (request.method === "POST" && url.pathname === "/v1/web/notifications/read") return handleWebNotificationRead(request, env)
+  if (request.method === "POST" && url.pathname === "/v1/web/notifications/read-all") return handleWebNotificationsReadAll(request, env)
+  if (request.method === "POST" && url.pathname === "/v1/web/notifications/archive") return handleWebNotificationArchive(request, env)
+  return json({ success: false, error: "notifications_not_found" }, 404)
 }
 
 type InviteValidationStatus = "valid" | "invalid" | "expired" | "already_used" | "blocked" | "policy_unavailable"
@@ -3114,12 +3559,16 @@ async function handleAdminSupportMessages(request: Request, env: Env): Promise<R
     .bind(threadId)
     .first<SupportThreadRow>()
   if (!thread) return json({ success: false, error: "thread_not_found" }, 404)
-  const messages = await env.DB.prepare("SELECT id, thread_id, sender, body, created_at FROM support_messages WHERE thread_id = ?1 ORDER BY datetime(created_at) ASC")
+  const messages = await env.DB.prepare("SELECT id, thread_id, sender, sender_role, delivery_mode, source, provider_message_id, body, created_at FROM support_messages WHERE thread_id = ?1 ORDER BY datetime(created_at) ASC")
     .bind(threadId)
     .all<SupportMessageRow>()
     .catch(() => ({ results: [] as SupportMessageRow[] }))
+  const audit = await env.DB.prepare("SELECT id, event_type, actor_role, actor_id, message_id, metadata_json, created_at FROM support_audit_events WHERE thread_id = ?1 ORDER BY datetime(created_at) ASC LIMIT 200")
+    .bind(threadId)
+    .all<Record<string, unknown>>()
+    .catch(() => ({ results: [] as Record<string, unknown>[] }))
   await env.DB.prepare("UPDATE support_threads SET admin_last_read_at = datetime('now') WHERE id = ?1").bind(threadId).run()
-  return json({ success: true, thread, messages: messages.results || [] })
+  return json({ success: true, thread: normalizeSupportThread(thread), messages: (messages.results || []).map(normalizeSupportMessage), audit: audit.results || [] })
 }
 
 async function handleAdminSupportBlock(request: Request, env: Env): Promise<Response> {
@@ -3142,26 +3591,36 @@ async function handleAdminSupportBlock(request: Request, env: Env): Promise<Resp
   const blocked = parseBooleanInput(body.blocked)
 
   if (blocked) {
-    await env.DB.prepare(
-      `INSERT INTO support_message_blocks (id, user_id, email, install_id, device_id, reason, active, created_at, updated_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, datetime('now'), datetime('now'))`
-    )
-      .bind(
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO support_message_blocks (id, user_id, email, install_id, device_id, reason, active, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, datetime('now'), datetime('now'))`
+      ).bind(
         crypto.randomUUID(),
         userId || null,
         email || null,
         installId || null,
         deviceId || null,
         clampText(body.reason, 300) || "admin_block"
-      )
-      .run()
-    return json({ success: true, blocked: true })
+      ),
+      env.DB.prepare(`UPDATE support_threads SET status_before_block = status, status = 'blocked', blocked_at = datetime('now'), updated_at = datetime('now') WHERE ${supportScopeSql("", 1)}`)
+        .bind(userId, email, installId, deviceId),
+      env.DB.prepare("INSERT INTO support_audit_events (id, thread_id, event_type, actor_role, metadata_json, created_at) VALUES (?1, ?2, 'sender_blocked', 'admin', ?3, datetime('now'))")
+        .bind(crypto.randomUUID(), threadId, toJsonText({ reason: clampText(body.reason, 300) || "admin_block" }, {})),
+    ])
+    return json({ success: true, blocked: true, status: "blocked" })
   }
 
-  await env.DB.prepare(`UPDATE support_message_blocks SET active = 0, updated_at = datetime('now') WHERE active = 1 AND ${supportScopeSql("", 1)}`)
-    .bind(userId, email, installId, deviceId)
-    .run()
-  return json({ success: true, blocked: false })
+  await env.DB.batch([
+    env.DB.prepare(`UPDATE support_message_blocks SET active = 0, updated_at = datetime('now') WHERE active = 1 AND ${supportScopeSql("", 1)}`)
+      .bind(userId, email, installId, deviceId),
+    env.DB.prepare(`UPDATE support_threads SET status = COALESCE(NULLIF(status_before_block, ''), 'awaiting_support'), status_before_block = NULL, blocked_at = NULL, updated_at = datetime('now') WHERE status = 'blocked' AND ${supportScopeSql("", 1)}`)
+      .bind(userId, email, installId, deviceId),
+    env.DB.prepare("INSERT INTO support_audit_events (id, thread_id, event_type, actor_role, metadata_json, created_at) VALUES (?1, ?2, 'sender_unblocked', 'admin', '{}', datetime('now'))")
+      .bind(crypto.randomUUID(), threadId),
+  ])
+  const restored = await env.DB.prepare("SELECT status FROM support_threads WHERE id = ?1 LIMIT 1").bind(threadId).first<{ status: string }>()
+  return json({ success: true, blocked: false, status: canonicalSupportStatus(restored?.status) })
 }
 
 async function handleAdminSupportReply(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
@@ -3170,43 +3629,128 @@ async function handleAdminSupportReply(request: Request, env: Env, ctx?: Executi
   const message = clampMultilineText(body.body || body.message, 4000)
   const internalNote = parseBooleanInput(body.internal_note)
   const emailRequested = body.email_requested === undefined ? true : parseBooleanInput(body.email_requested)
+  const deliveryMode: SupportDeliveryMode = internalNote ? "portal_only" : emailRequested ? "portal_and_email" : "portal_only"
+  const idempotencyKey = supportIdempotencyKey(body.idempotency_key || request.headers.get("Idempotency-Key")) || crypto.randomUUID()
   if (!threadId) return json({ success: false, error: "thread_id_required" }, 400)
   if (!message) return json({ success: false, error: "message_required" }, 400)
+  const duplicate = await env.DB.prepare("SELECT id FROM support_messages WHERE idempotency_key = ?1 AND thread_id = ?2 LIMIT 1")
+    .bind(idempotencyKey, threadId)
+    .first<{ id: string }>()
+  if (duplicate?.id) return json({ success: true, duplicate: true })
   const thread = await env.DB.prepare("SELECT * FROM support_threads WHERE id = ?1").bind(threadId).first<SupportThreadRow>()
   if (!thread) return json({ success: false, error: "thread_not_found" }, 404)
+  const currentStatus = canonicalSupportStatus(thread.status)
+  if (!internalNote && currentStatus === "blocked") return json({ success: false, error: "support_blocked" }, 409)
   const messageId = crypto.randomUUID()
-  await env.DB.prepare("INSERT INTO support_messages (id, thread_id, sender, body, created_at) VALUES (?1, ?2, ?3, ?4, datetime('now'))")
-    .bind(messageId, threadId, internalNote ? "internal" : "admin", message)
-    .run()
-  await env.DB.prepare(internalNote
-    ? "UPDATE support_threads SET admin_last_read_at = datetime('now'), updated_at = datetime('now') WHERE id = ?1"
-    : "UPDATE support_threads SET status = 'waiting_for_customer', admin_last_read_at = datetime('now'), updated_at = datetime('now') WHERE id = ?1")
+  const senderRole: SupportSenderRole = internalNote ? "internal_note" : "support_agent"
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO support_messages (id, thread_id, sender, sender_role, delivery_mode, idempotency_key, source, body, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'portal', ?7, datetime('now'))")
+      .bind(messageId, threadId, internalNote ? "internal" : "admin", senderRole, deliveryMode, idempotencyKey, message),
+    env.DB.prepare(internalNote
+      ? "UPDATE support_threads SET admin_last_read_at = datetime('now'), updated_at = datetime('now') WHERE id = ?1"
+      : "UPDATE support_threads SET status = 'awaiting_customer', last_support_reply_at = datetime('now'), admin_last_read_at = datetime('now'), updated_at = datetime('now') WHERE id = ?1")
+      .bind(threadId),
+    env.DB.prepare("INSERT INTO support_audit_events (id, thread_id, event_type, actor_role, message_id, metadata_json, created_at) VALUES (?1, ?2, ?3, 'admin', ?4, ?5, datetime('now'))")
+      .bind(crypto.randomUUID(), threadId, internalNote ? "internal_note_added" : "support_reply", messageId, toJsonText({ delivery_mode: deliveryMode }, {})),
+  ])
+
+  if (internalNote) return json({ success: true, delivery_mode: deliveryMode })
+
+  const notificationId = await createPortalNotification(env, {
+    idempotencyKey: `support-reply:${messageId}`,
+    userId: thread.user_id,
+    type: "support_reply",
+    title: "Support replied to your ticket",
+    body: message,
+    titleAr: "رد جديد من الدعم",
+    bodyAr: message,
+    linkedResourceType: "support_ticket",
+    linkedResourceId: thread.id,
+    payload: { status: "awaiting_customer" },
+    emailStatus: emailRequested ? "queued" : "not_requested",
+  })
+
+  let emailJobId: string | null = null
+  if (emailRequested) emailJobId = await queueSupportAdminReplyEmail(env, thread, messageId, message, ctx)
+  if (notificationId) {
+    const emailStatus = !emailRequested ? "not_requested" : emailJobId ? "queued" : "failed"
+    await env.DB.prepare("UPDATE portal_notifications SET email_job_id = ?1, email_status = ?2, updated_at = datetime('now') WHERE id = ?3")
+      .bind(emailJobId, emailStatus, notificationId)
+      .run()
+  }
+  return json({ success: true, delivery_mode: deliveryMode, email_queued: Boolean(emailJobId) })
+}
+
+async function handleAdminSupportPriority(request: Request, env: Env): Promise<Response> {
+  const body = (await request.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
+  const threadId = normalizeText(body.thread_id)
+  const priority = normalizeLower(body.priority)
+  if (!threadId) return json({ success: false, error: "thread_id_required" }, 400)
+  if (!["low", "normal", "high", "urgent"].includes(priority)) return json({ success: false, error: "invalid_priority" }, 400)
+  const thread = await env.DB.prepare("SELECT id, priority FROM support_threads WHERE id = ?1 LIMIT 1")
     .bind(threadId)
-    .run()
-  if (!internalNote && emailRequested) await queueSupportAdminReplyEmail(env, thread, messageId, message, ctx)
-  return json({ success: true })
+    .first<{ id: string; priority: string | null }>()
+  if (!thread) return json({ success: false, error: "thread_not_found" }, 404)
+  await env.DB.batch([
+    env.DB.prepare("UPDATE support_threads SET priority = ?1, updated_at = datetime('now') WHERE id = ?2").bind(priority, threadId),
+    env.DB.prepare("INSERT INTO support_audit_events (id, thread_id, event_type, actor_role, metadata_json, created_at) VALUES (?1, ?2, 'priority_changed', 'admin', ?3, datetime('now'))")
+      .bind(crypto.randomUUID(), threadId, toJsonText({ from: thread.priority || "normal", to: priority }, {})),
+  ])
+  return json({ success: true, priority })
 }
 
 async function handleAdminSupportStatus(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
   const body = (await request.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
   const threadId = normalizeText(body.thread_id)
-  const status = normalizeLower(body.status)
+  const requestedStatus = normalizeLower(body.status)
   const reason = clampText(body.reason, 300)
+  const idempotencyKey = supportIdempotencyKey(body.idempotency_key || request.headers.get("Idempotency-Key")) || crypto.randomUUID()
   if (!threadId) return json({ success: false, error: "thread_id_required" }, 400)
-  if (!["open", "waiting_for_support", "waiting_for_customer", "resolved", "closed"].includes(status)) {
+  if (!["open", "waiting_for_support", "waiting_for_customer", "awaiting_support", "awaiting_customer", "resolved", "closed", "reopened"].includes(requestedStatus)) {
     return json({ success: false, error: "invalid_status" }, 400)
   }
   const thread = await env.DB.prepare("SELECT * FROM support_threads WHERE id = ?1").bind(threadId).first<SupportThreadRow>()
   if (!thread) return json({ success: false, error: "thread_not_found" }, 404)
-  await env.DB.prepare("UPDATE support_threads SET status = ?1, updated_at = datetime('now') WHERE id = ?2")
-    .bind(status, threadId)
-    .run()
+  const currentStatus = canonicalSupportStatus(thread.status)
+  const status = canonicalSupportStatus(requestedStatus)
+  if (!supportStatusCanTransition(currentStatus, status, "support_agent")) {
+    return json({ success: false, error: "invalid_status_transition" }, 409)
+  }
+  const duplicate = await env.DB.prepare("SELECT id FROM support_messages WHERE idempotency_key = ?1 AND thread_id = ?2 LIMIT 1")
+    .bind(idempotencyKey, threadId)
+    .first<{ id: string }>()
+  if (duplicate?.id) return json({ success: true, status, duplicate: true })
   const bodyText = reason ? `status:${status}; reason:${reason}` : `status:${status}`
-  await env.DB.prepare("INSERT INTO support_messages (id, thread_id, sender, body, created_at) VALUES (?1, ?2, 'system', ?3, datetime('now'))")
-    .bind(crypto.randomUUID(), threadId, bodyText)
-    .run()
-  await queueSupportStatusEmail(env, { ...thread, status }, status, ctx)
-  return json({ success: true, status })
+  const messageId = crypto.randomUUID()
+  await env.DB.batch([
+    env.DB.prepare("UPDATE support_threads SET status = ?1, closed_at = CASE WHEN ?1 = 'closed' THEN datetime('now') ELSE closed_at END, reopened_at = CASE WHEN ?1 = 'reopened' THEN datetime('now') ELSE reopened_at END, updated_at = datetime('now') WHERE id = ?2")
+      .bind(status, threadId),
+    env.DB.prepare("INSERT INTO support_messages (id, thread_id, sender, sender_role, delivery_mode, idempotency_key, source, body, created_at) VALUES (?1, ?2, 'system', 'system', 'portal_only', ?3, 'system', ?4, datetime('now'))")
+      .bind(messageId, threadId, idempotencyKey, bodyText),
+    env.DB.prepare("INSERT INTO support_audit_events (id, thread_id, event_type, actor_role, message_id, metadata_json, created_at) VALUES (?1, ?2, 'status_changed', 'admin', ?3, ?4, datetime('now'))")
+      .bind(crypto.randomUUID(), threadId, messageId, toJsonText({ from: currentStatus, to: status, reason: reason || undefined }, {})),
+  ])
+
+  const notificationId = await createPortalNotification(env, {
+    idempotencyKey: `support-status:${messageId}`,
+    userId: thread.user_id,
+    type: "support_status_changed",
+    title: "Support ticket status changed",
+    body: `Ticket status: ${status}`,
+    titleAr: "تغيرت حالة تذكرة الدعم",
+    bodyAr: `حالة التذكرة: ${status}`,
+    linkedResourceType: "support_ticket",
+    linkedResourceId: thread.id,
+    payload: { status, previous_status: currentStatus },
+    emailStatus: ["closed", "reopened", "open"].includes(status) ? "queued" : "not_requested",
+  })
+  const emailJobId = await queueSupportStatusEmail(env, { ...thread, status }, status, ctx)
+  if (notificationId) {
+    await env.DB.prepare("UPDATE portal_notifications SET email_job_id = ?1, email_status = ?2, updated_at = datetime('now') WHERE id = ?3")
+      .bind(emailJobId, emailJobId ? "queued" : "not_requested", notificationId)
+      .run()
+  }
+  return json({ success: true, status, email_queued: Boolean(emailJobId) })
 }
 
 async function handleAdminRequest(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
@@ -3223,6 +3767,7 @@ async function handleAdminRequest(request: Request, env: Env, ctx?: ExecutionCon
   if (request.method === "GET" && url.pathname === "/v1/admin/support/messages") return handleAdminSupportMessages(request, env)
   if (request.method === "POST" && url.pathname === "/v1/admin/support/block") return handleAdminSupportBlock(request, env)
   if (request.method === "POST" && url.pathname === "/v1/admin/support/reply") return handleAdminSupportReply(request, env, ctx)
+  if (request.method === "POST" && url.pathname === "/v1/admin/support/priority") return handleAdminSupportPriority(request, env)
   if (request.method === "POST" && url.pathname === "/v1/admin/support/status") return handleAdminSupportStatus(request, env, ctx)
   if (request.method === "GET" && url.pathname === "/v1/admin/email/status") return handleAdminEmailStatus(env)
   if ((request.method === "GET" || request.method === "POST") && url.pathname === "/v1/admin/email/preview") return handleAdminEmailPreview(request, env)
@@ -3253,6 +3798,10 @@ export default {
       }
       if (url.pathname === "/v1/internal/email/auth/enqueue") {
         return await handleInternalAuthEmailEnqueue(request, env)
+      }
+      if (url.pathname.startsWith("/v1/web/notifications/")) {
+        const res = await handleWebNotificationsRequest(request, env)
+        return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
       }
       if (url.pathname.startsWith("/v1/web/support/")) {
         const res = await handleWebSupportRequest(request, env, ctx)

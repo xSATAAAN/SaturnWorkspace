@@ -214,6 +214,10 @@ export type AdminSupportThread = {
   last_message_at?: string | null
   unread_count?: number
   support_blocked?: boolean | number
+  priority?: 'low' | 'normal' | 'high' | 'urgent' | string
+  assigned_admin_id?: string | null
+  last_customer_reply_at?: string | null
+  last_support_reply_at?: string | null
 }
 
 export type AdminSupportMessage = {
@@ -221,6 +225,20 @@ export type AdminSupportMessage = {
   thread_id: string
   sender: 'user' | 'admin' | 'system' | 'internal' | string
   body: string
+  created_at?: string
+  sender_role?: string | null
+  delivery_mode?: string | null
+  source?: string | null
+  provider_message_id?: string | null
+}
+
+export type AdminSupportAuditEvent = {
+  id: string
+  event_type: string
+  actor_role: string
+  actor_id?: string | null
+  message_id?: string | null
+  metadata_json?: string | null
   created_at?: string
 }
 
@@ -663,27 +681,38 @@ export async function fetchSupportThreads() {
 }
 
 export async function fetchSupportMessages(threadId: string) {
-  return adminFetch<{ success: boolean; thread?: AdminSupportThread; messages: AdminSupportMessage[] }>(
+  return adminFetch<{ success: boolean; thread?: AdminSupportThread; messages: AdminSupportMessage[]; audit?: AdminSupportAuditEvent[] }>(
     `/policy/support/messages?thread_id=${encodeURIComponent(threadId)}`,
   )
 }
 
-export async function sendSupportReply(payload: { thread_id: string; body: string; internal_note?: boolean; email_requested?: boolean }) {
+export async function sendSupportReply(payload: { thread_id: string; body: string; internal_note?: boolean; email_requested?: boolean; idempotency_key?: string }) {
+  const idempotencyKey = payload.idempotency_key || crypto.randomUUID()
   return adminFetch<{ success: boolean }>('/policy/support/reply', {
     method: 'POST',
-    body: JSON.stringify(payload),
+    headers: { 'Idempotency-Key': idempotencyKey },
+    body: JSON.stringify({ ...payload, idempotency_key: idempotencyKey }),
   })
 }
 
-export async function updateAdminSupportStatus(payload: { thread_id: string; status: string; reason?: string }) {
+export async function updateAdminSupportStatus(payload: { thread_id: string; status: string; reason?: string; idempotency_key?: string }) {
+  const idempotencyKey = payload.idempotency_key || crypto.randomUUID()
   return adminFetch<{ success: boolean; status?: string }>('/policy/support/status', {
+    method: 'POST',
+    headers: { 'Idempotency-Key': idempotencyKey },
+    body: JSON.stringify({ ...payload, idempotency_key: idempotencyKey }),
+  })
+}
+
+export async function updateAdminSupportPriority(payload: { thread_id: string; priority: 'low' | 'normal' | 'high' | 'urgent' }) {
+  return adminFetch<{ success: boolean; priority?: string }>('/policy/support/priority', {
     method: 'POST',
     body: JSON.stringify(payload),
   })
 }
 
 export async function setSupportBlocked(payload: { thread_id: string; blocked: boolean; reason?: string }) {
-  return adminFetch<{ success: boolean; blocked?: boolean }>('/policy/support/block', {
+  return adminFetch<{ success: boolean; blocked?: boolean; status?: string }>('/policy/support/block', {
     method: 'POST',
     body: JSON.stringify(payload),
   })

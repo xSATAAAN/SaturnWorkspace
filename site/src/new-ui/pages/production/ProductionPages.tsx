@@ -1,10 +1,12 @@
-﻿import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import {
   ArrowLeft,
   ArrowRight,
+  Archive,
   Bell,
   Bug,
   Check,
+  CheckCheck,
   Copy,
   CreditCard,
   Download,
@@ -28,7 +30,7 @@ import {
 import type { AdminAuditLogItem, AdminCrashGroup, AdminCrashLog, AdminEmailCatalogItem, AdminEmailJob, AdminEmailProviderEvent, AdminEmailRecipientFlag, AdminEmailStatus, AdminInboundEmailMessage, AdminRemoteControls, AdminScheduledEmail, AdminSubscription, AdminSupportThread, ManualGrantPreview } from '../../../api/admin'
 import type { AccountSession, AccountSubscription } from '../../../api/account'
 import { useAdapters } from '../../adapters/AdapterProvider'
-import type { CustomerSupportThread, PlanInfo, ReleaseInfo, SupportSenderRole } from '../../adapters/contracts'
+import type { AccountNotification, CustomerSupportThread, PlanInfo, ReleaseInfo, SupportSenderRole } from '../../adapters/contracts'
 import { useExperience } from '../../app/ExperienceProvider'
 import { createAuthRoute, createPricingReturnState, currentInternalLocation, readAuthIntent, readCheckoutPlan } from '../../app/navigationIntent'
 import { routeFromInternalUrl } from '../../app/productionRouter'
@@ -135,9 +137,9 @@ function stableTicketNumber(id: string, createdAt?: string | null, updatedAt?: s
 
 function supportStatusTone(status?: string) {
   const normalized = String(status || 'open').toLowerCase()
-  if (normalized === 'closed') return 'neutral' as const
+  if (normalized === 'closed' || normalized === 'blocked') return 'neutral' as const
   if (normalized === 'resolved') return 'success' as const
-  if (normalized === 'waiting_for_customer' || normalized === 'answered') return 'warning' as const
+  if (normalized === 'waiting_for_customer' || normalized === 'awaiting_customer' || normalized === 'answered') return 'warning' as const
   return 'info' as const
 }
 
@@ -146,10 +148,14 @@ function supportStatusLabel(status: string | undefined, locale: 'ar' | 'en') {
   const labels: Record<string, { en: string; ar: string }> = {
     open: { en: 'Open', ar: 'مفتوحة' },
     waiting_for_support: { en: 'Waiting for support', ar: 'بانتظار الدعم' },
+    awaiting_support: { en: 'Waiting for support', ar: 'بانتظار الدعم' },
     waiting_for_customer: { en: 'Waiting for customer', ar: 'بانتظار العميل' },
+    awaiting_customer: { en: 'Waiting for customer', ar: 'بانتظار العميل' },
     answered: { en: 'Waiting for customer', ar: 'بانتظار العميل' },
     resolved: { en: 'Resolved', ar: 'تم الحل' },
     closed: { en: 'Closed', ar: 'مغلقة' },
+    reopened: { en: 'Reopened', ar: 'أعيد فتحها' },
+    blocked: { en: 'Blocked', ar: 'محظورة' },
   }
   const item = labels[normalized] || labels.open
   return locale === 'ar' ? item.ar : item.en
@@ -161,6 +167,7 @@ function supportSenderRole(sender: string | undefined, explicitRole?: SupportSen
   if (normalized === 'admin' || normalized === 'support' || normalized === 'support_agent' || normalized === 'agent') return 'support_agent'
   if (normalized === 'internal' || normalized === 'internal_note') return 'internal_note'
   if (normalized === 'system') return 'system'
+  if (normalized === 'email_inbound') return 'email_inbound'
   return 'customer'
 }
 
@@ -168,11 +175,33 @@ function supportSenderLabel(role: SupportSenderRole, locale: 'ar' | 'en') {
   if (role === 'support_agent') return copyByLocale(locale, 'Support', 'الدعم')
   if (role === 'internal_note') return copyByLocale(locale, 'Internal note', 'ملاحظة داخلية')
   if (role === 'system') return copyByLocale(locale, 'System', 'النظام')
+  if (role === 'email_inbound') return copyByLocale(locale, 'Customer by email', 'العميل عبر البريد')
   return copyByLocale(locale, 'Customer', 'العميل')
 }
 
 function supportMessageClass(role: SupportSenderRole) {
   return `support-message support-message--${role}`
+}
+
+function supportAuditLabel(eventType: string, locale: 'ar' | 'en') {
+  const labels: Record<string, { en: string; ar: string }> = {
+    ticket_created: { en: 'Ticket created', ar: 'إنشاء التذكرة' },
+    customer_reply: { en: 'Customer replied', ar: 'رد العميل' },
+    support_reply: { en: 'Support replied', ar: 'رد الدعم' },
+    internal_note_added: { en: 'Internal note added', ar: 'إضافة ملاحظة داخلية' },
+    status_changed: { en: 'Status changed', ar: 'تغيير الحالة' },
+    priority_changed: { en: 'Priority changed', ar: 'تغيير الأولوية' },
+    ticket_closed: { en: 'Ticket closed', ar: 'إغلاق التذكرة' },
+    ticket_reopened: { en: 'Ticket reopened', ar: 'إعادة فتح التذكرة' },
+    sender_blocked: { en: 'Sender blocked', ar: 'حظر المرسل' },
+    sender_unblocked: { en: 'Sender unblocked', ar: 'إلغاء حظر المرسل' },
+    inbound_email_processed: { en: 'Email reply received', ar: 'استلام رد عبر البريد' },
+    email_delivery_failed: { en: 'Email delivery failed', ar: 'فشل تسليم البريد' },
+    email_delivery_retry_scheduled: { en: 'Email retry scheduled', ar: 'جدولة إعادة إرسال البريد' },
+    email_retry_requested: { en: 'Email retry requested', ar: 'طلب إعادة إرسال البريد' },
+  }
+  const item = labels[eventType] || { en: 'Support activity', ar: 'نشاط دعم' }
+  return locale === 'ar' ? item.ar : item.en
 }
 
 function supportErrorMessage(error: unknown, locale: 'ar' | 'en') {
@@ -187,6 +216,8 @@ function supportErrorMessage(error: unknown, locale: 'ar' | 'en') {
   if (key === 'support_rate_limited') {
     return copyByLocale(locale, 'Daily support message limit reached. Try again later.', 'تم الوصول إلى الحد اليومي لرسائل الدعم. حاول لاحقًا.')
   }
+  if (key === 'support_blocked') return copyByLocale(locale, 'Support messaging is unavailable for this account.', 'إرسال رسائل الدعم غير متاح لهذا الحساب.')
+  if (key === 'ticket_closed') return copyByLocale(locale, 'Reopen the ticket before sending another reply.', 'أعد فتح التذكرة قبل إرسال رد جديد.')
   if (key === 'network_unavailable' || key.includes('failed to fetch') || key.includes('network')) {
     return copyByLocale(locale, 'Unable to reach the server right now. Check the connection and retry.', 'تعذر الوصول إلى الخادم حاليًا. تحقق من الاتصال ثم أعد المحاولة.')
   }
@@ -266,14 +297,16 @@ function useAsyncData<T>(load: () => Promise<T>, deps: React.DependencyList): As
   const [state, setState] = useState<Omit<AsyncResource<T>, 'reload'>>({ status: 'idle', loading: true, refreshing: false, data: null, error: null })
   useEffect(() => {
     let alive = true
-    setState((previous) => ({
-      ...previous,
-      status: previous.data ? 'refreshing' : 'loading_initial',
-      loading: !previous.data,
-      refreshing: Boolean(previous.data),
-      error: null,
-    }))
     Promise.resolve()
+      .then(() => {
+        if (alive) setState((previous) => ({
+          ...previous,
+          status: previous.data ? 'refreshing' : 'loading_initial',
+          loading: !previous.data,
+          refreshing: Boolean(previous.data),
+          error: null,
+        }))
+      })
       .then(load)
       .then((data) => {
         if (alive) setState({ status: isEmptyAsyncData(data) ? 'empty' : 'success', loading: false, refreshing: false, data, error: null })
@@ -483,11 +516,11 @@ function PublicContact({ navigate }: { navigate: Navigate }) {
   const { ready, user } = useAuthState()
   const supportRoute = ready && user ? { surface: 'portal' as const, page: 'support' } : createAuthRoute('signin', { returnTo: '/account/support' })
   const channels = [
-    { title: copyByLocale(locale, 'Billing', 'الفوترة'), body: copyByLocale(locale, 'Invoices, renewal, and subscription questions.', 'الفواتير والتجديد وأسئلة الاشتراك.'), icon: CreditCard },
-    { title: copyByLocale(locale, 'Security', 'الأمان'), body: copyByLocale(locale, 'Account access, device activity, and privacy concerns.', 'الوصول للحساب ونشاط الأجهزة وطلبات الخصوصية.'), icon: ShieldCheck },
-    { title: copyByLocale(locale, 'General', 'استفسار عام'), body: copyByLocale(locale, 'Product questions before creating an account.', 'أسئلة المنتج قبل إنشاء الحساب.'), icon: Mail },
+    { title: copyByLocale(locale, 'Billing', 'الفوترة'), body: copyByLocale(locale, 'Invoices, renewal, and subscription questions.', 'الفواتير والتجديد وأسئلة الاشتراك.'), email: 'billing@saturnws.com', icon: CreditCard },
+    { title: copyByLocale(locale, 'Security', 'الأمان'), body: copyByLocale(locale, 'Account access, device activity, and privacy concerns.', 'الوصول للحساب ونشاط الأجهزة وطلبات الخصوصية.'), email: 'security@saturnws.com', icon: ShieldCheck },
+    { title: copyByLocale(locale, 'General', 'استفسار عام'), body: copyByLocale(locale, 'Product questions before creating an account.', 'أسئلة المنتج قبل إنشاء الحساب.'), email: 'hello@saturnws.com', icon: Mail },
   ]
-  return <div className="marketing-section page-enter"><div className="container contact-page"><header className="marketing-heading marketing-heading--center"><LifeBuoy size={28} /><h1>{t('contact')}</h1><p>{copyByLocale(locale, 'Choose the topic that matches your request.', 'اختر الموضوع المناسب لطلبك.')}</p></header><div className="contact-grid">{channels.map(({ title, body, icon: Icon }) => <Card key={title}><SectionHeader title={title} description={body} action={<Icon size={18} />} /></Card>)}<Card className="contact-support-card"><SectionHeader title={t('support')} description={copyByLocale(locale, 'For account help, create a ticket after signing in.', 'للمساعدة المتعلقة بالحساب، أنشئ تذكرة بعد تسجيل الدخول.')} /><div className="cluster"><Button variant="primary" disabled={!ready} onClick={() => navigate(supportRoute)}>{t('createTicket')}</Button><Button variant="secondary" onClick={() => navigate({ surface: 'public', page: 'faq' })}>{t('faq')}</Button></div></Card></div></div></div>
+  return <div className="marketing-section page-enter"><div className="container contact-page"><header className="marketing-heading marketing-heading--center"><LifeBuoy size={28} /><h1>{t('contact')}</h1><p>{copyByLocale(locale, 'Choose the topic that matches your request.', 'اختر الموضوع المناسب لطلبك.')}</p></header><div className="contact-grid">{channels.map(({ title, body, email, icon: Icon }) => <Card key={title}><SectionHeader title={title} description={<>{body}<a className="contact-email" href={`mailto:${email}`}>{email}</a></>} action={<Icon size={18} />} /></Card>)}<Card className="contact-support-card"><SectionHeader title={t('support')} description={copyByLocale(locale, 'For account help, create a ticket after signing in.', 'للمساعدة المتعلقة بالحساب، أنشئ تذكرة بعد تسجيل الدخول.')} /><div className="cluster"><Button variant="primary" disabled={!ready} onClick={() => navigate(supportRoute)}>{t('createTicket')}</Button><Button variant="secondary" onClick={() => navigate({ surface: 'public', page: 'faq' })}>{t('faq')}</Button></div></Card></div></div></div>
 }
 
 function LegalSection({ page }: { page: string }) {
@@ -538,7 +571,7 @@ function EmailPasswordProductionPage({ page, routeState, navigate }: { page: str
   const completionStartedRef = useRef(false)
   const passwordLongEnough = password.length >= 6
   const passwordsMatch = Boolean(confirmPassword) && password === confirmPassword
-  const finishActivationIfNeeded = async () => {
+  const finishActivationIfNeeded = useCallback(async () => {
     if (!activationPayload) return false
     if (completionStartedRef.current) return true
     completionStartedRef.current = true
@@ -547,18 +580,27 @@ function EmailPasswordProductionPage({ page, routeState, navigate }: { page: str
     await completeDeviceActivation(token, activationPayload)
     navigate({ surface: 'auth', page: 'linked' })
     return true
-  }
+  }, [activationPayload, auth, navigate])
   useEffect(() => {
     if (!activationPayload || !authState.ready || !authState.user || completionStartedRef.current) return
-    setLoading(true)
-    setError('')
-    finishActivationIfNeeded()
-      .catch((err) => {
-        completionStartedRef.current = false
-        setError(deviceActivationErrorMessage(err, locale))
-      })
-      .finally(() => setLoading(false))
-  }, [activationPayload, authState.ready, authState.user?.id, locale])
+    let cancelled = false
+    queueMicrotask(() => {
+      if (cancelled) return
+      setLoading(true)
+      setError('')
+      finishActivationIfNeeded()
+        .catch((err) => {
+          completionStartedRef.current = false
+          if (!cancelled) setError(deviceActivationErrorMessage(err, locale))
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false)
+        })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [activationPayload, authState.ready, authState.user, finishActivationIfNeeded, locale])
   const submit = async (event: FormEvent) => {
     event.preventDefault()
     setError('')
@@ -700,7 +742,7 @@ export function PortalProductionPages({ page, navigate }: { page: string; naviga
   const title = groups[0].items.find((item) => item.id === page)?.label || t('overview')
   if (!authState.ready) return <WorkspaceShell surface="portal" page={page} title={title} groups={groups} navigate={navigate}><PortalRouteSkeleton page={page} /></WorkspaceShell>
   if (!authState.user) return <FullPageState icon={KeyRound} title={t('signIn')} body={t('signInBody')} primaryLabel={t('signIn')} onPrimary={() => navigate(createAuthRoute('signin', { returnTo: currentInternalLocation() }))} secondaryLabel={t('signUp')} onSecondary={() => navigate(createAuthRoute('signup', { returnTo: currentInternalLocation() }))} />
-  return <WorkspaceShell surface="portal" page={page} title={title} groups={groups} navigate={navigate}>{page === 'subscription' ? <PortalSubscription /> : page === 'downloads' ? <PortalDownloads /> : page === 'support' ? <PortalSupport /> : page === 'security' || page === 'settings' ? <PortalSettings /> : page === 'payments' ? <PortalPayments /> : page === 'devices' ? <PortalDevices /> : page === 'notifications' ? <PortalNotifications /> : <PortalOverview navigate={navigate} />}</WorkspaceShell>
+  return <WorkspaceShell surface="portal" page={page} title={title} groups={groups} navigate={navigate}>{page === 'subscription' ? <PortalSubscription /> : page === 'downloads' ? <PortalDownloads /> : page === 'support' ? <PortalSupport /> : page === 'security' || page === 'settings' ? <PortalSettings /> : page === 'payments' ? <PortalPayments /> : page === 'devices' ? <PortalDevices /> : page === 'notifications' ? <PortalNotifications navigate={navigate} /> : <PortalOverview navigate={navigate} />}</WorkspaceShell>
 }
 
 function PortalRouteSkeleton({ page }: { page: string }) {
@@ -717,7 +759,8 @@ function PortalOverview({ navigate }: { navigate: Navigate }) {
   const adapters = useAdapters()
   const subscription = useAsyncData(() => adapters.account.getSubscription(), [adapters])
   const release = useAsyncData(() => adapters.releases.getLatest('beta'), [adapters])
-  return <><PageHeader title={t('overview')} />{subscription.error ? <ErrorBlock error={subscription.error} onRetry={subscription.reload} /> : null}<div className="portal-overview-grid"><div className="stack"><SubscriptionSummary data={subscription.data} loading={subscription.loading} navigate={navigate} />{subscription.refreshing ? <Alert title={copyByLocale(locale, 'Refreshing account data', 'يتم تحديث بيانات الحساب')} tone="info" /> : null}<Card><SectionHeader title={t('latestRelease')} action={<Button variant="text" onClick={() => navigate({ surface: 'portal', page: 'downloads' })}>{t('viewAll')}</Button>} />{release.loading ? <SkeletonStack rows={4} /> : release.error ? <ErrorBlock error={release.error} onRetry={release.reload} /> : <DownloadCard title={t('downloadForWindows')} version={release.data?.version || t('unavailable')} meta={[release.data?.available ? t('active') : t('unavailable')]} buttonLabel={t('downloads')} disabled={!release.data?.available} onClick={() => { if (release.data?.downloadUrl) window.location.href = release.data.downloadUrl }} />}</Card></div><aside className="portal-notices"><SectionHeader title={t('notifications')} /><Alert title={t('noNotifications')} tone="info">{copyByLocale(locale, 'Important account messages will appear here.', 'ستظهر رسائل الحساب المهمة هنا.')}</Alert></aside></div></>
+  const notifications = useAsyncData(() => adapters.notifications.list({ limit: 3 }), [adapters])
+  return <><PageHeader title={t('overview')} />{subscription.error ? <ErrorBlock error={subscription.error} onRetry={subscription.reload} /> : null}<div className="portal-overview-grid"><div className="stack"><SubscriptionSummary data={subscription.data} loading={subscription.loading} navigate={navigate} />{subscription.refreshing ? <Alert title={copyByLocale(locale, 'Refreshing account data', 'يتم تحديث بيانات الحساب')} tone="info" /> : null}<Card><SectionHeader title={t('latestRelease')} action={<Button variant="text" onClick={() => navigate({ surface: 'portal', page: 'downloads' })}>{t('viewAll')}</Button>} />{release.loading ? <SkeletonStack rows={4} /> : release.error ? <ErrorBlock error={release.error} onRetry={release.reload} /> : <DownloadCard title={t('downloadForWindows')} version={release.data?.version || t('unavailable')} meta={[release.data?.available ? t('active') : t('unavailable')]} buttonLabel={t('downloads')} disabled={!release.data?.available} onClick={() => { if (release.data?.downloadUrl) window.location.href = release.data.downloadUrl }} />}</Card></div><aside className="portal-notices"><SectionHeader title={t('notifications')} action={<Button variant="text" onClick={() => navigate({ surface: 'portal', page: 'notifications' })}>{t('viewAll')}</Button>} />{notifications.loading ? <SkeletonStack rows={3} /> : notifications.error ? <ErrorBlock error={notifications.error} onRetry={notifications.reload} /> : notifications.data?.items.length ? notifications.data.items.map((item) => <NotificationSummary key={item.id} item={item} locale={locale} />) : <Alert title={t('noNotifications')} tone="info">{copyByLocale(locale, 'Important account messages will appear here.', 'ستظهر رسائل الحساب المهمة هنا.')}</Alert>}</aside></div></>
 }
 
 function SubscriptionSummary({ data, loading, navigate }: { data: AccountSubscription | null; loading: boolean; navigate?: Navigate }) {
@@ -732,8 +775,8 @@ function SubscriptionSummary({ data, loading, navigate }: { data: AccountSubscri
   return <SubscriptionCard title={t('subscriptionStatus')} status={sub?.plan || sub?.tier || projection?.plan_term || t('active')} tone={projection?.entitlement === 'payment_required' ? 'warning' : 'success'} badgeLabel={projection?.entitlement || sub?.status || t('active')} details={[{ label: t('email'), value: data?.user?.email || sub?.user_email || '—' }, { label: t('plan'), value: sub?.plan || sub?.tier || projection?.plan_term || t('planUnavailable') }, { label: t('expiresOn'), value: formatDisplayDate(sub?.expires_at || projection?.expires_at, locale) }, { label: t('status'), value: projection?.lifecycle || sub?.status || data?.status || '—' }]} />
 }
 
-function SupportThreadMessage({ message, locale }: { message: { id: string; sender?: string; senderRole?: SupportSenderRole; body?: string; createdAt?: string; created_at?: string }; locale: 'ar' | 'en' }) {
-  const role = supportSenderRole(message.sender, message.senderRole)
+function SupportThreadMessage({ message, locale }: { message: { id: string; sender?: string; senderRole?: SupportSenderRole; sender_role?: SupportSenderRole | string | null; body?: string; createdAt?: string; created_at?: string }; locale: 'ar' | 'en' }) {
+  const role = supportSenderRole(message.sender, (message.senderRole || message.sender_role || undefined) as SupportSenderRole | undefined)
   return <article className={supportMessageClass(role)} data-role={role}><strong>{supportSenderLabel(role, locale)}</strong>{role === 'system' ? <span>{message.body}</span> : <p>{message.body}</p>}<small>{formatDisplayDate(message.createdAt || message.created_at, locale)}</small></article>
 }
 
@@ -784,9 +827,87 @@ function PortalDevices() {
   return <><PageHeader title={t('devices')} />{error ? <ErrorBlock error={error} onRetry={() => setError('')} /> : null}{resource.loading ? <div className="portal-mini-grid"><CardSkeleton rows={4} /><CardSkeleton rows={4} /></div> : resource.error ? <ErrorBlock error={resource.error} onRetry={resource.reload} /> : sessions.length === 0 ? <EmptyState icon={Monitor} title={copyByLocale(locale, 'No linked desktop sessions', 'لا توجد جلسات سطح مكتب مرتبطة')} body={copyByLocale(locale, 'Link Saturn Workspace from the desktop app to see it here.', 'اربط Saturn Workspace من أداة سطح المكتب لتظهر الجلسة هنا.')} /> : <div className="stack"><Card><SectionHeader title={copyByLocale(locale, 'Linked devices', 'الأجهزة المرتبطة')} action={activeSessions.length ? <Button size="sm" variant="danger" onClick={() => setTarget({ scope: 'all' })}>{copyByLocale(locale, 'End all desktop sessions', 'إنهاء كل جلسات سطح المكتب')}</Button> : undefined} /><div className="settings-list">{devices.map((device) => { const representative = sessions.find((session) => session.device_key === device.device_key); return <div key={device.device_key} className="device-row device-row--large"><span><Monitor size={20} /></span><div><strong>{device.device_name}</strong><small>{[device.platform, device.os_version].filter(Boolean).join(' · ') || copyByLocale(locale, 'Desktop device', 'جهاز سطح مكتب')} · {copyByLocale(locale, 'Last activity', 'آخر نشاط')}: {formatDisplayDate(device.last_activity_at, locale)}</small></div><Badge tone={device.active_sessions ? 'success' : 'neutral'}>{device.active_sessions ? copyByLocale(locale, 'Connected', 'متصل') : copyByLocale(locale, 'Inactive', 'غير نشط')}</Badge>{representative && device.active_sessions ? <Button size="sm" variant="secondary" onClick={() => setTarget({ scope: 'device', session: representative })}>{copyByLocale(locale, 'Revoke device', 'إلغاء الجهاز')}</Button> : null}</div> })}</div></Card><Card><SectionHeader title={copyByLocale(locale, 'Desktop sessions', 'جلسات سطح المكتب')} /><div className="settings-list">{sessions.map((session) => <div key={session.id} className="device-row device-row--large"><span><Monitor size={20} /></span><div><strong>{session.device_name}</strong><small>{copyByLocale(locale, 'Last activity', 'آخر نشاط')}: {formatDisplayDate(session.last_activity_at, locale)}{session.app_version ? ` · ${session.app_version}` : ''}</small></div><Badge tone={session.status === 'active' ? 'success' : session.status === 'expired' ? 'warning' : 'neutral'}>{session.status === 'active' ? copyByLocale(locale, 'Connected', 'متصل') : session.status === 'expired' ? copyByLocale(locale, 'Expired', 'منتهية') : copyByLocale(locale, 'Revoked', 'ملغاة')}</Badge>{session.status === 'active' ? <Button size="sm" variant="secondary" onClick={() => setTarget({ scope: 'session', session })}>{copyByLocale(locale, 'End session', 'إنهاء الجلسة')}</Button> : null}</div>)}</div></Card></div>}<ConfirmDialog open={Boolean(target)} onClose={() => { if (!busy) setTarget(null) }} title={target?.scope === 'all' ? copyByLocale(locale, 'End all desktop sessions?', 'إنهاء كل جلسات سطح المكتب؟') : target?.scope === 'device' ? copyByLocale(locale, 'Revoke this device?', 'إلغاء هذا الجهاز؟') : copyByLocale(locale, 'End this session?', 'إنهاء هذه الجلسة؟')} body={copyByLocale(locale, 'Saturn Workspace will require sign-in again on the affected device.', 'سيطلب Saturn Workspace تسجيل الدخول من جديد على الجهاز المتأثر.')} confirmLabel={busy ? copyByLocale(locale, 'Ending…', 'جارٍ الإنهاء…') : copyByLocale(locale, 'Confirm', 'تأكيد')} cancelLabel={t('cancel')} destructive onConfirm={() => { void runRevoke() }} /></>
 }
 
-function PortalNotifications() {
+function notificationText(item: AccountNotification, locale: 'ar' | 'en') {
+  return {
+    title: locale === 'ar' ? item.titleAr || item.title : item.title,
+    body: locale === 'ar' ? item.bodyAr || item.body : item.body,
+  }
+}
+
+function NotificationSummary({ item, locale }: { item: AccountNotification; locale: 'ar' | 'en' }) {
+  const content = notificationText(item, locale)
+  return <article className={item.readAt ? 'is-read' : ''}><span><Bell size={17} /></span><div><strong>{content.title}</strong><p>{content.body}</p><small>{formatDisplayDate(item.createdAt, locale)}</small></div></article>
+}
+
+function PortalNotifications({ navigate }: { navigate: Navigate }) {
   const { t, locale } = useExperience()
-  return <><PageHeader title={t('notifications')} /><EmptyState icon={Bell} title={t('noNotifications')} body={copyByLocale(locale, 'Important account messages will appear here.', 'ستظهر رسائل الحساب المهمة هنا.')} /></>
+  const { notifications } = useAdapters()
+  const resource = useAsyncData(() => notifications.list({ limit: 20 }), [notifications])
+  const [extraItems, setExtraItems] = useState<AccountNotification[]>([])
+  const [paginationCursor, setPaginationCursor] = useState<string | null | undefined>()
+  const [busy, setBusy] = useState('')
+  const [error, setError] = useState('')
+
+  const items = [...(resource.data?.items || []), ...extraItems]
+  const nextCursor = paginationCursor === undefined ? resource.data?.nextCursor : paginationCursor || undefined
+  const refresh = () => {
+    setExtraItems([])
+    setPaginationCursor(undefined)
+    resource.reload()
+  }
+  const markRead = async (item: AccountNotification) => {
+    if (item.readAt || busy) return
+    setBusy(item.id)
+    setError('')
+    try {
+      await notifications.markRead(item.id)
+      refresh()
+    } catch (err) {
+      setError(String(err instanceof Error ? err.message : err || 'notification_update_failed'))
+    } finally {
+      setBusy('')
+    }
+  }
+  const markAll = async () => {
+    setBusy('all')
+    setError('')
+    try {
+      await notifications.markAllRead()
+      refresh()
+    } catch (err) {
+      setError(String(err instanceof Error ? err.message : err || 'notification_update_failed'))
+    } finally {
+      setBusy('')
+    }
+  }
+  const archive = async (item: AccountNotification) => {
+    setBusy(`archive:${item.id}`)
+    setError('')
+    try {
+      await notifications.archive(item.id)
+      refresh()
+    } catch (err) {
+      setError(String(err instanceof Error ? err.message : err || 'notification_update_failed'))
+    } finally {
+      setBusy('')
+    }
+  }
+  const loadMore = async () => {
+    if (!nextCursor || busy) return
+    setBusy('more')
+    setError('')
+    try {
+      const page = await notifications.list({ cursor: nextCursor, limit: 20 })
+      setExtraItems((current) => [...current, ...page.items])
+      setPaginationCursor(page.nextCursor || null)
+    } catch (err) {
+      setError(String(err instanceof Error ? err.message : err || 'notification_load_failed'))
+    } finally {
+      setBusy('')
+    }
+  }
+
+  return <><PageHeader title={t('notifications')} actions={resource.data?.unreadCount ? <Button size="sm" leadingIcon={<CheckCheck size={15} />} loading={busy === 'all'} onClick={() => { void markAll() }}>{copyByLocale(locale, 'Mark all as read', 'تحديد الكل كمقروء')}</Button> : undefined} />{error ? <ErrorBlock error={error} onRetry={() => setError('')} /> : null}{resource.loading ? <SkeletonStack rows={5} /> : resource.error ? <ErrorBlock error={resource.error} onRetry={resource.reload} /> : items.length === 0 ? <EmptyState icon={Bell} title={t('noNotifications')} body={copyByLocale(locale, 'Important account messages will appear here.', 'ستظهر رسائل الحساب المهمة هنا.')} /> : <div className="notification-list">{items.map((item) => { const content = notificationText(item, locale); return <Card key={item.id} padding="sm" className={item.readAt ? 'is-read' : ''}><div className="notification-row"><span><Bell size={18} /></span><button type="button" className="notification-copy" onClick={() => { void markRead(item) }} disabled={Boolean(busy)}><strong>{content.title}</strong><p>{content.body}</p><small>{formatDisplayDate(item.createdAt, locale)}</small></button><div className="cluster">{!item.readAt ? <Badge tone="info">{copyByLocale(locale, 'New', 'جديد')}</Badge> : null}{item.linkedResourceType === 'support_ticket' ? <Button size="sm" variant="text" onClick={() => navigate({ surface: 'portal', page: 'support' })}>{t('support')}</Button> : null}<Button size="sm" variant="text" leadingIcon={<Archive size={14} />} loading={busy === `archive:${item.id}`} onClick={() => { void archive(item) }}>{copyByLocale(locale, 'Dismiss', 'إخفاء')}</Button></div></div></Card>})}{nextCursor ? <Button variant="secondary" loading={busy === 'more'} onClick={() => { void loadMore() }}>{copyByLocale(locale, 'Load more', 'عرض المزيد')}</Button> : null}</div>}</>
 }
 
 function PortalSupport() {
@@ -808,7 +929,7 @@ function PortalSupport() {
     return (threads.data || []).filter((row) => {
       const ticketNumber = stableTicketNumber(row.id, row.updatedAt)
       const status = String(row.status || 'open').toLowerCase()
-      const matchesStatus = !statusFilter || status === statusFilter || (statusFilter === 'waiting_for_customer' && status === 'answered')
+      const matchesStatus = !statusFilter || status === statusFilter || (statusFilter === 'awaiting_customer' && ['waiting_for_customer', 'answered'].includes(status)) || (statusFilter === 'awaiting_support' && status === 'waiting_for_support')
       const matchesSearch = !query || row.subject.toLowerCase().includes(query) || ticketNumber.toLowerCase().includes(query)
       return matchesStatus && matchesSearch
     })
@@ -893,7 +1014,7 @@ function PortalSupport() {
         </Card>
         <Card>
           <SectionHeader title={t('recentSupport')} />
-          <TableToolbar searchLabel={t('search')} searchValue={search} onSearch={setSearch} filters={<Select aria-label={t('status')} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">{t('status')}</option><option value="open">{supportStatusLabel('open', locale)}</option><option value="waiting_for_support">{supportStatusLabel('waiting_for_support', locale)}</option><option value="waiting_for_customer">{supportStatusLabel('waiting_for_customer', locale)}</option><option value="resolved">{supportStatusLabel('resolved', locale)}</option><option value="closed">{supportStatusLabel('closed', locale)}</option></Select>} />
+          <TableToolbar searchLabel={t('search')} searchValue={search} onSearch={setSearch} filters={<Select aria-label={t('status')} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">{t('status')}</option><option value="open">{supportStatusLabel('open', locale)}</option><option value="awaiting_support">{supportStatusLabel('awaiting_support', locale)}</option><option value="awaiting_customer">{supportStatusLabel('awaiting_customer', locale)}</option><option value="reopened">{supportStatusLabel('reopened', locale)}</option><option value="closed">{supportStatusLabel('closed', locale)}</option><option value="blocked">{supportStatusLabel('blocked', locale)}</option></Select>} />
           {threads.error ? <ErrorBlock error={supportErrorMessage(threads.error, locale)} onRetry={threads.reload} /> : <DataTable columns={columns} rows={visibleThreads} loading={threads.loading} rowKey={(row) => row.id} emptyTitle={t('tableEmpty')} emptyBody={copyByLocale(locale, 'Create a ticket when you need help.', 'أنشئ تذكرة عندما تحتاج إلى مساعدة.')} onRowClick={(row) => { setSelected(row); setError(''); setNotice('') }} />}
         </Card>
       </div>
@@ -1097,22 +1218,25 @@ function AdminSupportV2() {
   const [replyMode, setReplyMode] = useState<'portal' | 'portal_email'>('portal')
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [priorityFilter, setPriorityFilter] = useState('')
   const [statusReason, setStatusReason] = useState('')
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
   const threads = useAsyncData(() => admin.listSupportThreads(), [admin])
   const messages = useAsyncData(() => selected ? admin.listSupportMessages(selected.id) : Promise.resolve([]), [admin, selected?.id])
+  const audit = useAsyncData(() => selected ? admin.listSupportAudit(selected.id) : Promise.resolve([]), [admin, selected?.id])
   const visibleThreads = useMemo(() => {
     const query = search.trim().toLowerCase()
     return (threads.data || []).filter((row) => {
       const ticketNumber = stableTicketNumber(row.id, row.created_at, row.updated_at)
       const status = String(row.status || 'open').toLowerCase()
-      const matchesStatus = !statusFilter || status === statusFilter || (statusFilter === 'waiting_for_customer' && status === 'answered')
+      const matchesStatus = !statusFilter || status === statusFilter || (statusFilter === 'awaiting_customer' && ['waiting_for_customer', 'answered'].includes(status)) || (statusFilter === 'awaiting_support' && status === 'waiting_for_support')
       const haystack = [ticketNumber, row.subject, row.email, row.install_id, row.device_id, row.last_message_body].filter(Boolean).join(' ').toLowerCase()
-      return matchesStatus && (!query || haystack.includes(query))
+      const matchesPriority = !priorityFilter || String(row.priority || 'normal').toLowerCase() === priorityFilter
+      return matchesStatus && matchesPriority && (!query || haystack.includes(query))
     })
-  }, [threads.data, search, statusFilter])
+  }, [threads.data, search, statusFilter, priorityFilter])
   const columns: Column<AdminSupportThread>[] = [
     { key: 'ticket', header: '#', render: (row) => <div><strong>{stableTicketNumber(row.id, row.created_at, row.updated_at)}</strong>{row.unread_count ? <small className="muted">{row.unread_count} unread</small> : null}</div> },
     { key: 'customer', header: t('email'), render: (row) => <div><strong>{row.email || '—'}</strong><small className="muted">{row.install_id || row.device_id || ''}</small></div> },
@@ -1132,6 +1256,7 @@ function AdminSupportV2() {
       setReply('')
       setNotice(t('success'))
       messages.reload()
+      audit.reload()
       threads.reload()
     } catch (err) {
       setError(supportErrorMessage(err, locale))
@@ -1149,6 +1274,7 @@ function AdminSupportV2() {
       setInternalNote('')
       setNotice(t('success'))
       messages.reload()
+      audit.reload()
       threads.reload()
     } catch (err) {
       setError(supportErrorMessage(err, locale))
@@ -1167,6 +1293,25 @@ function AdminSupportV2() {
       setStatusReason('')
       setNotice(t('success'))
       messages.reload()
+      audit.reload()
+      threads.reload()
+      audit.reload()
+    } catch (err) {
+      setError(supportErrorMessage(err, locale))
+    } finally {
+      setBusy(false)
+    }
+  }
+  const changePriority = async (priority: 'low' | 'normal' | 'high' | 'urgent') => {
+    if (!selected) return
+    setBusy(true)
+    setError('')
+    setNotice('')
+    try {
+      await admin.updateSupportPriority(selected.id, priority)
+      setSelected({ ...selected, priority, updated_at: new Date().toISOString() })
+      setNotice(t('success'))
+      audit.reload()
       threads.reload()
     } catch (err) {
       setError(supportErrorMessage(err, locale))
@@ -1184,8 +1329,8 @@ function AdminSupportV2() {
     setBusy(true)
     setError('')
     try {
-      await admin.setSupportBlocked(selected.id, !selected.support_blocked, selected.support_blocked ? undefined : 'admin_block')
-      setSelected({ ...selected, support_blocked: !selected.support_blocked })
+      const result = await admin.setSupportBlocked(selected.id, !selected.support_blocked, selected.support_blocked ? undefined : 'admin_block')
+      setSelected({ ...selected, support_blocked: result.blocked, status: result.status || selected.status })
       threads.reload()
       setNotice(t('success'))
     } catch (err) {
@@ -1194,7 +1339,7 @@ function AdminSupportV2() {
       setBusy(false)
     }
   }
-  return <><PageHeader title={t('supportInbox')} description={copyByLocale(locale, 'Manage customer support threads, internal notes, status changes, and sender blocks.', 'إدارة تذاكر الدعم، الملاحظات الداخلية، تغييرات الحالة، وحظر المرسلين.')} /><TableToolbar searchLabel={t('search')} searchValue={search} onSearch={setSearch} filters={<Select aria-label={t('status')} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">{t('status')}</option><option value="open">{supportStatusLabel('open', locale)}</option><option value="waiting_for_support">{supportStatusLabel('waiting_for_support', locale)}</option><option value="waiting_for_customer">{supportStatusLabel('waiting_for_customer', locale)}</option><option value="resolved">{supportStatusLabel('resolved', locale)}</option><option value="closed">{supportStatusLabel('closed', locale)}</option></Select>} />{threads.error ? <ErrorBlock error={supportErrorMessage(threads.error, locale)} onRetry={threads.reload} /> : <DataTable columns={columns} rows={visibleThreads} loading={threads.loading} rowKey={(row) => row.id} emptyTitle={t('tableEmpty')} emptyBody={t('supportInbox')} onRowClick={(row) => { setSelected(row); setError(''); setNotice(''); setReply(''); setInternalNote('') }} />}{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}<Drawer open={Boolean(selected)} onClose={() => setSelected(null)} title={selected ? stableTicketNumber(selected.id, selected.created_at, selected.updated_at) : t('support')} description={selected?.subject || t('support')} closeLabel={t('close')}><div className="support-admin-head"><div><Badge tone={supportStatusTone(selected?.status)}>{supportStatusLabel(selected?.status, locale)}</Badge><span>{selected?.email || '—'}</span><small>{selected?.app_version || selected?.platform || ''}</small></div><div className="cluster"><Button size="sm" leadingIcon={<Copy size={14} />} onClick={copyTicketNumber}>{copyByLocale(locale, 'Copy ticket number', 'نسخ رقم التذكرة')}</Button><Button size="sm" variant="secondary" onClick={toggleBlock} disabled={!selected || busy}>{selected?.support_blocked ? t('enabled') : t('blockSender')}</Button></div></div><div className="form-grid"><FormField label={t('status')} htmlFor="admin-ticket-status"><Select id="admin-ticket-status" value={selected?.status || 'open'} onChange={(event) => changeStatus(event.target.value)}><option value="open">{supportStatusLabel('open', locale)}</option><option value="waiting_for_support">{supportStatusLabel('waiting_for_support', locale)}</option><option value="waiting_for_customer">{supportStatusLabel('waiting_for_customer', locale)}</option><option value="resolved">{supportStatusLabel('resolved', locale)}</option><option value="closed">{supportStatusLabel('closed', locale)}</option></Select></FormField><FormField label={t('reason')} htmlFor="support-status-reason"><Input id="support-status-reason" value={statusReason} onChange={(event) => setStatusReason(event.target.value)} /></FormField></div>{messages.error ? <ErrorBlock error={supportErrorMessage(messages.error, locale)} onRetry={messages.reload} /> : null}<div className="support-thread">{messages.loading ? <LoadingBlock label={t('loading')} /> : messages.data?.map((message) => <SupportThreadMessage key={message.id} message={message} locale={locale} />)}</div><form className="settings-form" onSubmit={sendReply}><div className="form-grid"><FormField label={t('type')} htmlFor="admin-support-mode"><Select id="admin-support-mode" value={replyMode} onChange={(event) => setReplyMode(event.target.value as 'portal' | 'portal_email')}><option value="portal">{copyByLocale(locale, 'Portal only', 'البوابة فقط')}</option><option value="portal_email">{copyByLocale(locale, 'Portal + email', 'البوابة + البريد')}</option></Select></FormField><FormField label={copyByLocale(locale, 'Assigned admin', 'المسؤول المعين')} htmlFor="assigned-admin"><Input id="assigned-admin" value={copyByLocale(locale, 'Unassigned', 'غير معيّن')} readOnly /></FormField></div>{replyMode === 'portal_email' && !EMAIL_SUPPORT_ENABLED ? <Alert title={copyByLocale(locale, 'Email provider required', 'يتطلب مزود بريد')} tone="warning">{copyByLocale(locale, 'The reply will be saved in the portal. Email sending stays off until a transactional email provider is configured.', 'سيتم حفظ الرد داخل البوابة فقط. إرسال البريد يظل متوقفًا حتى يتم إعداد مزود بريد للرسائل التشغيلية.')}</Alert> : null}<FormField label={t('reply')} htmlFor="admin-support-reply"><Textarea id="admin-support-reply" value={reply} maxLength={4000} onChange={(event) => setReply(event.target.value)} required /></FormField><Button type="submit" variant="primary" loading={busy}>{t('reply')}</Button></form><Card padding="sm"><SectionHeader title={copyByLocale(locale, 'Internal note', 'ملاحظة داخلية')} description={copyByLocale(locale, 'Visible only to administrators.', 'تظهر للمديرين فقط.')} /><FormField label={t('adminNote')} htmlFor="admin-internal-note"><Textarea id="admin-internal-note" value={internalNote} maxLength={4000} onChange={(event) => setInternalNote(event.target.value)} /></FormField><Button type="button" onClick={saveInternalNote} loading={busy}>{t('save')}</Button></Card></Drawer></>
+  return <><PageHeader title={t('supportInbox')} description={copyByLocale(locale, 'Manage customer support threads, internal notes, status changes, and sender blocks.', 'إدارة تذاكر الدعم، الملاحظات الداخلية، تغييرات الحالة، وحظر المرسلين.')} /><TableToolbar searchLabel={t('search')} searchValue={search} onSearch={setSearch} filters={<div className="cluster"><Select aria-label={t('status')} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">{t('status')}</option><option value="open">{supportStatusLabel('open', locale)}</option><option value="awaiting_support">{supportStatusLabel('awaiting_support', locale)}</option><option value="awaiting_customer">{supportStatusLabel('awaiting_customer', locale)}</option><option value="reopened">{supportStatusLabel('reopened', locale)}</option><option value="closed">{supportStatusLabel('closed', locale)}</option><option value="blocked">{supportStatusLabel('blocked', locale)}</option></Select><Select aria-label={copyByLocale(locale, 'Priority', 'الأولوية')} value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value)}><option value="">{copyByLocale(locale, 'All priorities', 'كل الأولويات')}</option><option value="urgent">{copyByLocale(locale, 'Urgent', 'عاجلة')}</option><option value="high">{copyByLocale(locale, 'High', 'مرتفعة')}</option><option value="normal">{copyByLocale(locale, 'Normal', 'عادية')}</option><option value="low">{copyByLocale(locale, 'Low', 'منخفضة')}</option></Select></div>} />{threads.error ? <ErrorBlock error={supportErrorMessage(threads.error, locale)} onRetry={threads.reload} /> : <DataTable columns={columns} rows={visibleThreads} loading={threads.loading} rowKey={(row) => row.id} emptyTitle={t('tableEmpty')} emptyBody={t('supportInbox')} onRowClick={(row) => { setSelected(row); setError(''); setNotice(''); setReply(''); setInternalNote('') }} />}{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}<Drawer open={Boolean(selected)} onClose={() => setSelected(null)} title={selected ? stableTicketNumber(selected.id, selected.created_at, selected.updated_at) : t('support')} description={selected?.subject || t('support')} closeLabel={t('close')}><div className="support-admin-head"><div><Badge tone={supportStatusTone(selected?.status)}>{supportStatusLabel(selected?.status, locale)}</Badge><span>{selected?.email || '—'}</span><small>{selected?.app_version || selected?.platform || ''}</small></div><div className="cluster"><Button size="sm" leadingIcon={<Copy size={14} />} onClick={copyTicketNumber}>{copyByLocale(locale, 'Copy ticket number', 'نسخ رقم التذكرة')}</Button><Button size="sm" variant="secondary" onClick={toggleBlock} disabled={!selected || busy}>{selected?.support_blocked ? t('enabled') : t('blockSender')}</Button></div></div><div className="form-grid"><FormField label={t('status')} htmlFor="admin-ticket-status"><Select id="admin-ticket-status" value={selected?.status === 'blocked' ? 'awaiting_support' : selected?.status || 'open'} onChange={(event) => changeStatus(event.target.value)}><option value="open">{supportStatusLabel('open', locale)}</option><option value="awaiting_support">{supportStatusLabel('awaiting_support', locale)}</option><option value="awaiting_customer">{supportStatusLabel('awaiting_customer', locale)}</option><option value="reopened">{supportStatusLabel('reopened', locale)}</option><option value="closed">{supportStatusLabel('closed', locale)}</option></Select></FormField><FormField label={copyByLocale(locale, 'Priority', 'الأولوية')} htmlFor="admin-ticket-priority"><Select id="admin-ticket-priority" value={selected?.priority || 'normal'} onChange={(event) => { void changePriority(event.target.value as 'low' | 'normal' | 'high' | 'urgent') }}><option value="urgent">{copyByLocale(locale, 'Urgent', 'عاجلة')}</option><option value="high">{copyByLocale(locale, 'High', 'مرتفعة')}</option><option value="normal">{copyByLocale(locale, 'Normal', 'عادية')}</option><option value="low">{copyByLocale(locale, 'Low', 'منخفضة')}</option></Select></FormField><FormField label={t('reason')} htmlFor="support-status-reason"><Input id="support-status-reason" value={statusReason} onChange={(event) => setStatusReason(event.target.value)} /></FormField></div>{messages.error ? <ErrorBlock error={supportErrorMessage(messages.error, locale)} onRetry={messages.reload} /> : null}<div className="support-thread">{messages.loading ? <LoadingBlock label={t('loading')} /> : messages.data?.map((message) => <SupportThreadMessage key={message.id} message={message} locale={locale} />)}</div><Card padding="sm"><SectionHeader title={copyByLocale(locale, 'History', 'السجل')} />{audit.loading ? <SkeletonStack rows={3} /> : audit.error ? <ErrorBlock error={supportErrorMessage(audit.error, locale)} onRetry={audit.reload} /> : audit.data?.length ? <div className="support-audit-list">{audit.data.map((event) => <div key={event.id}><strong>{supportAuditLabel(event.event_type, locale)}</strong><small>{formatDisplayDate(event.created_at, locale)}</small></div>)}</div> : <EmptyState title={copyByLocale(locale, 'No history yet', 'لا يوجد سجل بعد')} body={copyByLocale(locale, 'Ticket activity will appear here.', 'سيظهر نشاط التذكرة هنا.')} />}</Card><form className="settings-form" onSubmit={sendReply}><div className="form-grid"><FormField label={t('type')} htmlFor="admin-support-mode"><Select id="admin-support-mode" value={replyMode} onChange={(event) => setReplyMode(event.target.value as 'portal' | 'portal_email')}><option value="portal">{copyByLocale(locale, 'Portal only', 'البوابة فقط')}</option><option value="portal_email">{copyByLocale(locale, 'Portal + email', 'البوابة + البريد')}</option></Select></FormField></div>{replyMode === 'portal_email' && !EMAIL_SUPPORT_ENABLED ? <Alert title={copyByLocale(locale, 'Email provider required', 'يتطلب مزود بريد')} tone="warning">{copyByLocale(locale, 'The reply will be saved in the portal. Email sending stays off until a transactional email provider is configured.', 'سيتم حفظ الرد داخل البوابة فقط. إرسال البريد يظل متوقفًا حتى يتم إعداد مزود بريد للرسائل التشغيلية.')}</Alert> : null}<FormField label={t('reply')} htmlFor="admin-support-reply"><Textarea id="admin-support-reply" value={reply} maxLength={4000} onChange={(event) => setReply(event.target.value)} required /></FormField><Button type="submit" variant="primary" loading={busy}>{t('reply')}</Button></form><Card padding="sm"><SectionHeader title={copyByLocale(locale, 'Internal note', 'ملاحظة داخلية')} description={copyByLocale(locale, 'Visible only to administrators.', 'تظهر للمديرين فقط.')} /><FormField label={t('adminNote')} htmlFor="admin-internal-note"><Textarea id="admin-internal-note" value={internalNote} maxLength={4000} onChange={(event) => setInternalNote(event.target.value)} /></FormField><Button type="button" onClick={saveInternalNote} loading={busy}>{t('save')}</Button></Card></Drawer></>
 }
 
 export function AdminSupport() {

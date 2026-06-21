@@ -297,6 +297,12 @@ export default {
         await appendAudit(env, { type: "support_status_update", actor: adminEmail, at: new Date().toISOString() });
         return json(payload, 200, corsHeaders(request, env));
       }
+      if (url.pathname === "/api/admin/policy/support/priority" && request.method === "POST") {
+        const adminEmail = await requireAdmin(request, env);
+        const payload = await proxyPolicyAdmin(request, env, "/v1/admin/support/priority");
+        await appendAudit(env, { type: "support_priority_update", actor: adminEmail, at: new Date().toISOString() });
+        return json(payload, 200, corsHeaders(request, env));
+      }
       if (url.pathname === "/api/admin/policy/support/block" && request.method === "POST") {
         const adminEmail = await requireAdmin(request, env);
         const payload = await proxyPolicyAdmin(request, env, "/v1/admin/support/block");
@@ -1495,6 +1501,8 @@ async function proxyPolicyAdmin(request, env, targetPath) {
     Accept: "application/json",
     Authorization: `Bearer ${token}`,
   };
+  const idempotencyKey = String(request.headers.get("Idempotency-Key") || "").trim();
+  if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey.slice(0, 160);
   const init = {
     method: request.method,
     headers,

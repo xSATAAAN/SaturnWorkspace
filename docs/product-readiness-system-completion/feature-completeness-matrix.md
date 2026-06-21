@@ -1,11 +1,28 @@
 # Feature Completeness Matrix
 
+## Phase C/D Reconciliation - 2026-06-21
+
+This section supersedes older rows where production evidence changed.
+
+| Matrix area | Current status | Production evidence | Deferred acceptance |
+|---|---|---|---|
+| Account and desktop linking | `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE` | Supabase migration 010 applied; Auth/Policy/site/desktop automated checks pass. | Installed-app and human workflow acceptance in Phase G. |
+| Customer support portal | `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE` | Owned ticket list/detail/create/reply/reopen, unread state, idempotency, rate limit, and clean error contracts deployed. | Phase G. |
+| Admin support | `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE` | Inbox, state/priority filters, portal/email reply, internal notes, block/unblock, audit/history, and email retry deployed. | Phase G. |
+| Reply by email | `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE` | Resend signature verification, Received Email retrieval, hashed expiring reply tokens, sender ownership, replay protection, automated-reply rejection, inbound retry, and one-time insertion deployed. | Real human reply acceptance in Phase G. |
+| Support attachments | `NOT_IMPLEMENTED` | No customer/admin attachment control or contract is exposed; inbound attachment metadata is discarded except a non-sensitive count. | Future product decision; not blocking. |
+| Customer notifications | `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE` | D1 `portal_notifications`; list/unread/read-all/archive/pagination/ownership/idempotency and linked support resources deployed. | Phase G. |
+| Email operations | `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE` | Queue claim/retry/backoff/final failure, lock, provider IDs/events, bounce/complaint/suppression, inbound retry, cleanup, and sensitive payload purge tested. | Phase G and any future category-specific rollout. |
+| Contact | `IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED` | Public billing/security/general channels and authenticated support route are separated; no duplicate public ticket form. | Phase G copy/link acceptance. |
+| OTP email delivery | `PREPARED_DISABLED` | Auth and Policy flags are false; no production send claim is made. Superseded-job cancellation now keys by UID/email/purpose. | Separate controlled activation. |
+| No-subscription projected as `monthly` | `BROKEN_NON_BLOCKING_PHASE_C_D` | Not investigated in C/D by explicit decision. | Phase E correction; Phase G acceptance. |
+
 Legend:
 - `COMPLETE_AND_VERIFIED`: implemented and locally/live verified with evidence.
 - `IMPLEMENTED_NOT_VERIFIED`: code exists but current audit did not execute E2E proof.
 - `IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED`: code is deployed/protected but manual operational acceptance is deferred to Phase G; do not treat as complete.
 
-Phase B status: `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE`. OTP/Auth rows keep their implementation evidence; all Phase B manual acceptance is deferred to Phase G. Phase C is active. No B.3/B.4 or dependency gate exists.
+Phase B status: `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE`. OTP/Auth rows keep their implementation evidence; all Phase B manual acceptance is deferred to Phase G. Phase C and Phase D are closed after automated verification, with manual acceptance deferred to Phase G. No B.3/B.4 or dependency gate exists.
 - `PARTIALLY_IMPLEMENTED`: UI/API exists but behavior, state model, or edge cases are incomplete.
 - `BROKEN`: current implementation contradicts required product behavior or known production errors.
 - `UI_ONLY`: visual shell exists without real production backend.

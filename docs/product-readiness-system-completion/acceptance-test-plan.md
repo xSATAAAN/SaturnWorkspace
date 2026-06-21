@@ -1,5 +1,23 @@
 # Acceptance Test Plan
 
+## Automated Evidence Update - 2026-06-21
+
+Phase C and Phase D are closed for automated implementation. Manual acceptance remains consolidated in Phase G; no additional manual gate is requested here.
+
+Automated Phase D evidence now covers:
+
+- Owned ticket creation/list/detail/reply and unauthorized cross-user access.
+- Duplicate create/reply/admin mutations through idempotency keys.
+- Portal-only and portal-plus-email admin reply contracts.
+- Internal note exclusion from customer responses.
+- Canonical close/reopen/block transitions, priority, unread state, and rate limiting.
+- Portal notification ownership, unread count, mark-read, mark-all, archive contract, pagination contract, and delivery state.
+- Invalid webhook signature, duplicate webhook, unknown/expired/revoked reply token, wrong sender, automated reply, blocked sender, closed-ticket email reopen, provider retrieval retry, and one-time inbound insertion.
+- Email queue retry/backoff/final failure, lock contention, delivered event, bounce suppression, duplicate provider event, and no secret values in API output.
+- TypeScript checks for Auth/Policy, Admin syntax/tests, site build/lint/contracts, D1 migration local rehearsal, production preflight/postflight, and live unauthorized/health smoke checks.
+
+Phase G must still perform real human acceptance for customer/admin support conversation, actual email reply from a mailbox, notification presentation, and installed desktop account-linking binaries.
+
 This is the required regression plan before declaring product readiness.
 
 ## Execution Policy

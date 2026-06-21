@@ -6,6 +6,7 @@
   "scripts": {
     "check": "tsc --noEmit",
     "test:phase-c": "node scripts/check-phase-c-entitlement-policy.mjs",
+    "test:phase-d": "node scripts/check-phase-d-support-notifications.mjs",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "migrate:local": "wrangler d1 migrations apply saturnws-policy --local",
@@ -16,7 +17,9 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260504.0",
+    "esbuild": "^0.28.1",
+    "miniflare": "^4.20260617.1",
     "typescript": "^5.8.3",
-    "wrangler": "^4.87.0"
+    "wrangler": "^4.103.0"
   }
 }
