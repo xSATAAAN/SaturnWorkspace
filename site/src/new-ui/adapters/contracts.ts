@@ -11,6 +11,8 @@ import type {
   AdminSupportThread,
   AdminUserDetail,
   AdminEmailStatus,
+  AdminCommerceOverview,
+  AdminUserSummary,
   ManualGrantExecuteInput,
   ManualGrantPreview,
   ManualGrantPreviewInput,
@@ -66,6 +68,8 @@ export type AuthState = {
 
 export type ReleaseInfo = {
   available: boolean
+  releaseId?: string
+  accessState?: 'signed_out' | 'not_entitled' | 'available' | 'unavailable'
   version?: string
   channel?: string
   mandatory?: boolean
@@ -79,12 +83,15 @@ export type ReleaseInfo = {
 }
 
 export type PlanInfo = {
-  id: 'weekly' | 'monthly' | 'yearly'
+  id: 'weekly' | 'monthly' | 'annual'
+  version: number
   name: string
   price: string
   originalPrice?: string
   period: string
   description: string
+  trialDays: number
+  features: string[]
   enabled: boolean
   checkoutEnabled: boolean
 }
@@ -95,14 +102,15 @@ export type AdminDashboardState = {
 }
 
 export type PaymentIntentInput = {
-  plan: 'monthly' | 'yearly'
+  plan: 'weekly' | 'monthly' | 'annual'
+  planVersion: number
   email?: string
   locale: 'ar' | 'en'
 }
 
 export type PaymentIntentResult = {
   success: boolean
-  status: 'created' | 'pending' | 'paid' | 'failed'
+  status: 'creating' | 'provider_unavailable' | 'awaiting_payment' | 'confirming' | 'paid' | 'underpaid' | 'overpaid' | 'failed' | 'cancelled' | 'expired' | 'refunded' | 'manual_review'
   orderId?: string
   hostedUrl?: string
   reason?: string
@@ -162,6 +170,7 @@ export type AccountAdapter = {
 
 export type ReleaseAdapter = {
   getLatest(channel?: 'stable' | 'beta'): Promise<ReleaseInfo>
+  download(releaseId: string, filename?: string): Promise<void>
 }
 
 export type PlansAdapter = {
@@ -216,6 +225,8 @@ export type AdminAdapter = {
   signInWithGoogle(): Promise<AppUser>
   getSession(): Promise<{ email: string }>
   getDashboard(): Promise<AdminDashboardState>
+  getCommerceOverview(): Promise<AdminCommerceOverview>
+  listUsers(input?: { search?: string }): Promise<AdminUserSummary[]>
   listSubscriptions(input?: { search?: string }): Promise<AdminSubscription[]>
   createSubscription(input: {
     user_email: string

@@ -27,7 +27,7 @@ import {
   Users,
   WalletCards,
 } from 'lucide-react'
-import type { AdminAuditLogItem, AdminCrashGroup, AdminCrashLog, AdminEmailCatalogItem, AdminEmailJob, AdminEmailProviderEvent, AdminEmailRecipientFlag, AdminEmailStatus, AdminInboundEmailMessage, AdminRemoteControls, AdminScheduledEmail, AdminSubscription, AdminSupportThread, ManualGrantPreview } from '../../../api/admin'
+import type { AdminAuditLogItem, AdminCommerceOverview, AdminCrashGroup, AdminCrashLog, AdminEmailCatalogItem, AdminEmailJob, AdminEmailProviderEvent, AdminEmailRecipientFlag, AdminEmailStatus, AdminInboundEmailMessage, AdminRemoteControls, AdminScheduledEmail, AdminSubscription, AdminSupportThread, AdminUserSummary, ManualGrantPreview } from '../../../api/admin'
 import type { AccountSession, AccountSubscription } from '../../../api/account'
 import { useAdapters } from '../../adapters/AdapterProvider'
 import type { AccountNotification, CustomerSupportThread, PlanInfo, ReleaseInfo, SupportSenderRole } from '../../adapters/contracts'
@@ -417,7 +417,7 @@ export function PublicProductionPages({ page, routeState, navigate }: { page: st
   let content: ReactNode
   if (page === 'pricing') content = <PricingSection page={page} routeState={routeState} plans={plans.data || []} loading={plans.loading} navigate={navigate} />
   else if (page === 'product' || page === 'features') content = <ProductDetailsSection />
-  else if (page === 'download') content = <DownloadSection release={release.data} loading={release.loading} error={release.error} reload={release.reload} />
+  else if (page === 'download') content = <DownloadSection release={release.data} loading={release.loading} error={release.error} reload={release.reload} navigate={navigate} />
   else if (page === 'releases' || page === 'changelog') content = <ReleaseNotes release={release.data} loading={release.loading} error={release.error} />
   else if (page === 'faq') content = <FaqSection />
   else if (page === 'contact' || page === 'support') content = <PublicContact navigate={navigate} />
@@ -455,7 +455,7 @@ function PricingSection({ page, routeState, plans, loading, navigate, compact = 
     : null
   const activeCheckoutPlan = selectedPlan ?? requestedCheckoutPlan
   const choosePlan = (plan: PlanInfo) => {
-    if (!ready) return
+    if (!ready || !plan.enabled || !plan.checkoutEnabled) return
     if (!user) {
       navigate(createAuthRoute('signup', { returnTo: currentInternalLocation().split('?')[0], plan: plan.id, checkout: true }))
       return
@@ -466,13 +466,17 @@ function PricingSection({ page, routeState, plans, loading, navigate, compact = 
     setSelectedPlan(null)
     if (requestedPlan) navigate({ surface: 'public', page })
   }
-  const trialLabel = locale === 'ar' ? 'ابدأ بـ 7 أيام مجانًا' : 'Start with 7 days free'
   const getCta = (plan: PlanInfo) => {
     if (!ready) return t('loading')
+    if (!plan.checkoutEnabled) return t('unavailable')
     if (user) return locale === 'ar' ? 'اختر الخطة' : 'Choose plan'
-    return plan.id === 'weekly' ? t('getStarted') : (locale === 'ar' ? 'ابدأ التجربة المجانية' : 'Start free trial')
+    return plan.trialDays > 0 ? (locale === 'ar' ? 'ابدأ التجربة المجانية' : 'Start free trial') : t('getStarted')
   }
-  return <section className={`marketing-section pricing-section${compact ? '' : ' pricing-page'}`}><div className="container"><header className="marketing-heading marketing-heading--center">{compact ? <h2>{c.pricingTitle}</h2> : <h1>{c.pricingTitle}</h1>}<p>{c.pricingBody}</p></header><div className="pricing-promo">{c.trialPromo}</div>{loading ? <LoadingBlock label={t('loading')} /> : <div className="pricing-grid">{plans.map((plan) => <PricingCard key={plan.id} name={plan.name} description={plan.description} price={plan.price} originalPrice={plan.originalPrice} period={plan.period} features={featuresForPlan()} cta={getCta(plan)} featured={plan.id === 'monthly'} featuredLabel={c.recommended} trialLabel={plan.id === 'monthly' || plan.id === 'yearly' ? trialLabel : undefined} disabled={!ready} onClick={() => choosePlan(plan)} />)}</div>}<p className="pricing-trust-note"><ShieldCheck size={15} />{c.trustNote}</p></div><CheckoutDialog open={Boolean(activeCheckoutPlan)} plan={activeCheckoutPlan} user={user} features={activeCheckoutPlan ? featuresForPlan() : []} onClose={closeCheckout} /></section>
+  return <section className={`marketing-section pricing-section${compact ? '' : ' pricing-page'}`}><div className="container"><header className="marketing-heading marketing-heading--center">{compact ? <h2>{c.pricingTitle}</h2> : <h1>{c.pricingTitle}</h1>}<p>{c.pricingBody}</p></header>{loading ? <LoadingBlock label={t('loading')} /> : plans.length ? <><div className="pricing-grid">{plans.map((plan) => {
+    const features = plan.features.length ? plan.features : featuresForPlan()
+    const trialLabel = plan.trialDays > 0 ? (locale === 'ar' ? `ابدأ بـ ${plan.trialDays} أيام مجانًا` : `Start with ${plan.trialDays} days free`) : undefined
+    return <PricingCard key={`${plan.id}:${plan.version}`} name={plan.name} description={plan.description} price={plan.price} originalPrice={plan.originalPrice} period={plan.period} features={features} cta={getCta(plan)} featured={plan.id === 'monthly'} featuredLabel={c.recommended} trialLabel={trialLabel} disabled={!ready || !plan.enabled || !plan.checkoutEnabled} onClick={() => choosePlan(plan)} />
+  })}</div><p className="pricing-trust-note"><ShieldCheck size={15} />{c.trustNote}</p></> : <EmptyState icon={CreditCard} title={t('unavailable')} body={c.pricingBody} />}</div><CheckoutDialog open={Boolean(activeCheckoutPlan)} plan={activeCheckoutPlan} user={user} features={activeCheckoutPlan ? (activeCheckoutPlan.features.length ? activeCheckoutPlan.features : featuresForPlan()) : []} onClose={closeCheckout} /></section>
 }
 
 function FaqSection() {
@@ -487,9 +491,11 @@ function FaqSection() {
   return <section className="marketing-section faq-section page-enter"><div className="container narrow-page"><header className="marketing-heading marketing-heading--center"><h1>{c.faqTitle}</h1></header><Accordion items={items} /></div></section>
 }
 
-function DownloadSection({ release, loading, error, reload }: { release: ReleaseInfo | null; loading: boolean; error: string | null; reload: () => void }) {
+function DownloadSection({ release, loading, error, reload, navigate }: { release: ReleaseInfo | null; loading: boolean; error: string | null; reload: () => void; navigate: Navigate }) {
   const { t, locale } = useExperience()
+  const adapters = useAdapters()
   const [downloading, setDownloading] = useState(false)
+  const [downloadError, setDownloadError] = useState('')
   if (loading) return <div className="marketing-section"><div className="container narrow-page"><LoadingBlock label={t('loading')} /></div></div>
   const meta = [
     release?.version ? `${t('version')}: ${release.version}` : '',
@@ -497,13 +503,24 @@ function DownloadSection({ release, loading, error, reload }: { release: Release
     formatBytes(release?.sizeBytes),
     release?.filename || '',
   ].filter(Boolean)
-  const startDownload = () => {
-    if (!release?.downloadUrl) return
+  const startDownload = async () => {
+    if (!release?.releaseId) return
     setDownloading(true)
-    window.location.href = release.downloadUrl
-    window.setTimeout(() => setDownloading(false), 1400)
+    setDownloadError('')
+    try {
+      await adapters.releases.download(release.releaseId, release.filename)
+    } catch {
+      setDownloadError(t('downloadError'))
+    } finally {
+      setDownloading(false)
+    }
   }
-  return <div className="marketing-section page-enter"><div className="container narrow-page"><header className="marketing-heading marketing-heading--center"><img className="download-product-icon" src={appIcon} alt="" /><h1>{t('downloadTitle')}</h1><p>{t('downloadBody')}</p></header>{error ? <ErrorBlock error={error} onRetry={reload} /> : release?.available && release.downloadUrl ? <Card className="download-simple-card"><div><span className="download-simple-card__mark"><Download size={25} /></span><h2>{t('downloadForWindows')}</h2><p>{copyByLocale(locale, 'Get the current Windows package published for Saturn Workspace.', 'نزّل حزمة Windows الحالية المنشورة لـ Saturn Workspace.')}</p><div className="download-simple-card__meta">{meta.map((item) => <span key={item}>{item}</span>)}</div></div><Button size="lg" variant="primary" leadingIcon={<Download size={17} />} loading={downloading} onClick={startDownload}>{t('downloadForWindows')}</Button></Card> : <EmptyState icon={Download} title={t('noRelease')} body={t('releaseUnavailable')} action={<Button onClick={reload}>{t('retry')}</Button>} />}</div></div>
+  const unavailableAction = release?.accessState === 'signed_out'
+    ? <Button onClick={() => navigate(createAuthRoute('signin', { returnTo: '/download' }))}>{t('signIn')}</Button>
+    : release?.accessState === 'not_entitled'
+      ? <Button onClick={() => navigate({ surface: 'public', page: 'pricing' })}>{t('pricing')}</Button>
+      : <Button onClick={reload}>{t('retry')}</Button>
+  return <div className="marketing-section page-enter"><div className="container narrow-page"><header className="marketing-heading marketing-heading--center"><img className="download-product-icon" src={appIcon} alt="" /><h1>{t('downloadTitle')}</h1><p>{t('downloadBody')}</p></header>{error ? <ErrorBlock error={error} onRetry={reload} /> : release?.available && release.releaseId ? <><Card className="download-simple-card"><div><span className="download-simple-card__mark"><Download size={25} /></span><h2>{t('downloadForWindows')}</h2><p>{copyByLocale(locale, 'Get the current Windows package published for Saturn Workspace.', 'نزّل حزمة Windows الحالية المنشورة لـ Saturn Workspace.')}</p><div className="download-simple-card__meta">{meta.map((item) => <span key={item}>{item}</span>)}</div></div><Button size="lg" variant="primary" leadingIcon={<Download size={17} />} loading={downloading} onClick={() => void startDownload()}>{t('downloadForWindows')}</Button></Card>{downloadError ? <Alert title={t('downloadError')} tone="danger">{downloadError}</Alert> : null}</> : <EmptyState icon={Download} title={t('noRelease')} body={release?.accessState === 'not_entitled' ? t('subscriptionReviewBody') : t('releaseUnavailable')} action={unavailableAction} />}</div></div>
 }
 
 function ReleaseNotes({ release, loading, error }: { release: ReleaseInfo | null; loading: boolean; error: string | null }) {
@@ -760,7 +777,7 @@ function PortalOverview({ navigate }: { navigate: Navigate }) {
   const subscription = useAsyncData(() => adapters.account.getSubscription(), [adapters])
   const release = useAsyncData(() => adapters.releases.getLatest('beta'), [adapters])
   const notifications = useAsyncData(() => adapters.notifications.list({ limit: 3 }), [adapters])
-  return <><PageHeader title={t('overview')} />{subscription.error ? <ErrorBlock error={subscription.error} onRetry={subscription.reload} /> : null}<div className="portal-overview-grid"><div className="stack"><SubscriptionSummary data={subscription.data} loading={subscription.loading} navigate={navigate} />{subscription.refreshing ? <Alert title={copyByLocale(locale, 'Refreshing account data', 'يتم تحديث بيانات الحساب')} tone="info" /> : null}<Card><SectionHeader title={t('latestRelease')} action={<Button variant="text" onClick={() => navigate({ surface: 'portal', page: 'downloads' })}>{t('viewAll')}</Button>} />{release.loading ? <SkeletonStack rows={4} /> : release.error ? <ErrorBlock error={release.error} onRetry={release.reload} /> : <DownloadCard title={t('downloadForWindows')} version={release.data?.version || t('unavailable')} meta={[release.data?.available ? t('active') : t('unavailable')]} buttonLabel={t('downloads')} disabled={!release.data?.available} onClick={() => { if (release.data?.downloadUrl) window.location.href = release.data.downloadUrl }} />}</Card></div><aside className="portal-notices"><SectionHeader title={t('notifications')} action={<Button variant="text" onClick={() => navigate({ surface: 'portal', page: 'notifications' })}>{t('viewAll')}</Button>} />{notifications.loading ? <SkeletonStack rows={3} /> : notifications.error ? <ErrorBlock error={notifications.error} onRetry={notifications.reload} /> : notifications.data?.items.length ? notifications.data.items.map((item) => <NotificationSummary key={item.id} item={item} locale={locale} />) : <Alert title={t('noNotifications')} tone="info">{copyByLocale(locale, 'Important account messages will appear here.', 'ستظهر رسائل الحساب المهمة هنا.')}</Alert>}</aside></div></>
+  return <><PageHeader title={t('overview')} />{subscription.error ? <ErrorBlock error={subscription.error} onRetry={subscription.reload} /> : null}<div className="portal-overview-grid"><div className="stack"><SubscriptionSummary data={subscription.data} loading={subscription.loading} navigate={navigate} />{subscription.refreshing ? <Alert title={copyByLocale(locale, 'Refreshing account data', 'يتم تحديث بيانات الحساب')} tone="info" /> : null}<Card><SectionHeader title={t('latestRelease')} action={<Button variant="text" onClick={() => navigate({ surface: 'portal', page: 'downloads' })}>{t('viewAll')}</Button>} />{release.loading ? <SkeletonStack rows={4} /> : release.error ? <ErrorBlock error={release.error} onRetry={release.reload} /> : <DownloadCard title={t('downloadForWindows')} version={release.data?.version || t('unavailable')} meta={[release.data?.available ? t('active') : t('unavailable')]} buttonLabel={t('downloads')} disabled={!release.data?.available} onClick={() => navigate({ surface: 'portal', page: 'downloads' })} />}</Card></div><aside className="portal-notices"><SectionHeader title={t('notifications')} action={<Button variant="text" onClick={() => navigate({ surface: 'portal', page: 'notifications' })}>{t('viewAll')}</Button>} />{notifications.loading ? <SkeletonStack rows={3} /> : notifications.error ? <ErrorBlock error={notifications.error} onRetry={notifications.reload} /> : notifications.data?.items.length ? notifications.data.items.map((item) => <NotificationSummary key={item.id} item={item} locale={locale} />) : <Alert title={t('noNotifications')} tone="info">{copyByLocale(locale, 'Important account messages will appear here.', 'ستظهر رسائل الحساب المهمة هنا.')}</Alert>}</aside></div></>
 }
 
 function SubscriptionSummary({ data, loading, navigate }: { data: AccountSubscription | null; loading: boolean; navigate?: Navigate }) {
@@ -791,7 +808,21 @@ function PortalDownloads() {
   const { t } = useExperience()
   const adapters = useAdapters()
   const release = useAsyncData(() => adapters.releases.getLatest('beta'), [adapters])
-  return <><PageHeader title={t('downloads')} />{release.loading ? <DownloadCardSkeleton /> : release.error ? <ErrorBlock error={release.error} onRetry={release.reload} /> : <DownloadCard title={t('downloadForWindows')} version={release.data?.version || t('unavailable')} meta={[release.data?.filename || t('fileSize'), release.data?.sha256 || t('releaseNotes')]} buttonLabel={t('downloads')} disabled={!release.data?.available} onClick={() => { if (release.data?.downloadUrl) window.location.href = release.data.downloadUrl }} />}</>
+  const [downloading, setDownloading] = useState(false)
+  const [downloadError, setDownloadError] = useState('')
+  const startDownload = async () => {
+    if (!release.data?.releaseId) return
+    setDownloading(true)
+    setDownloadError('')
+    try {
+      await adapters.releases.download(release.data.releaseId, release.data.filename)
+    } catch {
+      setDownloadError(t('downloadError'))
+    } finally {
+      setDownloading(false)
+    }
+  }
+  return <><PageHeader title={t('downloads')} />{release.loading ? <DownloadCardSkeleton /> : release.error ? <ErrorBlock error={release.error} onRetry={release.reload} /> : <><DownloadCard title={t('downloadForWindows')} version={release.data?.version || t('unavailable')} meta={[release.data?.filename || t('fileSize'), release.data?.sha256 || t('releaseNotes')]} buttonLabel={t('downloads')} disabled={!release.data?.available || downloading} onClick={() => void startDownload()} />{downloadError ? <Alert title={t('downloadError')} tone="danger">{downloadError}</Alert> : null}</>}</>
 }
 
 function PortalPayments() {
@@ -1049,7 +1080,7 @@ export function AdminProductionPages({ page, navigate }: { page: string; navigat
     { label: t('governance'), items: [{ id: 'policies', label: t('policies'), icon: ShieldCheck }, { id: 'audit', label: t('auditLog'), icon: ScrollText }, { id: 'settings', label: t('settings'), icon: Settings }] },
   ], [t, locale])
   const title = groups.flatMap((group) => group.items).find((item) => item.id === page)?.label || t('adminOverview')
-  return <AdminGuard navigate={navigate}><WorkspaceShell surface="admin" page={page} title={title} groups={groups} navigate={navigate} admin>{page === 'subscriptions' || page === 'users' ? <AdminSubscriptions /> : page === 'releases' ? <AdminReleases /> : page === 'support' ? <AdminSupportV2 /> : page === 'communications' ? <AdminEmailOperations /> : page === 'diagnostics' ? <AdminDiagnostics /> : page === 'audit' ? <AdminAudit /> : page === 'promos' ? <AdminPromos /> : page === 'commerce' ? <AdminCommerce /> : page === 'policies' ? <AdminPolicies /> : <AdminOverview />}</WorkspaceShell></AdminGuard>
+  return <AdminGuard navigate={navigate}><WorkspaceShell surface="admin" page={page} title={title} groups={groups} navigate={navigate} admin>{page === 'users' ? <AdminUsers /> : page === 'subscriptions' ? <AdminSubscriptions /> : page === 'releases' ? <AdminReleases /> : page === 'support' ? <AdminSupportV2 /> : page === 'communications' ? <AdminEmailOperations /> : page === 'diagnostics' ? <AdminDiagnostics /> : page === 'audit' ? <AdminAudit /> : page === 'promos' ? <AdminPromos /> : page === 'commerce' ? <AdminCommerce /> : page === 'policies' ? <AdminPolicies /> : <AdminOverview />}</WorkspaceShell></AdminGuard>
 }
 
 function AdminGuard({ children }: { children: ReactNode; navigate: Navigate }) {
@@ -1092,6 +1123,22 @@ function AdminOverview() {
   return <><PageHeader title={t('adminOverview')} />{dashboard.error ? <ErrorBlock error={dashboard.error} onRetry={dashboard.reload} /> : null}<div className="admin-metric-strip">{[t('totalUsers'), t('activeSubscriptions'), t('openTickets'), t('unresolvedCrashes')].map((label, index) => <StatCard key={label} label={label} value={Object.values(kpis)[index] ?? '—'} />)}</div><Card><SectionHeader title={t('recentAdminActivity')} /><pre className="mono">{JSON.stringify(dashboard.data?.recentActivity || [], null, 2)}</pre></Card></>
 }
 
+function AdminUsers() {
+  const { t, locale } = useExperience()
+  const { admin } = useAdapters()
+  const [search, setSearch] = useState('')
+  const rows = useAsyncData(() => admin.listUsers({ search }), [admin, search])
+  const columns: Column<AdminUserSummary>[] = [
+    { key: 'name', header: t('name'), render: (row) => row.display_name || '—' },
+    { key: 'email', header: t('email'), render: (row) => row.email },
+    { key: 'account', header: t('status'), render: (row) => <Badge tone={row.account_status === 'active' ? 'success' : 'warning'}>{row.account_status}</Badge> },
+    { key: 'entitlement', header: t('subscription'), render: (row) => <Badge tone={row.subscription_projection?.entitlement === 'entitled' ? 'success' : 'neutral'}>{row.subscription_projection?.entitlement || 'no_subscription'}</Badge> },
+    { key: 'plan', header: t('plan'), render: (row) => row.subscription_projection?.plan_term || copyByLocale(locale, 'No subscription', 'لا يوجد اشتراك') },
+    { key: 'created', header: t('date'), render: (row) => formatDisplayDate(row.created_at, locale) },
+  ]
+  return <><PageHeader title={t('users')} /><TableToolbar searchLabel={t('search')} searchValue={search} onSearch={setSearch} />{rows.error ? <ErrorBlock error={rows.error} onRetry={rows.reload} /> : <DataTable columns={columns} rows={rows.data || []} loading={rows.loading} rowKey={(row) => row.firebase_user_id} emptyTitle={t('tableEmpty')} emptyBody={t('unavailableMetric')} />}</>
+}
+
 function AdminSubscriptions() {
   const { t, locale } = useExperience()
   const { admin } = useAdapters()
@@ -1101,10 +1148,11 @@ function AdminSubscriptions() {
   if (rows.loading && !rows.data) return <AdminSubscriptionsSkeleton />
   const columns: Column<AdminSubscription>[] = [
     { key: 'email', header: t('email'), render: (row) => row.user_email || row.firebase_user_id || row.id },
-    { key: 'status', header: t('status'), render: (row) => <Badge tone={row.status === 'active' ? 'success' : 'warning'}>{row.status}</Badge> },
-    { key: 'plan', header: t('plan'), render: (row) => row.plan },
+    { key: 'current', header: t('type'), render: (row) => <Badge tone={row.is_current_projection ? 'info' : 'neutral'}>{row.is_current_projection ? t('current') : copyByLocale(locale, 'History', 'سجل سابق')}</Badge> },
+    { key: 'status', header: t('status'), render: (row) => <Badge tone={row.subscription_projection?.entitlement === 'entitled' ? 'success' : 'warning'}>{row.subscription_projection?.lifecycle || row.status}</Badge> },
+    { key: 'plan', header: t('plan'), render: (row) => row.subscription_projection?.plan_term || row.plan },
     { key: 'expires', header: t('expiryDate'), render: (row) => formatDisplayDate(row.expires_at, locale) },
-    { key: 'actions', header: t('actions'), render: (row) => <div className="cluster"><Button size="sm" onClick={() => admin.updateSubscriptionStatus(row.id, row.status === 'active' ? 'suspended' : 'active').then(rows.reload)}>{row.status === 'active' ? t('disabled') : t('enabled')}</Button><Button size="sm" onClick={() => admin.resetHwid(row.id).then(rows.reload)}>{t('resetHwid')}</Button></div> },
+    { key: 'actions', header: t('actions'), render: (row) => row.is_current_projection ? <div className="cluster"><Button size="sm" onClick={() => admin.updateSubscriptionStatus(row.id, row.status === 'active' ? 'suspended' : 'active').then(rows.reload)}>{row.status === 'active' ? t('disabled') : t('enabled')}</Button><Button size="sm" onClick={() => admin.resetHwid(row.id).then(rows.reload)}>{t('resetHwid')}</Button></div> : row.integrity_warning ? <Badge tone="danger">{row.integrity_warning}</Badge> : '—' },
   ]
   return <><PageHeader title={t('subscriptions')} actions={<Button variant="primary" onClick={() => setGrantOpen(true)}>{t('grantSubscription')}</Button>} /><TableToolbar searchLabel={t('search')} searchValue={search} onSearch={setSearch} />{rows.error ? <ErrorBlock error={rows.error} onRetry={rows.reload} /> : <DataTable columns={columns} rows={rows.data || []} loading={rows.loading} rowKey={(row) => row.id} emptyTitle={t('tableEmpty')} emptyBody={t('unavailableMetric')} />}<GrantSubscriptionDrawer open={grantOpen} onClose={() => { setGrantOpen(false); rows.reload() }} /></>
 }
@@ -1595,8 +1643,24 @@ function AdminPromos() {
 }
 
 function AdminCommerce() {
-  const { t } = useExperience()
-  return <><PageHeader title={t('payments')} /><EmptyState icon={WalletCards} title={t('payments')} body={t('unavailableMetric')} /></>
+  const { t, locale } = useExperience()
+  const adapters = useAdapters()
+  const overview = useAsyncData(() => adapters.admin.getCommerceOverview(), [adapters])
+  const data = overview.data
+  const planColumns: Column<AdminCommerceOverview['plans'][number]>[] = [
+    { key: 'plan', header: t('plan'), render: (row) => row.display_name || row.plan_id },
+    { key: 'term', header: t('type'), render: (row) => row.term },
+    { key: 'price', header: t('details'), render: (row) => new Intl.NumberFormat(locale === 'ar' ? 'ar-EG' : 'en-US', { style: 'currency', currency: row.currency }).format(row.price_minor / 100) },
+    { key: 'provider', header: t('status'), render: (row) => <Badge tone={row.purchasable ? 'success' : 'warning'}>{row.purchasable ? t('enabled') : row.config_status}</Badge> },
+  ]
+  const orderColumns: Column<AdminCommerceOverview['orders'][number]>[] = [
+    { key: 'id', header: t('details'), render: (row) => row.id.slice(0, 8) },
+    { key: 'plan', header: t('plan'), render: (row) => `${row.plan_id} v${row.plan_version}` },
+    { key: 'status', header: t('status'), render: (row) => <Badge tone={row.status === 'paid' ? 'success' : 'warning'}>{row.status}</Badge> },
+    { key: 'date', header: t('date'), render: (row) => formatDisplayDate(row.created_at, locale) },
+  ]
+  if (overview.loading && !data) return <><PageHeader title={t('payments')} /><SkeletonStack rows={6} /></>
+  return <><PageHeader title={t('payments')} />{overview.error ? <ErrorBlock error={overview.error} onRetry={overview.reload} /> : null}{data ? <div className="stack"><div className="admin-metric-strip"><StatCard label={copyByLocale(locale, 'Checkout', 'الدفع')} value={data.checkout_available ? t('enabled') : t('disabled')} /><StatCard label={copyByLocale(locale, 'Configured providers', 'المزودون المجهزون')} value={Object.values(data.provider_status).filter(Boolean).length} /><StatCard label={t('plans')} value={data.plans.length} /><StatCard label={t('payments')} value={data.orders.length} /></div>{!data.checkout_available ? <Alert title={copyByLocale(locale, 'Checkout unavailable', 'الدفع غير متاح')} tone="info">{copyByLocale(locale, 'No payment provider is configured for a purchasable plan.', 'لا يوجد مزود دفع مجهز لخطة قابلة للشراء.')}</Alert> : null}{data.integrity_events.length ? <Alert title={copyByLocale(locale, 'Subscription integrity review', 'مراجعة سلامة الاشتراكات')} tone="warning">{copyByLocale(locale, `${data.integrity_events.length} unresolved event(s).`, `${data.integrity_events.length} حالة غير محلولة.`)}</Alert> : null}<Card><SectionHeader title={t('plans')} description={data.reconciliation_status} /><DataTable columns={planColumns} rows={data.plans} rowKey={(row) => `${row.plan_id}:${row.version}`} emptyTitle={t('tableEmpty')} emptyBody={t('unavailableMetric')} /></Card><Card><SectionHeader title={t('payments')} /><DataTable columns={orderColumns} rows={data.orders} rowKey={(row) => row.id} emptyTitle={t('tableEmpty')} emptyBody={copyByLocale(locale, 'No provider orders have been created.', 'لا توجد طلبات دفع من مزود حاليًا.')} /></Card><div className="admin-metric-strip"><StatCard label={t('releases')} value={data.releases.length} /><StatCard label={t('downloads')} value={data.download_access_logs.length} /><StatCard label={copyByLocale(locale, 'Integrity alerts', 'تنبيهات السلامة')} value={data.integrity_events.length} /></div></div> : null}</>
 }
 
 function AdminPolicies() {

@@ -1,5 +1,6 @@
 import { hmacSha256Hex, randomBase64Url, randomUserCode, sha256Hex, timingSafeEqualHex } from "./lib/crypto"
 import { allowRateLimit } from "./lib/rateLimit"
+import { desktopEntitlementFromProjection, resolveSubscriptionTruth } from "../../shared/subscriptions/resolver.js"
 import {
   createAppSession,
   createDeviceLogin,
@@ -11,7 +12,6 @@ import {
   getAppSessionByIdForUser,
   getDeviceLoginByCode,
   getLatestEmailVerification,
-  getLatestSubscriptionForUser,
   getPendingDeviceLoginByUserCode,
   getSubscriptionRowsForUser,
   insertEmailVerificationAudit,
@@ -147,6 +147,7 @@ async function handleVerify(request: Request, env: Env): Promise<Response> {
 
 type AccountConnectionState = "signed_out" | "link_pending" | "linked" | "session_expired" | "revoked" | "offline" | "error"
 type DesktopEntitlementState = "unknown" | "no_subscription" | "active" | "trial" | "grace" | "expired" | "suspended" | "lifetime"
+type SubscriptionResolution = ReturnType<typeof resolveSubscriptionTruth<SubscriptionRow>>
 
 function appSessionTtlMs(env: Env): number {
   const configuredDays = Number(String(env.APP_SESSION_TTL_DAYS || "30").trim())
@@ -154,48 +155,50 @@ function appSessionTtlMs(env: Env): number {
   return days * 24 * 60 * 60 * 1000
 }
 
-function desktopEntitlementState(row: SubscriptionRow | null): DesktopEntitlementState {
-  if (!row) return "no_subscription"
-  const lifecycle = subscriptionLifecycle(row)
-  if (lifecycle === "suspended") return "suspended"
-  if (lifecycle === "expired") return "expired"
-  if (planTerm(row) === "lifetime" && isActiveUsableSubscription(row)) return "expired"
-  if (planTerm(row) === "lifetime") return "lifetime"
-  if (lifecycle === "trialing") return "trial"
-  if (lifecycle === "past_due") return "grace"
-  if (lifecycle === "active" || lifecycle === "cancelled") return "active"
-  return "unknown"
-}
-
 function entitlementAllowsPaidAccess(state: DesktopEntitlementState): boolean {
   return state === "active" || state === "trial" || state === "grace" || state === "lifetime"
 }
 
+function resolveRowsForUser(rows: SubscriptionRow[], userId: string, email: string): SubscriptionResolution {
+  return resolveSubscriptionTruth<SubscriptionRow>(rows, { firebaseUid: userId, email })
+}
+
+async function resolveUserSubscription(env: Env, userId: string, email: string): Promise<SubscriptionResolution> {
+  const rows = await getSubscriptionRowsForUser(env, userId, email)
+  return resolveRowsForUser(rows, userId, email)
+}
+
 function buildSubscriptionRuntime(
-  row: SubscriptionRow | null,
+  resolutionOrRow: SubscriptionResolution | SubscriptionRow | null,
   status: string,
   user: { userId?: string | null; email?: string | null; displayName?: string | null; photoUrl?: string | null; authProvider?: string | null } = {},
 ): Record<string, unknown> {
+  const resolution = resolutionOrRow && "projection" in resolutionOrRow
+    ? resolutionOrRow as SubscriptionResolution
+    : resolveRowsForUser(resolutionOrRow ? [resolutionOrRow as SubscriptionRow] : [], String(user.userId || ""), String(user.email || ""))
+  const row = resolution.currentRow
+  const projection = resolution.projection
+  const projectionRecord = projection as Record<string, any>
   const tier = row ? (String(row.tier || "public").trim().toLowerCase() === "private" ? "private" : "public") : null
   const featurePayload = row?.feature_payload && typeof row.feature_payload === "object" ? row.feature_payload : {}
   const metadata = row?.metadata && typeof row.metadata === "object" ? row.metadata : {}
-  const entitlementState = desktopEntitlementState(row)
+  const entitlementState = desktopEntitlementFromProjection(projection) as DesktopEntitlementState
   return {
     success: true,
     status,
     connection_state: "linked" satisfies AccountConnectionState,
     entitlement_state: entitlementState,
-    entitlement: subscriptionProjection(row),
+    entitlement: projection,
     tier,
-    subscription_id: row?.id || null,
-    license_id: row?.id || null,
+    subscription_id: projectionRecord.subscription_id || null,
+    license_id: projectionRecord.subscription_id || null,
     user_id: user.userId || row?.firebase_user_id || null,
     user_email: user.email || row?.user_email || null,
     display_name: user.displayName || metadata.display_name || null,
     avatar_url: user.photoUrl || metadata.avatar_url || null,
     auth_provider: user.authProvider || metadata.auth_provider || null,
-    plan: row?.plan || null,
-    expires_at: row?.expires_at || null,
+    plan: projectionRecord.plan || null,
+    expires_at: projectionRecord.expires_at || null,
     runtime_payload: tier === "private" ? featurePayload : {},
     policy: {
       allow: entitlementAllowsPaidAccess(entitlementState),
@@ -340,115 +343,6 @@ async function provisionProfile(
       photo_url: firebaseUser.photoUrl || null,
     },
   })
-}
-
-function subscriptionLifecycle(row: SubscriptionRow | null): "trialing" | "active" | "past_due" | "cancelled" | "expired" | "suspended" | null {
-  if (!row) return null
-  const status = String(row.status || "").trim().toLowerCase()
-  const term = planTerm(row)
-  if (status === "suspended") return "suspended"
-  if (status === "past_due") return "past_due"
-  if (status === "trialing" || status === "trial") return "trialing"
-  if (status === "canceled" || status === "cancelled") return "cancelled"
-  if ((status === "expired" || isIsoExpired(row.expires_at || null)) && term !== "lifetime") return "expired"
-  if (status === "active") return "active"
-  return "expired"
-}
-
-function planTerm(row: SubscriptionRow | null): "weekly" | "monthly" | "annual" | "lifetime" | "custom" | null {
-  if (!row) return null
-  const metadata = row.metadata && typeof row.metadata === "object" ? row.metadata : {}
-  const expiresAt = Date.parse(String(row.expires_at || ""))
-  if (Boolean((metadata as Record<string, unknown>).is_unlimited) || (Number.isFinite(expiresAt) && expiresAt >= Date.parse("9999-01-01T00:00:00Z"))) {
-    return "lifetime"
-  }
-  const plan = String(row.plan || "").trim().toLowerCase()
-  if (plan === "weekly") return "weekly"
-  if (plan === "monthly") return "monthly"
-  if (plan === "yearly" || plan === "annual") return "annual"
-  return "custom"
-}
-
-function renewalState(row: SubscriptionRow | null): "not_applicable" | "manual" | "auto_renew" | "cancel_at_period_end" {
-  if (!row || planTerm(row) === "lifetime") return "not_applicable"
-  const metadata = row.metadata && typeof row.metadata === "object" ? row.metadata as Record<string, unknown> : {}
-  if (metadata.cancel_at_period_end) return "cancel_at_period_end"
-  if (metadata.auto_renew || row.provider_subscription_id) return "auto_renew"
-  return "manual"
-}
-
-function entitlementResult(row: SubscriptionRow | null): "no_subscription" | "entitled" | "grace_period" | "payment_required" | "expired" | "suspended" | "policy_blocked" {
-  const lifecycle = subscriptionLifecycle(row)
-  if (!row || !lifecycle) return "no_subscription"
-  if (lifecycle === "suspended") return "suspended"
-  if (lifecycle === "past_due") return "payment_required"
-  if (lifecycle === "expired") return "expired"
-  return "entitled"
-}
-
-function subscriptionProjection(row: SubscriptionRow | null) {
-  return {
-    existence: row ? "present" : "none",
-    lifecycle: subscriptionLifecycle(row),
-    plan_term: planTerm(row),
-    renewal_state: renewalState(row),
-    entitlement: entitlementResult(row),
-    subscription_id: row?.id || null,
-    plan: row?.plan || null,
-    tier: row?.tier || null,
-    expires_at: row?.expires_at || null,
-    source: "supabase_account_subscriptions",
-  }
-}
-
-function subscriptionBelongsToFirebaseUser(row: SubscriptionRow, userId: string, email: string): boolean {
-  const rowUserId = String(row.firebase_user_id || "").trim()
-  if (rowUserId) return rowUserId === String(userId || "").trim()
-  return Boolean(email) && String(row.user_email || "").trim().toLowerCase() === String(email || "").trim().toLowerCase()
-}
-
-function isCurrentSubscriptionCandidate(row: SubscriptionRow): boolean {
-  const lifecycle = subscriptionLifecycle(row)
-  if (!lifecycle || lifecycle === "expired" || lifecycle === "suspended") return false
-  return ["active", "trialing", "past_due", "cancelled"].includes(lifecycle)
-}
-
-function currentSubscriptionScore(row: SubscriptionRow, userId: string): string {
-  const exactUser = String(row.firebase_user_id || "").trim() === String(userId || "").trim() ? "1" : "0"
-  const lifecycle = subscriptionLifecycle(row)
-  const lifecycleScore = lifecycle === "active" ? "5" : lifecycle === "trialing" ? "4" : lifecycle === "past_due" ? "3" : lifecycle === "cancelled" ? "2" : "0"
-  const lifetime = planTerm(row) === "lifetime" ? "1" : "0"
-  return [exactUser, lifecycleScore, lifetime, String(row.expires_at || ""), String(row.updated_at || ""), String(row.created_at || "")].join("|")
-}
-
-function selectCurrentSubscription(rows: SubscriptionRow[], userId: string, email: string): SubscriptionRow | null {
-  const owned = rows.filter((row) => subscriptionBelongsToFirebaseUser(row, userId, email))
-  const current = owned.filter(isCurrentSubscriptionCandidate)
-  if (current.length > 1) {
-    console.warn(JSON.stringify({ event: "subscription_integrity_multiple_current", user_id: userId, count: current.length }))
-  }
-  return current.sort((left, right) => currentSubscriptionScore(right, userId).localeCompare(currentSubscriptionScore(left, userId)))[0] || null
-}
-
-function subscriptionHistorySummary(rows: SubscriptionRow[], current: SubscriptionRow | null, userId: string, email: string) {
-  const owned = rows.filter((row) => subscriptionBelongsToFirebaseUser(row, userId, email))
-  const historicalExpired = owned.filter((row) => subscriptionLifecycle(row) === "expired")
-  const latestExpired = historicalExpired
-    .map((row) => String(row.expires_at || row.updated_at || row.created_at || ""))
-    .filter(Boolean)
-    .sort()
-    .reverse()[0] || null
-  return {
-    total: owned.length,
-    current_usable_count: current ? owned.filter(isCurrentSubscriptionCandidate).length : 0,
-    historical_expired_count: historicalExpired.length,
-    latest_expired_at: latestExpired,
-    legacy_email_candidates: owned.filter((row) => !String(row.firebase_user_id || "").trim()).length,
-    uid_mismatch_candidates: rows.filter((row) => {
-      const rowUserId = String(row.firebase_user_id || "").trim()
-      return rowUserId && rowUserId !== String(userId || "").trim() && String(row.user_email || "").trim().toLowerCase() === String(email || "").trim().toLowerCase()
-    }).length,
-  }
 }
 
 function randomOtpCode(): string {
@@ -827,7 +721,7 @@ async function authorizePendingDeviceLogin(
     authProvider?: string | null
     authProviders?: string[]
   },
-): Promise<{ success: true; subscription: SubscriptionRow | null; runtime: Record<string, unknown> } | { success: false; error: string; status: number }> {
+): Promise<{ success: true; subscription: SubscriptionRow | null; subscriptionResolution: SubscriptionResolution; runtime: Record<string, unknown> } | { success: false; error: string; status: number }> {
   if (String(pending?.status || "").trim().toLowerCase() !== "pending") {
     return { success: false, error: "device_code_already_used", status: 409 }
   }
@@ -845,7 +739,8 @@ async function authorizePendingDeviceLogin(
     return { success: false, error: "account_disabled", status: 403 }
   }
 
-  const subscription = await getLatestSubscriptionForUser(env, firebaseUser.userId, firebaseUser.email)
+  const subscriptionResolution = await resolveUserSubscription(env, firebaseUser.userId, firebaseUser.email)
+  const subscription = subscriptionResolution.currentRow
   const authorized = await authorizePendingDeviceLoginRow(env, pending.id, {
     user_id: firebaseUser.userId,
     user_email: firebaseUser.email,
@@ -860,14 +755,15 @@ async function authorizePendingDeviceLogin(
     },
   })
   if (!authorized) return { success: false, error: "device_code_already_used", status: 409 }
-  const runtime = buildSubscriptionRuntime(subscription, "authorized", firebaseUser)
-  return { success: true, subscription, runtime }
+  const runtime = buildSubscriptionRuntime(subscriptionResolution, "authorized", firebaseUser)
+  return { success: true, subscription, subscriptionResolution, runtime }
 }
 
 async function issueDesktopSession(
   env: Env,
   pending: any,
   subscription: SubscriptionRow | null,
+  subscriptionResolution: SubscriptionResolution | null,
   user: {
     userId: string
     email: string
@@ -906,7 +802,7 @@ async function issueDesktopSession(
       user_id: user.userId,
       user_email: user.email,
     })
-    const runtime = buildSubscriptionRuntime(subscription, "verified", user)
+    const runtime = buildSubscriptionRuntime(subscriptionResolution || subscription, "verified", user)
     return json({
       success: true,
       status: "authorized",
@@ -942,21 +838,17 @@ async function resolveSessionSubscription(
   env: Env,
   sessionToken: string,
   hwid: string,
-): Promise<{ session: any; subscription: any; error?: string }> {
+): Promise<{ session: any; subscription: SubscriptionRow | null; subscriptionResolution: SubscriptionResolution | null; error?: string }> {
   const tokenHash = await sha256Hex(sessionToken)
   const session = await getAppSessionByHash(env, tokenHash)
-  if (!session) return { session: null, subscription: null, error: "session_not_found" }
-  if (session.revoked_at) return { session, subscription: null, error: "session_revoked" }
-  if (session.hwid !== hwid) return { session, subscription: null, error: "session_hwid_mismatch" }
+  if (!session) return { session: null, subscription: null, subscriptionResolution: null, error: "session_not_found" }
+  if (session.revoked_at) return { session, subscription: null, subscriptionResolution: null, error: "session_revoked" }
+  if (session.hwid !== hwid) return { session, subscription: null, subscriptionResolution: null, error: "session_hwid_mismatch" }
   if (isIsoExpired(session.expires_at)) {
-    return { session, subscription: null, error: "session_expired" }
+    return { session, subscription: null, subscriptionResolution: null, error: "session_expired" }
   }
-  const subscription = await getLatestSubscriptionForUser(
-    env,
-    String(session.user_id || ""),
-    String(session.user_email || ""),
-  )
-  return { session, subscription }
+  const subscriptionResolution = await resolveUserSubscription(env, String(session.user_id || ""), String(session.user_email || ""))
+  return { session, subscription: subscriptionResolution.currentRow, subscriptionResolution }
 }
 
 async function handleDeviceStart(request: Request, env: Env): Promise<Response> {
@@ -1068,7 +960,7 @@ async function handleDevicePasswordComplete(request: Request, env: Env): Promise
     return json({ success: false, error: authorization.error }, authorization.status)
   }
 
-  return await issueDesktopSession(env, pending, authorization.subscription, firebaseUser)
+  return await issueDesktopSession(env, pending, authorization.subscription, authorization.subscriptionResolution, firebaseUser)
 }
 
 async function handleDevicePoll(request: Request, env: Env): Promise<Response> {
@@ -1090,8 +982,8 @@ async function handleDevicePoll(request: Request, env: Env): Promise<Response> {
   }
   if (!row.user_id) return json({ success: false, error: "device_authorization_incomplete" }, 409)
 
-  const subscription = await getLatestSubscriptionForUser(env, String(row.user_id || ""), String(row.user_email || ""))
-  return await issueDesktopSession(env, row, subscription, {
+  const subscriptionResolution = await resolveUserSubscription(env, String(row.user_id || ""), String(row.user_email || ""))
+  return await issueDesktopSession(env, row, subscriptionResolution.currentRow, subscriptionResolution, {
     userId: String(row.user_id || ""),
     email: String(row.user_email || ""),
     displayName: String(row.metadata?.display_name || row.user_email || "").trim() || null,
@@ -1118,7 +1010,7 @@ async function handleSessionVerify(request: Request, env: Env): Promise<Response
     authProvider: String(resolved.session.metadata?.auth_provider || "").trim() || null,
   }
   return json({
-    ...buildSubscriptionRuntime(resolved.subscription, "verified", user),
+    ...buildSubscriptionRuntime(resolved.subscriptionResolution || resolved.subscription, "verified", user),
     user_email: resolved.session.user_email,
     display_name: resolved.session.metadata?.display_name || null,
     avatar_url: resolved.session.metadata?.avatar_url || null,
@@ -1267,11 +1159,26 @@ async function handleAccountSubscription(request: Request, env: Env): Promise<Re
   const firebaseUser = await verifyFirebaseUser(idToken, env)
   const profile = await provisionProfile(env, firebaseUser).catch(() => null)
   const rows = await getSubscriptionRowsForUser(env, firebaseUser.userId, firebaseUser.email)
-  const currentSubscription = selectCurrentSubscription(rows, firebaseUser.userId, firebaseUser.email)
-  const projection = subscriptionProjection(currentSubscription)
-  const historySummary = subscriptionHistorySummary(rows, currentSubscription, firebaseUser.userId, firebaseUser.email)
-  const runtime = currentSubscription ? {
-    ...buildSubscriptionRuntime(currentSubscription, "verified"),
+  const resolution = resolveRowsForUser(rows, firebaseUser.userId, firebaseUser.email)
+  const projection = resolution.projection as Record<string, any>
+  const historySummary = {
+    total: resolution.diagnostics.authoritative_rows,
+    current_usable_count: resolution.diagnostics.current_usable_count,
+    historical_count: resolution.diagnostics.historical_count,
+    historical_expired_count: resolution.history.filter((item) => String(item.lifecycle || "") === "expired").length,
+    latest_expired_at: resolution.history
+      .filter((item) => String(item.lifecycle || "") === "expired")
+      .map((item) => String(item.expires_at || ""))
+      .filter(Boolean)
+      .sort()
+      .reverse()[0] || null,
+    legacy_email_candidates: resolution.diagnostics.legacy_email_candidates,
+    uid_mismatch_candidates: resolution.diagnostics.uid_mismatch_candidates,
+    integrity: resolution.diagnostics.integrity,
+    integrity_code: resolution.diagnostics.code,
+  }
+  const runtime = resolution.currentRow ? {
+    ...buildSubscriptionRuntime(resolution, "verified", firebaseUser),
     lifecycle: projection.lifecycle,
     entitlement: projection.entitlement,
     plan_term: projection.plan_term,
@@ -1292,7 +1199,7 @@ async function handleAccountSubscription(request: Request, env: Env): Promise<Re
     subscription_projection: projection,
     entitlement: projection.entitlement,
     subscription_history_summary: historySummary,
-    status: runtime ? "active" : "no_subscription",
+    status: runtime ? String(projection.lifecycle || "active") : String(projection.entitlement || "no_subscription"),
   })
 }
 

@@ -114,9 +114,9 @@ Phase B is closed as `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACC
 
 ## Phase C: Account & Desktop Linking
 
-Phase C is active and has no dependency gate on the deferred `monthly` projection defect.
+Phase C is closed as `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE`. The `monthly` projection defect is owned by active Phase E and does not reopen Phase C.
 
-Automated implementation evidence is complete locally and the Auth/Policy Workers have passed live smoke checks. The additive Supabase session-independence migration remains a rollout prerequisite; manual workflow acceptance remains deferred to Phase G.
+Automated implementation evidence is complete, the additive Supabase session-independence migration is applied, and the Auth/Policy Workers have passed live smoke checks. Manual workflow acceptance remains deferred to Phase G.
 
 Account connection states: `signed_out`, `link_pending`, `linked`, `session_expired`, `revoked`, `offline`, `error`.
 
@@ -154,6 +154,14 @@ Entitlement states: `unknown`, `no_subscription`, `active`, `trial`, `grace`, `e
 
 ## Phase E: Subscription, Downloads, Pricing & Checkout
 
+Automated implementation status: `COMPLETE_EXCEPT_WAITING_EXTERNAL_INTEGRATION`.
+
+- Supabase migration `20260622101510_phase_e_commercial_truth` applied with preflight, PostgreSQL 17 validation, recovery package, and postflight.
+- Shared resolver behavior tests pass for no rows, legacy email rows, UID mismatch, active/trial/grace/lifetime/cancel, history, malformed rows, and duplicate current rows.
+- Plan catalog, idempotent order preparation, and protected-download authorization tests pass.
+- Real checkout remains disabled until a payment provider and provider price mappings are supplied.
+- Manual acceptance remains Phase G.
+
 Subscription truth normalization must cover:
 
 1. New account with no subscription shows `No subscription`.
@@ -176,6 +184,12 @@ Subscription truth normalization must cover:
 10. Download gating matches product rule.
 
 ## Phase F: Admin Completion
+
+Current automated status: `ACTIVE`.
+
+- Users and Subscriptions now use distinct endpoints and pages.
+- Commerce operations has structured plan/provider/order/integrity/download visibility.
+- Manual grant simplification, advanced recovery placement, broader dashboard/policy cleanup, and final operational acceptance remain open.
 
 1. Admin dashboard loads structured KPIs and structured recent activity.
 2. Admin user list is separate from subscription list.

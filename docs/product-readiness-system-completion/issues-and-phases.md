@@ -1,6 +1,6 @@
 # Discovered Issues, Severity, Root Cause and Recommended Phase
 
-## Current Phase Ownership - 2026-06-21
+## Current Phase Ownership - 2026-06-22
 
 | Item | Current state | Owner / next action |
 |---|---|---|
@@ -8,7 +8,9 @@
 | Emergency Subscription Grant | `IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED` | Operational acceptance in Phase G; UX/IA remains Phase F. |
 | Phase C account/desktop linking | `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE` | Supabase migration 010 applied and postflight verified. No Setup was rebuilt. |
 | Phase D support/contact/notifications/email | `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE` | Production Workers and D1 deployed; full human workflow acceptance remains Phase G. |
-| False `monthly` projection | Critical final correctness; not blocking C/D | Phase E only. Do not infer a current plan from email/default row order. |
+| Phase E commercial truth | `COMPLETE_EXCEPT_WAITING_EXTERNAL_INTEGRATION` | Schema/resolver/catalog/download authorization deployed; payment provider still required for real checkout. |
+| False `monthly` projection | `IMPLEMENTED_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE` | Firebase UID-only ownership and exact no-subscription projection deployed. |
+| Phase F Admin IA | `ACTIVE` | Users/subscriptions split implemented; remaining operational UX continues in Phase F. |
 | Support attachments | `NOT_IMPLEMENTED` | No UI promise; optional future product decision, not a Phase D blocker. |
 | OTP production delivery | Prepared but disabled | Auth/Policy `EMAIL_AUTH_ENABLED=false`; activate only after required secret/config readiness and a dedicated rollout. |
 | Desktop binary coverage | Source newer than latest Setup | Phase G installed-app packaging/acceptance. Launcher/Updater/Installer/OTA were not touched. |
@@ -85,11 +87,11 @@ Phase B.2 Emergency Subscription Grant status: `IMPLEMENTED_NOT_OPERATIONALLY_AC
 Current roadmap continuation:
 
 1. Phase B is closed after automated verification; retain the documented OTP/Auth state.
-2. Execute Phase C account and desktop linking without another manual gate.
-3. Continue D, E, and F in order.
-4. Perform consolidated manual product acceptance in Phase G.
+2. Phase C and Phase D are closed after automated verification.
+3. Phase E is closed except for the external payment-provider integration.
+4. Continue Phase F, then perform consolidated manual product acceptance in Phase G.
 
-Phase C implementation note: automated Auth/Policy/portal/desktop checks pass. The additive `010_account_session_subscription_independence.sql` migration is prepared and pending a valid Supabase database credential; this is a deployment prerequisite, not a new manual acceptance gate.
+Phase C implementation note: automated Auth/Policy/portal/desktop checks pass. Supabase migration `010_account_session_subscription_independence.sql` is applied and postflight verified. Phase E is closed except for the external payment-provider integration; Phase F is active and manual acceptance remains consolidated in Phase G.
 
 | ID | Issue | Severity | Root cause | Recommended phase | Required migration? |
 |---|---|---|---|---|---|
@@ -99,11 +101,11 @@ Phase C implementation note: automated Auth/Policy/portal/desktop checks pass. T
 | PR-004 | Subscription source of truth is split between Supabase and D1. | Critical | Auth/Admin use Supabase `account_subscriptions`; Policy uses D1 `subscriptions`; no ownership rule documented/enforced. | A/B/C/F | Possibly |
 | PR-005 | Subscription status vocabulary is incomplete. | High | Auth migration enum lacks `trialing`, `cancel_at_period_end`, `lifetime`, explicit `none`, and status normalization rules. | E | Yes, if adding enum values |
 | PR-006 | Admin grant flow can create/update subscriptions but does not model full production lifecycle. | High | Admin `createSubscription` takes plan/tier/expires and metadata `is_unlimited`; no unified state model or provider ownership. | F | Possibly |
-| PR-007 | Admin users view is not a real user management surface. | High | Router maps `users` and `subscriptions` to `AdminSubscriptions`; user details API exists but no dedicated page. | F | No |
+| PR-007 | Admin users view was not a real user management surface. | High | Resolved in Phase F: Users now read `account_profiles` and receive canonical subscription projections separately. | F/G | No |
 | PR-008 | Admin dashboard recent activity is raw and mixes unrelated rows. | Medium | `getAdminDashboard` merges crash and update rows directly into `recent_activity`, and UI renders JSON. | F | No |
-| PR-009 | Old floating `Policy Controls` panel still exists. | High | Admin Worker serves injected standalone policy admin JavaScript while new Admin Policies page exists. | F | No |
-| PR-010 | Pricing uses static frontend plans, not backend plan source. | High | `productionAdapters.listStaticPlans` returns static plans; no canonical plans endpoint verified. | E | Maybe, if plans table/API needed |
-| PR-011 | Checkout is only partially production. | High | Payment code creates manual fallback order and feature flags may disable checkout; provider completion not verified. | E | Possibly |
+| PR-009 | Old floating `Policy Controls` panel still exists. | High | Resolved in Phase F: Admin Worker no longer injects or serves the standalone panel; the structured Policies page is the sole UI. | F/G | No |
+| PR-010 | Pricing used static frontend plans. | High | Resolved in Phase E: production consumes `/api/plans/catalog`; draft plans are hidden until provider-ready. | E/G | Yes, applied |
+| PR-011 | Checkout awaits a real payment provider. | High | Fake/manual success was removed; order/idempotency schema is prepared and checkout is honestly disabled. | E / external integration | Applied schema; provider still required |
 | PR-012 | Customer portal payments and invoices are UI shells. | Medium | `PortalPayments` renders empty state/backend required. | E | Yes if invoices are required |
 | PR-013 | Devices page is UI shell, despite backend app session data existing. | Medium | Portal devices page shows backend required; admin user detail reads sessions. | C | No |
 | PR-014 | Notifications page is UI shell. | Medium | No customer notification API identified beyond support/email operational jobs. | D/F | Possibly |
@@ -116,26 +118,26 @@ Phase C implementation note: automated Auth/Policy/portal/desktop checks pass. T
 | PR-021 | Trial and lifetime product logic is not normalized. | High | Lifetime stored as metadata; trial not in Auth subscription enum. | E/F | Yes if status/tables change |
 | PR-022 | Auth signup does not clearly provision internal account profile. | High | Frontend creates Firebase user; Auth Worker can verify identity but no profile creation flow found. | B | Possibly |
 | PR-023 | Account subscription endpoint returns `subscription_required` for no subscription. | Medium | Auth Worker uses same error vocabulary for no subscription and blocked entitlement. | B/C | No |
-| PR-024 | Admin payment management page is shell only. | Medium | `AdminCommerce` returns decision-required empty state. | E/F | Depends on provider |
+| PR-024 | Admin payment management lacked operational visibility. | Medium | Structured catalog/provider/order/integrity/download visibility implemented; real provider reconciliation remains external. | E/F/G | No additional migration |
 | PR-025 | Policy admin state is accessible through old and new paths. | Medium | New Admin Policies page plus old injected panel/proxy endpoints. | F | No |
 | PR-026 | Product readiness requires tests for desktop auth paths but current phase did not run desktop E2E. | High | Audit-only phase; desktop build/test excluded from implementation. | G | No |
-| PR-027 | New/no-subscription users can appear as `monthly` in admin projections. Type: subscription truth/projection defect. Blocking Phase C now: No. Final acceptance: Phase G. | Critical for final correctness | Root-cause investigation is intentionally deferred. Phase E must produce `No subscription`, no default plan, no fake expiry/status, separate current/history, unified Customer/Admin projection, Firebase UID identity, and no email/default-row-order current selection. | E | Decision deferred to Phase E |
-| PR-028 | Admin users and subscriptions IA are conflated. | High | Production admin routes map `users` and `subscriptions` to the same subscription-centered surface, so users can look like subscription rows. | F | No |
+| PR-027 | New/no-subscription users appeared as `monthly`. | Critical for final correctness | Resolved automatically: exact null contract, UID-only ownership, current/history separation, integrity conflict fail-closed. Manual acceptance remains Phase G. | E/G | Applied migration 20260622101510 |
+| PR-028 | Admin users and subscriptions IA were conflated. | High | Separate `account_profiles` users endpoint/page and subscription history/projection page implemented. | F/G | No |
 | PR-029 | Manual Grant UI is implemented but too operational for daily admin use. | Medium | The current drawer requires manual Firebase UID entry, exposes internal operation labels, and requires free-text reason for routine actions. | F | No |
 | PR-030 | Subscription recovery is exposed as a normal grant operation. | Medium | `restore_remaining_time` is available in the primary grant operation selector, but it should be an advanced recovery action only when recovery context exists. | F | No |
 
 ## Phase ordering recommendation
 
 1. Phase B: Closed as `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE`.
-2. Phase C: Active. Decouple desktop link/session from subscription entitlement.
-3. Phase D: Stabilize support/contact and confirm email operations after auth is stable.
-4. Phase E: Normalize subscription truth, plan lifecycle, pricing/plans/checkout/download gates.
-5. Phase F: Complete admin IA and operational UX: users vs subscriptions, manual grant simplification, recovery actions, policy/dashboard surfaces.
+2. Phase C: Closed after automated verification; manual acceptance in G.
+3. Phase D: Closed after automated verification; manual acceptance in G.
+4. Phase E: `COMPLETE_EXCEPT_WAITING_EXTERNAL_INTEGRATION` for payment provider.
+5. Phase F: Active: complete remaining admin operational UX, recovery actions, policy/dashboard surfaces.
 6. Phase G: Consolidated manual product acceptance and full regression including desktop installed app, policy, support, email, checkout, OTA, downloads, skeleton rhythm, RTL/LTR, and visual regression.
 
 ## Phase E - Subscription Truth and Lifecycle Normalization
 
-Phase E critical item: a new user with no current subscription must never appear as `monthly`. It does not block Phase C and must not be investigated before Phase E.
+Phase E implementation result: a user with no UID-owned current subscription resolves to `no_subscription` with all plan/status/date fields null. Email-only legacy rows are diagnostic and never authorize access.
 
 Rule when no current subscription exists:
 

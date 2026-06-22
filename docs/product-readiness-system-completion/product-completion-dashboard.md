@@ -1,21 +1,23 @@
 # Product Completion Dashboard
 
-Date: 2026-06-21
+Date: 2026-06-22
 
-## Current Production Reconciliation - 2026-06-21
+## Current Production Reconciliation - 2026-06-22
 
 - Phase B remains closed as `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE`.
 - Emergency Subscription Grant remains `IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED`.
 - Phase C is closed as `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE` after Supabase migration `010_account_session_subscription_independence` was applied and verified. Account connection and entitlement remain separate.
 - Phase D is implemented and deployed with automated verification; manual workflow acceptance remains consolidated in Phase G.
-- The false `monthly` projection defect remains owned exclusively by Phase E. It was not investigated or patched during C/D.
+- Phase E is `COMPLETE_EXCEPT_WAITING_EXTERNAL_INTEGRATION`: subscription truth, normalized schema, backend-owned draft catalog, protected-download authorization, and operational commerce visibility are deployed and automatically verified. Real checkout remains disabled because no payment provider is configured.
+- The false `monthly` projection root cause was email-based ownership plus implicit legacy defaults. Firebase UID is now the only current-subscription owner; legacy email-only rows remain diagnostic history and cannot grant entitlement.
+- Phase F is active. Users and Subscriptions now have separate backend/UI sources; remaining manual-grant and broader Admin IA work stays in Phase F.
 - No B.3/B.4 or additional dependency gate was created.
 
 Current deployed Worker versions:
 
-- Auth: `7b886b15-71e7-4578-9c39-fe89c6d85e5c`
+- Auth: `c0a32f1d-076f-4c76-b490-10403824c283`
 - Policy: `3b81a537-e485-4af4-8ff9-576d75b1896f`
-- Admin: `91e248e9-ec88-4b68-ad93-5615be26379a`
+- Admin: `c098bc19-8457-4637-b66c-5b689ef4abe6`
 
 Phase D production state:
 
@@ -97,18 +99,18 @@ Final release acceptance:
 | Matrix # | Feature / flow | Previous status | B.1 implementation status | Product status after B.1 | Deferred acceptance |
 |---:|---|---|---|---|---|
 | 19 | Public contact page | `PARTIALLY_IMPLEMENTED` | Public contact and authenticated support routing separated. | `IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED` | Phase G. |
-| 20 | Customer support portal | `IMPLEMENTED_NOT_VERIFIED` | Visual support shell and loading states stabilized. | `IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED` | Phase G. |
+| 20 | Customer support portal | `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE` | Production D1 ownership, lifecycle, idempotency, unread state, and clean errors are deployed. | `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE` | Phase G. |
 | 21 | Customer create ticket | `IMPLEMENTED_NOT_VERIFIED` | No backend change; support IA clarified. | `UNCHANGED_BACKEND_PENDING_E2E` | Phase D/G. |
 | 22 | Customer reply to ticket | `IMPLEMENTED_NOT_VERIFIED` | Message role UI standardized. | `UNCHANGED_BACKEND_PENDING_E2E` | Phase D/G. |
 | 23 | Ticket status changes | `IMPLEMENTED_NOT_VERIFIED` | Message/thread presentation improved. | `UNCHANGED_BACKEND_PENDING_E2E` | Phase D/G. |
-| 24 | Admin support replies | `IMPLEMENTED_NOT_VERIFIED` | Admin support messages use semantic roles and labels. | `IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED` | Phase G. |
+| 24 | Admin support replies | `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE` | Portal/email replies, notes, priority, block state, and audit history are deployed. | `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE` | Phase G. |
 | 25 | Admin internal notes | `IMPLEMENTED_NOT_VERIFIED` | Internal notes get distinct visual treatment and remain admin-only in UI. | `IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED` | Phase G. |
-| 26 | Support sender blocking | `IMPLEMENTED_NOT_VERIFIED` | No backend change. UI remains in support drawer. | `UNCHANGED_BACKEND_PENDING_E2E` | Phase D/G. |
-| 27 | Support reply by email | `WAITING_EXTERNAL_INTEGRATION` | No change. | `WAITING_EXTERNAL_INTEGRATION` | Phase D/G after provider rollout. |
+| 26 | Support sender blocking | `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE` | Block/unblock is enforced for portal and inbound email with audit. | `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE` | Phase G. |
+| 27 | Support reply by email | `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE` | Signed Resend webhook, expiring reply token, sender ownership, replay protection, and inbound retry are deployed. | `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE` | Phase G. |
 | 28 | Support attachments | `NOT_IMPLEMENTED` | No change. | `NOT_IMPLEMENTED` | Decision in Phase D/F if required. |
 | 29 | Operational email catalog | `IMPLEMENTED_NOT_VERIFIED` | Admin email operations loading skeleton stabilized. | `IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED` | Phase G. |
 | 40 | Account portal overview | `PARTIALLY_IMPLEMENTED` | Portal overview skeleton matches final page structure. | `IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED_FOR_B1_SCOPE` | Phase G. |
-| 77 | Notifications in customer portal | `UI_ONLY` | No backend change; content gate avoids treating it as operational log. | `UI_ONLY` | Later support/notifications phase. |
+| 77 | Notifications in customer portal | `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE` | D1-owned notification list, unread count, read-all, archive, pagination, and linked resources are deployed. | `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE` | Phase G. |
 | 78 | Security settings | `PARTIALLY_IMPLEMENTED` | Settings/security skeleton matches final settings pattern. | `IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED_FOR_B1_SCOPE` | Phase G. |
 | 81 | Admin route cleanup | `IMPLEMENTED_NOT_VERIFIED` | No route change in B.1. | `UNCHANGED_PENDING_VERIFICATION` | Phase F/G. |
 
@@ -145,8 +147,8 @@ Operational acceptance is deferred to Phase G. Do not execute grants against rea
 
 | Item | Owner phase | Severity now | Current execution effect |
 |---|---|---|---|
-| New/no-subscription user appears as `monthly` | Phase E | Critical for final correctness | Subscription truth/projection defect. It does not block Phase C and has no additional dependency gate. Do not investigate or patch it before Phase E. Final acceptance is Phase G. |
-| Users and Subscriptions are conflated in Admin IA | Phase F | High | Track for Admin IA; current Phase B continues. |
+| New/no-subscription user appears as `monthly` | Phase E/G | Resolved automatically; manual acceptance pending | Canonical resolver returns the exact no-subscription contract and ignores email-only legacy rows for ownership. Production migration `20260622101510` is applied. |
+| Users and Subscriptions are conflated in Admin IA | Phase F/G | Implemented automatically; manual acceptance pending | Users now come from `account_profiles`; subscriptions retain current/history projections separately. |
 | Manual Grant form is too operational and requires too many inputs | Phase F | Medium | Track for Admin operational UX; current deployed function remains not operationally accepted. |
 | Recovery action appears as a normal grant action | Phase F | Medium | Move to Advanced actions -> Subscription recovery in Phase F. |
 | Deferred skeleton vertical rhythm debt | Phase G | Low | Final-release blocker only. |
@@ -161,14 +163,15 @@ Phase B status: `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTAN
 - Emergency Subscription Grant remains `IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED` and must not be used automatically on real users.
 - No additional Phase B workstream or manual test request is required before progression.
 
-Active phase: `Phase C - Account and Desktop Linking`.
+Active phase: `Phase F - Admin Information Architecture and Operational UX`.
 
-Phase C separates account connection from subscription entitlement. A user may link an account without a subscription; paid functionality remains controlled by canonical entitlement and policy checks.
+Phase E status: `COMPLETE_EXCEPT_WAITING_EXTERNAL_INTEGRATION`.
 
-Phase C implementation status: `IMPLEMENTED_AUTOMATED_VERIFICATION_PENDING_SCHEMA_ROLLOUT_AND_PHASE_G_MANUAL_ACCEPTANCE`.
-
-- Auth, Policy, portal session management, and desktop connection state changes pass automated checks.
-- `workers/auth/migrations/010_account_session_subscription_independence.sql` is prepared but not applied because no Supabase database credential is available in the current environment.
-- Auth Worker deployed version: `2e68b33a-ab02-4b25-bab0-ae5c11ebdafb`; live `/health` returned `200` and invalid account-session access returned the stable `401 AUTH_SESSION_EXPIRED` contract.
-- Policy Worker deployed version: `2b3b5f7c-2089-41f0-af4f-38a9de70b0dd`; live `/health` returned `200` and an invalid app session remained denied.
+- Supabase migration `20260622101510_phase_e_commercial_truth` is applied and postflight verified.
+- Auth and Admin use the shared canonical subscription resolver.
+- Public pricing consumes the backend catalog; zero plans are public/purchasable until a provider mapping is configured.
+- Checkout remains disabled and no subscription can be activated from frontend success.
+- Customer downloads use Firebase ownership plus server-side entitlement and an authorized R2 proxy under `customer-downloads/`; OTA routes were not changed.
+- Phase F began with distinct Users and Subscriptions sources and structured commerce operations visibility.
+- The legacy floating Policy Controls injection is disabled in production; the obsolete script route returns `404` and the structured Policies page remains the only admin policy surface.
 - No manual acceptance is requested here; consolidated acceptance remains in Phase G.

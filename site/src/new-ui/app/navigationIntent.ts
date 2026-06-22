@@ -2,11 +2,11 @@ import type { AppRoute } from './routes'
 
 export type AuthIntent = {
   returnTo?: string
-  plan?: 'weekly' | 'monthly' | 'yearly'
+  plan?: 'weekly' | 'monthly' | 'annual'
   checkout?: boolean
 }
 
-const PLAN_IDS = new Set(['weekly', 'monthly', 'yearly'])
+const PLAN_IDS = new Set(['weekly', 'monthly', 'annual'])
 const RETURN_TO_PREFIX_ALLOWLIST = [
   '/account',
   '/account/support',

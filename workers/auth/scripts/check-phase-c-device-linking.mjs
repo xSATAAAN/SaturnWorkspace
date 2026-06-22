@@ -38,7 +38,7 @@ const db = {
     { id: 'sub-active', firebase_user_id: 'uid-active', user_email: 'active@example.test', plan: 'monthly', tier: 'public', status: 'active', hwid: null, starts_at: past(2), expires_at: future(28), feature_payload: {}, metadata: {}, created_at: past(2), updated_at: past(1) },
     { id: 'sub-expired', firebase_user_id: 'uid-expired', user_email: 'expired@example.test', plan: 'monthly', tier: 'public', status: 'expired', hwid: null, starts_at: past(40), expires_at: past(10), feature_payload: {}, metadata: {}, created_at: past(40), updated_at: past(10) },
     { id: 'sub-lifetime', firebase_user_id: 'uid-lifetime', user_email: 'lifetime@example.test', plan: 'yearly', tier: 'public', status: 'active', hwid: null, starts_at: past(2), expires_at: '9999-12-31T23:59:59.000Z', feature_payload: {}, metadata: { is_unlimited: true }, created_at: past(2), updated_at: past(1) },
-    { id: 'sub-grace', firebase_user_id: 'uid-grace', user_email: 'grace@example.test', plan: 'monthly', tier: 'public', status: 'past_due', hwid: null, starts_at: past(32), expires_at: future(3), feature_payload: {}, metadata: {}, created_at: past(32), updated_at: past(1) },
+    { id: 'sub-grace', firebase_user_id: 'uid-grace', user_email: 'grace@example.test', plan: 'monthly', tier: 'public', status: 'past_due', hwid: null, starts_at: past(32), expires_at: future(3), grace_ends_at: future(3), feature_payload: {}, metadata: {}, created_at: past(32), updated_at: past(1) },
   ],
   device_login_sessions: [],
   app_sessions: [],
@@ -179,7 +179,8 @@ assert.equal(expiredCode.body.error, 'device_code_expired')
 const active = await link('token-active', 'e'.repeat(32))
 assert.equal(active.session.entitlement_state, 'active')
 const expired = await link('token-expired', 'f'.repeat(32))
-assert.equal(expired.session.entitlement_state, 'expired')
+assert.equal(expired.session.entitlement_state, 'no_subscription')
+assert.equal(expired.session.subscription, null)
 const lifetime = await link('token-lifetime', '1'.repeat(32))
 assert.equal(lifetime.session.entitlement_state, 'lifetime')
 const grace = await link('token-grace', '3'.repeat(32))

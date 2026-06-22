@@ -1,6 +1,7 @@
 const RATE_WINDOW_MS = 60_000
 const MAX_CREATE_PER_WINDOW = 25
 const MAX_STATUS_PER_WINDOW = 80
+const MAX_DOWNLOADS_PER_WINDOW = 20
 
 const rateBuckets = new Map()
 
@@ -35,7 +36,11 @@ export function enforcePaymentRateLimit(request, type) {
   cleanupRateBucket(now)
   const ip = getClientIp(request)
   const bucketKey = `${type}:${ip}`
-  const max = type === 'create' ? MAX_CREATE_PER_WINDOW : MAX_STATUS_PER_WINDOW
+  const max = type === 'create'
+    ? MAX_CREATE_PER_WINDOW
+    : type === 'download_file'
+      ? MAX_DOWNLOADS_PER_WINDOW
+      : MAX_STATUS_PER_WINDOW
   const current = rateBuckets.get(bucketKey)
   if (!current || now - current.startedAt > RATE_WINDOW_MS) {
     rateBuckets.set(bucketKey, { startedAt: now, count: 1 })

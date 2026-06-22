@@ -96,6 +96,32 @@ globalThis.fetch = async (input, init = {}) => {
     rows.push(row)
     return Response.json([row])
   }
+  if (method === 'POST' && table === 'apply_manual_subscription_grant') {
+    const body = JSON.parse(init.body || '{}')
+    const current = rows.find((item) => item.id === body.p_current_id)
+    const row = current || {
+      id: `sub-created-${rows.length + 1}`,
+      created_at: new Date().toISOString(),
+      firebase_user_id: body.p_target_uid,
+      user_email: body.p_target_email,
+    }
+    Object.assign(row, {
+      plan: body.p_legacy_plan,
+      plan_term: body.p_plan_term,
+      tier: body.p_tier,
+      status: 'active',
+      lifecycle_state: 'active',
+      starts_at: body.p_starts_at,
+      expires_at: body.p_expires_at,
+      period_start_at: body.p_starts_at,
+      period_end_at: body.p_expires_at,
+      metadata: body.p_metadata,
+      feature_payload: body.p_feature_payload,
+      updated_at: new Date().toISOString(),
+    })
+    if (!current) rows.push(row)
+    return Response.json([row])
+  }
   if (method === 'POST' && table === 'admin_activity') {
     activity.push(JSON.parse(init.body || '{}'))
     return Response.json([])

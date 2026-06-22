@@ -48,6 +48,19 @@ export interface SubscriptionRow {
   plan: "monthly" | "yearly" | string
   tier?: string | null
   status: "active" | "past_due" | "canceled" | "expired" | "suspended" | string
+  lifecycle_state?: "trialing" | "active" | "past_due" | "cancel_at_period_end" | "cancelled" | "expired" | "suspended" | string | null
+  plan_term?: "weekly" | "monthly" | "annual" | "lifetime" | "custom" | string | null
+  renewal_state?: "not_applicable" | "manual" | "auto_renew" | "cancel_at_period_end" | string | null
+  source_type?: string | null
+  period_start_at?: string | null
+  period_end_at?: string | null
+  trial_starts_at?: string | null
+  trial_ends_at?: string | null
+  grace_ends_at?: string | null
+  cancel_at_period_end?: boolean | null
+  is_current?: boolean | null
+  integrity_state?: string | null
+  metadata_version?: number | null
   hwid: string | null
   bound_at?: string | null
   starts_at: string

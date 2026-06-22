@@ -1,45 +1,8 @@
 import type { AccountProfileRow, AppSessionRow, DeviceLoginRow, Env, SubscriptionRow } from "../types"
+import { resolveSubscriptionTruth } from "../../../shared/subscriptions/resolver.js"
 
 function normalizeEmail(value: string | null | undefined): string {
   return String(value || "").trim().toLowerCase()
-}
-
-function isExpiredIso(value: string | null | undefined): boolean {
-  const ts = Date.parse(String(value || ""))
-  return Number.isFinite(ts) ? ts <= Date.now() : false
-}
-
-function isUsableSubscription(row: SubscriptionRow | null | undefined): boolean {
-  if (!row) return false
-  const status = String(row.status || "").trim().toLowerCase()
-  const expiresAt = Date.parse(String(row.expires_at || ""))
-  const lifetime = Number.isFinite(expiresAt) && expiresAt >= Date.parse("9999-01-01T00:00:00Z")
-  if (status === "suspended" || status === "expired") return false
-  if (lifetime) return ["active", "trialing", "trial", "past_due", "cancelled", "canceled"].includes(status)
-  if (isExpiredIso(row.expires_at)) return false
-  return ["active", "trialing", "trial", "past_due", "cancelled", "canceled"].includes(status)
-}
-
-function belongsToFirebaseUser(row: SubscriptionRow, userId: string, email: string): boolean {
-  const rowUserId = String(row.firebase_user_id || "").trim()
-  if (rowUserId) return rowUserId === String(userId || "").trim()
-  return Boolean(email) && normalizeEmail(row.user_email) === normalizeEmail(email)
-}
-
-function scoreSubscription(row: SubscriptionRow, userId: string, email: string): string {
-  const active = isUsableSubscription(row) ? "1" : "0"
-  const exactUser = String(row.firebase_user_id || "").trim() === String(userId || "").trim() ? "1" : "0"
-  const exactEmail = normalizeEmail(row.user_email) === normalizeEmail(email) ? "1" : "0"
-  const lifetime = Date.parse(String(row.expires_at || "")) >= Date.parse("9999-01-01T00:00:00Z") ? "1" : "0"
-  return [
-    active,
-    exactUser,
-    exactEmail,
-    lifetime,
-    String(row.updated_at || ""),
-    String(row.expires_at || ""),
-    String(row.created_at || ""),
-  ].join("|")
 }
 
 function baseUrl(env: Env): string {
@@ -101,33 +64,15 @@ export async function getSubscriptionById(env: Env, subscriptionId: string): Pro
 }
 
 export async function getActiveSubscriptionForUser(env: Env, userId: string, email: string): Promise<SubscriptionRow | null> {
-  const filters = [`firebase_user_id.eq.${encodeURIComponent(userId)}`]
-  if (email) filters.push(`user_email.ilike.${encodeURIComponent(email)}`)
-  const rows = await supabaseJson<SubscriptionRow[]>(
-    env,
-    `/account_subscriptions?or=(${filters.join(",")})&select=*&order=created_at.desc&limit=50`,
-  )
-  if (!Array.isArray(rows) || !rows.length) return null
-  const candidates = rows.filter((row) => belongsToFirebaseUser(row, userId, email) && isUsableSubscription(row))
-  if (!candidates.length) return null
-  return [...candidates].sort((left, right) =>
-    scoreSubscription(right, userId, email).localeCompare(scoreSubscription(left, userId, email)),
-  )[0] || null
+  const rows = await getSubscriptionRowsForUser(env, userId, email)
+  const resolution = resolveSubscriptionTruth<SubscriptionRow>(rows, { firebaseUid: userId, email })
+  return resolution.currentRow
 }
 
 export async function getLatestSubscriptionForUser(env: Env, userId: string, email: string): Promise<SubscriptionRow | null> {
-  const filters = [`firebase_user_id.eq.${encodeURIComponent(userId)}`]
-  if (email) filters.push(`user_email.ilike.${encodeURIComponent(email)}`)
-  const rows = await supabaseJson<SubscriptionRow[]>(
-    env,
-    `/account_subscriptions?or=(${filters.join(",")})&select=*&order=created_at.desc&limit=50`,
-  )
-  if (!Array.isArray(rows) || !rows.length) return null
-  const candidates = rows.filter((row) => belongsToFirebaseUser(row, userId, email))
-  if (!candidates.length) return null
-  return [...candidates].sort((left, right) =>
-    scoreSubscription(right, userId, email).localeCompare(scoreSubscription(left, userId, email)),
-  )[0] || null
+  const rows = await getSubscriptionRowsForUser(env, userId, email)
+  const resolution = resolveSubscriptionTruth<SubscriptionRow>(rows, { firebaseUid: userId, email })
+  return resolution.currentRow
 }
 
 export async function getSubscriptionRowsForUser(env: Env, userId: string, email: string): Promise<SubscriptionRow[]> {

@@ -31,6 +31,70 @@ export type AdminSubscription = {
   expires_at: string
   metadata?: Record<string, unknown> | null
   created_at: string
+  identity_authority?: 'firebase_uid' | 'legacy_email_only'
+  is_current_projection?: boolean
+  integrity_warning?: string | null
+  subscription_projection?: {
+    existence?: string
+    lifecycle?: string | null
+    plan_term?: string | null
+    entitlement?: string
+  } | null
+}
+
+export type AdminUserSummary = {
+  firebase_user_id: string
+  email: string
+  display_name?: string | null
+  locale?: string | null
+  account_status: string
+  email_verified_at?: string | null
+  last_login_at?: string | null
+  created_at: string
+  subscription_projection: {
+    existence?: string
+    lifecycle?: string | null
+    plan_term?: string | null
+    entitlement?: string
+  }
+  subscription_integrity?: { integrity?: string; code?: string | null }
+}
+
+export type AdminCommerceOverview = {
+  success: boolean
+  provider_status: Record<string, boolean>
+  checkout_available: boolean
+  reconciliation_status: string
+  plans: Array<{
+    plan_id: string
+    version: number
+    display_name: string
+    term: string
+    price_minor: number
+    original_price_minor?: number | null
+    currency: string
+    active: boolean
+    public_visible: boolean
+    purchasable: boolean
+    provider?: string | null
+    trial_days: number
+    config_status: string
+    updated_at?: string
+  }>
+  orders: Array<{
+    id: string
+    plan_id: string
+    plan_version: number
+    status: string
+    currency: string
+    amount_minor: number
+    provider?: string | null
+    created_at: string
+    expires_at?: string
+  }>
+  integrity_events: Array<{ id: string; code: string; severity: string; source: string; created_at: string }>
+  releases: Array<{ id: string; version: string; channel: string; filename: string; active: boolean; published_at?: string | null }>
+  download_access_logs: Array<{ id: string; release_id: string; decision: string; entitlement: string; created_at: string }>
 }
 
 export type ManualGrantOperation = 'extend_current' | 'replace_current' | 'start_from_now' | 'restore_remaining_time'
@@ -560,6 +624,13 @@ export type AdminReleaseUpload = {
   package_type?: 'portable_exe' | 'installed_zip'
 }
 
+export async function fetchAdminUsers(params: { search?: string; limit?: number } = {}) {
+  const query = new URLSearchParams()
+  query.set('limit', String(params.limit ?? 100))
+  if (params.search) query.set('search', params.search)
+  return adminFetch<{ success: boolean; items: AdminUserSummary[]; total: number }>(`/users?${query}`)
+}
+
 export type AdminReleaseManifest = {
   version: string
   available: boolean
@@ -674,6 +745,10 @@ export async function fetchCrashGroups() {
 
 export async function fetchAuditLog() {
   return adminFetch<{ success: boolean; items: AdminAuditLogItem[] }>('/audit-log?limit=100')
+}
+
+export async function fetchAdminCommerceOverview() {
+  return adminFetch<AdminCommerceOverview>('/commerce/overview')
 }
 
 export async function fetchSupportThreads() {

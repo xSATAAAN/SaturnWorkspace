@@ -13,6 +13,8 @@ import {
   createSubscription,
   executeManualSubscriptionGrant,
   fetchAdminDashboard,
+  fetchAdminCommerceOverview,
+  fetchAdminUsers,
   fetchAdminPreauthState,
   fetchAdminSession,
   fetchAuditLog,
@@ -42,7 +44,8 @@ import {
   previewManualSubscriptionGrant,
   type AdminReleaseManifest,
 } from '../../api/admin'
-import { createPaymentIntent } from '../../api/payments'
+import { createPaymentIntent, fetchPlanCatalog, type PlanCatalogItem } from '../../api/payments'
+import { fetchProtectedReleaseCatalog, fetchProtectedReleaseFile, type ProtectedRelease } from '../../api/downloads'
 import { archivePortalNotification, fetchPortalNotifications, markAllPortalNotificationsRead, markPortalNotificationRead } from '../../api/notifications'
 import { requestEmailVerificationCode, verifyEmailVerificationCode } from '../../api/emailVerification'
 import {
@@ -54,7 +57,6 @@ import {
 } from '../../api/support'
 import { firebaseAuth } from '../../lib/firebase'
 import { publicCopy } from '../content/publicCopy'
-import { getJson } from './apiClient'
 import { isProductionFeatureEnabled, productionFeatureFlags } from './productionFeatureFlags'
 import type { AccountSubscription } from '../../api/account'
 import type { AppAdapters, AppUser, AuthState, PlanInfo, ReleaseInfo, SignUpWithEmailInput, SupportSenderRole } from './contracts'
@@ -246,50 +248,56 @@ function ensureAuthListener() {
   })
 }
 
-function latestReleaseUrl(channel: 'stable' | 'beta') {
-  if (typeof window === 'undefined') return `/api/updates/latest.json?channel=${encodeURIComponent(channel)}`
-  const host = window.location.hostname.toLowerCase()
-  if (host === 'admin-api.saturnws.com') return `/api/updates/latest.json?channel=${encodeURIComponent(channel)}`
-  return `/updates/latest.json?channel=${encodeURIComponent(channel)}`
-}
-
-function normalizeRelease(payload: Record<string, unknown>): ReleaseInfo {
-  const channels = payload.channels && typeof payload.channels === 'object' ? payload.channels as Record<string, Record<string, unknown>> : {}
-  const selected = channels.beta || payload
-  const artifacts = selected.artifacts && typeof selected.artifacts === 'object' ? selected.artifacts as Record<string, Record<string, unknown>> : {}
-  const installed = artifacts.installed || {}
-  const portable = artifacts.portable || {}
-  const primaryArtifact = installed.url || installed.filename ? installed : portable
-  const filename = String(selected.filename || primaryArtifact.filename || payload.filename || '')
-  const sizeBytes = Number(selected.size_bytes || primaryArtifact.size_bytes || primaryArtifact.size || 0)
-  const architecture = /\b(x64|win64|64-bit|amd64)\b/i.test(filename)
-    ? 'Windows 64-bit'
-    : /\b(x86|win32|32-bit)\b/i.test(filename)
-      ? 'Windows 32-bit'
-      : ''
+function normalizeProtectedRelease(release: ProtectedRelease): ReleaseInfo {
   return {
-    available: Boolean(selected.available ?? payload.available),
-    version: String(selected.version || payload.version || ''),
-    channel: String(selected.channel || 'beta'),
-    mandatory: Boolean(selected.mandatory ?? payload.mandatory),
-    filename,
-    downloadUrl: String(selected.download_url || selected.url || primaryArtifact.url || payload.download_url || ''),
-    sha256: String(selected.download_sha256 || primaryArtifact.sha256 || payload.download_sha256 || ''),
-    sizeBytes: Number.isFinite(sizeBytes) && sizeBytes > 0 ? sizeBytes : undefined,
-    architecture: architecture || undefined,
-    notes: String(selected.notes || payload.notes || ''),
-    raw: payload,
+    available: true,
+    releaseId: release.id,
+    accessState: 'available',
+    version: release.version,
+    channel: release.channel,
+    filename: release.filename,
+    sha256: release.sha256,
+    sizeBytes: release.size_bytes,
+    architecture: release.architecture,
+    notes: release.release_notes,
+    raw: release,
   }
 }
 
-function listStaticPlans(locale: 'ar' | 'en'): PlanInfo[] {
-  const copy = publicCopy[locale]
-  const checkoutEnabled = isProductionFeatureEnabled('payments') && isProductionFeatureEnabled('publicCheckout')
-  return [
-    { id: 'weekly', name: copy.weeklyName, price: copy.weeklyPrice, originalPrice: copy.weeklyOriginalPrice, period: copy.weeklyPeriod, description: copy.weeklyBody, enabled: true, checkoutEnabled: false },
-    { id: 'monthly', name: copy.monthlyName, price: copy.monthlyPrice, originalPrice: copy.monthlyOriginalPrice, period: copy.monthlyPeriod, description: copy.monthlyBody, enabled: true, checkoutEnabled },
-    { id: 'yearly', name: copy.annualName, price: copy.annualPrice, originalPrice: copy.annualOriginalPrice, period: copy.annualPeriod, description: copy.annualBody, enabled: true, checkoutEnabled },
-  ]
+function formatCatalogMoney(amountMinor: number | null | undefined, currency: string, locale: 'ar' | 'en') {
+  if (!Number.isFinite(amountMinor)) return ''
+  return new Intl.NumberFormat(locale === 'ar' ? 'ar-EG' : 'en-US', {
+    style: 'currency',
+    currency,
+    maximumFractionDigits: 2,
+  }).format(Number(amountMinor) / 100)
+}
+
+function catalogPeriod(plan: PlanCatalogItem, locale: 'ar' | 'en') {
+  const labels = {
+    ar: { week: 'أسبوعيًا', month: 'شهريًا', year: 'سنويًا', once: 'مرة واحدة', custom: '' },
+    en: { week: 'per week', month: 'per month', year: 'per year', once: 'one time', custom: '' },
+  }
+  return labels[locale][plan.interval as keyof typeof labels.ar] || ''
+}
+
+function mapCatalogPlan(plan: PlanCatalogItem, locale: 'ar' | 'en'): PlanInfo {
+  const localized = plan.localizations?.[locale] || {}
+  return {
+    id: plan.id,
+    version: plan.version,
+    name: localized.name || plan.name,
+    price: formatCatalogMoney(plan.amount_minor, plan.currency, locale),
+    originalPrice: plan.original_amount_minor == null
+      ? undefined
+      : formatCatalogMoney(plan.original_amount_minor, plan.currency, locale),
+    period: catalogPeriod(plan, locale),
+    description: localized.description || plan.description,
+    trialDays: plan.trial_days,
+    features: plan.features,
+    enabled: plan.purchasable,
+    checkoutEnabled: plan.checkout_enabled,
+  }
 }
 
 function checkoutIdempotencyKey(plan: string, email: string): string {
@@ -419,13 +427,39 @@ export const productionAdapters: AppAdapters = {
   },
   releases: {
     async getLatest(channel = 'beta') {
-      const payload = await getJson<Record<string, unknown>>(latestReleaseUrl(channel))
-      return normalizeRelease(payload)
+      const user = firebaseAuth.currentUser
+      if (!user) return { available: false, accessState: 'signed_out' }
+      const token = await user.getIdToken(false)
+      try {
+        const catalog = await fetchProtectedReleaseCatalog(token)
+        const release = catalog.releases.find((item) => item.channel === channel) || catalog.releases[0]
+        return release ? normalizeProtectedRelease(release) : { available: false, accessState: 'unavailable' }
+      } catch (error) {
+        const code = String((error as Error)?.message || error || '')
+        if (code.includes('download_not_entitled')) return { available: false, accessState: 'not_entitled' }
+        throw error
+      }
+    },
+    async download(releaseId, filename = 'SaturnWorkspace.exe') {
+      const user = firebaseAuth.currentUser
+      if (!user) throw new Error('not_authenticated')
+      const token = await user.getIdToken(false)
+      const blob = await fetchProtectedReleaseFile(releaseId, token)
+      const objectUrl = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = objectUrl
+      link.download = filename
+      link.rel = 'noopener'
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 30_000)
     },
   },
   plans: {
     async listPlans(locale) {
-      return listStaticPlans(locale)
+      const catalog = await fetchPlanCatalog()
+      return catalog.plans.map((plan) => mapCatalogPlan(plan, locale))
     },
   },
   payments: {
@@ -439,6 +473,7 @@ export const productionAdapters: AppAdapters = {
       const token = await productionAdapters.auth.getIdToken(false).catch(() => null)
       const result = await createPaymentIntent({
         plan: input.plan,
+        plan_version: input.planVersion,
         id_token: token || undefined,
         idempotency_key: checkoutIdempotencyKey(input.plan, input.email || ''),
         customer: { email: input.email },
@@ -446,7 +481,7 @@ export const productionAdapters: AppAdapters = {
       })
       return {
         success: result.success,
-        status: result.status,
+        status: result.status || 'failed',
         orderId: result.order_id,
         hostedUrl: result.hosted_url,
       }
@@ -575,6 +610,13 @@ export const productionAdapters: AppAdapters = {
     async getDashboard() {
       const data = await fetchAdminDashboard()
       return { kpis: data.kpis, recentActivity: data.recent_activity }
+    },
+    async getCommerceOverview() {
+      return fetchAdminCommerceOverview()
+    },
+    async listUsers(input = {}) {
+      const data = await fetchAdminUsers({ search: input.search, limit: 100 })
+      return data.items || []
     },
     async listSubscriptions(input = {}) {
       const data = await fetchSubscriptions({ search: input.search, limit: 100 })

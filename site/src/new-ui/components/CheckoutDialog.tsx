@@ -21,8 +21,8 @@ export function CheckoutDialog({ open, plan, user, features, onClose }: Checkout
   const { payments } = useAdapters()
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
-  const checkoutAvailable = Boolean(plan && user && plan.checkoutEnabled && plan.id !== 'weekly' && payments.isCheckoutEnabled())
-  const hasTrial = plan?.id === 'monthly' || plan?.id === 'yearly'
+  const checkoutAvailable = Boolean(plan && user && plan.enabled && plan.checkoutEnabled && payments.isCheckoutEnabled())
+  const hasTrial = Boolean(plan?.trialDays)
   const paymentDescription = checkoutAvailable
     ? (locale === 'ar' ? 'سيتم تحويلك إلى صفحة دفع آمنة لإكمال الاشتراك.' : 'You will continue to a secure hosted checkout to complete the subscription.')
     : (locale === 'ar' ? 'الدفع الإلكتروني لهذه الخطة غير متاح حاليًا.' : 'Online checkout for this plan is not available yet.')
@@ -36,11 +36,11 @@ export function CheckoutDialog({ open, plan, user, features, onClose }: Checkout
   }
 
   const continueToCheckout = async () => {
-    if (!plan || !user || !checkoutAvailable || plan.id === 'weekly') return
+    if (!plan || !user || !checkoutAvailable) return
     setSubmitting(true)
     setError('')
     try {
-      const result = await payments.createIntent({ plan: plan.id, email: user.email, locale })
+      const result = await payments.createIntent({ plan: plan.id, planVersion: plan.version, email: user.email, locale })
       if (!result.success || !result.hostedUrl) throw new Error(result.reason || 'checkout_unavailable')
       window.location.assign(result.hostedUrl)
     } catch {
@@ -74,7 +74,7 @@ export function CheckoutDialog({ open, plan, user, features, onClose }: Checkout
           <div className="checkout-summary-panel__head"><span>{t('orderSummary')}</span>{plan?.id === 'monthly' ? <Badge tone="info">{locale === 'ar' ? 'رائج' : 'Popular'}</Badge> : null}</div>
           <h3>{planLabel}</h3>
           <p>{plan?.description}</p>
-          {hasTrial ? <div className="checkout-trial"><Sparkles size={17} /><div><strong>{locale === 'ar' ? '7 أيام مجانًا' : '7 days free'}</strong><small>{locale === 'ar' ? 'لن يتم تحصيل أي مبلغ خلال الفترة التجريبية.' : 'No charge is made during the trial period.'}</small></div></div> : null}
+          {hasTrial ? <div className="checkout-trial"><Sparkles size={17} /><div><strong>{locale === 'ar' ? `${plan?.trialDays} أيام مجانًا` : `${plan?.trialDays} days free`}</strong><small>{locale === 'ar' ? 'لن يتم تحصيل أي مبلغ خلال الفترة التجريبية.' : 'No charge is made during the trial period.'}</small></div></div> : null}
           <div className="checkout-price-row"><span>{locale === 'ar' ? 'الإجمالي' : 'Total'}</span><div>{plan?.originalPrice ? <del>{plan.originalPrice}</del> : null}<strong>{plan?.price}</strong><small>{plan?.period}</small></div></div>
           <ul>{features.map((feature) => <li key={feature}><Check size={15} />{feature}</li>)}</ul>
           <p className="checkout-delivery-note">{locale === 'ar' ? 'بعد إتمام العملية ستتمكن من إدارة اشتراكك وتنزيل Saturn Workspace من حسابك.' : 'After completion, you can manage your subscription and download Saturn Workspace from your account.'}</p>

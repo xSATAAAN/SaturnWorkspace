@@ -15,7 +15,7 @@ This section supersedes older rows where production evidence changed.
 | Email operations | `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE` | Queue claim/retry/backoff/final failure, lock, provider IDs/events, bounce/complaint/suppression, inbound retry, cleanup, and sensitive payload purge tested. | Phase G and any future category-specific rollout. |
 | Contact | `IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED` | Public billing/security/general channels and authenticated support route are separated; no duplicate public ticket form. | Phase G copy/link acceptance. |
 | OTP email delivery | `PREPARED_DISABLED` | Auth and Policy flags are false; no production send claim is made. Superseded-job cancellation now keys by UID/email/purpose. | Separate controlled activation. |
-| No-subscription projected as `monthly` | `BROKEN_NON_BLOCKING_PHASE_C_D` | Not investigated in C/D by explicit decision. | Phase E correction; Phase G acceptance. |
+| No-subscription projected as `monthly` | `IMPLEMENTED_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE` | UID-only resolver and exact null projection deployed; legacy email rows are diagnostic only. | Phase G acceptance. |
 
 Legend:
 - `COMPLETE_AND_VERIFIED`: implemented and locally/live verified with evidence.
@@ -52,17 +52,17 @@ Phase B status: `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTAN
 | 17 | Mandatory update policy | System/update pages | Admin policies | Desktop startup/update gate | Policy Worker D1 + OTA manifest | PARTIALLY_IMPLEMENTED | Critical | F/G |
 | 18 | Silent update mode | N/A | Admin release controls | Desktop updater | OTA path excluded from this phase | IMPLEMENTED_NOT_VERIFIED | High | G |
 | 19 | Public contact page | `/contact`, `/support` | N/A | N/A | Shows sign-in prompt, no public unauth contact | PARTIALLY_IMPLEMENTED | Medium | D |
-| 20 | Customer support portal | `/account/support` | Admin support inbox | N/A | Policy Worker D1 support tables | IMPLEMENTED_NOT_VERIFIED | High | D |
-| 21 | Customer create ticket | Portal support form | Admin inbox | Desktop support exists elsewhere | `/v1/web/support/messages` | IMPLEMENTED_NOT_VERIFIED | High | D |
-| 22 | Customer reply to ticket | Portal support drawer | Admin inbox | N/A | `/v1/web/support/reply` | IMPLEMENTED_NOT_VERIFIED | High | D |
-| 23 | Ticket status changes | Portal open/closed | Admin status drawer | N/A | Policy Worker support status route | IMPLEMENTED_NOT_VERIFIED | Medium | D |
-| 24 | Admin support replies | N/A | Admin support drawer | N/A | `/v1/admin/support/reply` | IMPLEMENTED_NOT_VERIFIED | High | D |
-| 25 | Admin internal notes | N/A | Admin support drawer | N/A | `internal_note` option | IMPLEMENTED_NOT_VERIFIED | Medium | D |
-| 26 | Support sender blocking | N/A | Admin support drawer | N/A | `/v1/admin/support/block` | IMPLEMENTED_NOT_VERIFIED | Medium | D/F |
-| 27 | Support reply by email | Email provider | Admin support | N/A | Policy Worker Resend inbound/outbound | WAITING_EXTERNAL_INTEGRATION | High | D |
+| 20 | Customer support portal | `/account/support` | Admin support inbox | N/A | Policy Worker D1 support tables | COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE | High | G |
+| 21 | Customer create ticket | Portal support form | Admin inbox | Desktop support exists elsewhere | `/v1/web/support/messages` | COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE | High | G |
+| 22 | Customer reply to ticket | Portal support drawer | Admin inbox | N/A | `/v1/web/support/reply` | COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE | High | G |
+| 23 | Ticket status changes | Portal open/closed | Admin status drawer | N/A | Policy Worker support status route | COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE | Medium | G |
+| 24 | Admin support replies | N/A | Admin support drawer | N/A | `/v1/admin/support/reply` | COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE | High | G |
+| 25 | Admin internal notes | N/A | Admin support drawer | N/A | `internal_note` option | COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE | Medium | G |
+| 26 | Support sender blocking | N/A | Admin support drawer | N/A | `/v1/admin/support/block` | COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE | Medium | G |
+| 27 | Support reply by email | Email provider | Admin support | N/A | Policy Worker Resend inbound/outbound | COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE | High | G |
 | 28 | Support attachments | Not found | Not found | Not found | No attachment storage flow found | NOT_IMPLEMENTED | Low | D/F |
 | 29 | Operational email catalog | N/A | `/communications` | N/A | Policy Worker D1 email tables | IMPLEMENTED_NOT_VERIFIED | High | D/F |
-| 30 | Email queue/retry/lock | N/A | Admin email ops | N/A | Policy Worker scheduled handler/D1 lock | IMPLEMENTED_NOT_VERIFIED | High | G |
+| 30 | Email queue/retry/lock | N/A | Admin email ops | N/A | Policy Worker scheduled handler/D1 lock | COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE | High | G |
 | 31 | Email provider events | N/A | Admin email ops provider tab | N/A | `/api/webhooks/resend`, `email_events` | IMPLEMENTED_NOT_VERIFIED | High | G |
 | 32 | Auth sign in email/password | `/account/signin` | Admin guard separate | Desktop inline login | Firebase + Auth Worker helper | PARTIALLY_IMPLEMENTED | Critical | B |
 | 33 | Auth sign up email/password | `/account/signup` | N/A | Desktop inline signup | Firebase signUp, email verification API | PARTIALLY_IMPLEMENTED | Critical | B |
@@ -101,7 +101,7 @@ Phase B status: `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTAN
 | 66 | Tamper alerts | N/A | Admin dashboard only | N/A | Supabase `tamper_alerts` | BACKEND_ONLY | Medium | F |
 | 67 | Audit log | N/A | Admin audit page | N/A | R2 fallback + Supabase `admin_activity` | PARTIALLY_IMPLEMENTED | High | F |
 | 68 | Policy global controls | N/A | Admin policies + old floating panel | Desktop policy gate | Policy Worker D1 | PARTIALLY_IMPLEMENTED | Critical | F |
-| 69 | Old floating Policy Controls | N/A | Injected JS panel | N/A | Admin Worker proxy to Policy | DEPRECATED_OR_DEAD | High | F |
+| 69 | Old floating Policy Controls | N/A | Removed from production UI | N/A | Legacy script injection and route disabled; structured Policies page retained | REMOVED_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE | High | G |
 | 70 | Invite validation | Auth unlock flows | Policy admin | Desktop policy unlock | Policy Worker D1 invite tables | IMPLEMENTED_NOT_VERIFIED | Medium | F/G |
 | 71 | Invite code admin management | N/A | Admin policies shell only | N/A | Policy Worker likely backend | BACKEND_ONLY | Medium | F |
 | 72 | Kill switch / policy lock | System pages | Admin policies | Desktop startup gate | Policy Worker D1 | PARTIALLY_IMPLEMENTED | Critical | G |
@@ -109,27 +109,27 @@ Phase B status: `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTAN
 | 74 | Release catalog visibility | Public releases/download | Admin policy old/new controls | Desktop update gate | Policy D1 release_catalog + R2 manifest | PARTIALLY_IMPLEMENTED | High | F/G |
 | 75 | Legal pages | Public legal routes | Admin content shell | N/A | Static content adapter | IMPLEMENTED_NOT_VERIFIED | Low | E/F |
 | 76 | Admin content editing | Public legal/FAQ | Admin content route | N/A | No real content backend found | UI_ONLY | Low | F |
-| 77 | Notifications in customer portal | Portal notifications | Admin communications | N/A | No customer notification API found beyond email/support | UI_ONLY | Medium | D/F |
+| 77 | Notifications in customer portal | Portal notifications | Admin communications | N/A | Policy Worker D1 `portal_notifications` and owned notification APIs | COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE | Medium | G |
 | 78 | Security settings | Portal settings/security | N/A | N/A | Firebase password reset only | PARTIALLY_IMPLEMENTED | Medium | B |
 | 79 | Account deletion/danger zone | Portal settings | Admin users | Desktop data | No production deletion flow verified | NOT_IMPLEMENTED | Medium | F |
 | 80 | Admin preauth | N/A | Admin preauth/session | N/A | Admin Worker preauth endpoints | IMPLEMENTED_NOT_VERIFIED | High | F/G |
 | 81 | Admin route cleanup | N/A | `/communications` vs old `/admin/communications` | N/A | Router supports clean admin host paths | IMPLEMENTED_NOT_VERIFIED | Low | F |
 | 82 | Desktop Google Drive OAuth config | N/A | N/A | Cloud backup auth | Auth Worker `/oauth/google-drive-config` | IMPLEMENTED_NOT_VERIFIED | Medium | G |
 | 83 | Desktop policy check | N/A | Admin policies | Desktop startup/session | Policy Worker `/v1/policy/check` style routes | PARTIALLY_IMPLEMENTED | Critical | G |
-| 84 | Desktop support bridge | Portal support separate | Admin support | In-app support | Policy Worker app support routes | IMPLEMENTED_NOT_VERIFIED | Medium | D/G |
+| 84 | Desktop support bridge | Portal support separate | Admin support | In-app support | Policy Worker app support routes | COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE | Medium | G |
 | 85 | Desktop crash reporting | N/A | Diagnostics | Crash reporter | Admin Worker `/crash-logs` ingestion | IMPLEMENTED_NOT_VERIFIED | High | G |
 | 86 | Product readiness coverage page | N/A | Admin `coverage` route exists in router only | N/A | No production backing | UI_ONLY | Low | F |
 | 87 | Static legacy public pages | Root HTML files | N/A | N/A | Static files in web-platform root | DEPRECATED_OR_DEAD | Medium | E |
-| 88 | No-subscription user projected as `monthly` | Customer portal subscription summary | Admin users/subscriptions projections | Desktop entitlement later | Subscription truth/projection defect; root cause intentionally deferred | BROKEN_NON_BLOCKING_PHASE_C | Critical for final correctness | E/G |
+| 88 | No-subscription user projected as `monthly` | Customer portal subscription summary | Admin users/subscriptions projections | Desktop entitlement contract | Canonical resolver deployed across Auth/Admin with exact no-subscription contract | IMPLEMENTED_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE | Critical for final correctness | G |
 | 89 | Manual Grant daily admin UX | N/A | Grant subscription drawer | N/A | Admin Worker manual grant preview/execute | PARTIALLY_IMPLEMENTED | Medium | F |
 | 90 | Subscription recovery action placement | N/A | Manual grant operation selector | N/A | `restore_remaining_time` operation | PARTIALLY_IMPLEMENTED | Medium | F |
 
 Highest priority blockers:
 1. Auth readiness/hydration can route signed-in users to the auth gate during refresh.
 2. Phase C account linking no longer requires a subscription in local automated verification; production acceptance remains deferred to Phase G.
-3. Desktop startup now separates `linked` from `no_subscription`; the Supabase session-independence migration is prepared but not yet applied.
-4. No-subscription users can be projected as `monthly`; this belongs exclusively to Phase E subscription truth normalization, does not block Phase C, and has no separate dependency gate.
+3. Desktop startup separates `linked` from `no_subscription`; the Supabase session-independence migration is applied and postflight verified.
+4. No-subscription projection is corrected automatically; final customer/admin/desktop acceptance remains Phase G.
 5. Subscription source of truth is split between Supabase/Auth/Admin and D1/Policy.
 6. Subscription status vocabulary is incomplete for planned production states.
-7. Admin Users and Subscriptions IA are conflated; this belongs to Phase F.
-8. Admin dashboard and old Policy Controls still expose prototype/raw administration patterns.
+7. Admin Users and Subscriptions now have distinct sources/pages; remaining Admin operational UX belongs to active Phase F.
+8. Admin dashboard recent activity still needs structured presentation; the old Policy Controls surface has been removed.

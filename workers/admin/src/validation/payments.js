@@ -1,4 +1,4 @@
-const PLAN_VALUES = ['monthly', 'yearly']
+const PLAN_VALUES = ['weekly', 'monthly', 'yearly', 'annual']
 const LOCALE_VALUES = ['en', 'ar']
 
 function cleanText(value, maxLen = 180) {
@@ -19,6 +19,7 @@ export async function parseCreatePaymentRequest(request) {
 
   let plan = cleanText(payload.plan, 20).toLowerCase()
   if (plan === 'six_months') plan = 'yearly'
+  if (plan === 'yearly') plan = 'annual'
   if (!PLAN_VALUES.includes(plan)) throw new Error('invalid_plan')
 
   const locale = cleanText(payload.locale, 4).toLowerCase()
@@ -30,10 +31,13 @@ export async function parseCreatePaymentRequest(request) {
   const contact = cleanText(customer.contact, 120)
   const notes = cleanText(payload.notes, 500)
   const idToken = String(payload.id_token || '').trim().slice(0, 6000)
+  const idempotencyKey = cleanText(payload.idempotency_key, 160)
 
   return {
     plan,
+    plan_version: Number(payload.plan_version || 0) || null,
     id_token: idToken,
+    idempotency_key: idempotencyKey,
     locale: safeLocale,
     customer: {
       email,
