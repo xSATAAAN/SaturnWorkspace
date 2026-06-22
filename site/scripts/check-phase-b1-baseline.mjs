@@ -75,7 +75,7 @@ const checks = [
   },
   {
     name: 'auth worker exposes current_subscription and history summary',
-    pass: authWorker.includes('current_subscription: runtime') && authWorker.includes('subscription_history_summary: historySummary') && authWorker.includes('selectCurrentSubscription'),
+    pass: authWorker.includes('current_subscription: runtime') && authWorker.includes('subscription_history_summary: historySummary') && authWorker.includes('resolveSubscriptionTruth'),
   },
 ]
 

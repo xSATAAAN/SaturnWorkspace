@@ -31,6 +31,20 @@ export type AdminSubscription = {
   expires_at: string
   metadata?: Record<string, unknown> | null
   created_at: string
+  updated_at?: string
+  lifecycle_state?: string | null
+  plan_term?: string | null
+  renewal_state?: string | null
+  source_type?: string | null
+  provider?: string | null
+  period_start_at?: string | null
+  period_end_at?: string | null
+  trial_starts_at?: string | null
+  trial_ends_at?: string | null
+  grace_ends_at?: string | null
+  cancel_at_period_end?: boolean
+  is_current?: boolean
+  integrity_state?: string
   identity_authority?: 'firebase_uid' | 'legacy_email_only'
   is_current_projection?: boolean
   integrity_warning?: string | null
@@ -50,6 +64,10 @@ export type AdminUserSummary = {
   account_status: string
   email_verified_at?: string | null
   last_login_at?: string | null
+  last_activity_at?: string | null
+  session_count?: number
+  device_count?: number
+  subscription_presence?: 'none' | 'active' | 'history_only' | 'integrity_conflict'
   created_at: string
   subscription_projection: {
     existence?: string
@@ -112,6 +130,9 @@ export type ManualGrantPreviewInput = {
   exact_expiry?: string
   timezone?: string
   reason?: string
+  reason_code?: 'admin_grant' | 'compensation' | 'trial' | 'technical_support' | 'subscription_replacement' | 'subscription_recovery' | 'other'
+  reason_note?: string
+  recovery_evidence_id?: string
 }
 
 export type ManualGrantExecuteInput = ManualGrantPreviewInput & {
@@ -242,9 +263,16 @@ export type AdminCrashGroup = {
   last_seen_at: string
   error_type: string
   message?: string | null
-  affected_hwids: string[]
-  affected_users: string[]
-  latest: AdminCrashLog
+  affected_hwids?: string[]
+  affected_users?: string[]
+  affected_device_count?: number
+  affected_user_count?: number
+  affected_versions?: string[]
+  status?: 'open' | 'investigating' | 'resolved' | 'ignored'
+  assignee?: string | null
+  note?: string | null
+  state_updated_at?: string | null
+  latest?: AdminCrashLog
 }
 
 export type AdminAuditLogItem = {
@@ -258,6 +286,108 @@ export type AdminAuditLogItem = {
   payload?: unknown
   happened_at?: string
   at?: string
+  timestamp?: string
+  actor_role?: string | null
+  target_type?: string | null
+  target_id?: string | null
+  request_id?: string | null
+  reason_code?: string | null
+  reason_note?: string | null
+  outcome?: string
+  source_service?: string
+}
+
+export type AdminSession = {
+  success: boolean
+  email: string
+  role: 'super_admin' | 'support' | 'billing' | 'release_manager' | 'security' | 'auditor' | 'read_only'
+  permissions: string[]
+}
+
+export type AdminOperationReason = {
+  reason_code: 'admin_action' | 'customer_request' | 'security_review' | 'technical_support' | 'billing_correction' | 'subscription_recovery' | 'policy_enforcement' | 'other'
+  reason_note?: string
+}
+
+export type AdminOperationPreview = {
+  preview_hash: string
+  action?: string
+  scope?: string
+  target: Record<string, unknown>
+  current_status?: string
+  resulting_status?: string
+  current?: Record<string, unknown>
+  resulting?: Record<string, unknown>
+  sessions_will_be_revoked?: boolean
+  expected_updated_at?: string
+  reason_code: string
+  reason_note?: string | null
+}
+
+export type AdminTamperAlert = {
+  id: string
+  happened_at: string
+  user_id?: string | null
+  subscription_id?: string | null
+  hwid?: string | null
+  severity: 'low' | 'medium' | 'high' | 'critical'
+  reason: string
+  details?: Record<string, unknown>
+  resolved: boolean
+  resolved_at?: string | null
+}
+
+export type AdminReadiness = {
+  success: boolean
+  generated_at: string
+  services: Record<string, string>
+  integrations: Record<string, string>
+  admin_security: Record<string, string>
+}
+
+export type AdminInviteCode = {
+  id: string
+  status: string
+  expires_at?: string | null
+  max_uses?: number | null
+  used_count: number
+  note?: string | null
+  scope?: { channels?: string[]; app_versions?: string[] }
+  restrictions?: { user_ids?: string[]; emails?: string[]; device_ids?: string[]; install_ids?: string[]; one_per_user?: boolean; one_per_device?: boolean }
+  created_by?: string | null
+  created_at?: string
+  updated_at?: string
+  revoked_at?: string | null
+  revoked_by?: string | null
+  revoke_reason?: string | null
+}
+
+export type AdminInviteUsage = {
+  id: string
+  user_id?: string | null
+  email?: string | null
+  install_id?: string | null
+  device_id?: string | null
+  app_version?: string | null
+  channel?: string | null
+  result: string
+  created_at: string
+}
+
+export type AdminPolicyState = {
+  success: boolean
+  global_policy?: {
+    kill_switch_enabled?: number | boolean
+    mandatory_update_enabled?: number | boolean
+    minimum_supported_version?: string | null
+    update_mode?: string | null
+    blocked_actions_json?: string | null
+    features_json?: string | null
+    limits_json?: string | null
+  } | null
+  disabled_versions?: Array<{ version: string; reason?: string | null; created_at?: string }>
+  plan_features?: Array<{ plan_id: string; features_json?: string | null; blocked_actions_json?: string | null; limits_json?: string | null }>
+  releases?: Array<{ version: string; channel: string; release_type: string; visibility: string; artifact_kind: string; updated_at?: string }>
 }
 
 export type AdminSupportThread = {
@@ -450,11 +580,19 @@ export type AdminRemoteControls = {
 
 export type AdminUserDetail = {
   success: boolean
+  profile: AdminUserSummary
   item: AdminSubscription | null
+  subscription_projection?: AdminUserSummary['subscription_projection']
+  subscription_integrity?: AdminUserSummary['subscription_integrity']
+  subscription_history?: Array<Record<string, unknown>>
   sessions: Array<Record<string, unknown>>
   crashes: AdminCrashLog[]
   login_requests: Array<Record<string, unknown>>
   devices: Array<Record<string, unknown>>
+  tamper_alerts?: AdminTamperAlert[]
+  audit?: AdminAuditLogItem[]
+  recovery_evidence?: Array<{ id: string; subscription_id?: string | null; evidence_type: string; evidence_reference: string; remaining_seconds: number; status: string; created_at: string; expires_at?: string | null }>
+  support_threads?: AdminSupportThread[]
   last_crash?: AdminCrashLog | null
   request?: {
     user_id?: string | null
@@ -525,19 +663,24 @@ export async function clearAdminPreauth() {
 }
 
 export async function fetchAdminSession() {
-  return adminFetch<{ success: boolean; email: string }>('/session')
+  return adminFetch<AdminSession>('/session')
 }
 
 export async function fetchAdminDashboard() {
   return adminFetch<{ success: boolean; kpis?: Record<string, number | null>; recent_activity?: unknown[] }>('/dashboard')
 }
 
-export async function fetchSubscriptions(params: { search?: string; page?: number; limit?: number } = {}) {
+export async function fetchSubscriptions(params: { search?: string; page?: number; limit?: number; lifecycle?: string; planTerm?: string; source?: string; current?: string; integrity?: string } = {}) {
   const query = new URLSearchParams()
   query.set('limit', String(params.limit ?? 100))
   if (params.page) query.set('page', String(params.page))
   if (params.search) query.set('search', params.search)
-  return adminFetch<{ success: boolean; items: AdminSubscription[]; page?: number; limit?: number }>(`/subscriptions?${query}`)
+  if (params.lifecycle) query.set('lifecycle', params.lifecycle)
+  if (params.planTerm) query.set('plan_term', params.planTerm)
+  if (params.source) query.set('source', params.source)
+  if (params.current) query.set('current', params.current)
+  if (params.integrity) query.set('integrity', params.integrity)
+  return adminFetch<{ success: boolean; items: AdminSubscription[]; total: number; page: number; limit: number }>(`/subscriptions?${query}`)
 }
 
 export async function createSubscription(payload: {
@@ -624,11 +767,98 @@ export type AdminReleaseUpload = {
   package_type?: 'portable_exe' | 'installed_zip'
 }
 
-export async function fetchAdminUsers(params: { search?: string; limit?: number } = {}) {
+export async function updatePromoCodeState(id: string, active: boolean, reason: string) {
+  return adminFetch<{ success: boolean; item: AdminPromoCode }>(`/promo-codes/${encodeURIComponent(id)}/state`, { method: 'POST', body: JSON.stringify({ active, reason }) })
+}
+
+export async function fetchAdminUsers(params: { search?: string; page?: number; limit?: number; accountStatus?: string; verification?: string; subscription?: string; sort?: string } = {}) {
   const query = new URLSearchParams()
   query.set('limit', String(params.limit ?? 100))
   if (params.search) query.set('search', params.search)
-  return adminFetch<{ success: boolean; items: AdminUserSummary[]; total: number }>(`/users?${query}`)
+  if (params.page) query.set('page', String(params.page))
+  if (params.accountStatus) query.set('account_status', params.accountStatus)
+  if (params.verification) query.set('verification', params.verification)
+  if (params.subscription) query.set('subscription', params.subscription)
+  if (params.sort) query.set('sort', params.sort)
+  return adminFetch<{ success: boolean; items: AdminUserSummary[]; total: number; page: number; limit: number }>(`/users?${query}`)
+}
+
+export async function previewAccountLifecycle(firebaseUid: string, payload: AdminOperationReason & { action: 'suspend' | 'reactivate' | 'mark_pending_deletion' }) {
+  return adminFetch<{ success: boolean; preview: AdminOperationPreview }>(`/users/${encodeURIComponent(firebaseUid)}/lifecycle/preview`, { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export async function executeAccountLifecycle(firebaseUid: string, payload: AdminOperationReason & { action: 'suspend' | 'reactivate' | 'mark_pending_deletion'; preview_hash: string; request_id: string }) {
+  return adminFetch<{ success: boolean; result: Record<string, unknown> }>(`/users/${encodeURIComponent(firebaseUid)}/lifecycle/execute`, { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export async function previewAccessRevocation(firebaseUid: string, payload: AdminOperationReason & { scope: 'session' | 'device' | 'all'; target_id?: string }) {
+  return adminFetch<{ success: boolean; preview: AdminOperationPreview }>(`/users/${encodeURIComponent(firebaseUid)}/access/preview`, { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export async function executeAccessRevocation(firebaseUid: string, payload: AdminOperationReason & { scope: 'session' | 'device' | 'all'; target_id?: string; preview_hash: string; request_id: string }) {
+  return adminFetch<{ success: boolean; result: Record<string, unknown> }>(`/users/${encodeURIComponent(firebaseUid)}/access/execute`, { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export async function previewSubscriptionTransition(subscriptionId: string, payload: AdminOperationReason & { action: 'suspend' | 'resume' | 'cancel_at_period_end' | 'cancel_now' | 'end_trial' | 'correct_expiry' | 'revoke_entitlement'; new_expiry?: string }) {
+  return adminFetch<{ success: boolean; preview: AdminOperationPreview }>(`/subscriptions/${encodeURIComponent(subscriptionId)}/transition/preview`, { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export async function executeSubscriptionTransition(subscriptionId: string, payload: AdminOperationReason & { action: 'suspend' | 'resume' | 'cancel_at_period_end' | 'cancel_now' | 'end_trial' | 'correct_expiry' | 'revoke_entitlement'; new_expiry?: string; preview_hash: string; request_id: string }) {
+  return adminFetch<{ success: boolean; result: Record<string, unknown> }>(`/subscriptions/${encodeURIComponent(subscriptionId)}/transition/execute`, { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export async function fetchRecoveryEvidence(firebaseUid: string) {
+  return adminFetch<{ success: boolean; items: AdminUserDetail['recovery_evidence'] }>(`/subscriptions/recovery-evidence?firebase_uid=${encodeURIComponent(firebaseUid)}`)
+}
+
+export async function updateCrashGroupState(fingerprint: string, payload: { status: AdminCrashGroup['status']; assignee?: string; note?: string }) {
+  return adminFetch<{ success: boolean; item: AdminCrashGroup }>(`/crash-groups/${encodeURIComponent(fingerprint)}/state`, { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export async function fetchTamperAlerts(params: { page?: number; limit?: number; resolved?: boolean; severity?: string } = {}) {
+  const query = new URLSearchParams()
+  query.set('page', String(params.page || 1)); query.set('limit', String(params.limit || 50))
+  if (typeof params.resolved === 'boolean') query.set('resolved', String(params.resolved))
+  if (params.severity) query.set('severity', params.severity)
+  return adminFetch<{ success: boolean; items: AdminTamperAlert[]; page: number; limit: number }>(`/tamper-alerts?${query}`)
+}
+
+export async function resolveTamperAlert(alertId: string, reason: string) {
+  return adminFetch<{ success: boolean; item: AdminTamperAlert }>(`/tamper-alerts/${encodeURIComponent(alertId)}/resolve`, { method: 'POST', body: JSON.stringify({ reason }) })
+}
+
+export async function fetchAdminReadiness() {
+  return adminFetch<AdminReadiness>('/readiness')
+}
+
+export async function fetchAdminInvites(status = '') {
+  const query = new URLSearchParams({ limit: '100' })
+  if (status) query.set('status', status)
+  return adminFetch<{ success: boolean; items: AdminInviteCode[] }>(`/policy/invites?${query}`)
+}
+
+export async function createAdminInvite(payload: { request_id: string; expires_at?: string; max_uses?: number; note?: string; scope?: AdminInviteCode['scope']; restrictions?: AdminInviteCode['restrictions'] }) {
+  return adminFetch<{ success: boolean; item: AdminInviteCode; code: string | null; shown_once?: boolean; replay?: boolean }>('/policy/invites/create', { method: 'POST', headers: { 'Idempotency-Key': payload.request_id }, body: JSON.stringify(payload) })
+}
+
+export async function revokeAdminInvite(inviteId: string, reason: string) {
+  return adminFetch<{ success: boolean; invite_id: string; status: string }>('/policy/invites/revoke', { method: 'POST', body: JSON.stringify({ invite_id: inviteId, reason }) })
+}
+
+export async function fetchAdminInviteUsage(inviteId: string) {
+  return adminFetch<{ success: boolean; items: AdminInviteUsage[] }>(`/policy/invites/usage?invite_id=${encodeURIComponent(inviteId)}`)
+}
+
+export async function fetchAdminPolicyState() {
+  return adminFetch<AdminPolicyState>('/policy/state')
+}
+
+export async function updateAdminGlobalPolicy(payload: { kill_switch_enabled: boolean; mandatory_update_enabled: boolean; minimum_supported_version?: string; update_mode: string; reason: string }) {
+  return adminFetch<{ success: boolean }>('/policy/global-policy', { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export async function updateAdminDisabledVersion(payload: { version: string; reason?: string; disabled: boolean }) {
+  return adminFetch<{ success: boolean }>('/policy/disabled-versions', { method: 'POST', body: JSON.stringify(payload) })
 }
 
 export type AdminReleaseManifest = {

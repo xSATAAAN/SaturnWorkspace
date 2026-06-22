@@ -3,3 +3,38 @@
 @media (max-width: 1300px) { .admin-overview-lower { grid-template-columns: 1fr 1fr; }.admin-overview-lower > :last-child { grid-column: 1 / -1; }.coverage-summary { grid-template-columns: repeat(3, 1fr); }.service-health > div { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 1000px) { .admin-overview-grid, .admin-overview-lower { grid-template-columns: 1fr; }.admin-overview-lower > :last-child { grid-column: auto; }.service-health > div { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 640px) { .coverage-summary { grid-template-columns: repeat(2, 1fr); }.service-health > div { grid-template-columns: 1fr; }.content-list .ui-card { grid-template-columns: auto 1fr; }.content-list .ui-card > .ui-badge, .content-list .ui-card > .ui-button { grid-column: 2; justify-self: start; } }
+.selection-list {
+  display: grid;
+  gap: var(--space-2);
+  max-height: 15rem;
+  overflow: auto;
+  padding: var(--space-1);
+}
+
+.selection-list > button {
+  display: grid;
+  gap: 0.2rem;
+  width: 100%;
+  padding: var(--space-3);
+  text-align: start;
+  color: var(--text-primary);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.selection-list > button:hover,
+.selection-list > button.is-selected {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+}
+
+.selection-list small,
+.block {
+  display: block;
+}
+
+.danger-zone {
+  padding-block-start: var(--space-4);
+  border-block-start: 1px solid var(--danger-border, var(--border-strong));
+}

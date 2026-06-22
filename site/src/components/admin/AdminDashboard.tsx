@@ -1676,7 +1676,7 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
                   {crashGroups.map((group) => (
                     <button key={group.fingerprint} className="w-full min-w-0 overflow-hidden rounded-xl border border-white/10 bg-white/[0.03] p-3 text-start text-sm text-white/75 hover:border-sky-300/35" onClick={() => setCrashSearch(group.error_type)}>
                       <div className="break-words font-semibold text-white">{group.error_type}</div>
-                      <div>{isAr ? `${group.count} عطل / ${group.affected_hwids.length} جهاز` : `${group.count} crashes / ${group.affected_hwids.length} devices`}</div>
+                      <div>{isAr ? `${group.count} عطل / ${group.affected_hwids?.length || 0} جهاز` : `${group.count} crashes / ${group.affected_hwids?.length || 0} devices`}</div>
                       <div className="break-words text-white/50">{group.message || group.fingerprint}</div>
                     </button>
                   ))}

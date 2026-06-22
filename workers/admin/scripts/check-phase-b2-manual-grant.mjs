@@ -68,11 +68,23 @@ const rows = [
 const activity = []
 const paymentWrites = []
 const bucket = new Map()
+const profiles = [
+  { firebase_user_id: 'uid-active', normalized_email: 'active@example.com', display_name: 'Active user', account_status: 'active', updated_at: iso(-86400e3) },
+  { firebase_user_id: 'uid-expired', normalized_email: 'expired@example.com', display_name: 'Expired user', account_status: 'active', updated_at: iso(-86400e3) },
+  { firebase_user_id: 'uid-dupe', normalized_email: 'dupe@example.com', display_name: 'Duplicate user', account_status: 'active', updated_at: iso(-86400e3) },
+  { firebase_user_id: 'uid-new', normalized_email: 'new@example.com', display_name: 'New user', account_status: 'active', updated_at: iso(-86400e3) },
+]
 
 globalThis.fetch = async (input, init = {}) => {
   const url = new URL(typeof input === 'string' ? input : input.url)
   const table = url.pathname.split('/').pop()
   const method = String(init.method || 'GET').toUpperCase()
+  if (method === 'GET' && table === 'account_profiles') {
+    const query = decodeURIComponent(url.search)
+    return Response.json(profiles.filter((profile) =>
+      query.includes(profile.firebase_user_id) || query.includes(profile.normalized_email),
+    ))
+  }
   if (method === 'GET' && table === 'account_subscriptions') {
     const query = decodeURIComponent(url.search)
     if (query.includes('uid-active')) return Response.json(rows.filter((row) => row.firebase_user_id === 'uid-active'))
@@ -229,14 +241,21 @@ const missingReason = await post('/api/admin/subscriptions/manual-grant/execute'
 assert.ok(missingReason.status >= 400)
 assert.match(missingReason.payload.error, /missing_reason/)
 
+const executeReason = 'Manual acceptance test grant'
+const executePreview = await post('/api/admin/subscriptions/manual-grant/preview', {
+  ...base,
+  reason: executeReason,
+})
+assert.equal(executePreview.status, 200)
+
 const executePayload = {
   ...base,
-  reason: 'Manual acceptance test grant',
+  reason: executeReason,
   idempotency_key: 'idem-active-1',
-  preview_hash: preview5Days.payload.preview.preview_hash,
+  preview_hash: executePreview.payload.preview.preview_hash,
 }
 const executed = await post('/api/admin/subscriptions/manual-grant/execute', executePayload)
-assert.equal(executed.status, 200)
+assert.equal(executed.status, 200, JSON.stringify(executed.payload))
 assert.equal(executed.payload.success, true)
 assert.equal(executed.payload.item.id, 'sub-active-1')
 assert.ok(activity.some((row) => row.action === 'subscription_manual_grant'))

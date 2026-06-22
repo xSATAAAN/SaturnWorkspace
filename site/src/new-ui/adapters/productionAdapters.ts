@@ -11,6 +11,8 @@ import {
 import { fetchAccountSessions, fetchAccountSubscription, provisionAccountProfile, revokeAccountSession, revokeAllAccountSessions } from '../../api/account'
 import {
   createSubscription,
+  createPromoCode,
+  updatePromoCodeState,
   executeManualSubscriptionGrant,
   fetchAdminDashboard,
   fetchAdminCommerceOverview,
@@ -27,6 +29,23 @@ import {
   fetchSupportMessages,
   fetchSupportThreads,
   fetchUserDetail,
+  fetchAdminReadiness,
+  createAdminInvite,
+  fetchAdminInvites,
+  fetchAdminInviteUsage,
+  revokeAdminInvite,
+  fetchAdminPolicyState,
+  updateAdminDisabledVersion,
+  updateAdminGlobalPolicy,
+  fetchTamperAlerts,
+  executeAccessRevocation as executeAccessRevocationRequest,
+  executeAccountLifecycle as executeAccountLifecycleRequest,
+  executeSubscriptionTransition as executeSubscriptionTransitionRequest,
+  previewAccessRevocation as previewAccessRevocationRequest,
+  previewAccountLifecycle as previewAccountLifecycleRequest,
+  previewSubscriptionTransition as previewSubscriptionTransitionRequest,
+  resolveTamperAlert as resolveTamperAlertRequest,
+  updateCrashGroupState as updateCrashGroupStateRequest,
   publishRelease,
   resetSubscriptionHwid,
   sendSupportReply,
@@ -605,22 +624,22 @@ export const productionAdapters: AppAdapters = {
     },
     async getSession() {
       const session = await fetchAdminSession()
-      return { email: session.email }
+      return session
     },
     async getDashboard() {
       const data = await fetchAdminDashboard()
-      return { kpis: data.kpis, recentActivity: data.recent_activity }
+      return { kpis: data.kpis, recentActivity: data.recent_activity as never, degradedResources: (data as { degraded_resources?: string[] }).degraded_resources }
     },
     async getCommerceOverview() {
       return fetchAdminCommerceOverview()
     },
     async listUsers(input = {}) {
-      const data = await fetchAdminUsers({ search: input.search, limit: 100 })
-      return data.items || []
+      const data = await fetchAdminUsers(input)
+      return { items: data.items || [], total: data.total || 0, page: data.page || 1, limit: data.limit || input.limit || 50 }
     },
     async listSubscriptions(input = {}) {
-      const data = await fetchSubscriptions({ search: input.search, limit: 100 })
-      return data.items || []
+      const data = await fetchSubscriptions(input)
+      return { items: data.items || [], total: data.total || 0, page: data.page || 1, limit: data.limit || input.limit || 50 }
     },
     async createSubscription(input) {
       const data = await createSubscription(input)
@@ -637,6 +656,24 @@ export const productionAdapters: AppAdapters = {
       const data = await patchSubscriptionStatus(id, status)
       return data.item
     },
+    async previewAccountLifecycle(firebaseUid, input) {
+      return (await previewAccountLifecycleRequest(firebaseUid, input)).preview
+    },
+    async executeAccountLifecycle(firebaseUid, input) {
+      return (await executeAccountLifecycleRequest(firebaseUid, input)).result
+    },
+    async previewAccessRevocation(firebaseUid, input) {
+      return (await previewAccessRevocationRequest(firebaseUid, input)).preview
+    },
+    async executeAccessRevocation(firebaseUid, input) {
+      return (await executeAccessRevocationRequest(firebaseUid, input)).result
+    },
+    async previewSubscriptionTransition(subscriptionId, input) {
+      return (await previewSubscriptionTransitionRequest(subscriptionId, input)).preview
+    },
+    async executeSubscriptionTransition(subscriptionId, input) {
+      return (await executeSubscriptionTransitionRequest(subscriptionId, input)).result
+    },
     async resetHwid(id) {
       const data = await resetSubscriptionHwid(id)
       return data.item
@@ -644,6 +681,12 @@ export const productionAdapters: AppAdapters = {
     async listPromoCodes() {
       const data = await fetchPromoCodes()
       return data.items || []
+    },
+    async createPromoCode(input) {
+      return (await createPromoCode(input)).item
+    },
+    async updatePromoCodeState(id, active, reason) {
+      return (await updatePromoCodeState(id, active, reason)).item
     },
     async listReleases() {
       const latest = await productionAdapters.releases.getLatest('beta')
@@ -725,12 +768,46 @@ export const productionAdapters: AppAdapters = {
       const data = await fetchCrashGroups()
       return data.items || []
     },
+    async updateCrashGroupState(fingerprint, input) {
+      return (await updateCrashGroupStateRequest(fingerprint, input)).item
+    },
+    async listTamperAlerts(input = {}) {
+      return (await fetchTamperAlerts(input)).items || []
+    },
+    async resolveTamperAlert(alertId, reason) {
+      return (await resolveTamperAlertRequest(alertId, reason)).item
+    },
     async listAuditLog() {
       const data = await fetchAuditLog()
       return data.items || []
     },
     getUserDetail(userKey) {
       return fetchUserDetail(userKey)
+    },
+    getReadiness() {
+      return fetchAdminReadiness()
+    },
+    async listInvites(status = '') {
+      return (await fetchAdminInvites(status)).items || []
+    },
+    async createInvite(input) {
+      const result = await createAdminInvite(input)
+      return { item: result.item, code: result.code, shown_once: result.shown_once }
+    },
+    async revokeInvite(inviteId, reason) {
+      await revokeAdminInvite(inviteId, reason)
+    },
+    async listInviteUsage(inviteId) {
+      return (await fetchAdminInviteUsage(inviteId)).items || []
+    },
+    getPolicyState() {
+      return fetchAdminPolicyState()
+    },
+    async updateGlobalPolicy(input) {
+      await updateAdminGlobalPolicy(input)
+    },
+    async updateDisabledVersion(input) {
+      await updateAdminDisabledVersion(input)
     },
   },
   content: {

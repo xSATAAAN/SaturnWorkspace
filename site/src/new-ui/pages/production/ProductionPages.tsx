@@ -27,7 +27,7 @@ import {
   Users,
   WalletCards,
 } from 'lucide-react'
-import type { AdminAuditLogItem, AdminCommerceOverview, AdminCrashGroup, AdminCrashLog, AdminEmailCatalogItem, AdminEmailJob, AdminEmailProviderEvent, AdminEmailRecipientFlag, AdminEmailStatus, AdminInboundEmailMessage, AdminRemoteControls, AdminScheduledEmail, AdminSubscription, AdminSupportThread, AdminUserSummary, ManualGrantPreview } from '../../../api/admin'
+import type { AdminCommerceOverview, AdminEmailCatalogItem, AdminEmailJob, AdminEmailProviderEvent, AdminEmailRecipientFlag, AdminEmailStatus, AdminInboundEmailMessage, AdminPromoCode, AdminScheduledEmail, AdminSupportThread, ManualGrantPreview } from '../../../api/admin'
 import type { AccountSession, AccountSubscription } from '../../../api/account'
 import { useAdapters } from '../../adapters/AdapterProvider'
 import type { AccountNotification, CustomerSupportThread, PlanInfo, ReleaseInfo, SupportSenderRole } from '../../adapters/contracts'
@@ -41,7 +41,7 @@ import { Card, DataTable, PageHeader, SectionHeader, StatCard, TableToolbar, typ
 import { Alert, Badge, CardSkeleton, EmptyState, FullPageState, Skeleton, SkeletonStack } from '../../components/ui/Feedback'
 import { Checkbox, FormField, Input, OTPInput, PasswordInput, Select, Textarea } from '../../components/ui/FormControls'
 import { Accordion, Tabs } from '../../components/ui/Navigation'
-import { ConfirmDialog, Drawer } from '../../components/ui/Overlays'
+import { ConfirmDialog, Drawer, Modal } from '../../components/ui/Overlays'
 import { DownloadCard, PricingCard, SubscriptionCard } from '../../components/ui/ProductCards'
 import { publicCopy } from '../../content/publicCopy'
 import { isProductionFeatureEnabled } from '../../adapters/productionFeatureFlags'
@@ -51,6 +51,16 @@ import appIcon from '../../assets/saturnws-app-icon.png'
 import type { Navigate } from '../../app/routes'
 import type { MessageKey } from '../../i18n/messages'
 import { useAuthState } from '../../hooks/useAuthState'
+import {
+  AdminAuditPhaseF,
+  AdminDiagnosticsPhaseF,
+  AdminOverviewPhaseF,
+  AdminPoliciesPhaseF,
+  AdminReadinessPhaseF,
+  AdminSettingsPhaseF,
+  AdminSubscriptionsPhaseF,
+  AdminUsersPhaseF,
+} from './AdminPhaseF'
 
 type ResourceStatus = 'idle' | 'bootstrapping' | 'loading_initial' | 'refreshing' | 'success' | 'empty' | 'partial' | 'error_recoverable' | 'error_terminal'
 type AsyncResource<T> = { status: ResourceStatus; loading: boolean; refreshing: boolean; data: T | null; error: string | null; reload: () => void }
@@ -1077,10 +1087,10 @@ export function AdminProductionPages({ page, navigate }: { page: string; navigat
     { label: t('users'), items: [{ id: 'users', label: t('users'), icon: Users }, { id: 'subscriptions', label: t('subscriptions'), icon: CreditCard }, { id: 'commerce', label: t('payments'), icon: WalletCards }] },
     { label: t('distribution'), items: [{ id: 'releases', label: t('releases'), icon: PackageOpen }, { id: 'promos', label: t('promoCodes'), icon: Tags }] },
     { label: t('operations'), items: [{ id: 'support', label: t('supportInbox'), icon: LifeBuoy }, { id: 'communications', label: copyByLocale(locale, 'Email Operations', 'عمليات البريد'), icon: Mail }, { id: 'diagnostics', label: t('diagnostics'), icon: Bug }] },
-    { label: t('governance'), items: [{ id: 'policies', label: t('policies'), icon: ShieldCheck }, { id: 'audit', label: t('auditLog'), icon: ScrollText }, { id: 'settings', label: t('settings'), icon: Settings }] },
+    { label: t('governance'), items: [{ id: 'policies', label: t('policies'), icon: ShieldCheck }, { id: 'audit', label: t('auditLog'), icon: ScrollText }, { id: 'readiness', label: copyByLocale(locale, 'Readiness', 'الجاهزية'), icon: CheckCheck }, { id: 'settings', label: t('settings'), icon: Settings }] },
   ], [t, locale])
   const title = groups.flatMap((group) => group.items).find((item) => item.id === page)?.label || t('adminOverview')
-  return <AdminGuard navigate={navigate}><WorkspaceShell surface="admin" page={page} title={title} groups={groups} navigate={navigate} admin>{page === 'users' ? <AdminUsers /> : page === 'subscriptions' ? <AdminSubscriptions /> : page === 'releases' ? <AdminReleases /> : page === 'support' ? <AdminSupportV2 /> : page === 'communications' ? <AdminEmailOperations /> : page === 'diagnostics' ? <AdminDiagnostics /> : page === 'audit' ? <AdminAudit /> : page === 'promos' ? <AdminPromos /> : page === 'commerce' ? <AdminCommerce /> : page === 'policies' ? <AdminPolicies /> : <AdminOverview />}</WorkspaceShell></AdminGuard>
+  return <AdminGuard navigate={navigate}><WorkspaceShell surface="admin" page={page} title={title} groups={groups} navigate={navigate} admin>{page === 'users' ? <AdminUsersPhaseF /> : page === 'subscriptions' ? <AdminSubscriptionsPhaseF /> : page === 'releases' ? <AdminReleases /> : page === 'support' ? <AdminSupportV2 /> : page === 'communications' ? <AdminEmailOperations /> : page === 'diagnostics' ? <AdminDiagnosticsPhaseF /> : page === 'audit' ? <AdminAuditPhaseF /> : page === 'promos' ? <AdminPromos /> : page === 'commerce' ? <AdminCommerce /> : page === 'policies' ? <AdminPoliciesPhaseF /> : page === 'readiness' ? <AdminReadinessPhaseF /> : page === 'settings' ? <AdminSettingsPhaseF /> : <AdminOverviewPhaseF />}</WorkspaceShell></AdminGuard>
 }
 
 function AdminGuard({ children }: { children: ReactNode; navigate: Navigate }) {
@@ -1112,49 +1122,6 @@ function AdminGuard({ children }: { children: ReactNode; navigate: Navigate }) {
   if (!preauth) return <main className="admin-login"><header><Brand /><div className="cluster"><LocaleControl /><ThemeControl /></div></header><Card className="admin-login__card"><h1>{t('adminConsole')}</h1><p>{copyByLocale(locale, 'Use an authorized admin account.', 'استخدم حساب إدارة مخولًا.')}</p><form className="stack" onSubmit={async (event) => { event.preventDefault(); setError(''); try { const result = await admin.submitPreauth({ username, password }); setPreauth(result.authenticated); if (!result.authenticated) setError('admin_preauth_failed') } catch (err) { setError(err instanceof Error ? err.message : 'admin_preauth_failed') } }}><FormField label={t('email')} htmlFor="admin-user"><Input id="admin-user" value={username} onChange={(event) => setUsername(event.target.value)} /></FormField><FormField label={t('password')} htmlFor="admin-pass"><PasswordInput id="admin-pass" value={password} onChange={(event) => setPassword(event.target.value)} /></FormField>{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}<Button variant="primary" fullWidth>{t('continue')}</Button></form></Card></main>
   if (!sessionEmail) return <main className="admin-login"><header><Brand /><div className="cluster"><LocaleControl /><ThemeControl /></div></header><Card className="admin-login__card"><h1>{t('adminConsole')}</h1><p>{copyByLocale(locale, 'Continue with your admin Google account.', 'تابع باستخدام حساب Google الإداري.')}</p>{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}<Button variant="primary" fullWidth onClick={async () => { setError(''); try { await admin.signInWithGoogle(); const session = await admin.getSession(); setSessionEmail(session.email) } catch (err) { setError(err instanceof Error ? err.message : 'admin_session_failed') } }}>{t('continue')} Google</Button></Card></main>
   return children
-}
-
-function AdminOverview() {
-  const { t } = useExperience()
-  const adapters = useAdapters()
-  const dashboard = useAsyncData(() => adapters.admin.getDashboard(), [adapters])
-  const kpis = dashboard.data?.kpis || {}
-  if (dashboard.loading) return <AdminOverviewSkeleton />
-  return <><PageHeader title={t('adminOverview')} />{dashboard.error ? <ErrorBlock error={dashboard.error} onRetry={dashboard.reload} /> : null}<div className="admin-metric-strip">{[t('totalUsers'), t('activeSubscriptions'), t('openTickets'), t('unresolvedCrashes')].map((label, index) => <StatCard key={label} label={label} value={Object.values(kpis)[index] ?? '—'} />)}</div><Card><SectionHeader title={t('recentAdminActivity')} /><pre className="mono">{JSON.stringify(dashboard.data?.recentActivity || [], null, 2)}</pre></Card></>
-}
-
-function AdminUsers() {
-  const { t, locale } = useExperience()
-  const { admin } = useAdapters()
-  const [search, setSearch] = useState('')
-  const rows = useAsyncData(() => admin.listUsers({ search }), [admin, search])
-  const columns: Column<AdminUserSummary>[] = [
-    { key: 'name', header: t('name'), render: (row) => row.display_name || '—' },
-    { key: 'email', header: t('email'), render: (row) => row.email },
-    { key: 'account', header: t('status'), render: (row) => <Badge tone={row.account_status === 'active' ? 'success' : 'warning'}>{row.account_status}</Badge> },
-    { key: 'entitlement', header: t('subscription'), render: (row) => <Badge tone={row.subscription_projection?.entitlement === 'entitled' ? 'success' : 'neutral'}>{row.subscription_projection?.entitlement || 'no_subscription'}</Badge> },
-    { key: 'plan', header: t('plan'), render: (row) => row.subscription_projection?.plan_term || copyByLocale(locale, 'No subscription', 'لا يوجد اشتراك') },
-    { key: 'created', header: t('date'), render: (row) => formatDisplayDate(row.created_at, locale) },
-  ]
-  return <><PageHeader title={t('users')} /><TableToolbar searchLabel={t('search')} searchValue={search} onSearch={setSearch} />{rows.error ? <ErrorBlock error={rows.error} onRetry={rows.reload} /> : <DataTable columns={columns} rows={rows.data || []} loading={rows.loading} rowKey={(row) => row.firebase_user_id} emptyTitle={t('tableEmpty')} emptyBody={t('unavailableMetric')} />}</>
-}
-
-function AdminSubscriptions() {
-  const { t, locale } = useExperience()
-  const { admin } = useAdapters()
-  const [search, setSearch] = useState('')
-  const [grantOpen, setGrantOpen] = useState(false)
-  const rows = useAsyncData(() => admin.listSubscriptions({ search }), [admin, search])
-  if (rows.loading && !rows.data) return <AdminSubscriptionsSkeleton />
-  const columns: Column<AdminSubscription>[] = [
-    { key: 'email', header: t('email'), render: (row) => row.user_email || row.firebase_user_id || row.id },
-    { key: 'current', header: t('type'), render: (row) => <Badge tone={row.is_current_projection ? 'info' : 'neutral'}>{row.is_current_projection ? t('current') : copyByLocale(locale, 'History', 'سجل سابق')}</Badge> },
-    { key: 'status', header: t('status'), render: (row) => <Badge tone={row.subscription_projection?.entitlement === 'entitled' ? 'success' : 'warning'}>{row.subscription_projection?.lifecycle || row.status}</Badge> },
-    { key: 'plan', header: t('plan'), render: (row) => row.subscription_projection?.plan_term || row.plan },
-    { key: 'expires', header: t('expiryDate'), render: (row) => formatDisplayDate(row.expires_at, locale) },
-    { key: 'actions', header: t('actions'), render: (row) => row.is_current_projection ? <div className="cluster"><Button size="sm" onClick={() => admin.updateSubscriptionStatus(row.id, row.status === 'active' ? 'suspended' : 'active').then(rows.reload)}>{row.status === 'active' ? t('disabled') : t('enabled')}</Button><Button size="sm" onClick={() => admin.resetHwid(row.id).then(rows.reload)}>{t('resetHwid')}</Button></div> : row.integrity_warning ? <Badge tone="danger">{row.integrity_warning}</Badge> : '—' },
-  ]
-  return <><PageHeader title={t('subscriptions')} actions={<Button variant="primary" onClick={() => setGrantOpen(true)}>{t('grantSubscription')}</Button>} /><TableToolbar searchLabel={t('search')} searchValue={search} onSearch={setSearch} />{rows.error ? <ErrorBlock error={rows.error} onRetry={rows.reload} /> : <DataTable columns={columns} rows={rows.data || []} loading={rows.loading} rowKey={(row) => row.id} emptyTitle={t('tableEmpty')} emptyBody={t('unavailableMetric')} />}<GrantSubscriptionDrawer open={grantOpen} onClose={() => { setGrantOpen(false); rows.reload() }} /></>
 }
 
 function GrantSubscriptionDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -1224,8 +1191,11 @@ function GrantSubscriptionDrawer({ open, onClose }: { open: boolean; onClose: ()
   return <Drawer open={open} onClose={close} title={t('grantTitle')} description={copyByLocale(locale, 'Review the change before confirming it.', 'راجع التغييرات قبل التأكيد.')} closeLabel={t('close')} footer={<div className="cluster"><Button onClick={runPreview} loading={busy} disabled={!hasRequiredTarget}>{copyByLocale(locale, 'Preview', 'معاينة')}</Button><Button variant="primary" onClick={execute} loading={busy} disabled={!canExecute}>{t('confirmGrant')}</Button></div>}><div className="stack"><div className="form-grid"><FormField label={copyByLocale(locale, 'Firebase UID', 'معرّف Firebase')} htmlFor="grant-uid" required><Input id="grant-uid" value={uid} onChange={(event) => { setUid(event.target.value); resetOutcome() }} /></FormField><FormField label={t('email')} htmlFor="grant-email"><Input id="grant-email" value={email} onChange={(event) => { setEmail(event.target.value); resetOutcome() }} /></FormField></div><div className="form-grid"><FormField label={t('plan')} htmlFor="grant-plan"><Select id="grant-plan" value={plan} onChange={(event) => { setPlan(event.target.value as typeof plan); resetOutcome() }}><option value="weekly">weekly</option><option value="monthly">monthly</option><option value="annual">annual</option><option value="lifetime">lifetime</option><option value="custom">custom</option><option value="manual">manual</option></Select></FormField><FormField label={copyByLocale(locale, 'Operation', 'الإجراء')} htmlFor="grant-operation"><Select id="grant-operation" value={operation} onChange={(event) => { setOperation(event.target.value as typeof operation); resetOutcome() }}><option value="extend_current">{copyByLocale(locale, 'Extend current subscription', 'تمديد الاشتراك الحالي')}</option><option value="replace_current">{copyByLocale(locale, 'Replace subscription', 'استبدال الاشتراك')}</option><option value="start_from_now">{copyByLocale(locale, 'Start from now', 'بدء اشتراك من الآن')}</option><option value="restore_remaining_time">{copyByLocale(locale, 'Restore remaining time', 'استعادة المدة المتبقية')}</option></Select></FormField></div>{plan !== 'lifetime' ? <div className="form-grid"><FormField label={copyByLocale(locale, 'Duration mode', 'طريقة تحديد المدة')} htmlFor="grant-duration-mode"><Select id="grant-duration-mode" value={durationMode} onChange={(event) => { setDurationMode(event.target.value as typeof durationMode); resetOutcome() }}><option value="duration">{copyByLocale(locale, 'Duration', 'مدة')}</option><option value="exact">{copyByLocale(locale, 'Exact expiry', 'تاريخ انتهاء محدد')}</option></Select></FormField>{durationMode === 'duration' ? <><FormField label={copyByLocale(locale, 'Value', 'القيمة')} htmlFor="grant-duration-value"><Input id="grant-duration-value" type="number" min="1" value={durationValue} onChange={(event) => { setDurationValue(event.target.value); resetOutcome() }} /></FormField><FormField label={copyByLocale(locale, 'Unit', 'الوحدة')} htmlFor="grant-duration-unit"><Select id="grant-duration-unit" value={durationUnit} onChange={(event) => { setDurationUnit(event.target.value as typeof durationUnit); resetOutcome() }}><option value="hours">{copyByLocale(locale, 'Hours', 'ساعات')}</option><option value="days">{copyByLocale(locale, 'Days', 'أيام')}</option><option value="weeks">{copyByLocale(locale, 'Weeks', 'أسابيع')}</option><option value="months">{copyByLocale(locale, 'Months', 'شهور')}</option></Select></FormField></> : <><FormField label={t('expiryDate')} htmlFor="grant-exact"><Input id="grant-exact" type="datetime-local" value={exactExpiry} onChange={(event) => { setExactExpiry(event.target.value); resetOutcome() }} /></FormField><FormField label={copyByLocale(locale, 'Timezone', 'المنطقة الزمنية')} htmlFor="grant-timezone"><Input id="grant-timezone" value={timezone} onChange={(event) => { setTimezone(event.target.value); resetOutcome() }} /></FormField></>}</div> : null}<FormField label={t('reason')} htmlFor="grant-reason" required><Textarea id="grant-reason" value={reason} onChange={(event) => { setReason(event.target.value); setResult(null) }} /></FormField>{preview ? <Card padding="sm"><SectionHeader title={copyByLocale(locale, 'Preview', 'المعاينة')} description={preview.blocked ? copyByLocale(locale, 'Resolve the warnings before confirming.', 'عالج التحذيرات قبل التأكيد.') : copyByLocale(locale, 'Confirm only after reviewing the result.', 'أكّد فقط بعد مراجعة النتيجة.')} /><dl className="detail-list"><div><dt>{copyByLocale(locale, 'Current status', 'الحالة الحالية')}</dt><dd>{preview.current_subscription?.status || copyByLocale(locale, 'No active subscription', 'لا يوجد اشتراك نشط')}</dd></div><div><dt>{copyByLocale(locale, 'New expiry', 'تاريخ الانتهاء الجديد')}</dt><dd>{formatDisplayDate(preview.proposed_state.expires_at, locale)}</dd></div><div><dt>{t('plan')}</dt><dd>{preview.proposed_state.plan_intent}</dd></div><div><dt>{copyByLocale(locale, 'Affected rows', 'السجلات المتأثرة')}</dt><dd>{preview.affected_rows.length || 1}</dd></div></dl>{preview.warnings.length ? <Alert title={copyByLocale(locale, 'Needs review', 'تحتاج مراجعة')} tone={preview.blocked ? 'danger' : 'warning'}>{preview.warnings.join(', ')}</Alert> : null}{!uid.trim() ? <Alert title={copyByLocale(locale, 'Firebase UID required', 'معرّف Firebase مطلوب')} tone="warning">{copyByLocale(locale, 'Execution requires the user UID, even if email is used for search.', 'التنفيذ يتطلب معرّف المستخدم حتى لو استُخدم البريد في البحث.')}</Alert> : null}</Card> : null}{result ? <Alert title={t('success')} tone="success">{copyByLocale(locale, `Grant applied. Reference: ${result.request_id || '—'}`, `تم منح الاشتراك. المرجع: ${result.request_id || '—'}`)}</Alert> : null}{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}</div></Drawer>
 }
 
+// Kept temporarily for compatibility with the Phase B operational grant flow; no production route renders it.
+void [AdminOverviewSkeleton, AdminSubscriptionsSkeleton, GrantSubscriptionDrawer]
+
 function AdminReleases() {
-  const { t } = useExperience()
+  const { t, locale } = useExperience()
   const adapters = useAdapters()
   const release = useAsyncData(() => adapters.releases.getLatest('beta'), [adapters])
   const [version, setVersion] = useState('')
@@ -1238,8 +1208,19 @@ function AdminReleases() {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [acknowledged, setAcknowledged] = useState(false)
   const submit = async (event: FormEvent) => {
     event.preventDefault()
+    setError('')
+    setNotice('')
+    if (!version.trim() || !notes.trim()) {
+      setError(copyByLocale(locale, 'Enter a version and release notes.', 'أدخل الإصدار وملاحظات الإصدار.'))
+      return
+    }
+    setPreviewOpen(true)
+  }
+  const confirmPublish = async () => {
     setBusy(true)
     setError('')
     setNotice('')
@@ -1247,6 +1228,8 @@ function AdminReleases() {
       if (file) await adapters.admin.uploadRelease({ file, version, channel, artifactType })
       await adapters.admin.publishRelease({ version, channel, notes, mandatory, updateMode })
       setNotice(t('success'))
+      setPreviewOpen(false)
+      setAcknowledged(false)
       release.reload()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'release_publish_failed')
@@ -1254,7 +1237,7 @@ function AdminReleases() {
       setBusy(false)
     }
   }
-  return <><PageHeader title={t('releases')} description={t('managedUpdates')} />{release.error ? <ErrorBlock error={release.error} onRetry={release.reload} /> : <Card><dl className="detail-list"><div><dt>{t('version')}</dt><dd>{release.data?.version || t('unavailable')}</dd></div><div><dt>{t('mandatory')}</dt><dd>{release.data?.mandatory ? t('enabled') : t('disabled')}</dd></div><div><dt>SHA256</dt><dd>{release.data?.sha256 || '—'}</dd></div></dl></Card>}<Card><SectionHeader title={t('publishRelease')} description={t('managedUpdates')} /><form className="settings-form" onSubmit={submit}><div className="form-grid"><FormField label={t('version')} htmlFor="release-version" required><Input id="release-version" value={version} onChange={(event) => setVersion(event.target.value)} required /></FormField><FormField label={t('channel')} htmlFor="release-channel" required><Select id="release-channel" value={channel} onChange={(event) => setChannel(event.target.value)}><option value="beta">{t('beta')}</option><option value="stable">{t('stable')}</option></Select></FormField></div><div className="form-grid"><FormField label={t('type')} htmlFor="release-artifact"><Select id="release-artifact" value={artifactType} onChange={(event) => setArtifactType(event.target.value as 'portable' | 'installed')}><option value="installed">installed</option><option value="portable">portable</option></Select></FormField><FormField label={t('availability')} htmlFor="release-mode"><Select id="release-mode" value={updateMode} onChange={(event) => setUpdateMode(event.target.value as 'optional' | 'force' | 'required' | 'silent')}><option value="optional">optional</option><option value="required">required</option><option value="force">force</option><option value="silent">silent</option></Select></FormField></div><FormField label={t('uploadArtifact')} htmlFor="release-file"><Input id="release-file" type="file" onChange={(event) => setFile(event.target.files?.[0] || null)} /></FormField><FormField label={t('releaseNotes')} htmlFor="release-notes"><Textarea id="release-notes" value={notes} onChange={(event) => setNotes(event.target.value)} /></FormField><label className="ui-checkbox"><input type="checkbox" checked={mandatory} onChange={(event) => setMandatory(event.target.checked)} />{t('mandatory')}</label><Button type="submit" variant="primary" loading={busy}>{t('publishRelease')}</Button>{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}</form></Card></>
+  return <><PageHeader title={t('releases')} description={t('managedUpdates')} />{release.error ? <ErrorBlock error={release.error} onRetry={release.reload} /> : <Card><dl className="detail-list"><div><dt>{t('version')}</dt><dd>{release.data?.version || t('unavailable')}</dd></div><div><dt>{t('mandatory')}</dt><dd>{release.data?.mandatory ? t('enabled') : t('disabled')}</dd></div><div><dt>SHA256</dt><dd>{release.data?.sha256 || '—'}</dd></div></dl></Card>}<Card><SectionHeader title={t('publishRelease')} description={t('managedUpdates')} /><form className="settings-form" onSubmit={submit}><div className="form-grid"><FormField label={t('version')} htmlFor="release-version" required><Input id="release-version" value={version} onChange={(event) => setVersion(event.target.value)} required /></FormField><FormField label={t('channel')} htmlFor="release-channel" required><Select id="release-channel" value={channel} onChange={(event) => setChannel(event.target.value)}><option value="beta">{t('beta')}</option><option value="stable">{t('stable')}</option></Select></FormField></div><div className="form-grid"><FormField label={t('type')} htmlFor="release-artifact"><Select id="release-artifact" value={artifactType} onChange={(event) => setArtifactType(event.target.value as 'portable' | 'installed')}><option value="installed">{copyByLocale(locale, 'Installed update', 'تحديث النسخة المثبتة')}</option><option value="portable">{copyByLocale(locale, 'Portable application', 'نسخة محمولة')}</option></Select></FormField><FormField label={t('availability')} htmlFor="release-mode"><Select id="release-mode" value={updateMode} onChange={(event) => setUpdateMode(event.target.value as 'optional' | 'force' | 'required' | 'silent')}><option value="optional">{copyByLocale(locale, 'Optional', 'اختياري')}</option><option value="required">{copyByLocale(locale, 'Required', 'مطلوب')}</option><option value="force">{copyByLocale(locale, 'Mandatory', 'إجباري')}</option><option value="silent">{copyByLocale(locale, 'Background', 'في الخلفية')}</option></Select></FormField></div><FormField label={t('uploadArtifact')} htmlFor="release-file"><Input id="release-file" type="file" onChange={(event) => setFile(event.target.files?.[0] || null)} /></FormField><FormField label={t('releaseNotes')} htmlFor="release-notes"><Textarea id="release-notes" value={notes} onChange={(event) => setNotes(event.target.value)} /></FormField><label className="ui-checkbox"><input type="checkbox" checked={mandatory} onChange={(event) => setMandatory(event.target.checked)} />{t('mandatory')}</label><Button type="submit" variant="primary" loading={busy}>{copyByLocale(locale, 'Review release', 'مراجعة الإصدار')}</Button>{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}</form></Card><Modal open={previewOpen} onClose={() => setPreviewOpen(false)} title={copyByLocale(locale, 'Confirm release publication', 'تأكيد نشر الإصدار')} description={copyByLocale(locale, 'Review the artifact and targeting before publishing.', 'راجع الملف والاستهداف قبل النشر.')} closeLabel={t('close')} footer={<><Button onClick={() => setPreviewOpen(false)}>{copyByLocale(locale, 'Back', 'رجوع')}</Button><Button variant="danger" loading={busy} disabled={!acknowledged} onClick={confirmPublish}>{copyByLocale(locale, 'Publish release', 'نشر الإصدار')}</Button></>}><div className="stack"><dl className="detail-list"><div><dt>{t('version')}</dt><dd>{version}</dd></div><div><dt>{t('channel')}</dt><dd>{channel}</dd></div><div><dt>{t('type')}</dt><dd>{artifactType}</dd></div><div><dt>{t('uploadArtifact')}</dt><dd>{file ? `${file.name} · ${file.size} bytes` : copyByLocale(locale, 'No new artifact', 'لا يوجد ملف جديد')}</dd></div><div><dt>{t('mandatory')}</dt><dd>{mandatory ? t('enabled') : t('disabled')}</dd></div></dl><label className="ui-check"><input type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} /><span>{copyByLocale(locale, 'I reviewed the release scope and artifact.', 'راجعت نطاق الإصدار والملف.')}</span></label></div></Modal></>
 }
 
 function AdminSupportV2() {
@@ -1616,30 +1599,22 @@ function AdminEmailOperations() {
   )
 }
 
-function AdminDiagnostics() {
-  const { t, locale } = useExperience()
-  const adapters = useAdapters()
-  const [tab, setTab] = useState('crashes')
-  const logs = useAsyncData(() => adapters.admin.listCrashLogs(), [adapters])
-  const groups = useAsyncData(() => adapters.admin.listCrashGroups(), [adapters])
-  const logColumns: Column<AdminCrashLog>[] = [{ key: 'type', header: t('type'), render: (row) => row.error_type }, { key: 'message', header: t('details'), render: (row) => row.message || row.stack_trace?.slice(0, 80) || '—' }, { key: 'date', header: t('date'), render: (row) => formatDisplayDate(row.happened_at, locale) }]
-  const groupColumns: Column<AdminCrashGroup>[] = [{ key: 'type', header: t('type'), render: (row) => row.error_type }, { key: 'count', header: t('details'), render: (row) => row.count }, { key: 'date', header: t('date'), render: (row) => row.last_seen_at }]
-  return <><PageHeader title={t('diagnostics')} description={t('crashReports')} /><Tabs ariaLabel={t('diagnostics')} active={tab} onChange={setTab} items={[{ id: 'crashes', label: t('crashReports') }, { id: 'groups', label: t('crashSummary') }]} />{tab === 'groups' ? <DataTable columns={groupColumns} rows={groups.data || []} loading={groups.loading} rowKey={(row) => row.fingerprint} emptyTitle={t('tableEmpty')} emptyBody={t('crashSummary')} /> : <DataTable columns={logColumns} rows={logs.data || []} loading={logs.loading} rowKey={(row) => row.id} emptyTitle={t('tableEmpty')} emptyBody={t('crashReports')} />}</>
-}
-
-function AdminAudit() {
-  const { t, locale } = useExperience()
-  const adapters = useAdapters()
-  const rows = useAsyncData(() => adapters.admin.listAuditLog(), [adapters])
-  const columns: Column<AdminAuditLogItem>[] = [{ key: 'date', header: t('date'), render: (row) => formatDisplayDate(row.happened_at || row.at, locale) }, { key: 'action', header: t('actions'), render: (row) => row.action || row.type || '—' }, { key: 'entity', header: t('details'), render: (row) => row.entity || row.entity_id || '—' }]
-  return <><PageHeader title={t('auditLog')} description={t('auditLog')} />{rows.error ? <ErrorBlock error={rows.error} onRetry={rows.reload} /> : <DataTable columns={columns} rows={rows.data || []} loading={rows.loading} rowKey={(row, ) => row.id || `${row.action}-${row.at}`} emptyTitle={t('tableEmpty')} emptyBody={t('auditLog')} />}</>
-}
-
 function AdminPromos() {
-  const { t } = useExperience()
+  const { t, locale } = useExperience()
   const adapters = useAdapters()
   const promos = useAsyncData(() => adapters.admin.listPromoCodes(), [adapters])
-  return <><PageHeader title={t('promoCodes')} description={t('promoCodes')} />{promos.error ? <ErrorBlock error={promos.error} onRetry={promos.reload} /> : <Card><pre className="mono">{JSON.stringify(promos.data || [], null, 2)}</pre></Card>}</>
+  const [open, setOpen] = useState(false)
+  const [code, setCode] = useState('')
+  const [discountType, setDiscountType] = useState<'percent' | 'fixed'>('percent')
+  const [discountValue, setDiscountValue] = useState('')
+  const [maxUses, setMaxUses] = useState('')
+  const [expiry, setExpiry] = useState('')
+  const [preview, setPreview] = useState(false)
+  const [error, setError] = useState('')
+  const maskCode = (value: string) => value.length <= 4 ? '••••' : `${value.slice(0, 2)}••••${value.slice(-2)}`
+  const columns: Column<AdminPromoCode>[] = [{ key: 'code', header: t('promoCodes'), render: (row) => <span className="mono">{maskCode(row.code)}</span> }, { key: 'discount', header: t('details'), render: (row) => row.discount_type === 'percent' ? `${row.discount_value}%` : `$${row.discount_value}` }, { key: 'usage', header: copyByLocale(locale, 'Usage', 'الاستخدام'), render: (row) => `${row.used_count || 0}/${row.max_uses || '∞'}` }, { key: 'expiry', header: t('expiryDate'), render: (row) => row.expires_at ? formatDisplayDate(row.expires_at, locale) : '—' }, { key: 'status', header: t('status'), render: (row) => <Badge tone={row.is_active ? 'success' : 'neutral'}>{row.is_active ? t('enabled') : t('disabled')}</Badge> }, { key: 'action', header: t('actions'), render: (row) => <Button size="sm" onClick={() => adapters.admin.updatePromoCodeState(row.id, !row.is_active, row.is_active ? 'Paused by administrator' : 'Activated by administrator').then(promos.reload)}>{row.is_active ? t('disabled') : t('enabled')}</Button> }]
+  const create = async () => { setError(''); try { await adapters.admin.createPromoCode({ code, discount_type: discountType, discount_value: Number(discountValue), is_private_tier_trigger: false, max_uses: maxUses ? Number(maxUses) : undefined, expires_at: expiry ? new Date(expiry).toISOString() : undefined }); setOpen(false); setPreview(false); setCode(''); setDiscountValue(''); promos.reload() } catch (createError) { setError(createError instanceof Error ? createError.message : 'promo_create_failed') } }
+  return <><PageHeader title={t('promoCodes')} actions={<Button variant="primary" onClick={() => setOpen(true)}>{copyByLocale(locale, 'Create code', 'إنشاء كود')}</Button>} />{promos.error ? <ErrorBlock error={promos.error} onRetry={promos.reload} /> : <DataTable columns={columns} rows={promos.data || []} loading={promos.loading} rowKey={(row) => row.id} emptyTitle={t('tableEmpty')} emptyBody={copyByLocale(locale, 'No promotion codes exist.', 'لا توجد أكواد عروض.')} />}<Modal open={open} onClose={() => { setOpen(false); setPreview(false) }} title={copyByLocale(locale, 'Create promotion code', 'إنشاء كود عرض')} description={copyByLocale(locale, 'Checkout remains unavailable until a payment provider is connected.', 'الدفع غير متاح حتى يتم ربط مزود دفع.')} closeLabel={t('close')} footer={preview ? <><Button onClick={() => setPreview(false)}>{copyByLocale(locale, 'Back', 'رجوع')}</Button><Button variant="primary" onClick={create}>{copyByLocale(locale, 'Create code', 'إنشاء الكود')}</Button></> : <Button variant="primary" disabled={!code.trim() || !Number(discountValue)} onClick={() => setPreview(true)}>{copyByLocale(locale, 'Review', 'مراجعة')}</Button>}><div className="stack"><div className="form-grid"><FormField label={copyByLocale(locale, 'Code', 'الكود')} required><Input value={code} maxLength={64} onChange={(event) => { setCode(event.target.value.toUpperCase()); setPreview(false) }} /></FormField><FormField label={copyByLocale(locale, 'Benefit type', 'نوع الخصم')}><Select value={discountType} onChange={(event) => { setDiscountType(event.target.value as typeof discountType); setPreview(false) }}><option value="percent">{copyByLocale(locale, 'Percentage', 'نسبة مئوية')}</option><option value="fixed">{copyByLocale(locale, 'Fixed amount', 'قيمة ثابتة')}</option></Select></FormField><FormField label={copyByLocale(locale, 'Benefit value', 'قيمة الخصم')} required><Input type="number" min="0.01" value={discountValue} onChange={(event) => { setDiscountValue(event.target.value); setPreview(false) }} /></FormField><FormField label={copyByLocale(locale, 'Maximum uses', 'الحد الأقصى للاستخدام')}><Input type="number" min="1" value={maxUses} onChange={(event) => { setMaxUses(event.target.value); setPreview(false) }} /></FormField><FormField label={t('expiryDate')}><Input type="datetime-local" value={expiry} onChange={(event) => { setExpiry(event.target.value); setPreview(false) }} /></FormField></div>{preview ? <Alert title={copyByLocale(locale, 'Review the code', 'راجع الكود')} tone="info">{`${maskCode(code)} · ${discountType === 'percent' ? `${discountValue}%` : `$${discountValue}`}`}</Alert> : null}{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}</div></Modal></>
 }
 
 function AdminCommerce() {
@@ -1661,54 +1636,6 @@ function AdminCommerce() {
   ]
   if (overview.loading && !data) return <><PageHeader title={t('payments')} /><SkeletonStack rows={6} /></>
   return <><PageHeader title={t('payments')} />{overview.error ? <ErrorBlock error={overview.error} onRetry={overview.reload} /> : null}{data ? <div className="stack"><div className="admin-metric-strip"><StatCard label={copyByLocale(locale, 'Checkout', 'الدفع')} value={data.checkout_available ? t('enabled') : t('disabled')} /><StatCard label={copyByLocale(locale, 'Configured providers', 'المزودون المجهزون')} value={Object.values(data.provider_status).filter(Boolean).length} /><StatCard label={t('plans')} value={data.plans.length} /><StatCard label={t('payments')} value={data.orders.length} /></div>{!data.checkout_available ? <Alert title={copyByLocale(locale, 'Checkout unavailable', 'الدفع غير متاح')} tone="info">{copyByLocale(locale, 'No payment provider is configured for a purchasable plan.', 'لا يوجد مزود دفع مجهز لخطة قابلة للشراء.')}</Alert> : null}{data.integrity_events.length ? <Alert title={copyByLocale(locale, 'Subscription integrity review', 'مراجعة سلامة الاشتراكات')} tone="warning">{copyByLocale(locale, `${data.integrity_events.length} unresolved event(s).`, `${data.integrity_events.length} حالة غير محلولة.`)}</Alert> : null}<Card><SectionHeader title={t('plans')} description={data.reconciliation_status} /><DataTable columns={planColumns} rows={data.plans} rowKey={(row) => `${row.plan_id}:${row.version}`} emptyTitle={t('tableEmpty')} emptyBody={t('unavailableMetric')} /></Card><Card><SectionHeader title={t('payments')} /><DataTable columns={orderColumns} rows={data.orders} rowKey={(row) => row.id} emptyTitle={t('tableEmpty')} emptyBody={copyByLocale(locale, 'No provider orders have been created.', 'لا توجد طلبات دفع من مزود حاليًا.')} /></Card><div className="admin-metric-strip"><StatCard label={t('releases')} value={data.releases.length} /><StatCard label={t('downloads')} value={data.download_access_logs.length} /><StatCard label={copyByLocale(locale, 'Integrity alerts', 'تنبيهات السلامة')} value={data.integrity_events.length} /></div></div> : null}</>
-}
-
-function AdminPolicies() {
-  const { t } = useExperience()
-  const adapters = useAdapters()
-  const controls = useAsyncData(() => adapters.admin.getRemoteControls('beta'), [adapters])
-  const reloadPolicies = controls.reload
-  const policyKey = `${controls.data?.minimum_supported_version || ''}:${JSON.stringify(controls.data?.remote_config || {})}`
-  return <><PageHeader title={t('policies')} description={t('managedUpdates')} />{controls.error ? <ErrorBlock error={controls.error} onRetry={controls.reload} /> : null}{controls.data ? <AdminPoliciesEditor key={policyKey} controls={controls.data} onReload={reloadPolicies} /> : <Card><SectionHeader title={t('policies')} /><EmptyState icon={ShieldAlert} title={t('loading')} body={t('policies')} /></Card>}</>
-}
-
-function AdminPoliciesEditor({ controls, onReload }: { controls: AdminRemoteControls; onReload: () => void }) {
-  const { t } = useExperience()
-  const adapters = useAdapters()
-  const initialUpdateMode = controls.remote_config?.update_mode
-  const [minimumVersion, setMinimumVersion] = useState(controls.minimum_supported_version || '')
-  const [updateMode, setUpdateMode] = useState<'optional' | 'force' | 'required' | 'silent'>(initialUpdateMode && ['optional', 'force', 'required', 'silent'].includes(initialUpdateMode) ? initialUpdateMode : 'optional')
-  const [killSwitch, setKillSwitch] = useState(Boolean(controls.remote_config?.kill_switch_enabled))
-  const [killMessage, setKillMessage] = useState(controls.remote_config?.kill_switch_message || '')
-  const [error, setError] = useState('')
-  const [notice, setNotice] = useState('')
-  const [busy, setBusy] = useState(false)
-  const save = async (event: FormEvent) => {
-    event.preventDefault()
-    setBusy(true)
-    setError('')
-    setNotice('')
-    try {
-      await adapters.admin.updateRemoteControls({
-        channel: 'beta',
-        ...controls,
-        minimum_supported_version: minimumVersion,
-        remote_config: {
-          ...(controls.remote_config || {}),
-          update_mode: updateMode,
-          kill_switch_enabled: killSwitch,
-          kill_switch_message: killMessage,
-        },
-      })
-      setNotice(t('success'))
-      onReload()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'policy_update_failed')
-    } finally {
-      setBusy(false)
-    }
-  }
-  return <><Card><SectionHeader title={t('policies')} /><form className="settings-form" onSubmit={save}><div className="form-grid"><FormField label={t('minimumVersion')} htmlFor="policy-min-version"><Input id="policy-min-version" value={minimumVersion} onChange={(event) => setMinimumVersion(event.target.value)} /></FormField><FormField label={t('availability')} htmlFor="policy-update-mode"><Select id="policy-update-mode" value={updateMode} onChange={(event) => setUpdateMode(event.target.value as 'optional' | 'force' | 'required' | 'silent')}><option value="optional">optional</option><option value="required">required</option><option value="force">force</option><option value="silent">silent</option></Select></FormField></div><label className="ui-checkbox"><input type="checkbox" checked={killSwitch} onChange={(event) => setKillSwitch(event.target.checked)} />{t('killSwitch')}</label><FormField label={t('details')} htmlFor="policy-kill-message"><Textarea id="policy-kill-message" value={killMessage} onChange={(event) => setKillMessage(event.target.value)} /></FormField><Button type="submit" variant="primary" loading={busy}>{t('save')}</Button>{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}</form></Card><Card><SectionHeader title={t('details')} /><pre className="mono">{JSON.stringify(controls || {}, null, 2)}</pre></Card></>
 }
 
 export function SystemProductionPages({ page, navigate }: { page: string; navigate: Navigate }) {

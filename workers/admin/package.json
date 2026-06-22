@@ -6,9 +6,10 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "check:syntax": "node --check src/index.js && node --check src/routes/payments.js && node --check src/routes/downloads.js && node --check src/services/orders.js && node --check src/services/supabase.js && node --check src/security/firebaseCustomer.js && node --check src/security/payments.js && node --check src/validation/payments.js",
+    "check:syntax": "node --check src/index.js && node --check src/routes/payments.js && node --check src/routes/downloads.js && node --check src/routes/adminOperations.js && node --check src/services/orders.js && node --check src/services/supabase.js && node --check src/security/firebaseCustomer.js && node --check src/security/payments.js && node --check src/validation/payments.js",
     "test:phase-e": "node --test src/services/orders.test.mjs src/routes/downloads.test.mjs ../shared/subscriptions/resolver.test.mjs",
-    "test:phase-b2": "node scripts/check-phase-b2-manual-grant.mjs"
+    "test:phase-b2": "node scripts/check-phase-b2-manual-grant.mjs",
+    "test:phase-f": "node --test src/routes/adminOperations.test.mjs"
   },
   "devDependencies": {
     "wrangler": "^4.16.1"

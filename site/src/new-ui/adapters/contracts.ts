@@ -13,6 +13,14 @@ import type {
   AdminEmailStatus,
   AdminCommerceOverview,
   AdminUserSummary,
+  AdminSession,
+  AdminOperationReason,
+  AdminOperationPreview,
+  AdminReadiness,
+  AdminTamperAlert,
+  AdminInviteCode,
+  AdminInviteUsage,
+  AdminPolicyState,
   ManualGrantExecuteInput,
   ManualGrantPreview,
   ManualGrantPreviewInput,
@@ -98,7 +106,8 @@ export type PlanInfo = {
 
 export type AdminDashboardState = {
   kpis?: Record<string, number | null>
-  recentActivity?: unknown[]
+  recentActivity?: Array<{ id?: string; timestamp?: string; actor?: string | null; action?: string; target_type?: string | null; target_id?: string | null; outcome?: string; request_id?: string | null }>
+  degradedResources?: string[]
 }
 
 export type PaymentIntentInput = {
@@ -223,11 +232,11 @@ export type AdminAdapter = {
   getPreauthState(): Promise<{ authenticated: boolean }>
   submitPreauth(input: { username: string; password: string }): Promise<{ authenticated: boolean }>
   signInWithGoogle(): Promise<AppUser>
-  getSession(): Promise<{ email: string }>
+  getSession(): Promise<AdminSession>
   getDashboard(): Promise<AdminDashboardState>
   getCommerceOverview(): Promise<AdminCommerceOverview>
-  listUsers(input?: { search?: string }): Promise<AdminUserSummary[]>
-  listSubscriptions(input?: { search?: string }): Promise<AdminSubscription[]>
+  listUsers(input?: { search?: string; page?: number; limit?: number; accountStatus?: string; verification?: string; subscription?: string; sort?: string }): Promise<{ items: AdminUserSummary[]; total: number; page: number; limit: number }>
+  listSubscriptions(input?: { search?: string; page?: number; limit?: number; lifecycle?: string; planTerm?: string; source?: string; current?: string; integrity?: string }): Promise<{ items: AdminSubscription[]; total: number; page: number; limit: number }>
   createSubscription(input: {
     user_email: string
     firebase_user_id?: string
@@ -239,8 +248,16 @@ export type AdminAdapter = {
   previewManualGrant(input: ManualGrantPreviewInput): Promise<ManualGrantPreview>
   executeManualGrant(input: ManualGrantExecuteInput): Promise<ManualGrantResult>
   updateSubscriptionStatus(id: string, status: AdminSubscription['status']): Promise<AdminSubscription>
+  previewAccountLifecycle(firebaseUid: string, input: AdminOperationReason & { action: 'suspend' | 'reactivate' | 'mark_pending_deletion' }): Promise<AdminOperationPreview>
+  executeAccountLifecycle(firebaseUid: string, input: AdminOperationReason & { action: 'suspend' | 'reactivate' | 'mark_pending_deletion'; preview_hash: string; request_id: string }): Promise<Record<string, unknown>>
+  previewAccessRevocation(firebaseUid: string, input: AdminOperationReason & { scope: 'session' | 'device' | 'all'; target_id?: string }): Promise<AdminOperationPreview>
+  executeAccessRevocation(firebaseUid: string, input: AdminOperationReason & { scope: 'session' | 'device' | 'all'; target_id?: string; preview_hash: string; request_id: string }): Promise<Record<string, unknown>>
+  previewSubscriptionTransition(subscriptionId: string, input: AdminOperationReason & { action: 'suspend' | 'resume' | 'cancel_at_period_end' | 'cancel_now' | 'end_trial' | 'correct_expiry' | 'revoke_entitlement'; new_expiry?: string }): Promise<AdminOperationPreview>
+  executeSubscriptionTransition(subscriptionId: string, input: AdminOperationReason & { action: 'suspend' | 'resume' | 'cancel_at_period_end' | 'cancel_now' | 'end_trial' | 'correct_expiry' | 'revoke_entitlement'; new_expiry?: string; preview_hash: string; request_id: string }): Promise<Record<string, unknown>>
   resetHwid(id: string): Promise<AdminSubscription>
   listPromoCodes(): Promise<AdminPromoCode[]>
+  createPromoCode(input: { code: string; discount_type: 'percent' | 'fixed'; discount_value: number; is_private_tier_trigger: boolean; max_uses?: number; expires_at?: string }): Promise<AdminPromoCode>
+  updatePromoCodeState(id: string, active: boolean, reason: string): Promise<AdminPromoCode>
   listReleases(): Promise<AdminReleaseManifest[]>
   uploadRelease(input: { file: File; version: string; channel: string; artifactType?: 'portable' | 'installed' }): Promise<unknown>
   publishRelease(input: {
@@ -267,8 +284,19 @@ export type AdminAdapter = {
   sendAdminTestEmail(input: { recipient: string; emailType?: string; locale?: 'ar' | 'en'; subject?: string; message?: string }): Promise<void>
   listCrashLogs(): Promise<AdminCrashLog[]>
   listCrashGroups(): Promise<AdminCrashGroup[]>
+  updateCrashGroupState(fingerprint: string, input: { status: AdminCrashGroup['status']; assignee?: string; note?: string }): Promise<AdminCrashGroup>
+  listTamperAlerts(input?: { page?: number; limit?: number; resolved?: boolean; severity?: string }): Promise<AdminTamperAlert[]>
+  resolveTamperAlert(alertId: string, reason: string): Promise<AdminTamperAlert>
   listAuditLog(): Promise<AdminAuditLogItem[]>
   getUserDetail(userKey: string): Promise<AdminUserDetail>
+  getReadiness(): Promise<AdminReadiness>
+  listInvites(status?: string): Promise<AdminInviteCode[]>
+  createInvite(input: { request_id: string; expires_at?: string; max_uses?: number; note?: string; scope?: AdminInviteCode['scope']; restrictions?: AdminInviteCode['restrictions'] }): Promise<{ item: AdminInviteCode; code: string | null; shown_once?: boolean }>
+  revokeInvite(inviteId: string, reason: string): Promise<void>
+  listInviteUsage(inviteId: string): Promise<AdminInviteUsage[]>
+  getPolicyState(): Promise<AdminPolicyState>
+  updateGlobalPolicy(input: { kill_switch_enabled: boolean; mandatory_update_enabled: boolean; minimum_supported_version?: string; update_mode: string; reason: string }): Promise<void>
+  updateDisabledVersion(input: { version: string; reason?: string; disabled: boolean }): Promise<void>
 }
 
 export type ContentAdapter = {

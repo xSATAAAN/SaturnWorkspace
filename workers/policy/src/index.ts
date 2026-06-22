@@ -295,6 +295,16 @@ interface InviteCodeRow {
   expires_at: string | null
   max_uses: number | null
   used_count: number
+  note?: string | null
+  created_at?: string
+  updated_at?: string
+  scope_json?: string | null
+  restrictions_json?: string | null
+  creation_request_id?: string | null
+  created_by?: string | null
+  revoked_at?: string | null
+  revoked_by?: string | null
+  revoke_reason?: string | null
 }
 
 interface AuthResolved {
@@ -2350,6 +2360,96 @@ async function handleAdminEmailProcess(env: Env): Promise<Response> {
   return json({ success: true, processed: await runEmailCron(env) })
 }
 
+function generateInviteCode(): string {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+  const bytes = crypto.getRandomValues(new Uint8Array(20))
+  return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join("")
+}
+
+function adminActor(request: Request): string {
+  return clampText(request.headers.get("X-Saturn-Admin-Actor") || "admin", 160)
+}
+
+async function auditInviteAdmin(env: Env, actor: string, action: string, inviteId: string, reason?: string): Promise<void> {
+  await env.DB.prepare("INSERT INTO policy_audit (id, email, requested_action, decision, reason, created_at) VALUES (?1, ?2, ?3, 'allow', ?4, datetime('now'))")
+    .bind(crypto.randomUUID(), actor || null, action, reason || inviteId)
+    .run()
+}
+
+async function handleAdminInvitesList(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url)
+  const limit = Math.max(1, Math.min(100, Number(url.searchParams.get("limit") || 50)))
+  const offset = Math.max(0, Number(url.searchParams.get("offset") || 0))
+  const status = normalizeLower(url.searchParams.get("status"))
+  const statement = status
+    ? env.DB.prepare("SELECT id,status,expires_at,max_uses,used_count,note,scope_json,restrictions_json,created_by,created_at,updated_at,revoked_at,revoked_by,revoke_reason FROM invite_codes WHERE status=?1 ORDER BY datetime(updated_at) DESC LIMIT ?2 OFFSET ?3").bind(status, limit, offset)
+    : env.DB.prepare("SELECT id,status,expires_at,max_uses,used_count,note,scope_json,restrictions_json,created_by,created_at,updated_at,revoked_at,revoked_by,revoke_reason FROM invite_codes ORDER BY datetime(updated_at) DESC LIMIT ?1 OFFSET ?2").bind(limit, offset)
+  const rows = await statement.all<InviteCodeRow>()
+  return json({
+    success: true,
+    items: (rows.results || []).map((row) => ({ ...row, scope: parseJsonObject(row.scope_json), restrictions: parseJsonObject(row.restrictions_json), scope_json: undefined, restrictions_json: undefined })),
+    limit,
+    offset,
+  })
+}
+
+async function handleAdminInviteCreate(request: Request, env: Env): Promise<Response> {
+  const body = (await request.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
+  const actor = adminActor(request)
+  const requestId = clampText(body.request_id || request.headers.get("Idempotency-Key"), 160)
+  if (requestId.length < 8) return json({ success: false, error: "request_id_required" }, 400)
+  const previous = await env.DB.prepare("SELECT id,status,expires_at,max_uses,used_count,note,created_at,updated_at FROM invite_codes WHERE creation_request_id=?1 LIMIT 1").bind(requestId).first<InviteCodeRow>()
+  if (previous) return json({ success: true, item: previous, code: null, replay: true })
+  const maxUsesRaw = body.max_uses === null || body.max_uses === undefined || body.max_uses === "" ? null : Number(body.max_uses)
+  if (maxUsesRaw !== null && (!Number.isInteger(maxUsesRaw) || maxUsesRaw < 1 || maxUsesRaw > 100000)) return json({ success: false, error: "invalid_max_uses" }, 400)
+  const expiresText = normalizeText(body.expires_at)
+  if (expiresText && (!Number.isFinite(Date.parse(expiresText)) || Date.parse(expiresText) <= Date.now())) return json({ success: false, error: "invalid_expiry" }, 400)
+  const scopeInput = getObject(body.scope)
+  const restrictionsInput = getObject(body.restrictions)
+  const scope = {
+    channels: Array.isArray(scopeInput.channels) ? scopeInput.channels.map(normalizeLower).filter(Boolean).slice(0, 20) : [],
+    app_versions: Array.isArray(scopeInput.app_versions) ? scopeInput.app_versions.map((value) => clampText(value, 80)).filter(Boolean).slice(0, 50) : [],
+  }
+  const restrictions = {
+    user_ids: Array.isArray(restrictionsInput.user_ids) ? restrictionsInput.user_ids.map((value) => clampText(value, 160)).filter(Boolean).slice(0, 100) : [],
+    emails: Array.isArray(restrictionsInput.emails) ? restrictionsInput.emails.map(normalizeLower).filter(Boolean).slice(0, 100) : [],
+    device_ids: Array.isArray(restrictionsInput.device_ids) ? restrictionsInput.device_ids.map((value) => clampText(value, 160)).filter(Boolean).slice(0, 100) : [],
+    install_ids: Array.isArray(restrictionsInput.install_ids) ? restrictionsInput.install_ids.map((value) => clampText(value, 160)).filter(Boolean).slice(0, 100) : [],
+    one_per_user: restrictionsInput.one_per_user === true,
+    one_per_device: restrictionsInput.one_per_device === true,
+  }
+  const code = generateInviteCode()
+  const id = crypto.randomUUID()
+  await env.DB.prepare("INSERT INTO invite_codes (id,code_hash,status,expires_at,max_uses,used_count,note,scope_json,restrictions_json,creation_request_id,created_by,created_at,updated_at) VALUES (?1,?2,'active',?3,?4,0,?5,?6,?7,?8,?9,datetime('now'),datetime('now'))")
+    .bind(id, await sha256Hex(code), expiresText ? new Date(expiresText).toISOString() : null, maxUsesRaw, clampMultilineText(body.note, 1000) || null, toJsonText(scope, {}), toJsonText(restrictions, {}), requestId, actor)
+    .run()
+  await auditInviteAdmin(env, actor, "invite.create", id)
+  return json({ success: true, item: { id, status: "active", expires_at: expiresText ? new Date(expiresText).toISOString() : null, max_uses: maxUsesRaw, used_count: 0, note: clampMultilineText(body.note, 1000) || null, scope, restrictions }, code, shown_once: true })
+}
+
+async function handleAdminInviteRevoke(request: Request, env: Env): Promise<Response> {
+  const body = (await request.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
+  const inviteId = clampText(body.invite_id, 160)
+  const reason = clampMultilineText(body.reason, 1000)
+  if (!inviteId) return json({ success: false, error: "invite_id_required" }, 400)
+  if (reason.length < 3) return json({ success: false, error: "reason_required" }, 400)
+  const actor = adminActor(request)
+  const result = await env.DB.prepare("UPDATE invite_codes SET status='revoked',revoked_at=datetime('now'),revoked_by=?1,revoke_reason=?2,updated_at=datetime('now') WHERE id=?3 AND status IN ('active','enabled')")
+    .bind(actor, reason, inviteId).run()
+  if (!dbChanges(result)) return json({ success: false, error: "invite_not_active" }, 409)
+  await auditInviteAdmin(env, actor, "invite.revoke", inviteId, reason)
+  return json({ success: true, invite_id: inviteId, status: "revoked" })
+}
+
+async function handleAdminInviteUsage(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url)
+  const inviteId = clampText(url.searchParams.get("invite_id"), 160)
+  if (!inviteId) return json({ success: false, error: "invite_id_required" }, 400)
+  const rows = await env.DB.prepare("SELECT id,user_id,email,install_id,device_id,app_version,channel,result,created_at FROM invite_code_validations WHERE invite_code_id=?1 ORDER BY datetime(created_at) DESC LIMIT 200")
+    .bind(inviteId).all()
+  return json({ success: true, items: rows.results || [] })
+}
+
 
 async function adminAuthorized(request: Request, env: Env): Promise<boolean> {
   const expected = normalizeLower(env.ADMIN_TOKEN_SHA256)
@@ -3328,6 +3428,38 @@ function inviteValidationPayload(status: InviteValidationStatus): Record<string,
   }
 }
 
+function inviteRestrictionMatches(row: InviteCodeRow, scope: { userId: string; email: string; installId: string; deviceId: string }, body: PolicyRequest): boolean {
+  const restrictions = parseJsonObject(row.restrictions_json)
+  const allowedUsers = Array.isArray(restrictions.user_ids) ? restrictions.user_ids.map(normalizeText) : []
+  const allowedEmails = Array.isArray(restrictions.emails) ? restrictions.emails.map(normalizeLower) : []
+  const allowedDevices = Array.isArray(restrictions.device_ids) ? restrictions.device_ids.map(normalizeText) : []
+  const allowedInstalls = Array.isArray(restrictions.install_ids) ? restrictions.install_ids.map(normalizeText) : []
+  if (allowedUsers.length && !allowedUsers.includes(scope.userId)) return false
+  if (allowedEmails.length && !allowedEmails.includes(scope.email)) return false
+  if (allowedDevices.length && !allowedDevices.includes(scope.deviceId)) return false
+  if (allowedInstalls.length && !allowedInstalls.includes(scope.installId)) return false
+
+  const inviteScope = parseJsonObject(row.scope_json)
+  const channels = Array.isArray(inviteScope.channels) ? inviteScope.channels.map(normalizeLower) : []
+  const versions = Array.isArray(inviteScope.app_versions) ? inviteScope.app_versions.map(normalizeText) : []
+  if (channels.length && !channels.includes(normalizeLower(body.channel))) return false
+  if (versions.length && !versions.includes(normalizeText(body.app_version))) return false
+  return true
+}
+
+async function inviteAlreadyUsedForScope(env: Env, row: InviteCodeRow, scope: { userId: string; email: string; installId: string; deviceId: string }): Promise<boolean> {
+  const restrictions = parseJsonObject(row.restrictions_json)
+  if (restrictions.one_per_user === true && scope.userId) {
+    const existing = await env.DB.prepare("SELECT id FROM invite_code_validations WHERE invite_code_id=?1 AND user_id=?2 AND result='valid' LIMIT 1").bind(row.id, scope.userId).first()
+    if (existing) return true
+  }
+  if (restrictions.one_per_device === true && scope.deviceId) {
+    const existing = await env.DB.prepare("SELECT id FROM invite_code_validations WHERE invite_code_id=?1 AND device_id=?2 AND result='valid' LIMIT 1").bind(row.id, scope.deviceId).first()
+    if (existing) return true
+  }
+  return false
+}
+
 async function auditInviteValidation(
   env: Env,
   scope: { userId: string; email: string; installId: string; deviceId: string },
@@ -3403,12 +3535,50 @@ async function handleInviteValidate(request: Request, env: Env): Promise<Respons
 
   const maxUses = row.max_uses === null || row.max_uses === undefined ? 0 : Number(row.max_uses)
   const usedCount = Number(row.used_count || 0)
+  if (!inviteRestrictionMatches(row, scope, body)) {
+    await auditInviteValidation(env, scope, body, "blocked", row.id)
+    return json(inviteValidationPayload("blocked"))
+  }
+  if (await inviteAlreadyUsedForScope(env, row, scope)) {
+    await auditInviteValidation(env, scope, body, "already_used", row.id)
+    return json(inviteValidationPayload("already_used"))
+  }
   if (Number.isFinite(maxUses) && maxUses > 0 && usedCount >= maxUses) {
     await auditInviteValidation(env, scope, body, "already_used", row.id)
     return json(inviteValidationPayload("already_used"))
   }
 
-  await env.DB.prepare("UPDATE invite_codes SET used_count = used_count + 1, updated_at = datetime('now') WHERE id = ?1").bind(row.id).run()
+  const restrictions = parseJsonObject(row.restrictions_json)
+  const claimStatements: D1PreparedStatement[] = []
+  if (restrictions.one_per_user === true && scope.userId) {
+    claimStatements.push(
+      env.DB.prepare("INSERT INTO invite_code_claims (invite_code_id, claim_type, claim_value, created_at) SELECT ?1, 'user', ?2, datetime('now') WHERE EXISTS (SELECT 1 FROM invite_codes WHERE id=?1 AND status IN ('active','enabled') AND (max_uses IS NULL OR max_uses <= 0 OR used_count < max_uses))")
+        .bind(row.id, scope.userId)
+    )
+  }
+  if (restrictions.one_per_device === true && scope.deviceId) {
+    claimStatements.push(
+      env.DB.prepare("INSERT INTO invite_code_claims (invite_code_id, claim_type, claim_value, created_at) SELECT ?1, 'device', ?2, datetime('now') WHERE EXISTS (SELECT 1 FROM invite_codes WHERE id=?1 AND status IN ('active','enabled') AND (max_uses IS NULL OR max_uses <= 0 OR used_count < max_uses))")
+        .bind(row.id, scope.deviceId)
+    )
+  }
+  const consumeStatement = env.DB.prepare("UPDATE invite_codes SET used_count = used_count + 1, updated_at = datetime('now') WHERE id = ?1 AND status IN ('active','enabled') AND (max_uses IS NULL OR max_uses <= 0 OR used_count < max_uses)").bind(row.id)
+  let consumed: D1Result<unknown>
+  try {
+    if (claimStatements.length) {
+      const results = await env.DB.batch([...claimStatements, consumeStatement])
+      consumed = results[results.length - 1]
+    } else {
+      consumed = await consumeStatement.run()
+    }
+  } catch {
+    await auditInviteValidation(env, scope, body, "already_used", row.id)
+    return json(inviteValidationPayload("already_used"))
+  }
+  if (!dbChanges(consumed)) {
+    await auditInviteValidation(env, scope, body, "already_used", row.id)
+    return json(inviteValidationPayload("already_used"))
+  }
   await auditInviteValidation(env, scope, body, "valid", row.id)
   return json(inviteValidationPayload("valid"))
 }
@@ -3774,6 +3944,10 @@ async function handleAdminRequest(request: Request, env: Env, ctx?: ExecutionCon
   if (request.method === "POST" && url.pathname === "/v1/admin/email/retry") return handleAdminEmailRetry(request, env)
   if (request.method === "POST" && url.pathname === "/v1/admin/email/test") return handleAdminEmailTest(request, env)
   if (request.method === "POST" && url.pathname === "/v1/admin/email/process") return handleAdminEmailProcess(env)
+  if (request.method === "GET" && url.pathname === "/v1/admin/invites") return handleAdminInvitesList(request, env)
+  if (request.method === "POST" && url.pathname === "/v1/admin/invites/create") return handleAdminInviteCreate(request, env)
+  if (request.method === "POST" && url.pathname === "/v1/admin/invites/revoke") return handleAdminInviteRevoke(request, env)
+  if (request.method === "GET" && url.pathname === "/v1/admin/invites/usage") return handleAdminInviteUsage(request, env)
   return json({ success: false, error: "admin_not_found" }, 404)
 }
 

@@ -34,6 +34,33 @@ export async function supabaseJson(env, path, init = {}) {
   return payload
 }
 
+export async function supabasePage(env, path, init = {}) {
+  const root = baseUrl(env)
+  if (!root || !env.SUPABASE_SERVICE_ROLE_KEY) throw new Error("supabase_not_configured")
+  const response = await fetch(`${root}${path}`, {
+    ...init,
+    headers: serviceHeaders(env, {
+      Prefer: "count=exact",
+      ...(init.headers || {}),
+    }),
+  })
+  const text = await response.text()
+  let payload = null
+  try {
+    payload = text ? JSON.parse(text) : null
+  } catch {
+    payload = null
+  }
+  if (!response.ok) {
+    const message = payload && typeof payload === "object" && payload.message ? String(payload.message) : `supabase_${response.status}`
+    throw new Error(message)
+  }
+  const contentRange = response.headers.get("content-range") || ""
+  const totalText = contentRange.split("/")[1] || "0"
+  const total = totalText === "*" ? null : Number(totalText)
+  return { items: Array.isArray(payload) ? payload : [], total: Number.isFinite(total) ? total : null }
+}
+
 export function encodeFilterValue(value) {
   return encodeURIComponent(String(value || ""))
 }

@@ -7,6 +7,7 @@
     "check": "tsc --noEmit",
     "test:phase-c": "node scripts/check-phase-c-entitlement-policy.mjs",
     "test:phase-d": "node scripts/check-phase-d-support-notifications.mjs",
+    "test:phase-f": "node scripts/check-phase-f-invites.mjs",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "migrate:local": "wrangler d1 migrations apply saturnws-policy --local",

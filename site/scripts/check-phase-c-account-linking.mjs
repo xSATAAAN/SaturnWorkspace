@@ -22,8 +22,9 @@ const acceptance = read(PLATFORM, 'docs/product-readiness-system-completion/acce
 for (const [source, label] of [[dashboard, 'dashboard'], [issues, 'issues'], [matrix, 'matrix'], [acceptance, 'acceptance']]) {
   includes(source, 'COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE', `${label} Phase B closure`)
 }
-includes(dashboard, 'Active phase: `Phase C - Account and Desktop Linking`', 'dashboard active Phase C')
-includes(issues, 'does not block Phase C', 'monthly defect non-blocking')
+includes(dashboard, 'Phase C is closed as `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE`', 'dashboard closed Phase C')
+includes(dashboard, 'Active gate: `PHASE_G_READY_FOR_CONSOLIDATED_ACCEPTANCE`', 'dashboard Phase G gate')
+includes(issues, 'Phase C and Phase D are closed after automated verification', 'Phase C remains closed')
 
 const authWorker = read(PLATFORM, 'workers/auth/src/index.ts')
 const authStore = read(PLATFORM, 'workers/auth/src/lib/supabase.ts')
