@@ -19,7 +19,9 @@ Final automated status: `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_
 - D1 migrations 0014 and 0015 applied; no pending migrations.
 - Policy Worker deployed as `ed78fe79-292f-4cd7-9fa0-efcf14d46a90`.
 - Admin Worker deployed as `b6553308-4a84-4b98-b26e-5459503e7fc6`.
-- Site build and automated checks passed before GitHub Pages rollout.
+- Site build and automated checks passed.
+- Commit `9dbd5d20e6f6524d6d915f5aa7d5c6c271137f4c` was pushed to `main`.
+- GitHub Pages workflow `27982441199` completed successfully; public and direct Admin routes passed production smoke checks without console errors.
 
 ## Not executed
 

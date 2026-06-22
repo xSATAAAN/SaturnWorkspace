@@ -21,7 +21,9 @@ Updated: 2026-06-22
 - Admin Worker: `b6553308-4a84-4b98-b26e-5459503e7fc6`.
 - Policy route: `api.saturnws.com/*`; Workers.dev and preview URLs remain disabled.
 - Cron: `*/5 * * * *`.
-- Site production build: passed locally; GitHub Pages deployment evidence is recorded after the Phase F commit workflow finishes.
+- Phase F commit: `9dbd5d20e6f6524d6d915f5aa7d5c6c271137f4c`.
+- GitHub Pages workflow `27982441199`: build and deploy jobs succeeded.
+- Production assets and direct Admin routes were smoke-tested without console errors.
 
 ## State and source-of-truth decisions
 
