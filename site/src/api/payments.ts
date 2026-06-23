@@ -16,7 +16,10 @@ export type PlanCatalogItem = {
   trial_days: number
   features: string[]
   localizations?: Record<string, { name?: string; description?: string }>
+  visible: boolean
+  active: boolean
   purchasable: boolean
+  provider_ready: boolean
   checkout_enabled: boolean
 }
 

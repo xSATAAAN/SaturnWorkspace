@@ -25,10 +25,16 @@ function paymentProviderConfigured(env, provider) {
   return false
 }
 
-export function toPublicPlan(plan) {
+function isPublicVisiblePlan(plan) {
+  return Boolean(plan && plan.active && plan.public_visible)
+}
+
+export function toPublicPlan(plan, env = {}) {
   const currency = String(plan.currency || "USD").toUpperCase()
   const amount = money(plan, "price_minor")
   const original = money(plan, "original_price_minor")
+  const providerReady = paymentProviderConfigured(env, plan.provider)
+  const checkoutEnabled = isPublicPurchasablePlan(plan) && providerReady
   return {
     id: String(plan.plan_id || ""),
     version: Number(plan.version || 1),
@@ -42,8 +48,11 @@ export function toPublicPlan(plan) {
     trial_days: Number(plan.trial_days || 0),
     features: Array.isArray(plan.features) ? plan.features : [],
     localizations: plan.localized_content && typeof plan.localized_content === "object" ? plan.localized_content : {},
-    purchasable: isPublicPurchasablePlan(plan),
-    checkout_enabled: isPublicPurchasablePlan(plan),
+    visible: Boolean(plan.public_visible),
+    active: Boolean(plan.active),
+    purchasable: Boolean(plan.purchasable),
+    provider_ready: providerReady,
+    checkout_enabled: checkoutEnabled,
   }
 }
 
@@ -53,8 +62,8 @@ export async function listCommercialPlans(env, { publicOnly = false } = {}) {
     "/commercial_plans?select=*&order=display_order.asc,plan_id.asc,version.desc&limit=100",
   )
   const plans = Array.isArray(rows) ? rows : []
-  const filtered = publicOnly ? plans.filter(isPublicPurchasablePlan) : plans
-  return filtered.map(toPublicPlan)
+  const filtered = publicOnly ? plans.filter(isPublicVisiblePlan) : plans
+  return filtered.map((plan) => toPublicPlan(plan, env))
 }
 
 export async function getPlanConfig(env, planId, version = null) {

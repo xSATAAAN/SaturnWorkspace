@@ -67,12 +67,13 @@ const rows = [
 ]
 const activity = []
 const paymentWrites = []
+const recoveryRows = []
 const bucket = new Map()
 const profiles = [
-  { firebase_user_id: 'uid-active', normalized_email: 'active@example.com', display_name: 'Active user', account_status: 'active', updated_at: iso(-86400e3) },
-  { firebase_user_id: 'uid-expired', normalized_email: 'expired@example.com', display_name: 'Expired user', account_status: 'active', updated_at: iso(-86400e3) },
-  { firebase_user_id: 'uid-dupe', normalized_email: 'dupe@example.com', display_name: 'Duplicate user', account_status: 'active', updated_at: iso(-86400e3) },
-  { firebase_user_id: 'uid-new', normalized_email: 'new@example.com', display_name: 'New user', account_status: 'active', updated_at: iso(-86400e3) },
+  { firebase_uid: 'uid-active', normalized_email: 'active@example.com', display_name: 'Active user', account_status: 'active', updated_at: iso(-86400e3) },
+  { firebase_uid: 'uid-expired', normalized_email: 'expired@example.com', display_name: 'Expired user', account_status: 'active', updated_at: iso(-86400e3) },
+  { firebase_uid: 'uid-dupe', normalized_email: 'dupe@example.com', display_name: 'Duplicate user', account_status: 'active', updated_at: iso(-86400e3) },
+  { firebase_uid: 'uid-new', normalized_email: 'new@example.com', display_name: 'New user', account_status: 'active', updated_at: iso(-86400e3) },
 ]
 
 globalThis.fetch = async (input, init = {}) => {
@@ -82,7 +83,7 @@ globalThis.fetch = async (input, init = {}) => {
   if (method === 'GET' && table === 'account_profiles') {
     const query = decodeURIComponent(url.search)
     return Response.json(profiles.filter((profile) =>
-      query.includes(profile.firebase_user_id) || query.includes(profile.normalized_email),
+      query.includes(profile.firebase_uid) || query.includes(profile.normalized_email),
     ))
   }
   if (method === 'GET' && table === 'account_subscriptions') {
@@ -137,6 +138,12 @@ globalThis.fetch = async (input, init = {}) => {
   if (method === 'POST' && table === 'admin_activity') {
     activity.push(JSON.parse(init.body || '{}'))
     return Response.json([])
+  }
+  if (method === 'POST' && table === 'subscription_recovery_ledger') {
+    const body = JSON.parse(init.body || '{}')
+    const row = { id: `recovery-${recoveryRows.length + 1}`, created_at: new Date().toISOString(), ...body }
+    recoveryRows.push(row)
+    return Response.json([row], { status: 201 })
   }
   if (['orders', 'payment_events', 'invoices'].includes(table || '')) {
     paymentWrites.push({ table, method })
@@ -263,6 +270,33 @@ assert.ok(activity.some((row) => row.action === 'subscription_manual_grant'))
 const replay = await post('/api/admin/subscriptions/manual-grant/execute', executePayload)
 assert.equal(replay.status, 200)
 assert.equal(replay.payload.idempotent_replay, true)
+
+const replacePreview = await post('/api/admin/subscriptions/manual-grant/preview', {
+  ...base,
+  operation_type: 'replace_current',
+  duration_value: 1,
+  duration_unit: 'days',
+  reason: 'Replace current subscription after support correction',
+})
+assert.equal(replacePreview.status, 200)
+assert.equal(replacePreview.payload.preview.proposed_state.operation, 'replace_current')
+const replaceExecute = await post('/api/admin/subscriptions/manual-grant/execute', {
+  ...base,
+  operation_type: 'replace_current',
+  duration_value: 1,
+  duration_unit: 'days',
+  reason: 'Replace current subscription after support correction',
+  idempotency_key: 'idem-replace-1',
+  preview_hash: replacePreview.payload.preview.preview_hash,
+})
+assert.equal(replaceExecute.status, 200, JSON.stringify(replaceExecute.payload))
+assert.equal(replaceExecute.payload.success, true)
+assert.ok(replaceExecute.payload.recovery_evidence_created)
+assert.equal(recoveryRows.length, 1)
+assert.equal(recoveryRows[0].evidence_type, 'subscription_replacement')
+assert.equal(recoveryRows[0].source_type, 'manual_grant_replace_current')
+assert.ok(Number(recoveryRows[0].remaining_seconds) > 0)
+assert.ok(recoveryRows[0].integrity_hash)
 
 assert.equal(paymentWrites.length, 0, 'manual grant must not create payment/order/invoice rows')
 console.log('Phase B.2 manual grant checks passed.')

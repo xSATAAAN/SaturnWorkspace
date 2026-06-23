@@ -23,27 +23,49 @@ const REASON_CODES = new Set([
 
 function parseRoleAssignments(env) {
   const raw = String(env.ADMIN_ROLE_ASSIGNMENTS || "").trim()
-  if (!raw) return {}
+  if (!raw) return { byEmail: {}, byUid: {}, configured: false }
   try {
     const parsed = JSON.parse(raw)
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {}
-    return Object.fromEntries(
-      Object.entries(parsed)
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return { byEmail: {}, byUid: {}, configured: false }
+    const byEmailSource = parsed.by_email && typeof parsed.by_email === "object" && !Array.isArray(parsed.by_email)
+      ? parsed.by_email
+      : parsed
+    const byUidSource = parsed.by_uid && typeof parsed.by_uid === "object" && !Array.isArray(parsed.by_uid)
+      ? parsed.by_uid
+      : {}
+    const byEmail = Object.fromEntries(
+      Object.entries(byEmailSource)
+        .filter(([key]) => !["by_email", "by_uid"].includes(String(key).trim().toLowerCase()))
         .map(([email, role]) => [String(email).trim().toLowerCase(), String(role).trim().toLowerCase()])
         .filter(([email, role]) => email && Object.hasOwn(ROLE_PERMISSIONS, role)),
     )
+    const byUid = Object.fromEntries(
+      Object.entries(byUidSource)
+        .map(([uid, role]) => [String(uid).trim(), String(role).trim().toLowerCase()])
+        .filter(([uid, role]) => uid && Object.hasOwn(ROLE_PERMISSIONS, role)),
+    )
+    return { byEmail, byUid, configured: Object.keys(byEmail).length > 0 || Object.keys(byUid).length > 0 }
   } catch {
-    return {}
+    return { byEmail: {}, byUid: {}, configured: false }
   }
 }
 
-export function adminContext(env, email) {
-  const normalizedEmail = String(email || "").trim().toLowerCase()
+export function adminRoleAssignmentsState(env) {
+  return parseRoleAssignments(env).configured ? "configured" : "default_super_admin_compatibility"
+}
+
+export function adminContext(env, identityOrEmail) {
+  const identity = identityOrEmail && typeof identityOrEmail === "object"
+    ? identityOrEmail
+    : { email: identityOrEmail, uid: null }
+  const normalizedEmail = String(identity.email || "").trim().toLowerCase()
+  const firebaseUid = String(identity.uid || identity.firebase_uid || "").trim()
+  const assignments = parseRoleAssignments(env)
   const role = normalizedEmail === "token-admin"
     ? "super_admin"
-    : parseRoleAssignments(env)[normalizedEmail] || "super_admin"
+    : assignments.byUid[firebaseUid] || assignments.byEmail[normalizedEmail] || (assignments.configured ? "read_only" : "super_admin")
   const permissions = ROLE_PERMISSIONS[role] || ROLE_PERMISSIONS.read_only
-  return { email: normalizedEmail, role, permissions: [...permissions] }
+  return { email: normalizedEmail, firebase_uid: firebaseUid || null, role, permissions: [...permissions] }
 }
 
 export function requirePermission(context, permission) {

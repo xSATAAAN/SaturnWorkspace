@@ -90,6 +90,28 @@ const trustClaimFragments = [
 
 const failures = []
 
+const stateFixtures = [
+  { id: 'pricing-normal', state: 'normal', title: 'Access that fits', description: 'Choose a plan', cta: 'Choose plan', actionable: true },
+  { id: 'pricing-loading', state: 'loading', title: 'Loading', description: '', cta: '', actionable: false },
+  { id: 'pricing-empty', state: 'empty', title: 'No plans are published', description: '', cta: '', actionable: false },
+  { id: 'pricing-unavailable', state: 'unavailable', title: 'Prices could not be loaded', description: 'Try again to load the available plans.', cta: 'Try again', actionable: true },
+  { id: 'pricing-disabled', state: 'disabled', title: 'Monthly', description: '', cta: 'Unavailable', actionable: false },
+  { id: 'pricing-error-ar', state: 'error', title: 'تعذر تحميل الأسعار', description: 'أعد المحاولة لتحميل الخطط المتاحة.', cta: 'إعادة المحاولة', actionable: true },
+]
+
+for (const fixture of stateFixtures) {
+  const combined = `${fixture.title} ${fixture.description} ${fixture.cta}`.toLowerCase()
+  if (!fixture.actionable && /choose|select|اختر|اضغط/.test(combined)) {
+    failures.push(`state fixture ${fixture.id}: disabled/non-actionable state invites an action`)
+  }
+  if (['empty', 'unavailable', 'error'].includes(fixture.state) && /choose a plan|اختر.*خطة/.test(combined)) {
+    failures.push(`state fixture ${fixture.id}: normal pricing copy reused in ${fixture.state}`)
+  }
+  if (fixture.state === 'loading' && /retry|try again|إعادة المحاولة/.test(combined)) {
+    failures.push(`state fixture ${fixture.id}: retry shown during normal loading`)
+  }
+}
+
 function extensionOf(path) {
   const dot = path.lastIndexOf('.')
   return dot >= 0 ? path.slice(dot) : ''

@@ -17,6 +17,10 @@ import {
   insertEmailVerificationAudit,
   listAppSessionsForUser,
   markAccountProfileEmailVerified,
+  updateAccountProfileStatus,
+  getAccountDeletionRequest,
+  createAccountDeletionRequest,
+  cancelAccountDeletionRequest,
   revokeAppSession,
   revokeAppSessionByIdForUser,
   revokeAppSessionsForDevice,
@@ -1052,6 +1056,27 @@ function firebaseTokenFromRequest(request: Request, body: Record<string, any> | 
   return String(bearer || body?.id_token || "").trim()
 }
 
+function decodeJwtPayload(token: string): Record<string, any> | null {
+  const part = String(token || "").split(".")[1] || ""
+  if (!part) return null
+  try {
+    const normalized = part.replace(/-/g, "+").replace(/_/g, "/")
+    const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4)
+    const binary = atob(padded)
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
+    return JSON.parse(new TextDecoder().decode(bytes))
+  } catch {
+    return null
+  }
+}
+
+function hasRecentFirebaseAuth(token: string, maxAgeSeconds = 10 * 60): boolean {
+  const payload = decodeJwtPayload(token)
+  const authTime = Number(payload?.auth_time || 0)
+  if (!Number.isFinite(authTime) || authTime <= 0) return false
+  return Math.floor(Date.now() / 1000) - authTime <= maxAgeSeconds
+}
+
 async function accountSessionProjection(session: AppSessionRow) {
   const metadata = session.metadata && typeof session.metadata === "object" ? session.metadata : {}
   const status = session.revoked_at ? "revoked" : isIsoExpired(session.expires_at) ? "expired" : "active"
@@ -1222,6 +1247,120 @@ async function handleAccountIdentity(request: Request, env: Env): Promise<Respon
   })
 }
 
+function accountDeletionProjection(row: Record<string, any> | null) {
+  if (!row) {
+    return {
+      state: "none",
+      request: null,
+      purge_available: false,
+      purge_mode: "not_implemented_without_destructive_approval",
+    }
+  }
+  return {
+    state: row.status || "pending_deletion",
+    request: {
+      id: row.id,
+      status: row.status,
+      requested_at: row.requested_at,
+      cooling_off_until: row.cooling_off_until,
+      due_at: row.due_at,
+      held_at: row.held_at || null,
+      cancelled_at: row.cancelled_at || null,
+    },
+    purge_available: false,
+    purge_mode: "not_implemented_without_destructive_approval",
+  }
+}
+
+function accountDeletionUnavailableProjection() {
+  return {
+    state: "unavailable",
+    request: null,
+    purge_available: false,
+    purge_mode: "not_implemented_without_destructive_approval",
+    feature_available: false,
+    unavailable_reason: "schema_pending",
+  }
+}
+
+const ACCOUNT_DELETION_SCHEMA_PENDING = "__account_deletion_schema_pending__" as const
+
+function isAccountDeletionSchemaMissing(error: unknown): boolean {
+  const message = String(error instanceof Error ? error.message : error || "")
+  return /account_deletion_requests|relation .* does not exist|schema cache|PGRST20|PGRST2/i.test(message)
+}
+
+async function handleAccountDeletionStatus(request: Request, env: Env): Promise<Response> {
+  const body = await request.json<any>().catch(() => null)
+  const idToken = firebaseTokenFromRequest(request, body)
+  if (!idToken) return errorJson(request, "AUTH_SESSION_EXPIRED", 401, true)
+  const firebaseUser = await verifyFirebaseUser(idToken, env)
+  const profile = await getAccountProfileByFirebaseUid(env, firebaseUser.userId).catch(() => null)
+  let row: Record<string, any> | null = null
+  try {
+    row = await getAccountDeletionRequest(env, firebaseUser.userId)
+  } catch (error) {
+    if (isAccountDeletionSchemaMissing(error)) {
+      return json({
+        success: true,
+        account_status: profile?.account_status || "active",
+        deletion: accountDeletionUnavailableProjection(),
+      })
+    }
+    throw error
+  }
+  return json({
+    success: true,
+    account_status: profile?.account_status || "active",
+    deletion: accountDeletionProjection(row),
+  })
+}
+
+async function handleAccountDeletionRequest(request: Request, env: Env): Promise<Response> {
+  const body = await request.json<any>().catch(() => null)
+  const idToken = firebaseTokenFromRequest(request, body)
+  if (!idToken) return errorJson(request, "AUTH_SESSION_EXPIRED", 401, true)
+  const firebaseUser = await verifyFirebaseUser(idToken, env)
+  if (!hasRecentFirebaseAuth(idToken)) return errorJson(request, "RECENT_AUTH_REQUIRED", 401, true)
+
+  const existing = await getAccountDeletionRequest(env, firebaseUser.userId).catch((error): Record<string, any> | null | typeof ACCOUNT_DELETION_SCHEMA_PENDING => {
+    if (isAccountDeletionSchemaMissing(error)) return ACCOUNT_DELETION_SCHEMA_PENDING
+    throw error
+  })
+  if (existing === ACCOUNT_DELETION_SCHEMA_PENDING) return errorJson(request, "ACCOUNT_DELETION_UNAVAILABLE", 503, true)
+  if (existing) return json({ success: true, deletion: accountDeletionProjection(existing), idempotent: true })
+
+  const configuredDays = Number(String(env.ACCOUNT_DELETION_COOLING_OFF_DAYS || "7").trim())
+  const days = Math.max(1, Math.min(Number.isFinite(configuredDays) ? configuredDays : 7, 30))
+  const requestedAt = Date.now()
+  const coolingOffUntil = new Date(requestedAt + days * 24 * 60 * 60 * 1000).toISOString()
+  const dueAt = coolingOffUntil
+  const row = await createAccountDeletionRequest(env, {
+    firebaseUid: firebaseUser.userId,
+    requestId: `acctdel_${crypto.randomUUID()}`,
+    reason: String(body?.reason || "").trim() || null,
+    coolingOffUntil,
+    dueAt,
+  })
+  await updateAccountProfileStatus(env, firebaseUser.userId, "pending_deletion").catch(() => undefined)
+  await revokeAppSessionsForUser(env, firebaseUser.userId).catch(() => undefined)
+  return json({ success: true, deletion: accountDeletionProjection(row) })
+}
+
+async function handleAccountDeletionCancel(request: Request, env: Env): Promise<Response> {
+  const body = await request.json<any>().catch(() => null)
+  const idToken = firebaseTokenFromRequest(request, body)
+  if (!idToken) return errorJson(request, "AUTH_SESSION_EXPIRED", 401, true)
+  const firebaseUser = await verifyFirebaseUser(idToken, env)
+  const row = await cancelAccountDeletionRequest(env, firebaseUser.userId).catch((error): Record<string, any> | null | typeof ACCOUNT_DELETION_SCHEMA_PENDING => {
+    if (isAccountDeletionSchemaMissing(error)) return ACCOUNT_DELETION_SCHEMA_PENDING
+    throw error
+  })
+  if (row === ACCOUNT_DELETION_SCHEMA_PENDING) return errorJson(request, "ACCOUNT_DELETION_UNAVAILABLE", 503, true)
+  if (row) await updateAccountProfileStatus(env, firebaseUser.userId, "active").catch(() => undefined)
+  return json({ success: true, deletion: accountDeletionProjection(row) })
+}
+
 export default {
   async fetch(request, env): Promise<Response> {
     const url = new URL(request.url)
@@ -1291,6 +1430,18 @@ export default {
       }
       if (request.method === "POST" && apiPath === "/account/identity") {
         const res = await handleAccountIdentity(request, env)
+        return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
+      }
+      if (request.method === "POST" && apiPath === "/account/deletion/status") {
+        const res = await handleAccountDeletionStatus(request, env)
+        return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
+      }
+      if (request.method === "POST" && apiPath === "/account/deletion/request") {
+        const res = await handleAccountDeletionRequest(request, env)
+        return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
+      }
+      if (request.method === "POST" && apiPath === "/account/deletion/cancel") {
+        const res = await handleAccountDeletionCancel(request, env)
         return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
       }
       if (request.method === "POST" && apiPath === "/email-verification/request") {

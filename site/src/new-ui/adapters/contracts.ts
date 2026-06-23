@@ -26,7 +26,7 @@ import type {
   ManualGrantPreviewInput,
   ManualGrantResult,
 } from '../../api/admin'
-import type { AccountProfileProjection, AccountSessionsResult, AccountSubscription, SubscriptionProjection } from '../../api/account'
+import type { AccountDeletionStatusResult, AccountProfileProjection, AccountSessionsResult, AccountSubscription, SubscriptionProjection } from '../../api/account'
 
 export type RuntimeMode = 'preview' | 'production'
 
@@ -100,6 +100,10 @@ export type PlanInfo = {
   description: string
   trialDays: number
   features: string[]
+  visible: boolean
+  active: boolean
+  purchasable: boolean
+  providerReady: boolean
   enabled: boolean
   checkoutEnabled: boolean
 }
@@ -150,6 +154,15 @@ export type CustomerSupportMessage = {
   senderRole?: SupportSenderRole
   body: string
   createdAt?: string
+  attachments?: CustomerSupportAttachment[]
+}
+
+export type CustomerSupportAttachment = {
+  id: string
+  filename: string
+  mimeType: string
+  sizeBytes: number
+  status: string
 }
 
 export type SupportSenderRole = 'customer' | 'support_agent' | 'internal_note' | 'system' | 'email_inbound'
@@ -175,6 +188,9 @@ export type AccountAdapter = {
   listSessions(): Promise<AccountSessionsResult>
   revokeSession(sessionId: string, scope: 'session' | 'device'): Promise<void>
   revokeAllSessions(): Promise<void>
+  getDeletionStatus(): Promise<AccountDeletionStatusResult>
+  requestDeletion(reason?: string): Promise<AccountDeletionStatusResult>
+  cancelDeletion(): Promise<AccountDeletionStatusResult>
 }
 
 export type ReleaseAdapter = {
@@ -193,10 +209,11 @@ export type PaymentsAdapter = {
 
 export type SupportAdapter = {
   isCustomerWebSupportEnabled(): boolean
-  createTicket(input: { subject: string; body: string }): Promise<{ success: boolean; threadId?: string; error?: string }>
+  createTicket(input: { subject: string; body: string; attachments?: File[] }): Promise<{ success: boolean; threadId?: string; error?: string }>
   listThreads(): Promise<CustomerSupportThread[]>
   getThread(threadId: string): Promise<{ thread?: CustomerSupportThread; messages: CustomerSupportMessage[] }>
-  replyThread(threadId: string, body: string): Promise<{ success: boolean; error?: string }>
+  replyThread(threadId: string, body: string, attachments?: File[]): Promise<{ success: boolean; error?: string }>
+  downloadAttachment(attachment: CustomerSupportAttachment): Promise<void>
   setThreadStatus(threadId: string, status: 'open' | 'closed'): Promise<{ success: boolean; status?: string; error?: string }>
 }
 
@@ -273,6 +290,7 @@ export type AdminAdapter = {
   updateRemoteControls(input: AdminRemoteControls & { channel: string }): Promise<AdminRemoteControls>
   listSupportThreads(): Promise<AdminSupportThread[]>
   listSupportMessages(threadId: string): Promise<AdminSupportMessage[]>
+  downloadSupportAttachment(attachment: { id: string; filename: string }): Promise<void>
   listSupportAudit(threadId: string): Promise<AdminSupportAuditEvent[]>
   sendSupportReply(threadId: string, body: string, options?: { internal?: boolean; emailRequested?: boolean }): Promise<void>
   updateSupportStatus(threadId: string, status: string, reason?: string): Promise<void>

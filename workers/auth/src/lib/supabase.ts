@@ -182,6 +182,52 @@ export async function markAccountProfileEmailVerified(
   return rows[0] || null
 }
 
+export async function updateAccountProfileStatus(
+  env: Env,
+  firebaseUid: string,
+  accountStatus: "active" | "pending_deletion" | "suspended" | "deleted" | string,
+): Promise<AccountProfileRow | null> {
+  const rows = await supabaseJson<AccountProfileRow[]>(env, `/account_profiles?firebase_uid=eq.${encodeURIComponent(firebaseUid)}&select=*`, {
+    method: "PATCH",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({ account_status: accountStatus }),
+  })
+  return rows[0] || null
+}
+
+export async function getAccountDeletionRequest(env: Env, firebaseUid: string): Promise<Record<string, any> | null> {
+  const rows = await supabaseJson<Record<string, any>[]>(env, `/account_deletion_requests?firebase_uid=eq.${encodeURIComponent(firebaseUid)}&status=in.(pending_deletion,deletion_due,on_hold)&select=id,status,requested_at,cooling_off_until,due_at,cancelled_at,held_at&order=created_at.desc&limit=1`)
+  return rows[0] || null
+}
+
+export async function createAccountDeletionRequest(env: Env, input: { firebaseUid: string; requestId: string; reason?: string | null; coolingOffUntil: string; dueAt: string }): Promise<Record<string, any>> {
+  const rows = await supabaseJson<Record<string, any>[]>(env, '/account_deletion_requests?select=*', {
+    method: 'POST',
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify({
+      firebase_uid: input.firebaseUid,
+      request_id: input.requestId,
+      status: 'pending_deletion',
+      requested_at: new Date().toISOString(),
+      cooling_off_until: input.coolingOffUntil,
+      due_at: input.dueAt,
+      user_reason: String(input.reason || '').trim().slice(0, 500) || null,
+      inventory_snapshot: { contract_version: 1, purge_mode: 'dry_run_only' },
+    }),
+  })
+  if (!rows[0]) throw new Error('deletion_request_create_failed')
+  return rows[0]
+}
+
+export async function cancelAccountDeletionRequest(env: Env, firebaseUid: string): Promise<Record<string, any> | null> {
+  const rows = await supabaseJson<Record<string, any>[]>(env, `/account_deletion_requests?firebase_uid=eq.${encodeURIComponent(firebaseUid)}&status=eq.pending_deletion&select=*`, {
+    method: 'PATCH',
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify({ status: 'deletion_cancelled', cancelled_at: new Date().toISOString() }),
+  })
+  return rows[0] || null
+}
+
 export async function attachSubscriptionToUser(
   env: Env,
   subscriptionId: string,

@@ -23,11 +23,11 @@
     "EMAIL_OUTBOUND_ENABLED": "true",
     "EMAIL_INBOUND_ENABLED": "true",
     "EMAIL_SUPPORT_ENABLED": "true",
-    "EMAIL_AUTH_ENABLED": "false",
+    "EMAIL_AUTH_ENABLED": "true",
     "EMAIL_BILLING_ENABLED": "false",
     "EMAIL_RELEASE_ENABLED": "false",
     "EMAIL_SECURITY_ENABLED": "false",
-    "EMAIL_SCHEDULER_ENABLED": "false",
+    "EMAIL_SCHEDULER_ENABLED": "true",
     "EMAIL_ADMIN_ALERTS_ENABLED": "false",
     "EMAIL_FROM_SUPPORT": "SaturnWS Support <support@mail.saturnws.com>",
     "EMAIL_FROM_GENERAL": "SaturnWS <no-reply@mail.saturnws.com>",
@@ -48,6 +48,12 @@
       "binding": "DB",
       "database_name": "saturnws-policy",
       "database_id": "82332161-352a-42fd-a4f4-758e8df5a907"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "SUPPORT_ATTACHMENTS",
+      "bucket_name": "saturnws-support-attachments"
     }
   ]
 }

@@ -15,7 +15,7 @@ function response(body, status = 200) {
   })
 }
 
-test("public catalog excludes inactive, hidden, and provider-incomplete plans", async (t) => {
+test("public catalog shows visible plans when the payment provider is unavailable", async (t) => {
   const originalFetch = globalThis.fetch
   t.after(() => { globalThis.fetch = originalFetch })
   globalThis.fetch = async () => response([
@@ -26,9 +26,7 @@ test("public catalog excludes inactive, hidden, and provider-incomplete plans", 
       display_name: "Monthly",
       active: true,
       public_visible: true,
-      purchasable: true,
-      provider: "stripe",
-      provider_price_id: "price_test",
+      purchasable: false,
       price_minor: 3500,
       original_price_minor: 5000,
       currency: "USD",
@@ -41,8 +39,43 @@ test("public catalog excludes inactive, hidden, and provider-incomplete plans", 
   const plans = await listCommercialPlans(env, { publicOnly: true })
   assert.equal(plans.length, 1)
   assert.equal(plans[0].id, "monthly")
-  assert.equal(plans[0].checkout_enabled, true)
+  assert.equal(plans[0].visible, true)
+  assert.equal(plans[0].active, true)
+  assert.equal(plans[0].purchasable, false)
+  assert.equal(plans[0].provider_ready, false)
+  assert.equal(plans[0].checkout_enabled, false)
   assert.equal(plans[0].localizations.ar.name, "شهري")
+})
+
+test("public catalog enables checkout only when plan and provider are ready", async (t) => {
+  const originalFetch = globalThis.fetch
+  t.after(() => { globalThis.fetch = originalFetch })
+  globalThis.fetch = async () => response([{
+    plan_id: "monthly",
+    version: 1,
+    display_name: "Monthly",
+    active: true,
+    public_visible: true,
+    purchasable: true,
+    provider: "stripe",
+    provider_price_id: "price_test",
+    price_minor: 3500,
+    currency: "USD",
+  }])
+  const plans = await listCommercialPlans({ ...env, STRIPE_SECRET_KEY: "test-only" }, { publicOnly: true })
+  assert.equal(plans.length, 1)
+  assert.equal(plans[0].provider_ready, true)
+  assert.equal(plans[0].checkout_enabled, true)
+})
+
+test("public catalog excludes hidden and inactive plans", async (t) => {
+  const originalFetch = globalThis.fetch
+  t.after(() => { globalThis.fetch = originalFetch })
+  globalThis.fetch = async () => response([
+    { plan_id: "hidden", version: 1, active: true, public_visible: false, purchasable: false },
+    { plan_id: "inactive", version: 1, active: false, public_visible: true, purchasable: false },
+  ])
+  assert.deepEqual(await listCommercialPlans(env, { publicOnly: true }), [])
 })
 
 test("disabled plan cannot create an order", async (t) => {

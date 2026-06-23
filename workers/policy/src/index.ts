@@ -22,6 +22,7 @@ type Decision =
 
 interface Env {
   DB: D1Database
+  SUPPORT_ATTACHMENTS?: R2Bucket
   AUTH_SERVICE?: Fetcher
   RESEND_SERVICE?: Fetcher
   POLICY_SIGNING_SEED_B64: string
@@ -1656,18 +1657,40 @@ async function cleanupEmailOperations(env: Env): Promise<{ sensitivePurged: numb
   }
 }
 
-async function runEmailCron(env: Env): Promise<{ skipped: boolean; reason?: string; scheduled: { processed: number; queued: number; failed: number }; outbox: { processed: number; sent: number; skipped: number }; cleanup: { sensitivePurged: number; eventsDeleted: number; inboundDeleted: number; notificationsDeleted: number } }> {
+async function cleanupSupportAttachmentOrphans(env: Env): Promise<{ attachmentsDeleted: number }> {
+  if (!env.SUPPORT_ATTACHMENTS) return { attachmentsDeleted: 0 }
+  const rows = await env.DB.prepare(
+    "SELECT id, object_key FROM support_attachments WHERE message_id IS NULL AND status = 'complete' AND deleted_at IS NULL AND datetime(created_at) < datetime('now', '-24 hours') LIMIT 50"
+  ).all<{ id: string; object_key: string }>().catch(() => ({ results: [] as { id: string; object_key: string }[] }))
+  let deleted = 0
+  for (const row of rows.results || []) {
+    const id = normalizeText(row.id)
+    const objectKey = normalizeText(row.object_key)
+    if (!id || !objectKey) continue
+    await env.SUPPORT_ATTACHMENTS.delete(objectKey).catch(() => null)
+    const result = await env.DB.prepare("UPDATE support_attachments SET status = 'deleted', deleted_at = datetime('now') WHERE id = ?1 AND message_id IS NULL")
+      .bind(id)
+      .run()
+      .catch(() => ({ meta: { changes: 0 } }))
+    deleted += dbChanges(result)
+  }
+  return { attachmentsDeleted: deleted }
+}
+
+async function runEmailCron(env: Env): Promise<{ skipped: boolean; reason?: string; scheduled: { processed: number; queued: number; failed: number }; outbox: { processed: number; sent: number; skipped: number }; cleanup: { sensitivePurged: number; eventsDeleted: number; inboundDeleted: number; notificationsDeleted: number; attachmentsDeleted: number } }> {
   const empty = {
     scheduled: { processed: 0, queued: 0, failed: 0 },
     outbox: { processed: 0, sent: 0, skipped: 0 },
-    cleanup: { sensitivePurged: 0, eventsDeleted: 0, inboundDeleted: 0, notificationsDeleted: 0 },
+    cleanup: { sensitivePurged: 0, eventsDeleted: 0, inboundDeleted: 0, notificationsDeleted: 0, attachmentsDeleted: 0 },
   }
   const lock = await acquireEmailCronLock(env)
   if (!lock.acquired) return { skipped: true, reason: "cron_lock_held", ...empty }
   try {
     const scheduled = await processScheduledEmailNotifications(env)
     const outbox = await processEmailOutbox(env)
-    const cleanup = await cleanupEmailOperations(env)
+    const emailCleanup = await cleanupEmailOperations(env)
+    const attachmentCleanup = await cleanupSupportAttachmentOrphans(env)
+    const cleanup = { ...emailCleanup, ...attachmentCleanup }
     return { skipped: false, scheduled, outbox, cleanup }
   } finally {
     await releaseEmailCronLock(env, lock)
@@ -2860,9 +2883,82 @@ const EMAIL_WEBHOOK_TOLERANCE_SECONDS = 5 * 60
 const EMAIL_KNOWN_EVENTS = RESEND_KNOWN_EVENTS
 const SUPPORT_IDEMPOTENCY_KEY_MAX_LENGTH = 160
 const NOTIFICATION_PAGE_MAX = 50
+const SUPPORT_ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024
+const SUPPORT_ATTACHMENT_MAX_PER_MESSAGE = 3
+const SUPPORT_ATTACHMENT_ALLOWED_TYPES = new Set(["image/png", "image/jpeg", "application/pdf", "text/plain"])
 
 function supportIdempotencyKey(value: unknown): string {
   return clampText(value, SUPPORT_IDEMPOTENCY_KEY_MAX_LENGTH).replace(/[^a-zA-Z0-9:_-]/g, "")
+}
+
+function sanitizeSupportFilename(value: unknown): string {
+  const cleaned = normalizeText(value).replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_").replace(/\s+/g, " ").slice(0, 120)
+  return cleaned || "attachment"
+}
+
+function attachmentIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return [...new Set(value.map(normalizeText).filter((id) => /^[0-9a-f-]{36}$/i.test(id)))].slice(0, SUPPORT_ATTACHMENT_MAX_PER_MESSAGE)
+}
+
+async function attachmentDigest(bytes: ArrayBuffer): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", bytes)
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("")
+}
+
+function verifyAttachmentContent(type: string, bytes: Uint8Array): boolean {
+  if (type === "image/png") return bytes.length >= 8 && [137, 80, 78, 71, 13, 10, 26, 10].every((value, index) => bytes[index] === value)
+  if (type === "image/jpeg") return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+  if (type === "application/pdf") return bytes.length >= 5 && new TextDecoder().decode(bytes.slice(0, 5)) === "%PDF-"
+  if (type === "text/plain") {
+    if (bytes.includes(0)) return false
+    try { new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(bytes); return true } catch { return false }
+  }
+  return false
+}
+
+function publicAttachment(row: Record<string, unknown>, admin = false) {
+  return {
+    id: normalizeText(row.id),
+    filename: normalizeText(row.original_filename),
+    mime_type: normalizeText(row.mime_type),
+    size_bytes: Number(row.size_bytes || 0),
+    status: normalizeText(row.status),
+    created_at: normalizeText(row.created_at),
+    download_url: `${admin ? "/api/admin/policy/support/attachments/" : "/v1/web/support/attachments/"}${encodeURIComponent(normalizeText(row.id))}`,
+  }
+}
+
+async function loadMessageAttachments(env: Env, threadId: string, admin = false): Promise<Map<string, unknown[]>> {
+  const rows = await env.DB.prepare(
+    "SELECT id, message_id, original_filename, mime_type, size_bytes, status, created_at FROM support_attachments WHERE thread_id = ?1 AND status = 'complete' AND deleted_at IS NULL ORDER BY datetime(created_at) ASC"
+  ).bind(threadId).all<Record<string, unknown>>().catch(() => ({ results: [] as Record<string, unknown>[] }))
+  const byMessage = new Map<string, unknown[]>()
+  for (const row of rows.results || []) {
+    const messageId = normalizeText(row.message_id)
+    if (!messageId) continue
+    byMessage.set(messageId, [...(byMessage.get(messageId) || []), publicAttachment(row, admin)])
+  }
+  return byMessage
+}
+
+async function validateOwnedAttachments(env: Env, scope: { userId: string }, ids: string[], threadId?: string): Promise<Record<string, unknown>[]> {
+  if (!ids.length) return []
+  if (!env.SUPPORT_ATTACHMENTS) throw new Error("support_attachments_not_configured")
+  const placeholders = ids.map((_, index) => `?${index + 2}`).join(",")
+  const rows = await env.DB.prepare(
+    `SELECT * FROM support_attachments WHERE owner_user_id = ?1 AND id IN (${placeholders}) AND status = 'complete' AND deleted_at IS NULL`
+  ).bind(scope.userId, ...ids).all<Record<string, unknown>>()
+  if ((rows.results || []).length !== ids.length) throw new Error("support_attachment_invalid")
+  if (threadId && (rows.results || []).some((row) => row.thread_id && row.thread_id !== threadId)) throw new Error("support_attachment_wrong_thread")
+  if ((rows.results || []).some((row) => row.message_id)) throw new Error("support_attachment_already_used")
+  return rows.results || []
+}
+
+function attachmentLinkStatements(env: Env, ids: string[], threadId: string, messageId: string): D1PreparedStatement[] {
+  return ids.map((id) => env.DB.prepare(
+    "UPDATE support_attachments SET thread_id = ?1, message_id = ?2 WHERE id = ?3 AND message_id IS NULL AND status = 'complete'"
+  ).bind(threadId, messageId, id))
 }
 
 async function auditSupportEvent(
@@ -3157,8 +3253,70 @@ async function handleSupportRequest(request: Request, env: Env, ctx?: ExecutionC
   return json({ success: false, error: "support_not_found" }, 404)
 }
 
+async function handleWebSupportAttachmentUpload(request: Request, env: Env): Promise<Response> {
+  if (!env.SUPPORT_ATTACHMENTS) return json({ success: false, error: "support_attachments_unavailable" }, 503)
+  const scope = await requireWebSupportUser(request, env, {})
+  if (scope instanceof Response) return scope
+  if (await queryActiveSupportBlock(env, scope)) return json({ success: false, error: "support_blocked" }, 403)
+  const form = await request.formData().catch(() => null)
+  const file = form?.get("file") as unknown as File | null
+  const threadId = normalizeText(form?.get("thread_id"))
+  if (!file || typeof file === "string" || (typeof file.arrayBuffer !== "function" && typeof file.stream !== "function")) return json({ success: false, error: "attachment_required" }, 400)
+  const mimeType = normalizeLower(file.type)
+  if (!SUPPORT_ATTACHMENT_ALLOWED_TYPES.has(mimeType)) return json({ success: false, error: "attachment_type_not_allowed" }, 415)
+  if (file.size <= 0 || file.size > SUPPORT_ATTACHMENT_MAX_BYTES) return json({ success: false, error: "attachment_size_invalid" }, 413)
+  if (threadId) {
+    const [userId, email, installId, deviceId] = supportScopeBinds(scope)
+    const thread = await env.DB.prepare(`SELECT id, status FROM support_threads t WHERE t.id = ?1 AND ${supportScopeSql("t")} LIMIT 1`)
+      .bind(threadId, userId, email, installId, deviceId).first<{ id: string; status: string }>()
+    if (!thread) return json({ success: false, error: "thread_not_found" }, 404)
+    if (["closed", "blocked"].includes(canonicalSupportStatus(thread.status))) return json({ success: false, error: "ticket_not_writable" }, 409)
+  }
+  const pending = await env.DB.prepare(
+    "SELECT COUNT(*) AS count FROM support_attachments WHERE owner_user_id = ?1 AND message_id IS NULL AND status = 'complete' AND deleted_at IS NULL AND datetime(created_at) >= datetime('now', '-1 day')"
+  ).bind(scope.userId).first<{ count: number }>()
+  if (Number(pending?.count || 0) >= 12) return json({ success: false, error: "attachment_rate_limited" }, 429)
+  const buffer = typeof file.arrayBuffer === "function" ? await file.arrayBuffer() : await new Response(file.stream()).arrayBuffer()
+  if (!verifyAttachmentContent(mimeType, new Uint8Array(buffer))) return json({ success: false, error: "attachment_content_invalid" }, 415)
+  const id = crypto.randomUUID()
+  const objectKey = `support/${threadId || "drafts"}/${id}`
+  const filename = sanitizeSupportFilename(file.name)
+  const sha256 = await attachmentDigest(buffer)
+  await env.DB.prepare(
+    "INSERT INTO support_attachments (id, thread_id, owner_user_id, owner_email, uploader_role, object_key, original_filename, mime_type, size_bytes, sha256, status, created_at) VALUES (?1, ?2, ?3, ?4, 'customer', ?5, ?6, ?7, ?8, ?9, 'pending', datetime('now'))"
+  ).bind(id, threadId || null, scope.userId, scope.email, objectKey, filename, mimeType, file.size, sha256).run()
+  try {
+    await env.SUPPORT_ATTACHMENTS.put(objectKey, buffer, { httpMetadata: { contentType: mimeType, contentDisposition: `attachment; filename="${filename.replace(/"/g, "_")}"` }, customMetadata: { attachment_id: id, sha256 } })
+    await env.DB.prepare("UPDATE support_attachments SET status = 'complete', completed_at = datetime('now') WHERE id = ?1").bind(id).run()
+  } catch {
+    await env.DB.prepare("UPDATE support_attachments SET status = 'failed', failure_code = 'storage_write_failed' WHERE id = ?1").bind(id).run().catch(() => null)
+    return json({ success: false, error: "attachment_upload_failed" }, 503)
+  }
+  await auditSupportEvent(env, { threadId: threadId || "draft", eventType: "attachment_uploaded", actorRole: "customer", actorId: scope.userId, metadata: { attachment_id: id, mime_type: mimeType, size_bytes: file.size } }).catch(() => null)
+  return json({ success: true, attachment: publicAttachment({ id, original_filename: filename, mime_type: mimeType, size_bytes: file.size, status: "complete", created_at: new Date().toISOString() }) })
+}
+
+async function handleWebSupportAttachmentAccess(request: Request, env: Env, attachmentId: string): Promise<Response> {
+  if (!env.SUPPORT_ATTACHMENTS) return json({ success: false, error: "support_attachments_unavailable" }, 503)
+  const scope = await requireWebSupportUser(request, env, {})
+  if (scope instanceof Response) return scope
+  const row = await env.DB.prepare(
+    "SELECT a.* FROM support_attachments a LEFT JOIN support_threads t ON t.id = a.thread_id WHERE a.id = ?1 AND a.owner_user_id = ?2 AND a.status = 'complete' AND a.deleted_at IS NULL LIMIT 1"
+  ).bind(attachmentId, scope.userId).first<Record<string, unknown>>()
+  if (!row) return json({ success: false, error: "attachment_not_found" }, 404)
+  if (request.method === "DELETE") {
+    if (row.message_id) return json({ success: false, error: "attachment_already_sent" }, 409)
+    await env.SUPPORT_ATTACHMENTS.delete(normalizeText(row.object_key))
+    await env.DB.prepare("UPDATE support_attachments SET status = 'deleted', deleted_at = datetime('now') WHERE id = ?1").bind(attachmentId).run()
+    return json({ success: true })
+  }
+  const object = await env.SUPPORT_ATTACHMENTS.get(normalizeText(row.object_key))
+  if (!object) return json({ success: false, error: "attachment_object_missing" }, 404)
+  return new Response(object.body, { headers: { "Content-Type": normalizeText(row.mime_type), "Content-Length": String(row.size_bytes), "Content-Disposition": `attachment; filename="${sanitizeSupportFilename(row.original_filename)}"`, "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } })
+}
+
 async function handleWebSupportCreate(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
-  const body = await request.json<PolicyRequest & { id_token?: string; subject?: string; body?: string; message?: string; idempotency_key?: string }>().catch(() => null)
+  const body = await request.json<PolicyRequest & { id_token?: string; subject?: string; body?: string; message?: string; idempotency_key?: string; attachment_ids?: string[] }>().catch(() => null)
   if (!body || typeof body !== "object") return json({ success: false, error: "invalid_payload" }, 400)
   const scope = await requireWebSupportUser(request, env, body)
   if (scope instanceof Response) return scope
@@ -3179,6 +3337,8 @@ async function handleWebSupportCreate(request: Request, env: Env, ctx?: Executio
   }
   const threadId = crypto.randomUUID()
   const messageId = crypto.randomUUID()
+  const ownedAttachmentIds = attachmentIds(body.attachment_ids)
+  try { await validateOwnedAttachments(env, scope, ownedAttachmentIds) } catch (error) { return json({ success: false, error: normalizeText(error instanceof Error ? error.message : error) }, 400) }
   try {
     await env.DB.batch([
       env.DB.prepare(
@@ -3188,6 +3348,7 @@ async function handleWebSupportCreate(request: Request, env: Env, ctx?: Executio
         .bind(messageId, threadId, idempotencyKey, message),
       env.DB.prepare("INSERT INTO support_audit_events (id, thread_id, event_type, actor_role, actor_id, message_id, metadata_json, created_at) VALUES (?1, ?2, 'ticket_created', 'customer', ?3, ?4, '{}', datetime('now'))")
         .bind(crypto.randomUUID(), threadId, scope.userId, messageId),
+      ...attachmentLinkStatements(env, ownedAttachmentIds, threadId, messageId),
     ])
   } catch (error) {
     const raced = await env.DB.prepare("SELECT thread_id FROM support_messages WHERE idempotency_key = ?1 LIMIT 1")
@@ -3198,7 +3359,7 @@ async function handleWebSupportCreate(request: Request, env: Env, ctx?: Executio
   }
   const thread = await env.DB.prepare("SELECT * FROM support_threads WHERE id = ?1").bind(threadId).first<SupportThreadRow>()
   if (thread) await queueSupportTicketConfirmation(env, thread, scope.userId || null, messageId, ctx)
-  return json({ success: true, thread_id: threadId })
+  return json({ success: true, thread_id: threadId, attachments: ownedAttachmentIds.length })
 }
 
 async function handleWebSupportThreads(request: Request, env: Env): Promise<Response> {
@@ -3226,11 +3387,12 @@ async function handleWebSupportMessages(request: Request, env: Env): Promise<Res
     .all<SupportMessageRow>()
     .catch(() => ({ results: [] as SupportMessageRow[] }))
   await env.DB.prepare("UPDATE support_threads SET user_last_read_at = datetime('now') WHERE id = ?1").bind(threadId).run()
-  return json({ success: true, thread: normalizeSupportThread(thread), messages: (messages.results || []).map(normalizeSupportMessage) })
+  const attachments = await loadMessageAttachments(env, threadId)
+  return json({ success: true, thread: normalizeSupportThread(thread), messages: (messages.results || []).map((message) => ({ ...normalizeSupportMessage(message), attachments: attachments.get(message.id) || [] })) })
 }
 
 async function handleWebSupportReply(request: Request, env: Env): Promise<Response> {
-  const body = await request.json<PolicyRequest & { id_token?: string; thread_id?: string; body?: string; message?: string; idempotency_key?: string }>().catch(() => null)
+  const body = await request.json<PolicyRequest & { id_token?: string; thread_id?: string; body?: string; message?: string; idempotency_key?: string; attachment_ids?: string[] }>().catch(() => null)
   if (!body || typeof body !== "object") return json({ success: false, error: "invalid_payload" }, 400)
   const scope = await requireWebSupportUser(request, env, body)
   if (scope instanceof Response) return scope
@@ -3261,6 +3423,8 @@ async function handleWebSupportReply(request: Request, env: Env): Promise<Respon
     return json({ success: false, error: "support_rate_limited", retry_after_seconds: rateLimit.retryAfterSeconds, limit: SUPPORT_DAILY_MESSAGE_LIMIT }, 429)
   }
   const messageId = crypto.randomUUID()
+  const ownedAttachmentIds = attachmentIds(body.attachment_ids)
+  try { await validateOwnedAttachments(env, scope, ownedAttachmentIds, threadId) } catch (error) { return json({ success: false, error: normalizeText(error instanceof Error ? error.message : error) }, 400) }
   await env.DB.batch([
     env.DB.prepare("INSERT INTO support_messages (id, thread_id, sender, sender_role, delivery_mode, idempotency_key, source, body, created_at) VALUES (?1, ?2, 'user', 'customer', 'portal_only', ?3, 'portal', ?4, datetime('now'))")
       .bind(messageId, threadId, idempotencyKey, message),
@@ -3268,8 +3432,9 @@ async function handleWebSupportReply(request: Request, env: Env): Promise<Respon
       .bind(threadId),
     env.DB.prepare("INSERT INTO support_audit_events (id, thread_id, event_type, actor_role, actor_id, message_id, metadata_json, created_at) VALUES (?1, ?2, 'customer_reply', 'customer', ?3, ?4, '{}', datetime('now'))")
       .bind(crypto.randomUUID(), threadId, scope.userId, messageId),
+    ...attachmentLinkStatements(env, ownedAttachmentIds, threadId, messageId),
   ])
-  return json({ success: true })
+  return json({ success: true, attachments: ownedAttachmentIds.length })
 }
 
 async function handleWebSupportStatus(request: Request, env: Env): Promise<Response> {
@@ -3304,6 +3469,9 @@ async function handleWebSupportStatus(request: Request, env: Env): Promise<Respo
 
 async function handleWebSupportRequest(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
   const url = new URL(request.url)
+  if (request.method === "POST" && url.pathname === "/v1/web/support/attachments") return handleWebSupportAttachmentUpload(request, env)
+  const attachmentMatch = url.pathname.match(/^\/v1\/web\/support\/attachments\/([^/]+)$/)
+  if (attachmentMatch && (request.method === "GET" || request.method === "DELETE")) return handleWebSupportAttachmentAccess(request, env, decodeURIComponent(attachmentMatch[1]))
   if (request.method === "POST" && url.pathname === "/v1/web/support/messages") return handleWebSupportCreate(request, env, ctx)
   if (request.method === "POST" && url.pathname === "/v1/web/support/threads") return handleWebSupportThreads(request, env)
   if (request.method === "POST" && url.pathname === "/v1/web/support/thread") return handleWebSupportMessages(request, env)
@@ -3738,7 +3906,18 @@ async function handleAdminSupportMessages(request: Request, env: Env): Promise<R
     .all<Record<string, unknown>>()
     .catch(() => ({ results: [] as Record<string, unknown>[] }))
   await env.DB.prepare("UPDATE support_threads SET admin_last_read_at = datetime('now') WHERE id = ?1").bind(threadId).run()
-  return json({ success: true, thread: normalizeSupportThread(thread), messages: (messages.results || []).map(normalizeSupportMessage), audit: audit.results || [] })
+  const attachments = await loadMessageAttachments(env, threadId, true)
+  return json({ success: true, thread: normalizeSupportThread(thread), messages: (messages.results || []).map((message) => ({ ...normalizeSupportMessage(message), attachments: attachments.get(message.id) || [] })), audit: audit.results || [] })
+}
+
+async function handleAdminSupportAttachment(env: Env, attachmentId: string): Promise<Response> {
+  if (!env.SUPPORT_ATTACHMENTS) return json({ success: false, error: "support_attachments_unavailable" }, 503)
+  const row = await env.DB.prepare("SELECT * FROM support_attachments WHERE id = ?1 AND status = 'complete' AND deleted_at IS NULL LIMIT 1")
+    .bind(attachmentId).first<Record<string, unknown>>()
+  if (!row) return json({ success: false, error: "attachment_not_found" }, 404)
+  const object = await env.SUPPORT_ATTACHMENTS.get(normalizeText(row.object_key))
+  if (!object) return json({ success: false, error: "attachment_object_missing" }, 404)
+  return new Response(object.body, { headers: { "Content-Type": normalizeText(row.mime_type), "Content-Length": String(row.size_bytes), "Content-Disposition": `attachment; filename="${sanitizeSupportFilename(row.original_filename)}"`, "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } })
 }
 
 async function handleAdminSupportBlock(request: Request, env: Env): Promise<Response> {
@@ -3935,6 +4114,8 @@ async function handleAdminRequest(request: Request, env: Env, ctx?: ExecutionCon
   if (request.method === "POST" && url.pathname === "/v1/admin/releases") return handleAdminRelease(request, env)
   if (request.method === "GET" && url.pathname === "/v1/admin/support") return handleAdminSupportList(env)
   if (request.method === "GET" && url.pathname === "/v1/admin/support/messages") return handleAdminSupportMessages(request, env)
+  const adminAttachmentMatch = url.pathname.match(/^\/v1\/admin\/support\/attachments\/([^/]+)$/)
+  if (request.method === "GET" && adminAttachmentMatch) return handleAdminSupportAttachment(env, decodeURIComponent(adminAttachmentMatch[1]))
   if (request.method === "POST" && url.pathname === "/v1/admin/support/block") return handleAdminSupportBlock(request, env)
   if (request.method === "POST" && url.pathname === "/v1/admin/support/reply") return handleAdminSupportReply(request, env, ctx)
   if (request.method === "POST" && url.pathname === "/v1/admin/support/priority") return handleAdminSupportPriority(request, env)

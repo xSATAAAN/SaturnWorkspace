@@ -19,6 +19,7 @@ export interface Env {
   ACCOUNT_TERMS_VERSION?: string
   PROFILE_DEFAULT_LOCALE?: string
   APP_SESSION_TTL_DAYS?: string
+  ACCOUNT_DELETION_COOLING_OFF_DAYS?: string
   ALLOW_ORIGIN?: string
   APP_ENV?: string
 }

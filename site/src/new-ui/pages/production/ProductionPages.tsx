@@ -16,6 +16,7 @@ import {
   Mail,
   Monitor,
   PackageOpen,
+  Paperclip,
   ReceiptText,
   RefreshCcw,
   ScrollText,
@@ -425,7 +426,7 @@ export function PublicProductionPages({ page, routeState, navigate }: { page: st
   const plans = useAsyncData(() => adapters.plans.listPlans(locale), [adapters, locale])
   const release = useAsyncData(() => adapters.releases.getLatest('beta'), [adapters])
   let content: ReactNode
-  if (page === 'pricing') content = <PricingSection page={page} routeState={routeState} plans={plans.data || []} loading={plans.loading} navigate={navigate} />
+  if (page === 'pricing') content = <PricingSection page={page} routeState={routeState} plans={plans.data || []} loading={plans.loading} error={plans.error} reload={plans.reload} navigate={navigate} />
   else if (page === 'product' || page === 'features') content = <ProductDetailsSection />
   else if (page === 'download') content = <DownloadSection release={release.data} loading={release.loading} error={release.error} reload={release.reload} navigate={navigate} />
   else if (page === 'releases' || page === 'changelog') content = <ReleaseNotes release={release.data} loading={release.loading} error={release.error} />
@@ -436,7 +437,7 @@ export function PublicProductionPages({ page, routeState, navigate }: { page: st
   else {
     const primaryLabel = ready && user ? t('account') : c.heroPrimary
     const primaryAction = () => ready && user ? navigate({ surface: 'portal', page: 'overview' }) : navigate(createAuthRoute('signup', { returnTo: currentInternalLocation() }))
-    content = <><section className="marketing-hero"><div className="container"><div className="marketing-hero__copy"><span className="announcement">{c.announcement}</span><h1>{c.heroTitle}</h1><p>{c.heroBody}</p><div className="hero-actions"><Button size="lg" variant="primary" disabled={!ready} onClick={primaryAction}>{primaryLabel}</Button><Button size="lg" variant="ghost" onClick={() => navigate({ surface: 'public', page: 'pricing' })}>{t('pricing')}</Button></div><ul><li><Monitor size={15} />{c.proofOne}</li><li><ShieldCheck size={15} />{c.proofTwo}</li><li><Download size={15} />{c.proofThree}</li></ul></div><Card className="hero-product-reveal"><SectionHeader title={c.sessionsTitle} description={c.sessionsBody} /><div className="value-line"><span>{c.stepAccount}</span><span>{c.stepProfile}</span><span>{c.stepLaunch}</span></div></Card></div></section><section className="marketing-section"><div className="container split-feature"><div><span className="section-index">01</span><SectionHeader title={c.accountsTitle} description={c.accountsBody} /></div><Card><SectionHeader title={c.backupTitle} description={c.backupBody} /></Card></div></section><PricingSection page={page} routeState={routeState} plans={plans.data || []} loading={plans.loading} navigate={navigate} compact /><section className="final-cta"><div className="container"><div><h2>{c.finalTitle}</h2><p>{c.finalBody}</p></div><Button size="lg" variant="primary" disabled={!ready} onClick={primaryAction}>{primaryLabel}</Button></div></section></>
+    content = <><section className="marketing-hero"><div className="container"><div className="marketing-hero__copy"><span className="announcement">{c.announcement}</span><h1>{c.heroTitle}</h1><p>{c.heroBody}</p><div className="hero-actions"><Button size="lg" variant="primary" disabled={!ready} onClick={primaryAction}>{primaryLabel}</Button><Button size="lg" variant="ghost" onClick={() => navigate({ surface: 'public', page: 'pricing' })}>{t('pricing')}</Button></div><ul><li><Monitor size={15} />{c.proofOne}</li><li><ShieldCheck size={15} />{c.proofTwo}</li><li><Download size={15} />{c.proofThree}</li></ul></div><Card className="hero-product-reveal"><SectionHeader title={c.sessionsTitle} description={c.sessionsBody} /><div className="value-line"><span>{c.stepAccount}</span><span>{c.stepProfile}</span><span>{c.stepLaunch}</span></div></Card></div></section><section className="marketing-section"><div className="container split-feature"><div><span className="section-index">01</span><SectionHeader title={c.accountsTitle} description={c.accountsBody} /></div><Card><SectionHeader title={c.backupTitle} description={c.backupBody} /></Card></div></section><PricingSection page={page} routeState={routeState} plans={plans.data || []} loading={plans.loading} error={plans.error} reload={plans.reload} navigate={navigate} compact /><section className="final-cta"><div className="container"><div><h2>{c.finalTitle}</h2><p>{c.finalBody}</p></div><Button size="lg" variant="primary" disabled={!ready} onClick={primaryAction}>{primaryLabel}</Button></div></section></>
   }
   return <PublicLayout navigate={navigate}>{content}</PublicLayout>
 }
@@ -453,7 +454,7 @@ function ProductDetailsSection() {
   return <section className="marketing-section page-enter"><div className="container"><header className="marketing-heading marketing-heading--center marketing-heading--wide"><h1>{c.productPageTitle}</h1><p>{c.productPageBody}</p></header><div className="feature-grid">{sections.map((section) => <Card key={section.title}><SectionHeader title={section.title} description={section.body} /></Card>)}</div></div></section>
 }
 
-function PricingSection({ page, routeState, plans, loading, navigate, compact = false }: { page: string; routeState?: string; plans: PlanInfo[]; loading: boolean; navigate: Navigate; compact?: boolean }) {
+function PricingSection({ page, routeState, plans, loading, error, reload, navigate, compact = false }: { page: string; routeState?: string; plans: PlanInfo[]; loading: boolean; error: string | null; reload: () => void; navigate: Navigate; compact?: boolean }) {
   const { t, locale } = useExperience()
   const { ready, user } = useAuthState()
   const c = publicCopy[locale]
@@ -482,11 +483,11 @@ function PricingSection({ page, routeState, plans, loading, navigate, compact = 
     if (user) return locale === 'ar' ? 'اختر الخطة' : 'Choose plan'
     return plan.trialDays > 0 ? (locale === 'ar' ? 'ابدأ التجربة المجانية' : 'Start free trial') : t('getStarted')
   }
-  return <section className={`marketing-section pricing-section${compact ? '' : ' pricing-page'}`}><div className="container"><header className="marketing-heading marketing-heading--center">{compact ? <h2>{c.pricingTitle}</h2> : <h1>{c.pricingTitle}</h1>}<p>{c.pricingBody}</p></header>{loading ? <LoadingBlock label={t('loading')} /> : plans.length ? <><div className="pricing-grid">{plans.map((plan) => {
+  return <section className={`marketing-section pricing-section${compact ? '' : ' pricing-page'}`}><div className="container"><header className="marketing-heading marketing-heading--center">{compact ? <h2>{c.pricingTitle}</h2> : <h1>{c.pricingTitle}</h1>}<p>{c.pricingBody}</p></header>{loading ? <LoadingBlock label={t('loading')} /> : error ? <EmptyState icon={CreditCard} title={copyByLocale(locale, 'Prices could not be loaded', 'تعذر تحميل الأسعار')} body={copyByLocale(locale, 'Try again to load the available plans.', 'أعد المحاولة لتحميل الخطط المتاحة.')} action={<Button onClick={reload}>{t('retry')}</Button>} /> : plans.length ? <><div className="pricing-grid">{plans.map((plan) => {
     const features = plan.features.length ? plan.features : featuresForPlan()
     const trialLabel = plan.trialDays > 0 ? (locale === 'ar' ? `ابدأ بـ ${plan.trialDays} أيام مجانًا` : `Start with ${plan.trialDays} days free`) : undefined
     return <PricingCard key={`${plan.id}:${plan.version}`} name={plan.name} description={plan.description} price={plan.price} originalPrice={plan.originalPrice} period={plan.period} features={features} cta={getCta(plan)} featured={plan.id === 'monthly'} featuredLabel={c.recommended} trialLabel={trialLabel} disabled={!ready || !plan.enabled || !plan.checkoutEnabled} onClick={() => choosePlan(plan)} />
-  })}</div><p className="pricing-trust-note"><ShieldCheck size={15} />{c.trustNote}</p></> : <EmptyState icon={CreditCard} title={t('unavailable')} body={c.pricingBody} />}</div><CheckoutDialog open={Boolean(activeCheckoutPlan)} plan={activeCheckoutPlan} user={user} features={activeCheckoutPlan ? (activeCheckoutPlan.features.length ? activeCheckoutPlan.features : featuresForPlan()) : []} onClose={closeCheckout} /></section>
+  })}</div><p className="pricing-trust-note"><ShieldCheck size={15} />{c.trustNote}</p></> : <EmptyState icon={CreditCard} title={copyByLocale(locale, 'No plans are published', 'لا توجد خطط منشورة')} body="" />}</div><CheckoutDialog open={Boolean(activeCheckoutPlan)} plan={activeCheckoutPlan} user={user} features={activeCheckoutPlan ? (activeCheckoutPlan.features.length ? activeCheckoutPlan.features : featuresForPlan()) : []} onClose={closeCheckout} /></section>
 }
 
 function FaqSection() {
@@ -802,9 +803,10 @@ function SubscriptionSummary({ data, loading, navigate }: { data: AccountSubscri
   return <SubscriptionCard title={t('subscriptionStatus')} status={sub?.plan || sub?.tier || projection?.plan_term || t('active')} tone={projection?.entitlement === 'payment_required' ? 'warning' : 'success'} badgeLabel={projection?.entitlement || sub?.status || t('active')} details={[{ label: t('email'), value: data?.user?.email || sub?.user_email || '—' }, { label: t('plan'), value: sub?.plan || sub?.tier || projection?.plan_term || t('planUnavailable') }, { label: t('expiresOn'), value: formatDisplayDate(sub?.expires_at || projection?.expires_at, locale) }, { label: t('status'), value: projection?.lifecycle || sub?.status || data?.status || '—' }]} />
 }
 
-function SupportThreadMessage({ message, locale }: { message: { id: string; sender?: string; senderRole?: SupportSenderRole; sender_role?: SupportSenderRole | string | null; body?: string; createdAt?: string; created_at?: string }; locale: 'ar' | 'en' }) {
+function SupportThreadMessage({ message, locale, onAttachmentDownload }: { message: { id: string; sender?: string; senderRole?: SupportSenderRole; sender_role?: SupportSenderRole | string | null; body?: string; createdAt?: string; created_at?: string; attachments?: Array<{ id: string; filename: string; mimeType?: string; mime_type?: string; sizeBytes?: number; size_bytes?: number; status?: string }> }; locale: 'ar' | 'en'; onAttachmentDownload?: (attachment: { id: string; filename: string }) => Promise<void> }) {
+  const { support, admin } = useAdapters()
   const role = supportSenderRole(message.sender, (message.senderRole || message.sender_role || undefined) as SupportSenderRole | undefined)
-  return <article className={supportMessageClass(role)} data-role={role}><strong>{supportSenderLabel(role, locale)}</strong>{role === 'system' ? <span>{message.body}</span> : <p>{message.body}</p>}<small>{formatDisplayDate(message.createdAt || message.created_at, locale)}</small></article>
+  return <article className={supportMessageClass(role)} data-role={role}><strong>{supportSenderLabel(role, locale)}</strong>{role === 'system' ? <span>{message.body}</span> : <p>{message.body}</p>}{message.attachments?.length ? <div className="support-attachments">{message.attachments.map((attachment) => <Button key={attachment.id} size="sm" variant="secondary" leadingIcon={<Paperclip size={14} />} onClick={() => { void (onAttachmentDownload ? onAttachmentDownload(attachment) : message.created_at ? admin.downloadSupportAttachment(attachment) : support.downloadAttachment({ id: attachment.id, filename: attachment.filename, mimeType: attachment.mimeType || attachment.mime_type || 'application/octet-stream', sizeBytes: attachment.sizeBytes || attachment.size_bytes || 0, status: attachment.status || 'complete' })) }}>{attachment.filename}</Button>)}</div> : null}<small>{formatDisplayDate(message.createdAt || message.created_at, locale)}</small></article>
 }
 
 function PortalSubscription() {
@@ -958,6 +960,8 @@ function PortalSupport() {
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
   const [reply, setReply] = useState('')
+  const [ticketFiles, setTicketFiles] = useState<File[]>([])
+  const [replyFiles, setReplyFiles] = useState<File[]>([])
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [error, setError] = useState('')
@@ -982,10 +986,11 @@ function PortalSupport() {
     setError('')
     setNotice('')
     try {
-      const result = await support.createTicket({ subject, body })
+      const result = await support.createTicket({ subject, body, attachments: ticketFiles })
       if (!result.success) throw new Error(result.error || 'support_ticket_failed')
       setSubject('')
       setBody('')
+      setTicketFiles([])
       setNotice(t('success'))
       threads.reload()
       if (result.threadId) setSelected({ id: result.threadId, subject, status: 'open', updatedAt: new Date().toISOString() })
@@ -1002,9 +1007,10 @@ function PortalSupport() {
     setBusy(true)
     setError('')
     try {
-      const result = await support.replyThread(selected.id, reply)
+      const result = await support.replyThread(selected.id, reply, replyFiles)
       if (!result.success) throw new Error(result.error || 'support_reply_failed')
       setReply('')
+      setReplyFiles([])
       setNotice(t('success'))
       thread.reload()
       threads.reload()
@@ -1050,6 +1056,7 @@ function PortalSupport() {
           <form className="settings-form" onSubmit={createTicket}>
             <FormField label={t('details')} htmlFor="support-subject" required><Input id="support-subject" value={subject} maxLength={160} onChange={(event) => setSubject(event.target.value)} required /></FormField>
             <FormField label={t('support')} htmlFor="support-body" required><Textarea id="support-body" value={body} maxLength={4000} onChange={(event) => setBody(event.target.value)} required /></FormField>
+            <FormField label={copyByLocale(locale, 'Attachments', 'المرفقات')} htmlFor="support-attachments"><Input id="support-attachments" type="file" accept="image/png,image/jpeg,application/pdf,text/plain" multiple onChange={(event) => setTicketFiles(Array.from(event.target.files || []).slice(0, 3))} /></FormField>
             <Button type="submit" variant="primary" loading={busy}>{t('createTicket')}</Button>
           </form>
         </Card>
@@ -1065,19 +1072,79 @@ function PortalSupport() {
         <div className="support-ticket-meta"><Badge tone={supportStatusTone(thread.data?.thread?.status || selected?.status)}>{supportStatusLabel(thread.data?.thread?.status || selected?.status, locale)}</Badge><span>{formatDisplayDate(thread.data?.thread?.updatedAt || selected?.updatedAt, locale)}</span></div>
         {thread.error ? <ErrorBlock error={supportErrorMessage(thread.error, locale)} onRetry={thread.reload} /> : null}
         <div className="support-thread">{thread.loading ? <LoadingBlock label={t('loading')} /> : thread.data?.messages.filter((message) => supportSenderRole(message.sender, message.senderRole) !== 'internal_note').map((message) => <SupportThreadMessage key={message.id} message={message} locale={locale} />)}</div>
-        {(thread.data?.thread?.status || selected?.status) === 'closed' ? <Alert title={supportStatusLabel('closed', locale)} tone="info" action={<Button size="sm" onClick={() => setSelectedStatus('open')} loading={busy}>{copyByLocale(locale, 'Reopen', 'إعادة فتح')}</Button>}>{copyByLocale(locale, 'This ticket is closed. Reopen it if you need to add another reply.', 'هذه التذكرة مغلقة. أعد فتحها إذا كنت تريد إضافة رد جديد.')}</Alert> : <form className="settings-form" onSubmit={sendReply}><FormField label={t('reply')} htmlFor="support-reply"><Textarea id="support-reply" value={reply} maxLength={4000} onChange={(event) => setReply(event.target.value)} required /></FormField><div className="cluster"><Button type="submit" variant="primary" loading={busy}>{t('reply')}</Button>{selected ? <Button type="button" onClick={() => setSelectedStatus('closed')} loading={busy}>{t('close')}</Button> : null}</div></form>}
+        {(thread.data?.thread?.status || selected?.status) === 'closed' ? <Alert title={supportStatusLabel('closed', locale)} tone="info" action={<Button size="sm" onClick={() => setSelectedStatus('open')} loading={busy}>{copyByLocale(locale, 'Reopen', 'إعادة فتح')}</Button>}>{copyByLocale(locale, 'This ticket is closed. Reopen it if you need to add another reply.', 'هذه التذكرة مغلقة. أعد فتحها إذا كنت تريد إضافة رد جديد.')}</Alert> : <form className="settings-form" onSubmit={sendReply}><FormField label={t('reply')} htmlFor="support-reply"><Textarea id="support-reply" value={reply} maxLength={4000} onChange={(event) => setReply(event.target.value)} required /></FormField><FormField label={copyByLocale(locale, 'Attachments', 'المرفقات')} htmlFor="support-reply-attachments"><Input id="support-reply-attachments" type="file" accept="image/png,image/jpeg,application/pdf,text/plain" multiple onChange={(event) => setReplyFiles(Array.from(event.target.files || []).slice(0, 3))} /></FormField><div className="cluster"><Button type="submit" variant="primary" loading={busy}>{t('reply')}</Button>{selected ? <Button type="button" onClick={() => setSelectedStatus('closed')} loading={busy}>{t('close')}</Button> : null}</div></form>}
       </Drawer>
     </>
   )
 }
 
 function PortalSettings() {
-  const { t } = useExperience()
+  const { t, locale } = useExperience()
   const { account } = useAdapters()
   const { user } = useAuthState()
   const [name, setName] = useState(user?.displayName || '')
   const [message, setMessage] = useState('')
-  return <><PageHeader title={t('settings')} /><div className="settings-sections"><Card><SectionHeader title={t('profile')} /><form className="settings-form" onSubmit={async (event) => { event.preventDefault(); const next = await account.updateProfile({ displayName: name }); setName(next.displayName || ''); setMessage(t('success')) }}><FormField label={t('name')} htmlFor="profile-name"><Input id="profile-name" value={name} onChange={(event) => setName(event.target.value)} /></FormField><FormField label={t('email')} htmlFor="profile-email"><Input id="profile-email" value={user?.email || ''} readOnly /></FormField><Button variant="primary">{t('save')}</Button>{message ? <Alert title={message} tone="success" /> : null}</form></Card><Card><SectionHeader title={t('security')} /><Button onClick={async () => { await account.sendPasswordReset(); setMessage(t('passwordUpdated')) }}>{t('forgotPassword')}</Button></Card></div></>
+  const [deletion, setDeletion] = useState<any>(null)
+  const [deletionLoading, setDeletionLoading] = useState(true)
+  const [deletionBusy, setDeletionBusy] = useState(false)
+  const [deletionReason, setDeletionReason] = useState('')
+  const [error, setError] = useState('')
+
+  const loadDeletion = useCallback(async () => {
+    setDeletionLoading(true)
+    setError('')
+    try {
+      const result = await account.getDeletionStatus()
+      setDeletion(result.deletion)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'account_deletion_status_failed')
+    } finally {
+      setDeletionLoading(false)
+    }
+  }, [account])
+
+  useEffect(() => {
+    void loadDeletion()
+  }, [loadDeletion])
+
+  async function requestDeletion() {
+    setDeletionBusy(true)
+    setError('')
+    setMessage('')
+    try {
+      const result = await account.requestDeletion(deletionReason)
+      setDeletion(result.deletion)
+      setMessage(copyByLocale(locale, 'Account deletion request saved.', 'تم تسجيل طلب حذف الحساب.'))
+    } catch (err) {
+      const raw = String(err instanceof Error ? err.message : err || '')
+      setError(raw === 'RECENT_AUTH_REQUIRED'
+        ? copyByLocale(locale, 'Sign in again before requesting account deletion.', 'سجّل الدخول مرة أخرى قبل طلب حذف الحساب.')
+        : raw)
+    } finally {
+      setDeletionBusy(false)
+    }
+  }
+
+  async function cancelDeletion() {
+    setDeletionBusy(true)
+    setError('')
+    setMessage('')
+    try {
+      const result = await account.cancelDeletion()
+      setDeletion(result.deletion)
+      setMessage(copyByLocale(locale, 'Account deletion request cancelled.', 'تم إلغاء طلب حذف الحساب.'))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'account_deletion_cancel_failed')
+    } finally {
+      setDeletionBusy(false)
+    }
+  }
+
+  const deletionState = String(deletion?.state || 'none')
+  const deletionUnavailable = deletionState === 'unavailable'
+  const pendingDeletion = deletionState === 'pending_deletion' || deletionState === 'deletion_due' || deletionState === 'on_hold'
+
+  return <><PageHeader title={t('settings')} /><div className="settings-sections"><Card><SectionHeader title={t('profile')} /><form className="settings-form" onSubmit={async (event) => { event.preventDefault(); const next = await account.updateProfile({ displayName: name }); setName(next.displayName || ''); setMessage(t('success')) }}><FormField label={t('name')} htmlFor="profile-name"><Input id="profile-name" value={name} onChange={(event) => setName(event.target.value)} /></FormField><FormField label={t('email')} htmlFor="profile-email"><Input id="profile-email" value={user?.email || ''} readOnly /></FormField><Button variant="primary">{t('save')}</Button>{message ? <Alert title={message} tone="success" /> : null}</form></Card><Card><SectionHeader title={t('security')} /><Button onClick={async () => { await account.sendPasswordReset(); setMessage(t('passwordUpdated')) }}>{t('forgotPassword')}</Button></Card><Card><SectionHeader title={t('deleteAccount')} description={copyByLocale(locale, 'Request cancellation first. Final irreversible deletion is not available without a separate destructive approval.', 'ابدأ بطلب الحذف فقط. الحذف النهائي غير القابل للتراجع غير متاح بدون موافقة مدمّرة مستقلة.')} />{deletionLoading ? <SkeletonStack rows={3} /> : deletionUnavailable ? <Alert title={copyByLocale(locale, 'Account deletion is not available yet.', 'حذف الحساب غير متاح حاليًا.')} tone="warning">{copyByLocale(locale, 'The deletion request system is prepared but still waiting for its production database migration.', 'نظام طلبات الحذف جاهز في الواجهة لكنه بانتظار ترحيل قاعدة البيانات الإنتاجية.')}</Alert> : pendingDeletion ? <div className="stack"><Alert title={copyByLocale(locale, 'Deletion request pending', 'طلب الحذف قيد الانتظار')} tone={deletionState === 'on_hold' ? 'warning' : 'danger'}>{copyByLocale(locale, 'The account is marked pending deletion. You can cancel the request before final processing.', 'الحساب معلّم كطلب حذف قيد الانتظار. يمكنك إلغاء الطلب قبل المعالجة النهائية.')}</Alert><dl className="detail-list"><div><dt>{copyByLocale(locale, 'Requested', 'تاريخ الطلب')}</dt><dd>{formatDisplayDate(deletion?.request?.requested_at, locale)}</dd></div><div><dt>{copyByLocale(locale, 'Cooling-off ends', 'نهاية مهلة التراجع')}</dt><dd>{formatDisplayDate(deletion?.request?.cooling_off_until, locale)}</dd></div><div><dt>{copyByLocale(locale, 'Final purge', 'الحذف النهائي')}</dt><dd>{copyByLocale(locale, 'Disabled until explicit destructive approval.', 'معطّل حتى موافقة مدمّرة صريحة.')}</dd></div></dl><Button variant="secondary" loading={deletionBusy} onClick={() => void cancelDeletion()}>{copyByLocale(locale, 'Cancel deletion request', 'إلغاء طلب الحذف')}</Button></div> : <div className="stack"><FormField label={copyByLocale(locale, 'Reason (optional)', 'السبب (اختياري)')} htmlFor="deletion-reason"><Textarea id="deletion-reason" value={deletionReason} maxLength={500} onChange={(event) => setDeletionReason(event.target.value)} /></FormField><Button variant="danger" loading={deletionBusy} onClick={() => void requestDeletion()}>{t('deleteAccount')}</Button><Alert title={copyByLocale(locale, 'No immediate deletion', 'لا يوجد حذف فوري')} tone="info">{copyByLocale(locale, 'This creates a cancellable request and signs out linked desktop sessions. It does not purge user data.', 'هذا ينشئ طلبًا قابلًا للإلغاء وينهي جلسات سطح المكتب المرتبطة. لا يحذف بيانات المستخدم نهائيًا.')}</Alert></div>}{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}</Card></div></>
 }
 
 export function AdminProductionPages({ page, navigate }: { page: string; navigate: Navigate }) {

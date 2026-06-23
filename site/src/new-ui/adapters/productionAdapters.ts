@@ -8,7 +8,7 @@ import {
   signOut,
   updateProfile,
 } from 'firebase/auth'
-import { fetchAccountSessions, fetchAccountSubscription, provisionAccountProfile, revokeAccountSession, revokeAllAccountSessions } from '../../api/account'
+import { cancelAccountDeletion, fetchAccountDeletionStatus, fetchAccountSessions, fetchAccountSubscription, provisionAccountProfile, requestAccountDeletion, revokeAccountSession, revokeAllAccountSessions } from '../../api/account'
 import {
   createSubscription,
   createPromoCode,
@@ -27,6 +27,7 @@ import {
   fetchRemoteControls,
   fetchSubscriptions,
   fetchSupportMessages,
+  downloadAdminSupportAttachment,
   fetchSupportThreads,
   fetchUserDetail,
   fetchAdminReadiness,
@@ -71,6 +72,8 @@ import {
   createWebSupportTicket,
   fetchWebSupportThread,
   fetchWebSupportThreads,
+  uploadWebSupportAttachment,
+  downloadWebSupportAttachment,
   replyWebSupportThread,
   updateWebSupportStatus,
 } from '../../api/support'
@@ -314,7 +317,11 @@ function mapCatalogPlan(plan: PlanCatalogItem, locale: 'ar' | 'en'): PlanInfo {
     description: localized.description || plan.description,
     trialDays: plan.trial_days,
     features: plan.features,
-    enabled: plan.purchasable,
+    visible: plan.visible,
+    active: plan.active,
+    purchasable: plan.purchasable,
+    providerReady: plan.provider_ready,
+    enabled: plan.active && plan.visible,
     checkoutEnabled: plan.checkout_enabled,
   }
 }
@@ -443,6 +450,23 @@ export const productionAdapters: AppAdapters = {
       if (!token) throw new Error('not_authenticated')
       await revokeAllAccountSessions(token)
     },
+    async getDeletionStatus() {
+      const token = await productionAdapters.auth.getIdToken(false)
+      if (!token) throw new Error('not_authenticated')
+      return fetchAccountDeletionStatus(token)
+    },
+    async requestDeletion(reason) {
+      const token = await productionAdapters.auth.getIdToken(true)
+      if (!token) throw new Error('not_authenticated')
+      clearAccountBootstrap()
+      return requestAccountDeletion(token, reason)
+    },
+    async cancelDeletion() {
+      const token = await productionAdapters.auth.getIdToken(true)
+      if (!token) throw new Error('not_authenticated')
+      clearAccountBootstrap()
+      return cancelAccountDeletion(token)
+    },
   },
   releases: {
     async getLatest(channel = 'beta') {
@@ -513,7 +537,9 @@ export const productionAdapters: AppAdapters = {
     async createTicket(input) {
       const token = await productionAdapters.auth.getIdToken(false)
       if (!token) return { success: false, error: 'not_authenticated' }
-      const result = await createWebSupportTicket(token, { ...input, idempotencyKey: crypto.randomUUID() })
+      const uploaded = []
+      for (const file of input.attachments || []) uploaded.push((await uploadWebSupportAttachment(token, file)).attachment)
+      const result = await createWebSupportTicket(token, { subject: input.subject, body: input.body, attachmentIds: uploaded.map((item) => item.id), idempotencyKey: crypto.randomUUID() })
       return { success: result.success, threadId: result.thread_id, error: result.error }
     },
     async listThreads() {
@@ -550,15 +576,23 @@ export const productionAdapters: AppAdapters = {
           id: message.id,
           sender: message.sender,
           senderRole: supportSenderRole(message.sender),
-          body: message.body,
-          createdAt: message.created_at,
+              body: message.body,
+              createdAt: message.created_at,
+              attachments: (message.attachments || []).map((attachment) => ({ id: attachment.id, filename: attachment.filename, mimeType: attachment.mime_type, sizeBytes: attachment.size_bytes, status: attachment.status })),
         })),
       }
     },
-    async replyThread(threadId, body) {
+    async replyThread(threadId, body, attachments = []) {
       const token = await productionAdapters.auth.getIdToken(false)
       if (!token) return { success: false, error: 'not_authenticated' }
-      return replyWebSupportThread(token, threadId, body, crypto.randomUUID())
+      const uploaded = []
+      for (const file of attachments) uploaded.push((await uploadWebSupportAttachment(token, file, threadId)).attachment)
+      return replyWebSupportThread(token, threadId, body, crypto.randomUUID(), uploaded.map((item) => item.id))
+    },
+    async downloadAttachment(attachment) {
+      const token = await productionAdapters.auth.getIdToken(false)
+      if (!token) throw new Error('not_authenticated')
+      await downloadWebSupportAttachment(token, { id: attachment.id, filename: attachment.filename, mime_type: attachment.mimeType, size_bytes: attachment.sizeBytes, status: attachment.status, download_url: '' })
     },
     async setThreadStatus(threadId, status) {
       const token = await productionAdapters.auth.getIdToken(false)
@@ -722,6 +756,9 @@ export const productionAdapters: AppAdapters = {
     async listSupportMessages(threadId) {
       const data = await fetchSupportMessages(threadId)
       return data.messages || []
+    },
+    async downloadSupportAttachment(attachment) {
+      await downloadAdminSupportAttachment(attachment)
     },
     async listSupportAudit(threadId) {
       const data = await fetchSupportMessages(threadId)

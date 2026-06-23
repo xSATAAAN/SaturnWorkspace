@@ -32,6 +32,12 @@ const users = new Map([
   ['token-other', { localId: 'uid-other', email: 'other@example.test', emailVerified: true }],
 ])
 
+const jwtToken = (payload) => `test.${Buffer.from(JSON.stringify(payload)).toString('base64url')}.sig`
+const recentDeletionToken = jwtToken({ auth_time: Math.floor(Date.now() / 1000) })
+const staleDeletionToken = jwtToken({ auth_time: Math.floor(Date.now() / 1000) - 3600 })
+users.set(recentDeletionToken, { localId: 'uid-delete', email: 'delete@example.test', emailVerified: true })
+users.set(staleDeletionToken, { localId: 'uid-stale-delete', email: 'stale-delete@example.test', emailVerified: true })
+
 const db = {
   account_profiles: [],
   account_subscriptions: [
@@ -44,6 +50,7 @@ const db = {
   app_sessions: [],
   account_email_verifications: [],
   account_email_verification_audit: [],
+  account_deletion_requests: [],
 }
 
 let sequence = 0
@@ -58,6 +65,10 @@ function matches(row, params) {
     if (operator === 'eq' && String(row[key] ?? '') !== expected) return false
     if (operator === 'ilike' && String(row[key] ?? '').toLowerCase() !== expected.toLowerCase()) return false
     if (operator === 'is' && expected === 'null' && row[key] != null) return false
+    if (operator === 'in') {
+      const allowed = expected.replace(/^\(|\)$/g, '').split(',').map((item) => item.trim())
+      if (!allowed.includes(String(row[key] ?? ''))) return false
+    }
   }
   const or = params.get('or')
   if (or) {
@@ -223,6 +234,34 @@ assert.equal(revoke.status, 200)
 const revokeAll = await call('/account/sessions/revoke-all', {}, 'token-active')
 assert.equal(revokeAll.status, 200)
 assert.equal(db.app_sessions.filter((row) => row.user_id === 'uid-active' && !row.revoked_at).length, 0)
+
+const deletionProvision = await call('/account/provision', { id_token: recentDeletionToken, terms_accepted: true }, recentDeletionToken)
+assert.equal(deletionProvision.status, 200)
+const deletionSession = await link(recentDeletionToken, '4'.repeat(32))
+assert.ok(db.app_sessions.some((row) => row.user_id === 'uid-delete' && !row.revoked_at))
+const deletionInitial = await call('/account/deletion/status', {}, recentDeletionToken)
+assert.equal(deletionInitial.status, 200)
+assert.equal(deletionInitial.body.deletion.state, 'none')
+assert.equal(deletionInitial.body.deletion.purge_available, false)
+const staleDeletion = await call('/account/deletion/request', { reason: 'cleanup' }, staleDeletionToken)
+assert.equal(staleDeletion.status, 401)
+assert.equal(staleDeletion.body.error, 'RECENT_AUTH_REQUIRED')
+const deletionRequest = await call('/account/deletion/request', { reason: 'cleanup' }, recentDeletionToken)
+assert.equal(deletionRequest.status, 200)
+assert.equal(deletionRequest.body.deletion.state, 'pending_deletion')
+assert.equal(deletionRequest.body.deletion.purge_available, false)
+assert.equal(db.account_profiles.find((row) => row.firebase_uid === 'uid-delete').account_status, 'pending_deletion')
+assert.equal(db.app_sessions.filter((row) => row.user_id === 'uid-delete' && !row.revoked_at).length, 0)
+const deletionAgain = await call('/account/deletion/request', {}, recentDeletionToken)
+assert.equal(deletionAgain.status, 200)
+assert.equal(deletionAgain.body.idempotent, true)
+const deletionCancel = await call('/account/deletion/cancel', {}, recentDeletionToken)
+assert.equal(deletionCancel.status, 200)
+assert.equal(deletionCancel.body.deletion.state, 'deletion_cancelled')
+assert.equal(db.account_profiles.find((row) => row.firebase_uid === 'uid-delete').account_status, 'active')
+const deletionAfterCancel = await call('/account/deletion/status', {}, recentDeletionToken)
+assert.equal(deletionAfterCancel.status, 200)
+assert.equal(deletionAfterCancel.body.deletion.state, 'none')
 
 const source = fs.readFileSync(path.join(ROOT, 'src/index.ts'), 'utf8')
 for (const forbidden of ['console.log(sessionToken)', 'console.error(sessionToken)', 'session_token: sessionToken, error']) {

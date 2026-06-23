@@ -57,7 +57,7 @@ export type AdminSubscription = {
 }
 
 export type AdminUserSummary = {
-  firebase_user_id: string
+  firebase_uid: string
   email: string
   display_name?: string | null
   locale?: string | null
@@ -424,6 +424,7 @@ export type AdminSupportMessage = {
   delivery_mode?: string | null
   source?: string | null
   provider_message_id?: string | null
+  attachments?: Array<{ id: string; filename: string; mime_type: string; size_bytes: number; status: string; download_url: string }>
 }
 
 export type AdminSupportAuditEvent = {
@@ -989,6 +990,23 @@ export async function fetchSupportMessages(threadId: string) {
   return adminFetch<{ success: boolean; thread?: AdminSupportThread; messages: AdminSupportMessage[]; audit?: AdminSupportAuditEvent[] }>(
     `/policy/support/messages?thread_id=${encodeURIComponent(threadId)}`,
   )
+}
+
+export async function downloadAdminSupportAttachment(attachment: { id: string; filename: string }) {
+  const headers = new Headers()
+  const token = getAdminToken()
+  if (token) headers.set('Authorization', `Bearer ${token}`)
+  const response = await fetch(`${adminBaseUrl()}/policy/support/attachments/${encodeURIComponent(attachment.id)}`, { headers, credentials: 'same-origin' })
+  if (!response.ok) throw new ApiError(`support_attachment_download_failed_${response.status}`, response.status)
+  const blob = await response.blob()
+  const objectUrl = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = objectUrl
+  link.download = attachment.filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 30_000)
 }
 
 export async function sendSupportReply(payload: { thread_id: string; body: string; internal_note?: boolean; email_requested?: boolean; idempotency_key?: string }) {

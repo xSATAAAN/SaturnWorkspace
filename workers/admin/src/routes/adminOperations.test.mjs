@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   adminContext,
+  adminRoleAssignmentsState,
   previewAccessRevocation,
   previewAccountLifecycle,
   previewSubscriptionTransition,
@@ -9,6 +10,13 @@ import {
 } from './adminOperations.js'
 
 const env = { SUPABASE_URL: 'https://example.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'test-service-key', ADMIN_ROLE_ASSIGNMENTS: JSON.stringify({ 'billing@example.com': 'billing', 'support@example.com': 'support' }) }
+const uidEnv = {
+  ...env,
+  ADMIN_ROLE_ASSIGNMENTS: JSON.stringify({
+    by_uid: { 'firebase-admin-1': 'security' },
+    by_email: { 'admin@example.com': 'billing' },
+  }),
+}
 
 function jsonResponse(value, status = 200) {
   return new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json' } })
@@ -20,11 +28,17 @@ test('role assignments enforce least privilege', () => {
   assert.doesNotThrow(() => requirePermission(billing, 'subscriptions:write'))
   assert.throws(() => requirePermission(billing, 'policies:write'), /admin_permission_denied/)
   assert.doesNotThrow(() => requirePermission(adminContext(env, 'token-admin'), 'policies:write'))
+  assert.equal(adminRoleAssignmentsState(env), 'configured')
+  const uidContext = adminContext(uidEnv, { email: 'admin@example.com', uid: 'firebase-admin-1' })
+  assert.equal(uidContext.role, 'security')
+  assert.doesNotThrow(() => requirePermission(uidContext, 'policies:write'))
+  assert.throws(() => requirePermission(uidContext, 'subscriptions:write'), /admin_permission_denied/)
+  assert.equal(adminContext(uidEnv, 'unassigned@example.com').role, 'read_only')
 })
 
 test('account lifecycle preview is deterministic and revokes sessions for suspension', async () => {
   const originalFetch = globalThis.fetch
-  globalThis.fetch = async () => jsonResponse([{ firebase_user_id: 'uid-1', normalized_email: 'user@example.com', display_name: 'User', account_status: 'active', updated_at: '2026-06-22T10:00:00.000Z' }])
+  globalThis.fetch = async () => jsonResponse([{ firebase_uid: 'uid-1', normalized_email: 'user@example.com', display_name: 'User', account_status: 'active', updated_at: '2026-06-22T10:00:00.000Z' }])
   try {
     const preview = await previewAccountLifecycle(env, adminContext(env, 'token-admin'), 'uid-1', { action: 'suspend', reason_code: 'security_review' })
     assert.equal(preview.current_status, 'active')
@@ -37,7 +51,7 @@ test('account lifecycle preview is deterministic and revokes sessions for suspen
 test('email is never used as the account operation identity', async () => {
   const requested = []
   const originalFetch = globalThis.fetch
-  globalThis.fetch = async (url) => { requested.push(String(url)); return jsonResponse([{ firebase_user_id: 'uid-2', normalized_email: 'user@example.com', account_status: 'active', updated_at: '2026-06-22T10:00:00.000Z' }]) }
+  globalThis.fetch = async (url) => { requested.push(String(url)); return jsonResponse([{ firebase_uid: 'uid-2', normalized_email: 'user@example.com', account_status: 'active', updated_at: '2026-06-22T10:00:00.000Z' }]) }
   try {
     await previewAccessRevocation(env, adminContext(env, 'support@example.com'), 'uid-2', { scope: 'all', reason_code: 'technical_support' })
     assert.ok(requested.every((url) => url.includes('firebase_uid=eq.uid-2')))

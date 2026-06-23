@@ -467,7 +467,7 @@ export function AdminUsersPhaseF() {
           columns={columns}
           rows={resource.data?.items || []}
           loading={resource.loading}
-          rowKey={(row) => row.firebase_user_id}
+          rowKey={(row) => row.firebase_uid}
           onRowClick={setSelected}
           emptyTitle={copy(locale, "No users found", "لا يوجد مستخدمون")}
           emptyBody={copy(
@@ -517,9 +517,9 @@ function UserDetailDrawer({
   const detail = useResource(
     () =>
       user
-        ? admin.getUserDetail(user.firebase_user_id)
+        ? admin.getUserDetail(user.firebase_uid)
         : Promise.resolve(null as unknown as AdminUserDetail),
-    [admin, user?.firebase_user_id],
+    [admin, user?.firebase_uid],
   );
   const [operation, setOperation] = useState<OperationIntent | null>(null);
   const [recoveryEvidence, setRecoveryEvidence] = useState<
@@ -567,7 +567,7 @@ function UserDetailDrawer({
                 <dl className="detail-list">
                   <div>
                     <dt>{copy(locale, "Firebase UID", "معرّف Firebase")}</dt>
-                    <dd className="mono">{data.profile.firebase_user_id}</dd>
+                    <dd className="mono">{data.profile.firebase_uid}</dd>
                   </div>
                   <div>
                     <dt>{copy(locale, "Verification", "التحقق")}</dt>
@@ -636,7 +636,7 @@ function UserDetailDrawer({
                       onClick={() =>
                         setOperation({
                           kind: "access",
-                          uid: data.profile.firebase_user_id,
+                          uid: data.profile.firebase_uid,
                           scope: "all",
                         })
                       }
@@ -672,7 +672,7 @@ function UserDetailDrawer({
                           onClick={() =>
                             setOperation({
                               kind: "access",
-                              uid: data.profile.firebase_user_id,
+                              uid: data.profile.firebase_uid,
                               scope: "device",
                               targetId: String(row.hwid || ""),
                             })
@@ -740,7 +740,7 @@ function UserDetailDrawer({
                             onClick={() =>
                               setOperation({
                                 kind: "access",
-                                uid: data.profile.firebase_user_id,
+                                uid: data.profile.firebase_uid,
                                 scope: "session",
                                 targetId: String(row.id || ""),
                               })
@@ -946,7 +946,7 @@ function UserDetailDrawer({
                     onClick={() =>
                       setOperation({
                         kind: "account",
-                        uid: data.profile.firebase_user_id,
+                        uid: data.profile.firebase_uid,
                         action:
                           data.profile.account_status === "suspended"
                             ? "reactivate"
@@ -963,7 +963,7 @@ function UserDetailDrawer({
                     onClick={() =>
                       setOperation({
                         kind: "account",
-                        uid: data.profile.firebase_user_id,
+                        uid: data.profile.firebase_uid,
                         action: "mark_pending_deletion",
                       })
                     }
@@ -1036,7 +1036,7 @@ function SubscriptionRecoveryDrawer({
   const input =
     evidence && user
       ? {
-          target_firebase_uid: user.profile.firebase_user_id,
+          target_firebase_uid: user.profile.firebase_uid,
           target_email: user.profile.email,
           operation_type: "restore_remaining_time" as const,
           plan,
@@ -1668,9 +1668,9 @@ function ManualGrantDrawer({
             {users.data.items.map((user) => (
               <button
                 type="button"
-                key={user.firebase_user_id}
+                key={user.firebase_uid}
                 className={
-                  selected?.firebase_user_id === user.firebase_user_id
+                  selected?.firebase_uid === user.firebase_uid
                     ? "is-selected"
                     : ""
                 }

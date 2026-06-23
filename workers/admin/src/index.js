@@ -3,6 +3,7 @@ import { resolveSubscriptionTruth } from "../../shared/subscriptions/resolver.js
 import { handleDownloadCatalog, handleDownloadFile } from "./routes/downloads.js";
 import {
   adminContext,
+  adminRoleAssignmentsState,
   executeAccessRevocation,
   executeAccountLifecycle,
   executeSubscriptionTransition,
@@ -301,6 +302,11 @@ export default {
           200,
           corsHeaders(request, env),
         );
+      }
+      const supportAttachmentMatch = url.pathname.match(/^\/api\/admin\/policy\/support\/attachments\/([^/]+)$/);
+      if (supportAttachmentMatch && request.method === "GET") {
+        const context = await requireAdminContext(request, env, "support:write");
+        return proxyPolicyAdminDownload(request, env, `/v1/admin/support/attachments/${encodeURIComponent(decodeURIComponent(supportAttachmentMatch[1]))}`, context);
       }
       if (url.pathname === "/api/admin/policy/support/reply" && request.method === "POST") {
         const context = await requireAdminContext(request, env, "support:write");
@@ -741,12 +747,12 @@ function json(payload, status = 200, extraHeaders = {}) {
   });
 }
 
-async function requireAdmin(request, env) {
+async function requireAdminIdentity(request, env) {
   const bearer = request.headers.get("Authorization") || "";
   const configuredToken = String(env.ADMIN_API_TOKEN || "").trim();
   if (configuredToken && bearer.startsWith("Bearer ")) {
     const provided = bearer.slice("Bearer ".length).trim();
-    if (provided === configuredToken) return "token-admin";
+    if (provided === configuredToken) return { email: "token-admin", uid: "token-admin" };
   }
 
   await requireAdminLayer1(request, env);
@@ -754,9 +760,9 @@ async function requireAdmin(request, env) {
   if (bearer.startsWith("Bearer ")) {
     const idToken = bearer.slice("Bearer ".length).trim();
     if (idToken) {
-      const firebaseAdminEmail = await verifyFirebaseAdminEmail(idToken, env);
-      if (firebaseAdminEmail) {
-        return firebaseAdminEmail;
+      const firebaseAdminIdentity = await verifyFirebaseAdminIdentity(idToken, env);
+      if (firebaseAdminIdentity?.email) {
+        return firebaseAdminIdentity;
       }
     }
   }
@@ -766,7 +772,12 @@ async function requireAdmin(request, env) {
   if (!email || !allowlist.includes(email)) {
     throw new Error("unauthorized");
   }
-  return email;
+  return { email, uid: null };
+}
+
+async function requireAdmin(request, env) {
+  const identity = await requireAdminIdentity(request, env);
+  return identity.email;
 }
 function adminLayer1Configured(env) {
   return Boolean(
@@ -889,7 +900,7 @@ function parseAdminAllowlist(env) {
     .filter(Boolean);
 }
 
-async function verifyFirebaseAdminEmail(idToken, env) {
+async function verifyFirebaseAdminIdentity(idToken, env) {
   const allowlist = parseAdminAllowlist(env);
   if (!allowlist.length) throw new Error("admin_allowlist_empty");
   const webApiKey = String(env.FIREBASE_WEB_API_KEY || "").trim();
@@ -904,13 +915,14 @@ async function verifyFirebaseAdminEmail(idToken, env) {
 
   const payload = await response.json().catch(() => null);
   const user = payload?.users?.[0];
+  const uid = String(user?.localId || "").trim();
   const email = String(user?.email || "").trim().toLowerCase();
   const emailVerified = Boolean(user?.emailVerified);
 
-  if (!email) throw new Error("firebase_token_invalid");
+  if (!email || !uid) throw new Error("firebase_token_invalid");
   if (!emailVerified) throw new Error("firebase_email_not_verified");
   if (!allowlist.includes(email)) throw new Error(`admin_email_not_allowed:${email}`);
-  return email;
+  return { email, uid };
 }
 
 function normalizeChannel(value) {
@@ -957,8 +969,8 @@ function safePlainObject(value) {
 }
 
 async function requireAdminContext(request, env, permission = "admin:read") {
-  const email = await requireAdmin(request, env);
-  const context = adminContext(env, email);
+  const identity = await requireAdminIdentity(request, env);
+  const context = adminContext(env, identity);
   requirePermission(context, permission);
   return context;
 }
@@ -1636,6 +1648,26 @@ async function proxyPolicyAdmin(request, env, targetPath, context = null) {
   return payload || { success: true };
 }
 
+async function proxyPolicyAdminDownload(request, env, targetPath, context = null) {
+  const token = String(env.POLICY_ADMIN_TOKEN || "").trim();
+  if (!token) throw new Error("policy_admin_token_missing");
+  const base = String(env.POLICY_API_BASE || "https://api.saturnws.com").trim().replace(/\/+$/, "");
+  const headers = { Authorization: `Bearer ${token}`, Accept: "application/octet-stream" };
+  if (context?.email) headers["X-Saturn-Admin-Actor"] = String(context.email).slice(0, 160);
+  if (context?.role) headers["X-Saturn-Admin-Role"] = String(context.role).slice(0, 80);
+  const response = env.POLICY_WORKER && typeof env.POLICY_WORKER.fetch === "function"
+    ? await env.POLICY_WORKER.fetch(new Request(`https://api.saturnws.com${targetPath}`, { method: "GET", headers }))
+    : await fetch(`${base}${targetPath}`, { method: "GET", headers });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(compactUpstreamError(payload?.error || "", response.status, targetPath));
+  }
+  const responseHeaders = new Headers(response.headers);
+  responseHeaders.set("Cache-Control", "private, no-store");
+  responseHeaders.set("X-Content-Type-Options", "nosniff");
+  return new Response(response.body, { status: response.status, headers: responseHeaders });
+}
+
 function compactUpstreamError(message, status, targetPath) {
   const text = String(message || "").trim();
   const lower = text.toLowerCase();
@@ -2025,7 +2057,7 @@ function subscriptionRowsWithProjection(rows) {
 
 async function getAdminDashboard(env) {
   const resources = await Promise.allSettled([
-    safeSupabaseRead(env, "account_profiles", "select=firebase_user_id,account_status,created_at,updated_at&limit=1000"),
+    safeSupabaseRead(env, "account_profiles", "select=firebase_uid,account_status,created_at,updated_at&limit=1000"),
     safeSupabaseRead(env, "account_subscriptions", "select=id,firebase_user_id,status,lifecycle_state,plan_term,is_current,integrity_state,expires_at,period_end_at,updated_at,created_at&limit=1000"),
     safeSupabaseRead(env, "app_sessions", "select=id,user_id,revoked_at,expires_at,last_seen_at,created_at&order=last_seen_at.desc&limit=1000"),
     safeSupabaseRead(env, "crash_logs", "select=id,error_type,message,fingerprint,happened_at,app_version,user_id&order=happened_at.desc&limit=500"),
@@ -2101,7 +2133,7 @@ async function listAdminUsers(url, env) {
   const subscriptionState = String(url.searchParams.get("subscription") || "").trim().toLowerCase();
   const sort = String(url.searchParams.get("sort") || "created_desc").trim().toLowerCase();
   const [profiles, subscriptions, sessions, loginRequests] = await Promise.all([
-    safeSupabaseRead(env, "account_profiles", "select=firebase_user_id,normalized_email,display_name,locale,account_status,email_verified,email_verified_at,verification_source,created_at,updated_at&limit=1000"),
+    safeSupabaseRead(env, "account_profiles", "select=firebase_uid,normalized_email,display_name,locale,account_status,email_verified,email_verified_at,verification_source,created_at,updated_at&limit=1000"),
     safeSupabaseRead(env, "account_subscriptions", "select=*&order=created_at.desc&limit=1000"),
     safeSupabaseRead(env, "app_sessions", "select=id,user_id,hwid,expires_at,revoked_at,created_at,last_seen_at&order=last_seen_at.desc&limit=2000"),
     safeSupabaseRead(env, "device_login_sessions", "select=id,user_id,hwid,status,expires_at,created_at,authorized_at,consumed_at&order=created_at.desc&limit=2000"),
@@ -2111,7 +2143,7 @@ async function listAdminUsers(url, env) {
   const loginRows = Array.isArray(loginRequests) ? loginRequests : [];
   let items = (Array.isArray(profiles) ? profiles : [])
     .map((profile) => {
-      const uid = String(profile?.firebase_user_id || "").trim();
+      const uid = String(profile?.firebase_uid || "").trim();
       const resolution = resolveSubscriptionTruth(subscriptionRows, {
         firebaseUid: uid,
         email: normalizeEmail(profile?.normalized_email),
@@ -2136,7 +2168,7 @@ async function listAdminUsers(url, env) {
     })
     .filter((profile) => {
       if (!search) return true;
-      return [profile.firebase_user_id, profile.email, profile.display_name, profile.account_status, profile.subscription_projection?.entitlement]
+      return [profile.firebase_uid, profile.email, profile.display_name, profile.account_status, profile.subscription_projection?.entitlement]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(search));
     });
@@ -2279,6 +2311,89 @@ function summarizeSubscriptionRow(row) {
   };
 }
 
+function replacementRecoverySeconds(row) {
+  if (!row || isUnlimitedExpiry(row?.expires_at)) return 0;
+  const expiry = Date.parse(String(row.expires_at || ""));
+  if (!Number.isFinite(expiry)) return 0;
+  return Math.max(0, Math.floor((expiry - Date.now()) / 1000));
+}
+
+async function produceReplacementRecoveryEvidence(env, input, preview, current, adminEmail, requestId) {
+  if (input.operation !== "replace_current" || !current?.id) return null;
+  const remainingSeconds = replacementRecoverySeconds(current);
+  if (remainingSeconds <= 0) return null;
+  const evidenceReference = `manual_grant:${requestId}:${current.id}`;
+  const payload = {
+    firebase_uid: current.firebase_user_id || input.target_firebase_uid || null,
+    subscription_id: current.id,
+    evidence_type: "subscription_replacement",
+    evidence_reference: evidenceReference,
+    remaining_seconds: remainingSeconds,
+    status: "available",
+    expires_at: addManualGrantDuration(new Date().toISOString(), 180, "days"),
+    source_type: "manual_grant_replace_current",
+    source_reference: evidenceReference,
+    original_period_start: current.period_start_at || current.starts_at || null,
+    original_period_end: current.period_end_at || current.expires_at || null,
+    lost_duration_seconds: remainingSeconds,
+    created_by: adminEmail,
+    creation_reason: input.reason || "subscription_replacement",
+    recovery_operation_id: isUuid(requestId) ? requestId : null,
+  };
+  payload.integrity_hash = await sha256Hex(stableStringify({
+    firebase_uid: payload.firebase_uid,
+    subscription_id: payload.subscription_id,
+    source_reference: payload.source_reference,
+    remaining_seconds: payload.remaining_seconds,
+    original_period_end: payload.original_period_end,
+  }));
+  let inserted = null;
+  try {
+    inserted = await supabaseRequest(env, "subscription_recovery_ledger", "POST", {
+      body: payload,
+      prefer: "return=representation",
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error || "error");
+    if (!/source_type|source_reference|original_period|lost_duration|created_by|creation_reason|integrity_hash|recovery_operation_id|column/i.test(message)) {
+      throw new Error(`recovery_evidence_create_failed:${message}`);
+    }
+    const legacyPayload = {
+      firebase_uid: payload.firebase_uid,
+      subscription_id: payload.subscription_id,
+      evidence_type: payload.evidence_type,
+      evidence_reference: payload.evidence_reference,
+      remaining_seconds: payload.remaining_seconds,
+      status: payload.status,
+      expires_at: payload.expires_at,
+    };
+    inserted = await supabaseRequest(env, "subscription_recovery_ledger", "POST", {
+      body: legacyPayload,
+      prefer: "return=representation",
+    }).catch((legacyError) => {
+      throw new Error(`recovery_evidence_create_failed:${legacyError instanceof Error ? legacyError.message : String(legacyError || "error")}`);
+    });
+  }
+  const row = Array.isArray(inserted) ? inserted[0] : inserted;
+  await appendAudit(env, {
+    type: "subscription_recovery_evidence_created",
+    entity: "subscription_recovery_ledger",
+    entity_id: row?.id || null,
+    actor: adminEmail,
+    payload: {
+      request_id: requestId,
+      source: "manual_grant_replace_current",
+      target_firebase_uid: payload.firebase_uid,
+      subscription_id: current.id,
+      remaining_seconds: remainingSeconds,
+      old_expiry: current.expires_at || null,
+      replacement_expiry: preview?.proposed_state?.expires_at || null,
+    },
+    at: new Date().toISOString(),
+  });
+  return row || null;
+}
+
 function detectManualGrantDuplicateGroups(rows) {
   const byUid = new Map();
   const byEmail = new Map();
@@ -2296,17 +2411,17 @@ function detectManualGrantDuplicateGroups(rows) {
 
 async function resolveManualGrantTarget(env, input) {
   const profileFilter = input.target_firebase_uid
-    ? `firebase_user_id=eq.${encodeURIComponent(input.target_firebase_uid)}`
+    ? `firebase_uid=eq.${encodeURIComponent(input.target_firebase_uid)}`
     : `normalized_email=eq.${encodeURIComponent(input.target_email)}`;
   const profiles = await safeSupabaseRead(
     env,
     "account_profiles",
-    `select=firebase_user_id,normalized_email,display_name,account_status,updated_at&${profileFilter}&limit=2`,
+    `select=firebase_uid,normalized_email,display_name,account_status,updated_at&${profileFilter}&limit=2`,
   );
   if (!Array.isArray(profiles) || profiles.length === 0) throw new Error("account_not_found");
   if (profiles.length > 1) throw new Error("account_identity_conflict");
   const profile = profiles[0];
-  const targetUid = String(profile.firebase_user_id || "").trim();
+  const targetUid = String(profile.firebase_uid || "").trim();
   if (!targetUid) throw new Error("firebase_uid_required");
   if (profile.account_status !== "active") throw new Error("account_not_active");
   const rows = await safeSupabaseRead(
@@ -2443,9 +2558,10 @@ async function buildManualGrantPreview(env, rawInput, adminEmail, options = {}) 
   const previewHash = await sha256Hex(stableStringify({
     target: previewPayload.target,
     current_id: previewPayload.current_subscription?.id || null,
+    current_updated_at: previewPayload.current_subscription?.updated_at || null,
     latest_id: previewPayload.latest_subscription?.id || null,
+    latest_updated_at: previewPayload.latest_subscription?.updated_at || null,
     requested_operation: previewPayload.requested_operation,
-    proposed_state: previewPayload.proposed_state,
     affected_rows: previewPayload.affected_rows,
     blocked: previewPayload.blocked,
   }));
@@ -2557,6 +2673,7 @@ async function executeManualSubscriptionGrant(request, env, adminEmail) {
   });
 
   const item = Array.isArray(changed) ? changed[0] : changed;
+  const recoveryEvidence = await produceReplacementRecoveryEvidence(env, input, preview, current, adminEmail, requestId);
   const autoAuthorized = isActiveSubscription(item)
     ? await authorizeMatchingAccessRequests(env, item).catch(() => 0)
     : 0;
@@ -2565,6 +2682,11 @@ async function executeManualSubscriptionGrant(request, env, adminEmail) {
     request_id: requestId,
     item,
     preview,
+    recovery_evidence_created: recoveryEvidence ? {
+      id: recoveryEvidence.id || null,
+      remaining_seconds: recoveryEvidence.remaining_seconds || null,
+      status: recoveryEvidence.status || null,
+    } : null,
     auto_authorized_requests: autoAuthorized,
   };
   await appendAudit(env, {
@@ -2583,6 +2705,7 @@ async function executeManualSubscriptionGrant(request, env, adminEmail) {
       old_canonical_state: preview.current_subscription,
       proposed_state: preview.proposed_state,
       final_state: summarizeSubscriptionRow(item),
+      recovery_evidence_created: recoveryEvidence ? recoveryEvidence.id || true : false,
       affected_row_ids: preview.affected_rows,
       old_expiry: preview.current_subscription?.expires_at || null,
       new_expiry: item?.expires_at || null,
@@ -3269,7 +3392,7 @@ async function resolveTamperAlert(alertId, request, env, context) {
 
 async function getAdminReadiness(env) {
   const checks = await Promise.allSettled([
-    safeSupabaseRead(env, "account_profiles", "select=firebase_user_id&limit=1"),
+    safeSupabaseRead(env, "account_profiles", "select=firebase_uid&limit=1"),
     safeSupabaseRead(env, "admin_operation_requests", "select=id&limit=1"),
     safeSupabaseRead(env, "admin_crash_group_state", "select=fingerprint&limit=1"),
   ]);
@@ -3288,7 +3411,7 @@ async function getAdminReadiness(env) {
     },
     admin_security: {
       layer1: adminLayer1Configured(env) ? "configured" : "not_configured",
-      role_assignments: String(env.ADMIN_ROLE_ASSIGNMENTS || "").trim() ? "configured" : "default_super_admin_compatibility",
+      role_assignments: adminRoleAssignmentsState(env),
       firebase_allowlist: parseAdminAllowlist(env).length ? "configured" : "missing",
     },
   };
@@ -3299,13 +3422,13 @@ async function getUserDetail(userKey, env) {
   const key = safeSearchTerm(userKey);
   const emailKey = key.includes("@") ? normalizeEmail(key) : "";
   const profileQuery = emailKey
-    ? `select=firebase_user_id,normalized_email,display_name,email_verified,email_verified_at,verification_source,auth_providers,locale,account_status,created_at,updated_at&normalized_email=eq.${encodeURIComponent(emailKey)}&limit=2`
-    : `select=firebase_user_id,normalized_email,display_name,email_verified,email_verified_at,verification_source,auth_providers,locale,account_status,created_at,updated_at&firebase_user_id=eq.${encodeURIComponent(key)}&limit=1`;
+    ? `select=firebase_uid,normalized_email,display_name,email_verified,email_verified_at,verification_source,auth_providers,locale,account_status,created_at,updated_at&normalized_email=eq.${encodeURIComponent(emailKey)}&limit=2`
+    : `select=firebase_uid,normalized_email,display_name,email_verified,email_verified_at,verification_source,auth_providers,locale,account_status,created_at,updated_at&firebase_uid=eq.${encodeURIComponent(key)}&limit=1`;
   const profiles = await safeSupabaseRead(env, "account_profiles", profileQuery);
   if (!Array.isArray(profiles) || profiles.length === 0) throw new Error("account_not_found");
   if (profiles.length > 1) throw new Error("account_identity_conflict");
   const profile = profiles[0];
-  const userId = String(profile.firebase_user_id || "").trim();
+  const userId = String(profile.firebase_uid || "").trim();
   const userEmail = normalizeEmail(profile.normalized_email);
   const subscriptionRows = await safeSupabaseRead(
     env,

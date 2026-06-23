@@ -11,6 +11,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const temp = await mkdtemp(path.join(tmpdir(), 'saturnws-phase-d-'))
 const bundle = path.join(temp, 'worker.mjs')
 const adminToken = 'phase-d-local-admin-token-2026'
+const authEmailToken = 'phase-d-local-auth-email-token-2026'
 const webhookKey = Buffer.alloc(32, 7)
 const webhookSecret = `whsec_${webhookKey.toString('base64')}`
 const userByToken = new Map([
@@ -37,23 +38,26 @@ const mf = new Miniflare({
   scriptPath: bundle,
   compatibilityDate: '2026-05-28',
   d1Databases: ['DB'],
+  r2Buckets: ['SUPPORT_ATTACHMENTS'],
   bindings: {
     POLICY_SIGNING_SEED_B64: Buffer.alloc(32, 3).toString('base64'),
     ADMIN_TOKEN_SHA256: createHash('sha256').update(adminToken).digest('hex'),
     EMAIL_OUTBOUND_ENABLED: 'true',
     EMAIL_INBOUND_ENABLED: 'true',
     EMAIL_SUPPORT_ENABLED: 'true',
-    EMAIL_AUTH_ENABLED: 'false',
+    EMAIL_AUTH_ENABLED: 'true',
     EMAIL_BILLING_ENABLED: 'false',
     EMAIL_RELEASE_ENABLED: 'false',
     EMAIL_SECURITY_ENABLED: 'false',
-    EMAIL_SCHEDULER_ENABLED: 'false',
+    EMAIL_SCHEDULER_ENABLED: 'true',
     EMAIL_FROM_SUPPORT: 'SaturnWS Support <support@mail.saturnws.com>',
     EMAIL_REPLY_DOMAIN: 'mail.saturnws.com',
     APP_PUBLIC_URL: 'https://saturnws.com',
     RESEND_SEND_API_KEY: 'local-send-key',
     RESEND_RECEIVE_API_KEY: 'local-receive-key',
     RESEND_WEBHOOK_SECRET: webhookSecret,
+    AUTH_EMAIL_ENQUEUE_TOKEN: authEmailToken,
+    EMAIL_SENSITIVE_PAYLOAD_KEY_B64: Buffer.alloc(32, 11).toString('base64'),
     RESEND_API_BASE: 'https://resend.local',
   },
   serviceBindings: {
@@ -113,10 +117,62 @@ try {
     return { response, body: await response.json() }
   }
 
+  const verificationCode = '482731'
+  const authEnqueueResponse = await mf.dispatchFetch('https://api.saturnws.com/v1/internal/email/auth/enqueue', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authEmailToken}` },
+    body: JSON.stringify({
+      event_type: 'auth.email_verification',
+      idempotency_key: 'auth-email-verification:fixture:1',
+      verification_request_id: 'fixture-verification-1',
+      user_id: 'firebase-user-a',
+      purpose: 'email_verification',
+      recipient: 'user-a@example.test',
+      locale: 'en',
+      payload: { code: verificationCode, expires_at: new Date(Date.now() + 600_000).toISOString() },
+    }),
+  })
+  assert.equal(authEnqueueResponse.status, 200)
+  const authEnqueueBody = await authEnqueueResponse.json()
+  const queuedAuthJob = await db.prepare('SELECT * FROM email_jobs WHERE id = ?1').bind(authEnqueueBody.job_id).first()
+  assert.equal(queuedAuthJob.status, 'queued')
+  assert.ok(queuedAuthJob.sensitive_payload_ciphertext)
+  assert.ok(!JSON.stringify(queuedAuthJob).includes(verificationCode), 'OTP must not be exposed outside encrypted payload')
+  await adminPost('/v1/admin/email/process', {})
+  const sentAuthJob = await db.prepare('SELECT status, sensitive_payload_ciphertext, sensitive_payload_purged_at FROM email_jobs WHERE id = ?1').bind(authEnqueueBody.job_id).first()
+  assert.equal(sentAuthJob.status, 'sent')
+  assert.equal(sentAuthJob.sensitive_payload_ciphertext, null)
+  assert.ok(sentAuthJob.sensitive_payload_purged_at)
+
   const createKey = 'ticket:create:a'
-  const created = await post('/v1/web/support/messages', { subject: 'Account help', body: 'Please review my account.', idempotency_key: createKey }, 'token-a', { 'Idempotency-Key': createKey })
+  const attachmentForm = new FormData()
+  attachmentForm.set('file', new File([Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10])], 'evidence.png', { type: 'image/png' }))
+  const encodedAttachment = new Request('https://local.test', { method: 'POST', body: attachmentForm })
+  const attachmentResponse = await mf.dispatchFetch('https://api.saturnws.com/v1/web/support/attachments', { method: 'POST', headers: { Authorization: 'Bearer token-a', 'Content-Type': encodedAttachment.headers.get('Content-Type') }, body: await encodedAttachment.arrayBuffer() })
+  const attachmentPayload = await attachmentResponse.json()
+  assert.equal(attachmentResponse.status, 200, JSON.stringify(attachmentPayload))
+  const created = await post('/v1/web/support/messages', { subject: 'Account help', body: 'Please review my account.', idempotency_key: createKey, attachment_ids: [attachmentPayload.attachment.id] }, 'token-a', { 'Idempotency-Key': createKey })
   assert.equal(created.response.status, 200)
   assert.ok(created.body.thread_id)
+  const attachmentThread = await post('/v1/web/support/thread', { thread_id: created.body.thread_id }, 'token-a')
+  assert.equal(attachmentThread.body.messages[0].attachments.length, 1)
+  const attachmentDownload = await mf.dispatchFetch(`https://api.saturnws.com/v1/web/support/attachments/${attachmentPayload.attachment.id}`, { headers: { Authorization: 'Bearer token-a' } })
+  assert.equal(attachmentDownload.status, 200)
+  assert.match(attachmentDownload.headers.get('content-disposition') || '', /attachment;/)
+  const foreignAttachmentDownload = await mf.dispatchFetch(`https://api.saturnws.com/v1/web/support/attachments/${attachmentPayload.attachment.id}`, { headers: { Authorization: 'Bearer token-b' } })
+  assert.equal(foreignAttachmentDownload.status, 404)
+  const orphanForm = new FormData()
+  orphanForm.set('file', new File([Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10])], 'orphan.png', { type: 'image/png' }))
+  const encodedOrphan = new Request('https://local.test', { method: 'POST', body: orphanForm })
+  const orphanResponse = await mf.dispatchFetch('https://api.saturnws.com/v1/web/support/attachments', { method: 'POST', headers: { Authorization: 'Bearer token-a', 'Content-Type': encodedOrphan.headers.get('Content-Type') }, body: await encodedOrphan.arrayBuffer() })
+  assert.equal(orphanResponse.status, 200)
+  const orphanPayload = await orphanResponse.json()
+  await db.prepare("UPDATE support_attachments SET created_at = datetime('now', '-2 days') WHERE id = ?1").bind(orphanPayload.attachment.id).run()
+  const cleanupRun = await adminPost('/v1/admin/email/process', {})
+  assert.equal(cleanupRun.body.processed.cleanup.attachmentsDeleted, 1)
+  const orphanRow = await db.prepare('SELECT status, deleted_at FROM support_attachments WHERE id = ?1').bind(orphanPayload.attachment.id).first()
+  assert.equal(orphanRow.status, 'deleted')
+  assert.ok(orphanRow.deleted_at)
   const duplicateCreate = await post('/v1/web/support/messages', { subject: 'Account help', body: 'Please review my account.', idempotency_key: createKey })
   assert.equal(duplicateCreate.body.thread_id, created.body.thread_id)
   assert.equal(duplicateCreate.body.duplicate, true)

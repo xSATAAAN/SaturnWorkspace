@@ -109,6 +109,29 @@ export type AccountSessionsResult = {
   devices: AccountDevice[]
 }
 
+export type AccountDeletionRequest = {
+  id: string
+  status: 'pending_deletion' | 'deletion_cancelled' | 'deletion_due' | 'on_hold' | string
+  requested_at: string
+  cooling_off_until: string
+  due_at: string
+  held_at?: string | null
+  cancelled_at?: string | null
+}
+
+export type AccountDeletionState = {
+  state: 'none' | 'pending_deletion' | 'deletion_cancelled' | 'deletion_due' | 'on_hold' | string
+  request: AccountDeletionRequest | null
+  purge_available: boolean
+  purge_mode: string
+}
+
+export type AccountDeletionStatusResult = {
+  success: boolean
+  account_status?: string
+  deletion: AccountDeletionState
+}
+
 export async function fetchAccountSubscription(idToken: string) {
   const response = await fetch(`${AUTH_BASE}/account/subscription`, {
     method: 'POST',
@@ -180,4 +203,37 @@ export async function revokeAllAccountSessions(idToken: string): Promise<void> {
   })
   const payload = (await response.json().catch(() => null)) as { success?: boolean; error?: string } | null
   if (!response.ok || !payload?.success) throw new Error(payload?.error || `account_sessions_revoke_failed_${response.status}`)
+}
+
+export async function fetchAccountDeletionStatus(idToken: string): Promise<AccountDeletionStatusResult> {
+  const response = await fetch(`${AUTH_BASE}/account/deletion/status`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+    body: JSON.stringify({}),
+  })
+  const payload = (await response.json().catch(() => null)) as (AccountDeletionStatusResult & { error?: string }) | null
+  if (!response.ok || !payload?.success) throw new Error(payload?.error || `account_deletion_status_failed_${response.status}`)
+  return payload
+}
+
+export async function requestAccountDeletion(idToken: string, reason?: string): Promise<AccountDeletionStatusResult> {
+  const response = await fetch(`${AUTH_BASE}/account/deletion/request`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+    body: JSON.stringify({ reason: reason || '' }),
+  })
+  const payload = (await response.json().catch(() => null)) as (AccountDeletionStatusResult & { error?: string; code?: string }) | null
+  if (!response.ok || !payload?.success) throw new Error(payload?.error || payload?.code || `account_deletion_request_failed_${response.status}`)
+  return payload
+}
+
+export async function cancelAccountDeletion(idToken: string): Promise<AccountDeletionStatusResult> {
+  const response = await fetch(`${AUTH_BASE}/account/deletion/cancel`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+    body: JSON.stringify({}),
+  })
+  const payload = (await response.json().catch(() => null)) as (AccountDeletionStatusResult & { error?: string }) | null
+  if (!response.ok || !payload?.success) throw new Error(payload?.error || `account_deletion_cancel_failed_${response.status}`)
+  return payload
 }
