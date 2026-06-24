@@ -31,6 +31,8 @@ const users = new Map([
   ['token-grace', { localId: 'uid-grace', email: 'grace@example.test', emailVerified: true }],
   ['token-other', { localId: 'uid-other', email: 'other@example.test', emailVerified: true }],
 ])
+const securityEmailToken = 'phase-c-security-email-token'
+const securityEmailRequests = []
 
 const jwtToken = (payload) => `test.${Buffer.from(JSON.stringify(payload)).toString('base64url')}.sig`
 const recentDeletionToken = jwtToken({ auth_time: Math.floor(Date.now() / 1000) })
@@ -95,6 +97,12 @@ async function mockFetch(input, init = {}) {
     }
     return Response.json({ error: { message: 'INVALID_LOGIN_CREDENTIALS' } }, { status: 401 })
   }
+  if (url.hostname === 'policy-email.test') {
+    assert.equal(request.headers.get('authorization'), `Bearer ${securityEmailToken}`)
+    const body = await request.json().catch(() => ({}))
+    securityEmailRequests.push(body)
+    return Response.json({ success: true, status: 'queued', job_id: `job-${securityEmailRequests.length}` })
+  }
   if (url.hostname !== 'supabase.test') throw new Error(`unexpected_fetch:${url}`)
   const table = url.pathname.split('/').filter(Boolean).at(-1)
   const rows = db[table]
@@ -129,6 +137,9 @@ const env = {
   DEVICE_LOGIN_URL: 'https://saturnws.com/account/signin',
   APP_ENV: 'test',
   APP_SESSION_TTL_DAYS: '30',
+  EMAIL_SECURITY_ENABLED: 'true',
+  AUTH_EMAIL_ENQUEUE_URL: 'https://policy-email.test/v1/internal/email/auth/enqueue',
+  AUTH_EMAIL_ENQUEUE_TOKEN: securityEmailToken,
 }
 
 async function call(pathname, body, token) {
@@ -231,6 +242,16 @@ assert.equal(unauthorizedRevoke.status, 404)
 const revoke = await call('/account/sessions/revoke', { session_id: ownedSession.id, scope: 'session' }, 'token-active')
 assert.equal(revoke.status, 200)
 
+const remainingActiveSession = db.app_sessions.find((row) => row.user_id === 'uid-active' && !row.revoked_at)
+assert.ok(remainingActiveSession)
+const revokeDevice = await call('/account/sessions/revoke', { session_id: remainingActiveSession.id, scope: 'device' }, 'token-active')
+assert.equal(revokeDevice.status, 200)
+assert.equal(
+  db.app_sessions.filter((row) => row.user_id === 'uid-active' && row.hwid === remainingActiveSession.hwid && !row.revoked_at).length,
+  0,
+)
+
+await link('token-active', '5'.repeat(32))
 const revokeAll = await call('/account/sessions/revoke-all', {}, 'token-active')
 assert.equal(revokeAll.status, 200)
 assert.equal(db.app_sessions.filter((row) => row.user_id === 'uid-active' && !row.revoked_at).length, 0)
@@ -262,6 +283,24 @@ assert.equal(db.account_profiles.find((row) => row.firebase_uid === 'uid-delete'
 const deletionAfterCancel = await call('/account/deletion/status', {}, recentDeletionToken)
 assert.equal(deletionAfterCancel.status, 200)
 assert.equal(deletionAfterCancel.body.deletion.state, 'none')
+
+const securityEvents = securityEmailRequests.map((item) => item.event_type)
+for (const requiredEvent of [
+  'security.new_login',
+  'security.session_revoked',
+  'security.device_revoked',
+  'security.all_sessions_revoked',
+  'account.deletion_requested',
+  'account.deletion_cancelled',
+]) {
+  assert.ok(securityEvents.includes(requiredEvent), `missing security email event: ${requiredEvent}`)
+}
+const securityKeys = securityEmailRequests.map((item) => item.idempotency_key)
+assert.equal(securityKeys.length, new Set(securityKeys).size, 'security email idempotency keys must be deterministic and unique per committed event')
+const securityPayloadText = JSON.stringify(securityEmailRequests)
+assert.equal(securityPayloadText.includes('stk_'), false, 'security email payload must not include app session tokens')
+assert.equal(securityPayloadText.includes('session_token'), false, 'security email payload must not include session token fields')
+assert.equal(securityPayloadText.includes('device_code'), false, 'security email payload must not include device codes')
 
 const source = fs.readFileSync(path.join(ROOT, 'src/index.ts'), 'utf8')
 for (const forbidden of ['console.log(sessionToken)', 'console.error(sessionToken)', 'session_token: sessionToken, error']) {

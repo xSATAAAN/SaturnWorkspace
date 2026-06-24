@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Check, Download, ExternalLink, MessageCircle, Sparkles } from 'lucide-react'
+import { Check, Download, ExternalLink, MessageCircle } from 'lucide-react'
 import { Button } from './Button'
 import { Badge, type Tone } from './Feedback'
 import { Card } from './DataDisplay'
@@ -20,9 +20,6 @@ export function PricingCard({
   featured,
   disabled,
   featuredLabel,
-  trialLabel,
-  savingsLabel,
-  availabilityLabel,
   onClick,
 }: {
   name: string
@@ -35,19 +32,13 @@ export function PricingCard({
   featured?: boolean
   disabled?: boolean
   featuredLabel?: string
-  trialLabel?: string
-  savingsLabel?: string
-  availabilityLabel?: string
   onClick?: () => void
 }) {
   return <Card className={`pricing-card${featured ? ' is-featured' : ''}${disabled ? ' is-disabled' : ''}`}>
     <div className="pricing-card__head"><h3>{name}</h3>{featured && featuredLabel ? <Badge tone="info">{featuredLabel}</Badge> : null}</div>
     {description ? <p className="pricing-card__description">{description}</p> : null}
     <div className="pricing-card__price">{originalPrice ? <del><bdi>{originalPrice}</bdi></del> : null}<strong><bdi>{price}</bdi></strong>{period ? <span>{period}</span> : null}</div>
-    {savingsLabel ? <div className="pricing-card__saving">{savingsLabel}</div> : null}
-    {trialLabel ? <div className="pricing-card__trial"><Sparkles size={15} /><strong>{trialLabel}</strong></div> : null}
     {features.length ? <ul>{features.map((feature) => <li key={feature}><Check size={15} />{feature}</li>)}</ul> : null}
-    {availabilityLabel ? <p className="pricing-card__availability">{availabilityLabel}</p> : null}
     <Button variant={featured && !disabled ? 'primary' : 'secondary'} fullWidth disabled={disabled} onClick={onClick}>{cta}</Button>
   </Card>
 }

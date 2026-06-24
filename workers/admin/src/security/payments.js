@@ -23,10 +23,17 @@ function cleanupRateBucket(now) {
 }
 
 export function enforceBrowserOrigin(request, env) {
-  const allowedOrigin = String(env.PAYMENTS_ALLOWED_ORIGIN || '').trim()
-  if (!allowedOrigin) return
+  const configuredOrigins = String(env.PAYMENTS_ALLOWED_ORIGIN || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+  const allowedOrigins = new Set([
+    'https://saturnws.com',
+    'https://www.saturnws.com',
+    ...configuredOrigins,
+  ])
   const origin = String(request.headers.get('Origin') || '').trim()
-  if (!origin || origin !== allowedOrigin) {
+  if (!origin || !allowedOrigins.has(origin)) {
     throw new Error('forbidden_origin')
   }
 }

@@ -2,7 +2,7 @@
 
 Updated: 2026-06-24
 
-Status: `PHASE_G_IMPLEMENTATION_COMPLETE_WITH_EXPLICIT_OPERATIONAL_CONFIGURATION_ITEMS`
+Status: `PHASE_G_PRE_ACCEPTANCE_COMPLETION_ACTIVE`
 
 This inventory classifies visible or callable product capabilities by operational state. It is not consolidated manual acceptance; manual acceptance remains deferred to Phase G.
 
@@ -34,9 +34,9 @@ This inventory classifies visible or callable product capabilities by operationa
 | Admin | Recovery evidence | Admin subscriptions | `/api/admin/subscriptions/recovery-evidence` and recovery flow | Supabase recovery ledger | Admin role | Applied Phase G migrations | `DESTRUCTIVE_APPROVAL_GATED`; evidence path implemented, no real recovery executed | Admin Phase G, migration postflight | Phase G fixture |
 | Admin | Support and communications | `/communications`, `/support` | Admin Worker proxy to Policy `/v1/admin/support*`, `/v1/admin/email*` | D1 support/email queue/events | Admin role | Policy email flags/secrets | `FULLY_OPERATIONAL_ENABLED` for support/email operations already enabled; QA delivery pending | Policy Phase D/G | Phase G |
 | Admin | Email admin test/retry/process | Communications | Policy `/v1/admin/email/test`, `/retry`, `/process`, `/status` | D1 email jobs/events | Admin role | Email secrets and category flags | `FULLY_OPERATIONAL_ENABLED` for auth/support/admin-test paths | Policy Phase D/G | Phase G |
-| Admin | Security email producers | Auth/Admin lifecycle/session operations | Auth/Admin producers -> Policy internal enqueue | D1 email jobs/events | Event owner/admin | `EMAIL_SECURITY_ENABLED`, enqueue token | `COMPLETE_EXTERNALLY_BLOCKED`; producers exist, flags remain disabled | Auth/Admin/Policy checks | Phase G after flag decision |
-| Admin | Admin alert producer: email queue final failure | Policy scheduler/outbox | Policy internal enqueue to `admin.email_queue_final_failure` | D1 email jobs/events | System/admin recipient | `EMAIL_ADMIN_ALERTS_ENABLED`, `EMAIL_ADMIN_ALERT_RECIPIENTS` | `COMPLETE_EXTERNALLY_BLOCKED`; destination config required | Policy Phase G content checks | Phase G after recipient |
-| Admin | Admin alert producers: webhook, cleanup, storage, schema, readiness, tamper | Policy webhook verifier, scheduler, cleanup, status diagnostics | Policy internal enqueue to `admin.webhook_repeated_failure`, `admin.email_cleanup_failure`, `admin.storage_config_failure`, `admin.schema_mismatch`, `admin.readiness_degraded`, `admin.tamper_detected` | D1 email jobs/events | System/admin recipient | `EMAIL_ADMIN_ALERTS_ENABLED`, `EMAIL_ADMIN_ALERT_RECIPIENTS` | `COMPLETE_EXTERNALLY_BLOCKED`; destination config required | Policy Phase G content checks | Phase G after recipient |
+| Admin | Security email producers | Auth/Admin lifecycle/session operations | Auth/Admin producers -> Policy internal enqueue | D1 email jobs/events | Event owner/admin | `EMAIL_SECURITY_ENABLED`, enqueue token | `DEPLOYED_PENDING_SAFE_EVENT_VERIFICATION`; flags and enqueue secrets deployed, no real lifecycle mutation executed | Auth/Admin/Policy checks | Phase G |
+| Admin | Admin alert producer: email queue final failure | Policy scheduler/outbox | Policy internal enqueue to `admin.email_queue_final_failure` | D1 email jobs/events | System/admin recipient | `EMAIL_ADMIN_ALERTS_ENABLED`, `EMAIL_ADMIN_ALERT_RECIPIENTS` | `DEPLOYED_PENDING_SAFE_EVENT_VERIFICATION`; flag and recipient secret deployed, no false incident generated | Policy Phase G alert checks | Phase G |
+| Admin | Admin alert producers: webhook, cleanup, storage, schema, readiness, tamper | Policy webhook verifier, scheduler, cleanup, status diagnostics | Policy internal enqueue to `admin.webhook_repeated_failure`, `admin.email_cleanup_failure`, `admin.storage_config_failure`, `admin.schema_mismatch`, `admin.readiness_degraded`, `admin.tamper_detected` | D1 email jobs/events | System/admin recipient | `EMAIL_ADMIN_ALERTS_ENABLED`, `EMAIL_ADMIN_ALERT_RECIPIENTS` | `DEPLOYED_PENDING_SAFE_EVENT_VERIFICATION`; flag and recipient secret deployed, no false incident generated | Policy Phase G alert checks | Phase G |
 | Admin | Diagnostics and tamper resolution | Admin diagnostics | `/api/admin/crash-*`, `/api/admin/tamper-alerts*` | Supabase/R2 fallback | Admin role | Admin auth | `FULLY_OPERATIONAL_ENABLED` | Admin Phase F | Phase G |
 | Admin | Policy, invite, release, promotions management | Admin policy/release/commerce pages | Admin/Policy routes | Supabase, D1, R2 | Admin role | Admin auth | `FULLY_OPERATIONAL_ENABLED` for previews/metadata; live publish/force/kill actions are gated | Admin/Policy Phase F/G | Phase G |
 | Admin | Live release publish, forced update, kill switch | Admin confirmation modals | Admin/Policy update routes | R2/D1/Supabase | Admin role | Explicit user approval | `DESTRUCTIVE_APPROVAL_GATED` | Review-step tests | Separate approval |
@@ -55,4 +55,4 @@ This inventory classifies visible or callable product capabilities by operationa
 - Real checkout, billing emails, invoices, refunds, and payment webhooks remain externally blocked.
 - Irreversible account purge is not implemented.
 - Real production release publication, forced update, and kill switch activation require explicit approval.
-- Multi-role admin operations require `ADMIN_ROLE_ASSIGNMENTS` configuration before acceptance.
+- Multi-role admin acceptance still requires `ADMIN_ROLE_ASSIGNMENTS` configuration; security/admin-alert email rollout is deployed and now needs safe event-delivery verification.

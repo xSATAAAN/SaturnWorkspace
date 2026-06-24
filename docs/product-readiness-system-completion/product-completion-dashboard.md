@@ -11,12 +11,12 @@ Updated: 2026-06-24
 | D - Support and notifications | `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE` | Support ownership, webhook, retry, idempotency, rate-limit, lock, and private attachment contract tests pass. |
 | E - Commercial truth | `COMPLETE_EXCEPT_WAITING_EXTERNAL_INTEGRATION` | Plan catalog and entitlement truth are live; checkout remains disabled until a real payment provider is approved and mapped. |
 | F - Admin completion | `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE` | Admin schema contracts, RBAC paths, account/subscription operations, diagnostics, and readiness checks pass. |
-| G - Pre-acceptance completion | `PHASE_G_IMPLEMENTATION_COMPLETE_WITH_EXPLICIT_OPERATIONAL_CONFIGURATION_ITEMS` | Implementation work for the current Phase G pre-acceptance batch is complete. Consolidated manual acceptance has not started, and the remaining items are explicit operational configuration or manual-acceptance items. |
+| G - Pre-acceptance completion | `PHASE_G_PRE_ACCEPTANCE_COMPLETION_ACTIVE` | Phase G pre-acceptance remediation is active again because live product evidence contradicted prior reports. Consolidated manual acceptance has not started. |
 
 ## Production Evidence
 
 - Canonical repository: `D:\SaturnWS\github-deploy\SaturnWorkspace`.
-- Canonical `main` contains the Phase G pre-acceptance hardening changes. Live frontend verification is recorded against the GitHub Pages deployment and bundle below.
+- Canonical local worktree contains the current Phase G pre-acceptance hardening changes. These changes are pending commit/push for GitHub Pages deployment and final live frontend bundle verification.
 - Supabase project: `Saturn Workspace` / ref `iqvwoivlamglyblftwez`.
 - Applied Supabase migrations:
   - `20260623214309 phase_g_recovery_deletion`
@@ -31,14 +31,14 @@ Updated: 2026-06-24
 - Worker flags in source:
   - Auth: `EMAIL_AUTH_ENABLED=true`.
   - Policy: `EMAIL_OUTBOUND_ENABLED=true`, `EMAIL_INBOUND_ENABLED=true`, `EMAIL_SUPPORT_ENABLED=true`, `EMAIL_AUTH_ENABLED=true`, `EMAIL_SCHEDULER_ENABLED=true`.
-  - Security email producers exist in the current worktree for selected committed session, device, and account-lifecycle events, but `EMAIL_SECURITY_ENABLED=false`.
-  - Admin alert producers exist in the current worktree for final email queue failure, webhook verification failure, cleanup failure, storage configuration failure, schema mismatch, readiness degradation, and high-severity tamper signals; `EMAIL_ADMIN_ALERTS_ENABLED=false` and recipients are not configured.
+  - Security email producers exist in the current worktree for selected committed session, device, and account-lifecycle events. `EMAIL_SECURITY_ENABLED=true` is deployed on Auth `53764ba0-207e-42e7-84f8-4e59741d0a06`, Admin `85b71833-73d3-445a-a498-d8c1f3b4e9ef`, and Policy `cec58841-cbc9-44e4-853f-054425d29ecc`; production-safe event delivery verification remains pending.
+  - Admin alert producers exist in the current worktree for final email queue failure, webhook verification failure, cleanup failure, storage configuration failure, schema mismatch, readiness degradation, and high-severity tamper signals. `EMAIL_ADMIN_ALERTS_ENABLED=true` is deployed on Policy `cec58841-cbc9-44e4-853f-054425d29ecc`, `EMAIL_ADMIN_ALERT_RECIPIENTS` is configured as a Policy Worker secret, and safe alert-delivery verification remains pending.
   - Billing and release email categories remain disabled.
 - Secret inventory:
   - Policy Worker has `RESEND_SEND_API_KEY`, `RESEND_RECEIVE_API_KEY`, and `RESEND_WEBHOOK_SECRET`.
   - Auth Worker has `AUTH_EMAIL_ENQUEUE_TOKEN` and `EMAIL_VERIFICATION_PEPPER`.
   - Admin Worker does not currently show `ADMIN_ROLE_ASSIGNMENTS`; multi-role RBAC is therefore `OPERATIONAL_CONFIGURATION_REQUIRED`.
-  - `EMAIL_ADMIN_ALERT_RECIPIENTS` is not configured; admin alert delivery must stay disabled.
+  - `ADMIN_EMAIL_ENQUEUE_TOKEN` is configured on Admin and Policy Workers so Admin account lifecycle security emails can use the internal enqueue path after deployment.
 - Tests run during Phase G continuation:
   - Repository mojibake scan: passed.
   - Policy `test:phase-g`: passed.
@@ -69,17 +69,17 @@ Updated: 2026-06-24
 - Repository-wide mojibake guard now scans runtime source, Workers, AGENTS, and generated `site/dist` when requested.
 - Email catalog Phase G test renders Arabic/English HTML and plain text for each template and blocks mojibake, missing charset, missing RTL/LTR wrappers, empty CTA URLs, unsafe interpolation, disabled test sends, and implementation vocabulary leakage.
 - Billing and release email templates remain disabled because no real committed payment/release event source is active.
-- Security email producers were added in source for new desktop device link, session revoke, device revoke, revoke-all, deletion request/cancel, account suspend, and account reactivate. The category remains disabled until activation, destination, preference, and acceptance decisions are complete.
-- Admin alert producer coverage is implemented in source for the required operational families with deterministic idempotency/cooldown. Delivery remains disabled until recipients, rollout, and manual acceptance are configured.
-- Public pricing copy and card presentation were updated to the approved current prices and promotional trial language. Backend catalog remains price/status truth, while user-facing plan differentiators are localized in the content layer.
-- Public plan catalog CORS source was repaired to allow Saturn public origins as well as Admin origins. Production CORS verification is required after Admin Worker deployment.
-- Legacy root static website artifacts were removed from source. GitHub Pages continues to publish `site/dist`, and the cutover guard now blocks known legacy public bundle tokens from returning. Live bundle verification for this batch: `/assets/index-C4mJsmbc.js` contained the approved weekly/monthly/annual pricing and no legacy public tokens.
+- Security email producers were added in source for new desktop device link, session revoke, device revoke, revoke-all, deletion request/cancel, account suspend, and account reactivate. Local producer tests pass, category flags are deployed, and no production lifecycle mutation was executed for verification.
+- Admin alert producer coverage is implemented in source for the required operational families with deterministic idempotency/cooldown. The approved recipient is configured as a Worker secret, category flags are deployed, and no false production incident was generated.
+- Public pricing copy and card presentation were updated to the approved current prices and promotional trial language. Backend catalog remains price/status truth, while user-facing plan differentiators are localized in the content layer. GitHub Pages deployment and live bundle verification are pending for the current worktree.
+- Public plan catalog CORS source was repaired to allow Saturn public origins as well as Admin origins. Post-deploy verification confirmed `https://admin-api.saturnws.com/api/plans/catalog` returns 200 with `Access-Control-Allow-Origin: https://saturnws.com` for the public origin.
+- Legacy root static website artifacts were removed from source. GitHub Pages continues to publish `site/dist`, and the cutover guard blocks known legacy public bundle tokens from returning. The current local build produced `site/dist/assets/index-CIRJ2UvB.js`; live bundle verification is pending until the final commit is pushed and GitHub Pages deploys it.
 
 ## Operational Configuration Required
 
 | Item | State | Required action |
 | --- | --- | --- |
-| `ADMIN_ROLE_ASSIGNMENTS` | `OPERATIONAL_CONFIGURATION_REQUIRED` | Configure UID-based role JSON as a Worker secret before multi-role operations. Do not use email identity. |
+| `ADMIN_ROLE_ASSIGNMENTS` | `OPERATIONAL_CONFIGURATION_REQUIRED` | Configure UID-based role JSON as an Admin Worker secret before multi-role acceptance. Do not use email identity. The current UID was not guessed or printed. |
 | Real payment provider | `WAITING_EXTERNAL` | Approve provider, plan mappings, webhook contract, and rollout before checkout or billing emails are enabled. |
 | QA email delivery acceptance | `PENDING_MANUAL_ACCEPTANCE` | Use a dedicated QA recipient in Phase G to confirm provider delivery without exposing OTP values. |
 | QA Desktop Setup artifact | `QA_ARTIFACT_BUILT_PENDING_MANUAL_ACCEPTANCE` | Local artifact: `D:\SaturnWS\build-output\phase-g-qa-installed-channel-20260624-131944\setup\SaturnWorkspace-Setup-1.0.7-beta-phase-g-qa.exe`; SHA256 `527C21D6A87720DB31E0EC4A8F59EA6FF2299C928C1B83447E2AC1E6AAA45DDD`. Not published. |
@@ -95,4 +95,4 @@ Updated: 2026-06-24
 - No live kill switch or forced-update policy was enabled.
 - No irreversible account deletion or purge endpoint was implemented.
 
-Implementation state: `PHASE_G_IMPLEMENTATION_COMPLETE_WITH_EXPLICIT_OPERATIONAL_CONFIGURATION_ITEMS`.
+Current state: `PHASE_G_PRE_ACCEPTANCE_COMPLETION_ACTIVE`.

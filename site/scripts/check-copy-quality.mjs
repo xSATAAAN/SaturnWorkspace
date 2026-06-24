@@ -90,8 +90,35 @@ const trustClaimFragments = [
 
 const failures = []
 
+const pricingBannedFragments = [
+  'Choose the access period',
+  'access period',
+  'Weekly access',
+  'Monthly access',
+  'Annual access',
+  'launch pricing',
+  'Current launch',
+  'Current discount from',
+  'Launch price',
+  'سعر الإطلاق',
+  'مرحلة الإطلاق',
+  'مدة الوصول',
+  'وصول أسبوعي',
+  'وصول شهري',
+  'وصول سنوي',
+  'خصم حالي من',
+]
+
+const pricingSourceFragments = [
+  'src/new-ui/content/publicCopy.ts',
+  'src/new-ui/i18n/messages.ts',
+  'src/new-ui/pages/public/PublicPages.tsx',
+  'src/new-ui/pages/production/ProductionPages.tsx',
+  'src/new-ui/components/ui/ProductCards.tsx',
+]
+
 const stateFixtures = [
-  { id: 'pricing-normal', state: 'normal', title: 'Access that fits', description: 'Choose a plan', cta: 'Choose plan', actionable: true },
+  { id: 'pricing-normal', state: 'normal', title: 'Saturn Workspace plans', description: 'Every current plan includes the same Saturn Workspace features.', cta: 'Subscribe', actionable: true },
   { id: 'pricing-loading', state: 'loading', title: 'Loading', description: '', cta: '', actionable: false },
   { id: 'pricing-empty', state: 'empty', title: 'No plans are published', description: '', cta: '', actionable: false },
   { id: 'pricing-unavailable', state: 'unavailable', title: 'Prices could not be loaded', description: 'Try again to load the available plans.', cta: 'Try again', actionable: true },
@@ -137,6 +164,11 @@ function walk(dir) {
       trustClaimFragments.forEach((phrase) => {
         if (line.includes(phrase)) failures.push(`${relative(root, path)}:${index + 1}: trust claim: ${phrase}`)
       })
+      if (pricingSourceFragments.some((fragment) => rel === fragment)) {
+        pricingBannedFragments.forEach((phrase) => {
+          if (line.includes(phrase)) failures.push(`${relative(root, path)}:${index + 1}: pricing language: ${phrase}`)
+        })
+      }
     })
   }
 }

@@ -396,9 +396,21 @@ function AdminEmailOperationsSkeleton() {
   return <><PageHeaderSkeleton actions /><div className="admin-metric-strip">{Array.from({ length: 10 }).map((_, index) => <StatCard key={index} label={<Skeleton width="86px" height={12} />} value={<Skeleton width="44px" height={24} />} />)}</div><div className="admin-overview-grid"><Card><SectionHeaderSkeleton /><SkeletonStack rows={4} /></Card><Card><SectionHeaderSkeleton /><div className="cluster"><Skeleton width="86px" height={22} /><Skeleton width="96px" height={22} /><Skeleton width="84px" height={22} /></div></Card></div><Card><SectionHeaderSkeleton /><div className="settings-form"><div className="form-grid"><Skeleton width="100%" height={44} /><Skeleton width="100%" height={44} /><Skeleton width="100%" height={44} /></div><div className="cluster"><Skeleton width="120px" height={40} /><Skeleton width="140px" height={40} /></div></div></Card><div className="admin-tab-panel"><TablePanelSkeleton columns={5} rows={5} /></div></>
 }
 
+function userFacingErrorMessage(error: string, locale: 'ar' | 'en') {
+  const key = String(error || '').trim().toLowerCase()
+  if (key === 'origin_not_allowed' || key === 'forbidden_origin') {
+    return copyByLocale(
+      locale,
+      'This request was blocked by the site origin policy. Open the admin panel from admin.saturnws.com and retry.',
+      'تم حظر الطلب بسبب سياسة مصدر الموقع. افتح لوحة الإدارة من admin.saturnws.com ثم أعد المحاولة.',
+    )
+  }
+  return error
+}
+
 function ErrorBlock({ error, onRetry }: { error: string; onRetry?: () => void }) {
-  const { t } = useExperience()
-  return <Alert title={t('failed')} tone="danger" action={onRetry ? <Button size="sm" onClick={onRetry}>{t('retry')}</Button> : undefined}>{error}</Alert>
+  const { t, locale } = useExperience()
+  return <Alert title={t('failed')} tone="danger" action={onRetry ? <Button size="sm" onClick={onRetry}>{t('retry')}</Button> : undefined}>{userFacingErrorMessage(error, locale)}</Alert>
 }
 
 function authErrorMessage(error: unknown, t: (key: MessageKey) => string) {
@@ -458,17 +470,7 @@ function PricingSection({ page, routeState, plans, loading, error, reload, navig
   const { t, locale } = useExperience()
   const { ready, user } = useAuthState()
   const c = publicCopy[locale]
-  const sharedBenefits = [c.featureWorkspace, c.featureProfiles, c.featureRecovery, c.featureUpdates]
-  const differentiatorsForPlan = (plan: PlanInfo) => {
-    if (plan.id === 'weekly') return [copyByLocale(locale, 'Weekly flexibility without a long commitment.', 'مرونة أسبوعية بدون التزام طويل.')]
-    if (plan.id === 'monthly') return [copyByLocale(locale, 'Current launch pricing for regular use.', 'سعر إطلاق حالي للاستخدام المنتظم.')]
-    return [copyByLocale(locale, 'Largest current discount for long-term use.', 'أكبر خصم حالي للاستخدام طويل المدة.')]
-  }
-  const savingsLabelForPlan = (plan: PlanInfo) => {
-    if (!plan.originalPrice) return undefined
-    return copyByLocale(locale, `Current discount from ${plan.originalPrice} to ${plan.price}`, `خصم حالي من ${plan.originalPrice} إلى ${plan.price}`)
-  }
-  const checkoutFeaturesForPlan = (plan: PlanInfo | null) => plan ? [...sharedBenefits, ...differentiatorsForPlan(plan)] : []
+  const checkoutFeaturesForPlan = (plan: PlanInfo | null) => plan ? [c.featureWorkspace] : []
   const [selectedPlan, setSelectedPlan] = useState<PlanInfo | null>(null)
   const requestedPlan = readCheckoutPlan(routeState)
   const requestedCheckoutPlan = ready && user && requestedPlan && !loading
@@ -489,15 +491,19 @@ function PricingSection({ page, routeState, plans, loading, error, reload, navig
   }
   const getCta = (plan: PlanInfo) => {
     if (!ready) return t('loading')
-    if (!plan.checkoutEnabled) return t('unavailable')
-    if (user) return locale === 'ar' ? 'اختر الخطة' : 'Choose plan'
-    return plan.trialDays > 0 ? (locale === 'ar' ? 'ابدأ التجربة المجانية' : 'Start free trial') : t('getStarted')
+    if (!plan.enabled || !plan.checkoutEnabled) return copyByLocale(locale, 'Not available', 'غير متاح حاليًا')
+    return user ? copyByLocale(locale, 'Subscribe', 'اشترك') : t('signUp')
   }
-  return <section className={`marketing-section pricing-section${compact ? '' : ' pricing-page'}`}><div className="container"><header className="marketing-heading marketing-heading--center marketing-heading--wide">{compact ? <h2>{c.pricingTitle}</h2> : <h1>{c.pricingTitle}</h1>}<p>{c.pricingBody}</p></header>{loading ? <LoadingBlock label={t('loading')} /> : error ? <EmptyState icon={CreditCard} title={copyByLocale(locale, 'Prices could not be loaded', 'تعذر تحميل الأسعار')} body={copyByLocale(locale, 'Try again to load the available plans.', 'أعد المحاولة لتحميل الخطط المتاحة.')} action={<Button onClick={reload}>{t('retry')}</Button>} /> : plans.length ? <><div className="pricing-promo">{c.trialPromo}</div><div className="pricing-included"><strong>{c.compareTitle}</strong>{sharedBenefits.map((feature) => <span key={feature}><Check size={14} />{feature}</span>)}</div><div className="pricing-grid">{plans.map((plan) => {
-    const trialLabel = plan.trialDays > 0 ? copyByLocale(locale, `${plan.trialDays} free trial days before first charge`, `${plan.trialDays} أيام تجربة مجانية قبل أول تحصيل`) : undefined
-    const availabilityLabel = ready && (!plan.enabled || !plan.checkoutEnabled) ? copyByLocale(locale, 'Subscription action is not available now.', 'إجراء الاشتراك غير متاح الآن.') : undefined
-    return <PricingCard key={`${plan.id}:${plan.version}`} name={plan.name} description={plan.description} price={plan.price} originalPrice={plan.originalPrice} period={plan.period} features={differentiatorsForPlan(plan)} cta={getCta(plan)} featured={plan.id === 'monthly'} featuredLabel={c.recommended} trialLabel={trialLabel} savingsLabel={savingsLabelForPlan(plan)} availabilityLabel={availabilityLabel} disabled={!ready || !plan.enabled || !plan.checkoutEnabled} onClick={() => choosePlan(plan)} />
-  })}</div><p className="pricing-trust-note"><ShieldCheck size={15} />{c.trustNote}</p></> : <EmptyState icon={CreditCard} title={copyByLocale(locale, 'No plans are published', 'لا توجد خطط منشورة')} body="" />}</div><CheckoutDialog open={Boolean(activeCheckoutPlan)} plan={activeCheckoutPlan} user={user} features={checkoutFeaturesForPlan(activeCheckoutPlan)} onClose={closeCheckout} /></section>
+  const descriptionForPlan = (plan: PlanInfo) => {
+    if (plan.id === 'weekly') return c.weeklyBody
+    if (plan.id === 'monthly') return c.monthlyBody
+    if (plan.id === 'annual' || plan.id === 'yearly') return c.annualBody
+    return ''
+  }
+  const checkoutUnavailable = plans.length > 0 && !plans.some((plan) => plan.enabled && plan.checkoutEnabled)
+  return <section className={`marketing-section pricing-section${compact ? '' : ' pricing-page'}`}><div className="container"><header className="marketing-heading marketing-heading--center marketing-heading--wide">{compact ? <h2>{c.pricingTitle}</h2> : <h1>{c.pricingTitle}</h1>}<p>{c.pricingBody}</p></header>{loading ? <LoadingBlock label={t('loading')} /> : error ? <EmptyState icon={CreditCard} title={copyByLocale(locale, 'Prices could not be loaded', 'تعذر تحميل الأسعار')} body={copyByLocale(locale, 'Try again to load the available plans.', 'أعد المحاولة لتحميل الخطط المتاحة.')} action={<Button onClick={reload}>{t('retry')}</Button>} /> : plans.length ? <><div className="pricing-included"><strong>{c.compareTitle}</strong><span>{c.featureWorkspace}</span><span>{c.trialPromo}</span></div>{checkoutUnavailable ? <Alert title={copyByLocale(locale, 'Checkout unavailable', 'الدفع غير متاح حاليًا')} tone="info">{c.trustNote}</Alert> : null}<div className="pricing-grid">{plans.map((plan) => {
+    return <PricingCard key={`${plan.id}:${plan.version}`} name={plan.name} description={descriptionForPlan(plan)} price={plan.price} originalPrice={plan.originalPrice} period={plan.period} features={[]} cta={getCta(plan)} featured={plan.id === 'monthly'} featuredLabel={c.recommended} disabled={!ready || !plan.enabled || !plan.checkoutEnabled} onClick={() => choosePlan(plan)} />
+  })}</div></> : <EmptyState icon={CreditCard} title={copyByLocale(locale, 'No plans are published', 'لا توجد خطط منشورة')} body="" />}</div><CheckoutDialog open={Boolean(activeCheckoutPlan)} plan={activeCheckoutPlan} user={user} features={checkoutFeaturesForPlan(activeCheckoutPlan)} onClose={closeCheckout} /></section>
 }
 
 function FaqSection() {
@@ -1274,7 +1280,8 @@ void [AdminOverviewSkeleton, AdminSubscriptionsSkeleton, GrantSubscriptionDrawer
 function AdminReleases() {
   const { t, locale } = useExperience()
   const adapters = useAdapters()
-  const release = useAsyncData(() => adapters.releases.getLatest('beta'), [adapters])
+  const releases = useAsyncData(() => adapters.admin.listReleases(), [adapters])
+  const latestRelease = releases.data?.[0] || null
   const [version, setVersion] = useState('')
   const [channel, setChannel] = useState('beta')
   const [notes, setNotes] = useState('')
@@ -1307,14 +1314,14 @@ function AdminReleases() {
       setNotice(t('success'))
       setPreviewOpen(false)
       setAcknowledged(false)
-      release.reload()
+      releases.reload()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'release_publish_failed')
     } finally {
       setBusy(false)
     }
   }
-  return <><PageHeader title={t('releases')} description={t('managedUpdates')} />{release.error ? <ErrorBlock error={release.error} onRetry={release.reload} /> : <Card><dl className="detail-list"><div><dt>{t('version')}</dt><dd>{release.data?.version || t('unavailable')}</dd></div><div><dt>{t('mandatory')}</dt><dd>{release.data?.mandatory ? t('enabled') : t('disabled')}</dd></div><div><dt>SHA256</dt><dd>{release.data?.sha256 || '—'}</dd></div></dl></Card>}<Card><SectionHeader title={t('publishRelease')} description={t('managedUpdates')} /><form className="settings-form" onSubmit={submit}><div className="form-grid"><FormField label={t('version')} htmlFor="release-version" required><Input id="release-version" value={version} onChange={(event) => setVersion(event.target.value)} required /></FormField><FormField label={t('channel')} htmlFor="release-channel" required><Select id="release-channel" value={channel} onChange={(event) => setChannel(event.target.value)}><option value="beta">{t('beta')}</option><option value="stable">{t('stable')}</option></Select></FormField></div><div className="form-grid"><FormField label={t('type')} htmlFor="release-artifact"><Select id="release-artifact" value={artifactType} onChange={(event) => setArtifactType(event.target.value as 'portable' | 'installed')}><option value="installed">{copyByLocale(locale, 'Installed update', 'تحديث النسخة المثبتة')}</option><option value="portable">{copyByLocale(locale, 'Portable application', 'نسخة محمولة')}</option></Select></FormField><FormField label={t('availability')} htmlFor="release-mode"><Select id="release-mode" value={updateMode} onChange={(event) => setUpdateMode(event.target.value as 'optional' | 'force' | 'required' | 'silent')}><option value="optional">{copyByLocale(locale, 'Optional', 'اختياري')}</option><option value="required">{copyByLocale(locale, 'Required', 'مطلوب')}</option><option value="force">{copyByLocale(locale, 'Mandatory', 'إجباري')}</option><option value="silent">{copyByLocale(locale, 'Background', 'في الخلفية')}</option></Select></FormField></div><FormField label={t('uploadArtifact')} htmlFor="release-file"><Input id="release-file" type="file" onChange={(event) => setFile(event.target.files?.[0] || null)} /></FormField><FormField label={t('releaseNotes')} htmlFor="release-notes"><Textarea id="release-notes" value={notes} onChange={(event) => setNotes(event.target.value)} /></FormField><label className="ui-checkbox"><input type="checkbox" checked={mandatory} onChange={(event) => setMandatory(event.target.checked)} />{t('mandatory')}</label><Button type="submit" variant="primary" loading={busy}>{copyByLocale(locale, 'Review release', 'مراجعة الإصدار')}</Button>{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}</form></Card><Modal open={previewOpen} onClose={() => setPreviewOpen(false)} title={copyByLocale(locale, 'Confirm release publication', 'تأكيد نشر الإصدار')} description={copyByLocale(locale, 'Review the artifact and targeting before publishing.', 'راجع الملف والاستهداف قبل النشر.')} closeLabel={t('close')} footer={<><Button onClick={() => setPreviewOpen(false)}>{copyByLocale(locale, 'Back', 'رجوع')}</Button><Button variant="danger" loading={busy} disabled={!acknowledged} onClick={confirmPublish}>{copyByLocale(locale, 'Publish release', 'نشر الإصدار')}</Button></>}><div className="stack"><dl className="detail-list"><div><dt>{t('version')}</dt><dd>{version}</dd></div><div><dt>{t('channel')}</dt><dd>{channel}</dd></div><div><dt>{t('type')}</dt><dd>{artifactType}</dd></div><div><dt>{t('uploadArtifact')}</dt><dd>{file ? `${file.name} · ${file.size} bytes` : copyByLocale(locale, 'No new artifact', 'لا يوجد ملف جديد')}</dd></div><div><dt>{t('mandatory')}</dt><dd>{mandatory ? t('enabled') : t('disabled')}</dd></div></dl><label className="ui-check"><input type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} /><span>{copyByLocale(locale, 'I reviewed the release scope and artifact.', 'راجعت نطاق الإصدار والملف.')}</span></label></div></Modal></>
+  return <><PageHeader title={t('releases')} description={t('managedUpdates')} />{releases.error ? <ErrorBlock error={releases.error} onRetry={releases.reload} /> : <Card><dl className="detail-list"><div><dt>{t('version')}</dt><dd>{latestRelease?.version || t('unavailable')}</dd></div><div><dt>{t('mandatory')}</dt><dd>{latestRelease?.mandatory ? t('enabled') : t('disabled')}</dd></div><div><dt>SHA256</dt><dd>{latestRelease?.download_sha256 || '—'}</dd></div></dl></Card>}<Card><SectionHeader title={t('publishRelease')} description={t('managedUpdates')} /><form className="settings-form" onSubmit={submit}><div className="form-grid"><FormField label={t('version')} htmlFor="release-version" required><Input id="release-version" value={version} onChange={(event) => setVersion(event.target.value)} required /></FormField><FormField label={t('channel')} htmlFor="release-channel" required><Select id="release-channel" value={channel} onChange={(event) => setChannel(event.target.value)}><option value="beta">{t('beta')}</option><option value="stable">{t('stable')}</option></Select></FormField></div><div className="form-grid"><FormField label={t('type')} htmlFor="release-artifact"><Select id="release-artifact" value={artifactType} onChange={(event) => setArtifactType(event.target.value as 'portable' | 'installed')}><option value="installed">{copyByLocale(locale, 'Installed update', 'تحديث النسخة المثبتة')}</option><option value="portable">{copyByLocale(locale, 'Portable application', 'نسخة محمولة')}</option></Select></FormField><FormField label={t('availability')} htmlFor="release-mode"><Select id="release-mode" value={updateMode} onChange={(event) => setUpdateMode(event.target.value as 'optional' | 'force' | 'required' | 'silent')}><option value="optional">{copyByLocale(locale, 'Optional', 'اختياري')}</option><option value="required">{copyByLocale(locale, 'Required', 'مطلوب')}</option><option value="force">{copyByLocale(locale, 'Mandatory', 'إجباري')}</option><option value="silent">{copyByLocale(locale, 'Background', 'في الخلفية')}</option></Select></FormField></div><FormField label={t('uploadArtifact')} htmlFor="release-file"><Input id="release-file" type="file" onChange={(event) => setFile(event.target.files?.[0] || null)} /></FormField><FormField label={t('releaseNotes')} htmlFor="release-notes"><Textarea id="release-notes" value={notes} onChange={(event) => setNotes(event.target.value)} /></FormField><label className="ui-checkbox"><input type="checkbox" checked={mandatory} onChange={(event) => setMandatory(event.target.checked)} />{t('mandatory')}</label><Button type="submit" variant="primary" loading={busy}>{copyByLocale(locale, 'Review release', 'مراجعة الإصدار')}</Button>{error ? <Alert title={t('failed')} tone="danger">{userFacingErrorMessage(error, locale)}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}</form></Card><Modal open={previewOpen} onClose={() => setPreviewOpen(false)} title={copyByLocale(locale, 'Confirm release publication', 'تأكيد نشر الإصدار')} description={copyByLocale(locale, 'Review the artifact and targeting before publishing.', 'راجع الملف والاستهداف قبل النشر.')} closeLabel={t('close')} footer={<><Button onClick={() => setPreviewOpen(false)}>{copyByLocale(locale, 'Back', 'رجوع')}</Button><Button variant="danger" loading={busy} disabled={!acknowledged} onClick={confirmPublish}>{copyByLocale(locale, 'Publish release', 'نشر الإصدار')}</Button></>}><div className="stack"><dl className="detail-list"><div><dt>{t('version')}</dt><dd>{version}</dd></div><div><dt>{t('channel')}</dt><dd>{channel}</dd></div><div><dt>{t('type')}</dt><dd>{artifactType}</dd></div><div><dt>{t('uploadArtifact')}</dt><dd>{file ? `${file.name} · ${file.size} bytes` : copyByLocale(locale, 'No new artifact', 'لا يوجد ملف جديد')}</dd></div><div><dt>{t('mandatory')}</dt><dd>{mandatory ? t('enabled') : t('disabled')}</dd></div></dl><label className="ui-check"><input type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} /><span>{copyByLocale(locale, 'I reviewed the release scope and artifact.', 'راجعت نطاق الإصدار والملف.')}</span></label></div></Modal></>
 }
 
 function AdminSupportV2() {

@@ -125,6 +125,215 @@ Do not expose source of truth, Supabase write, Firebase UID required, provider m
 
 Copy-quality automation should include state fixtures, component snapshots for major states, status/description/CTA consistency assertions, Arabic and English cases, source scanning, production-dist scanning, Mojibake checks, raw-enum checks, and implementation-vocabulary checks.
 
+# Human Comprehension, Product Intent, and Proof of Quality
+
+The purpose of product copy is not to fill interface space, describe the page, or make the interface sound polished.
+
+The purpose is to help a real person understand a fact, make a decision, complete an action, understand a meaningful constraint, recognize a committed result, or recover from a problem.
+
+## Every sentence needs a job
+
+Before keeping any user-facing sentence, ask:
+
+1. What exact information does this sentence add?
+2. What decision does it help?
+3. What action does it enable?
+4. What misunderstanding does it prevent?
+5. What recovery does it support?
+
+If removing the sentence causes no loss of useful information, remove it.
+
+Do not keep text merely because:
+
+- A component has a description field.
+- The design has empty space.
+- Similar websites use a subtitle.
+- The page needs to look complete.
+- The text sounds polished in isolation.
+- The text explains what the visible controls already show.
+
+## Say each fact once
+
+Do not repeat one fact through several forms.
+
+Examples of repetition:
+
+- Showing an old crossed-out price and a new price, then adding a sentence that repeats the same discount.
+- Showing a trial badge in a plan card, then repeating the trial in a page banner.
+- Showing a disabled purchase button, then adding several messages that all say purchasing is unavailable.
+- Naming the page in the heading, then restating the same purpose in the subtitle.
+- Showing the current state visually, then narrating the state in a paragraph.
+
+Choose the clearest location for each fact and present it once.
+
+Repetition is allowed only when it prevents a real mistake or is required for accessibility.
+
+## Do not instruct users to perform the obvious task
+
+Avoid text such as:
+
+- Choose your subscription duration.
+- Compare the available plans.
+- Select the option that suits you.
+- Review the cards below.
+- Manage your accounts from this page.
+
+The interface already communicates these actions.
+
+Use a heading only when it provides useful orientation or product meaning.
+
+Do not describe the layout to the user.
+
+## Use the vocabulary people naturally expect
+
+Prefer the normal term used by customers for the current task.
+
+For subscription commerce, normal terms include:
+
+- Plan
+- Subscription
+- Subscription period
+- Price
+- Free trial
+- Renew
+- Purchase
+
+Do not replace familiar terms with abstract alternatives such as:
+
+- Access
+- Usage path
+- Availability flow
+- Workspace rate
+- Action route
+- Subscription procedure
+
+A softer technical phrase is still technical or unnatural when a normal product term exists.
+
+## Do not narrate internal reasoning
+
+Never expose a sentence merely because the implementation had to:
+
+- Check a provider.
+- Query an account.
+- Resolve a projection.
+- Verify a catalog.
+- Validate a path.
+- Inspect a backend state.
+- Wait for a queue.
+- Use a fallback.
+
+Show the resulting user state and the real next action only.
+
+If there is no useful next action, a concise state or no supporting sentence may be correct.
+
+## Write for the user's goal
+
+Determine why the user opened the page.
+
+Examples:
+
+- A user opens pricing to understand and purchase a subscription.
+- A user opens downloads to obtain the application.
+- A user opens support to ask for help or follow a conversation.
+- An administrator opens releases to manage releases.
+
+Do not replace the actual goal with an abstract secondary activity.
+
+For example, the primary goal of pricing is not "comparison." Comparison is only a means to selecting and purchasing a plan.
+
+## Copy, data, and layout must agree
+
+Review text with the rendered information around it.
+
+A sentence may be redundant or misleading because of:
+
+- Price styling.
+- Badges.
+- Buttons.
+- Card ordering.
+- Disabled controls.
+- Empty states.
+- Visual emphasis.
+- Repeated icons.
+- Nearby labels.
+
+Copy cannot be approved separately from layout.
+
+When copy is removed, redesign the remaining composition instead of preserving dead space.
+
+## Human clarity test
+
+A normal user should understand the page in a few seconds without decoding abstract language.
+
+During review ask:
+
+- Can a person explain what this page offers after one quick scan?
+- Do they know what is available?
+- Do they know what is unavailable?
+- Do they know the real next action?
+- Are they forced to infer hidden meaning?
+- Is any sentence harder than the concept it explains?
+- Would a normal commercial website use this wording?
+
+If the wording requires interpretation, rewrite it.
+
+## Production language is not project-management language
+
+Do not expose temporary implementation language in the finished product, including:
+
+- Launch phase
+- Launch price
+- Integration pending
+- Backend ready
+- Prepared feature
+- Operational flow
+- Current workstream
+- Source of truth
+
+Use campaign language such as "launch price" only when there is an explicitly approved public campaign with defined dates and terms.
+
+The product must read like a normal finished product, not a development report.
+
+## A content guard is not editorial acceptance
+
+Automated checks can detect:
+
+- Mojibake.
+- Forbidden phrases.
+- Missing labels.
+- Raw enums.
+- Repeated known strings.
+
+They cannot prove:
+
+- Natural human language.
+- Usefulness.
+- Correct emphasis.
+- Good hierarchy.
+- Appropriate brevity.
+- Visual balance.
+- Immediate comprehension.
+
+Every important surface requires a rendered product review in addition to automated checks.
+
+## Live workflow proof
+
+A route returning HTTP 200 does not prove the feature works.
+
+A protected product workflow is operational only after verifying:
+
+- Authenticated entry.
+- Real frontend request.
+- CORS and origin behavior.
+- Authorization.
+- Response contract.
+- Data rendering.
+- Mutations where safely testable.
+- Error handling.
+- Refresh and direct route behavior.
+
+A live error such as `forbidden_origin` invalidates a prior "fully operational" classification for that workflow and triggers investigation of the shared contract.
+
 ## Saturn Product Language
 
 Use `Saturn Workspace`, `الأداة`, or `أداة Saturn Workspace` naturally according to sentence context. Do not mechanically translate the product name to `مساحة العمل`.
@@ -136,6 +345,110 @@ Arabic copy must be natural, contemporary, and task-oriented. Avoid literal tran
 Pricing content must help the user compare plans: price, billing period, original/current price where relevant, savings, trial terms, renewal behavior, availability, and real differentiators. Shared identical facts should appear once globally, not repeated in every plan card.
 
 Provider/backend/payment readiness is not customer-facing narration. Plans may remain visible while checkout is unavailable, but unavailable actions must use honest disabled states and copy that does not imply payment can be completed now.
+
+# Saturn Workspace Commerce and Terminology Truth
+
+## Product naming
+
+The product name is:
+
+`Saturn Workspace`
+
+Use:
+
+- `Saturn Workspace`
+- `الأداة`
+- `أداة Saturn Workspace`
+
+according to the natural context.
+
+Do not repeatedly call the product:
+
+`مساحة العمل`
+
+The term `مساحة العمل` is used only when the actual workspace concept is being explained.
+
+Do not write phrases such as:
+
+- معدل استخدامك لمساحة العمل
+- أدر كل حساب من مساحة عمل واحدة
+- الوصول إلى مساحة العمل
+
+unless the workspace concept itself is essential to the meaning.
+
+## Current subscription truth
+
+All currently approved public plans provide full access to the current Saturn Workspace tool.
+
+The real public differences are:
+
+- Subscription period.
+- Price.
+- Approved discount.
+- Approved free-trial terms.
+- Renewal or billing period when relevant.
+
+Do not invent different feature sets to fill plan cards.
+
+Do not select a few product features and present them as if they define the limits of the plan.
+
+When useful, communicate the shared truth once:
+
+`جميع الخطط تمنحك الوصول الكامل إلى Saturn Workspace.`
+
+Do not repeat it inside every card.
+
+## Natural commerce language
+
+Prefer:
+
+- خطة
+- اشتراك
+- مدة الاشتراك
+- اشترك
+- تجربة مجانية
+- السعر
+
+Avoid using `وصول` as a substitute for subscription commerce unless actual access permission is being discussed.
+
+Do not use:
+
+- سعر الإطلاق
+- مرحلة الإطلاق
+- مقارنة الأسعار المعروضة
+- إجراءات الاشتراك
+- مسار الحساب
+- تأكيد توفر الاشتراك
+
+in normal customer-facing pricing copy.
+
+## Pricing information hierarchy
+
+A plan card should contain only useful commercial information:
+
+- Plan name.
+- Price.
+- Original price when a real discount exists.
+- Billing period.
+- Free-trial term when applicable.
+- A real plan-specific difference, only if one exists.
+- Current purchase action or honest unavailable state.
+
+Do not add:
+
+- A sentence repeating the visual discount.
+- A sentence repeating a visible trial badge.
+- A generic description merely to fill vertical space.
+- Identical feature lists in every card.
+- A statement explaining why checkout is unavailable.
+
+When checkout is unavailable for all plans, prefer one clear section-level state and coherent disabled actions over several repeated explanations.
+
+## Final-product voice
+
+The public site must not read like an implementation phase, beta report, or temporary internal rollout unless the user explicitly approves such public positioning.
+
+The default voice is a normal finished product.
 
 ## 10. Encoding Integrity
 

@@ -73,6 +73,17 @@ test("account without subscription is denied", async (t) => {
   await assert.rejects(() => handleDownloadCatalog(request(), testEnv()), /download_not_entitled/)
 })
 
+test("admin origin cannot use the customer protected download catalog", async () => {
+  const adminRequest = new Request("https://admin-api.saturnws.com/api/account/downloads/catalog", {
+    headers: {
+      Authorization: "Bearer test-id-token",
+      Origin: "https://admin.saturnws.com",
+      "CF-Connecting-IP": "127.0.0.1",
+    },
+  })
+  await assert.rejects(() => handleDownloadCatalog(adminRequest, testEnv()), /forbidden_origin/)
+})
+
 test("invalid release id is rejected before storage access", async () => {
   await assert.rejects(
     () => handleDownloadFile(request("/api/account/downloads/file/not-a-release"), "not-a-release", testEnv()),

@@ -198,6 +198,10 @@ export default {
       if (url.pathname.startsWith("/updates/file/") && (request.method === "GET" || request.method === "HEAD")) {
         return serveReleaseBinary(request, url, env);
       }
+      if (url.pathname.startsWith("/api/")) {
+        const originRejection = rejectForbiddenBrowserOrigin(request, env);
+        if (originRejection) return originRejection;
+      }
       if (url.pathname === "/api/admin/preauth/state" && request.method === "GET") {
         return json({ success: true, authenticated: await hasAdminLayer1Session(request, env) }, 200, corsHeaders(request, env));
       }
@@ -554,7 +558,7 @@ export default {
         "firebase_token_missing",
         "firebase_user_not_verified",
       ]);
-      const forbiddenErrors = new Set(["download_not_entitled", "forbidden_origin", "admin_permission_denied"]);
+      const forbiddenErrors = new Set(["download_not_entitled", "forbidden_origin", "origin_not_allowed", "admin_permission_denied"]);
       const notFoundErrors = new Set(["release_not_found", "release_artifact_missing", "order_not_found", "account_not_found", "subscription_not_found", "session_not_found", "device_not_found"]);
       const status = authErrors.has(message) || message.startsWith("admin_email_not_allowed")
         ? 401
@@ -565,7 +569,8 @@ export default {
             : message === "rate_limited"
               ? 429
               : 400;
-      return json({ success: false, error: message }, status, corsHeaders(request, env));
+      const publicMessage = message === "forbidden_origin" ? "origin_not_allowed" : message;
+      return json({ success: false, error: publicMessage }, status, corsHeaders(request, env));
     }
   },
 };
@@ -714,29 +719,87 @@ function serveAdminPolicyControlsScript() {
   });
 }
 
-function corsHeaders(request, env) {
-  const origin = request.headers.get("Origin") || "";
-  const allowedOrigins = [
+function normalizeOrigin(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  try {
+    const parsed = new URL(raw);
+    return `${parsed.protocol}//${parsed.host}`;
+  } catch {
+    return "";
+  }
+}
+
+function splitConfiguredOrigins(value) {
+  return String(value || "")
+    .split(",")
+    .map((item) => normalizeOrigin(item))
+    .filter(Boolean);
+}
+
+function uniqueOrigins(items) {
+  return [...new Set(items.map((item) => normalizeOrigin(item)).filter(Boolean))];
+}
+
+function adminApiOrigins(env) {
+  return uniqueOrigins([
     "https://admin.saturnws.com",
     "https://admin-api.saturnws.com",
+    ...splitConfiguredOrigins(env.ADMIN_ORIGIN),
+  ]);
+}
+
+function publicBrowserOrigins(env) {
+  return uniqueOrigins([
     "https://saturnws.com",
     "https://www.saturnws.com",
-    ...String(env.ADMIN_ORIGIN || "").split(","),
-    ...String(env.PAYMENTS_ALLOWED_ORIGIN || "").split(","),
-  ]
-    .map((item) => item.trim())
-    .filter(Boolean);
-  const value = origin && allowedOrigins.includes(origin) ? origin : allowedOrigins[0] || "*";
-  return {
-    "Access-Control-Allow-Origin": value,
+    ...splitConfiguredOrigins(env.PAYMENTS_ALLOWED_ORIGIN),
+  ]);
+}
+
+function allowedOriginsForRequest(request, env) {
+  const path = new URL(request.url).pathname;
+  if (path.startsWith("/api/admin/")) return adminApiOrigins(env);
+  if (
+    path === "/api/plans/catalog" ||
+    path.startsWith("/api/payments/") ||
+    path.startsWith("/api/account/downloads/")
+  ) {
+    return publicBrowserOrigins(env);
+  }
+  return uniqueOrigins([...adminApiOrigins(env), ...publicBrowserOrigins(env)]);
+}
+
+function isRequestOriginAllowed(request, env) {
+  const origin = normalizeOrigin(request.headers.get("Origin") || "");
+  if (!origin) return true;
+  return allowedOriginsForRequest(request, env).includes(origin);
+}
+
+function corsHeaders(request, env) {
+  const origin = normalizeOrigin(request.headers.get("Origin") || "");
+  const headers = {
     "Access-Control-Allow-Methods": "GET,POST,PATCH,OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
     "Access-Control-Max-Age": "86400",
     Vary: "Origin",
   };
+  if (origin && allowedOriginsForRequest(request, env).includes(origin)) {
+    headers["Access-Control-Allow-Origin"] = origin;
+    headers["Access-Control-Allow-Credentials"] = "true";
+  }
+  return headers;
+}
+
+function rejectForbiddenBrowserOrigin(request, env) {
+  const origin = normalizeOrigin(request.headers.get("Origin") || "");
+  if (!origin || isRequestOriginAllowed(request, env)) return null;
+  return json({ success: false, error: "origin_not_allowed" }, 403, corsHeaders(request, env));
 }
 
 function handleOptions(request, env) {
+  const originRejection = rejectForbiddenBrowserOrigin(request, env);
+  if (originRejection) return originRejection;
   return new Response(null, { status: 204, headers: corsHeaders(request, env) });
 }
 

@@ -2,7 +2,7 @@
 
 Updated: 2026-06-24
 
-Status: `PHASE_G_IMPLEMENTATION_COMPLETE_WITH_EXPLICIT_OPERATIONAL_CONFIGURATION_ITEMS`
+Status: `PHASE_G_PRE_ACCEPTANCE_COMPLETION_ACTIVE`
 
 Consolidated manual acceptance has not started. This report preserves the implementation, deployment, and automated verification evidence for the current Phase G pre-acceptance batch; remaining items are explicit operational configuration or manual-acceptance items.
 
@@ -54,9 +54,9 @@ Consolidated manual acceptance has not started. This report preserves the implem
 - No OTP value is returned in normal API responses or Admin queue projection.
 - Provider delivery acceptance still requires a dedicated QA recipient in consolidated Phase G manual acceptance.
 - Billing and release email categories remain `PREPARED_DISABLED` because no real payment or production-release event source exists.
-- Security email producers are implemented in source for selected reliable events: new desktop device link, session revoke, device revoke, revoke-all, account deletion request/cancel, account suspend, and account reactivate. `EMAIL_SECURITY_ENABLED=false`, so delivery remains disabled until activation and acceptance.
-- Admin alert producer coverage is implemented in source for final email queue failure, webhook verification failure, cleanup failure, storage configuration failure, schema mismatch, readiness degradation, and high-severity tamper signals. Delivery remains disabled until recipients, rollout, and manual acceptance are configured.
-- `EMAIL_ADMIN_ALERT_RECIPIENTS` is not configured, so admin alert delivery must remain disabled.
+- Security email producers are implemented in source for selected reliable events: new desktop device link, session revoke, device revoke, revoke-all, account deletion request/cancel, account suspend, and account reactivate. `EMAIL_SECURITY_ENABLED=true` is deployed on Auth/Admin/Policy and safe event-delivery verification is pending.
+- Admin alert producer coverage is implemented in source for final email queue failure, webhook verification failure, cleanup failure, storage configuration failure, schema mismatch, readiness degradation, and high-severity tamper signals. `EMAIL_ADMIN_ALERTS_ENABLED=true` is deployed on Policy, the approved recipient is configured as a Policy Worker secret, and safe alert-delivery verification is pending.
+- `ADMIN_EMAIL_ENQUEUE_TOKEN` is configured on Admin and Policy Workers for account lifecycle security emails.
 
 ## Encoding and Content
 
@@ -68,7 +68,7 @@ Consolidated manual acceptance has not started. This report preserves the implem
 - Public pricing content uses approved weekly/monthly/annual discounted prices, current promotional trial language, and localized plan differentiators instead of raw backend feature text.
 - Public pricing visual evidence was captured for Arabic/English desktop, tablet, and mobile layouts using a static local catalog fixture. This is implementation evidence only, not manual acceptance.
 - Legacy root static website artifacts were removed from source: root `index.html`, old root legal/contact HTML pages, and root generated `assets/index-*` bundles. The active publish path remains `site/dist`.
-- `site/scripts/check-frontend-cutover.mjs` now blocks legacy public bundle tokens including outdated pricing, old contact handles, provider-specific public copy, and old beta-access wording. Live bundle verification for this batch checked `/assets/index-C4mJsmbc.js`.
+- `site/scripts/check-frontend-cutover.mjs` blocks legacy public bundle tokens including outdated pricing, old contact handles, provider-specific public copy, and old beta-access wording. The current local build produced `/assets/index-CIRJ2UvB.js`; GitHub Pages deployment and live bundle verification are pending.
 
 ## Support Attachments
 
@@ -161,7 +161,7 @@ Known warnings:
 | Payment provider | `WAITING_EXTERNAL` | Approve and configure real provider, mappings, webhooks, rollback, and billing email activation. |
 | Manual Desktop install/uninstall acceptance | `PENDING_MANUAL_ACCEPTANCE` | Test install, launch, shortcuts, Add/Remove Programs, repair/upgrade, uninstall, logs, and data retention in Phase G manual acceptance. |
 | Public plan CORS deployment verification | `PRODUCTION_VERIFIED_AUTOMATED` | Admin Worker was redeployed and the live plan catalog allows `https://saturnws.com` as an origin. |
-| Public pricing Pages deployment | `PRODUCTION_VERIFIED_AUTOMATED` | GitHub Pages deployed the new public bundle; approved discount/trial pricing is present and legacy pricing/provider tokens are absent from the live bundle. |
-| Admin alert recipient and rollout configuration | `OPERATIONAL_CONFIGURATION_REQUIRED` | Required admin alert producers exist in source, but delivery remains disabled until recipients, rollout, and manual acceptance are configured. |
+| Public pricing Pages deployment | `PENDING_DEPLOYMENT_VERIFICATION` | Current source and local build contain the reconstructed pricing section; GitHub Pages deployment and live bundle verification are pending. |
+| Admin alert rollout verification | `DEPLOYED_PENDING_SAFE_EVENT_VERIFICATION` | Required admin alert producers exist, the recipient secret is configured, and Policy flag is deployed. Safe alert-delivery verification is pending. |
 
-Current implementation state: `PHASE_G_IMPLEMENTATION_COMPLETE_WITH_EXPLICIT_OPERATIONAL_CONFIGURATION_ITEMS`.
+Current state: `PHASE_G_PRE_ACCEPTANCE_COMPLETION_ACTIVE`.

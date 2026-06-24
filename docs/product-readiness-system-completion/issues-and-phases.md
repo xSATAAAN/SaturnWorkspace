@@ -9,7 +9,7 @@ Updated: 2026-06-24
 - Phase D: `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE`.
 - Phase E: `COMPLETE_EXCEPT_WAITING_EXTERNAL_INTEGRATION`.
 - Phase F: `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE`.
-- Phase G: `PHASE_G_IMPLEMENTATION_COMPLETE_WITH_EXPLICIT_OPERATIONAL_CONFIGURATION_ITEMS`.
+- Phase G: `PHASE_G_PRE_ACCEPTANCE_COMPLETION_ACTIVE`.
 - No B.3/B.4, C.1, F.1/F.2, G.1, or additional dependency gate exists.
 
 ## Current Tracked Items
@@ -27,9 +27,9 @@ Updated: 2026-06-24
 | PR-009 | Frontend main chunk above 500 kB | Performance debt | Build can pass with a Vite warning; code splitting remains a post-acceptance optimization unless it blocks release. | Post-G optimization |
 | PR-010 | Desktop QA Setup | Distribution QA | Local QA setup was built at `D:\SaturnWS\build-output\phase-g-qa-installed-channel-20260624-131944\setup\SaturnWorkspace-Setup-1.0.7-beta-phase-g-qa.exe`; SHA256 `527C21D6A87720DB31E0EC4A8F59EA6FF2299C928C1B83447E2AC1E6AAA45DDD`; not published to OTA, GitHub Releases, or R2. Install/uninstall acceptance remains Phase G manual. | Phase G acceptance |
 | PR-011 | Arabic mojibake | Content/storage defect | Supabase plan catalog values and desktop startup/OAuth copy repaired; runtime/source/dist/package guards added. | Phase G prevention |
-| PR-012 | Automatic billing/release/security/admin-alert emails | Event activation | Billing/release remain disabled without real committed events. Security email producers exist for selected reliable events but remain disabled. Admin alert producers now cover the required operational families in source with deterministic idempotency/cooldown, but delivery remains disabled until recipients, rollout, and acceptance are configured. | Phase G / future activation |
+| PR-012 | Automatic billing/release/security/admin-alert emails | Event activation | Billing/release remain disabled without real committed events. Security email producers and admin alert producers have deployed flags and local lifecycle tests passing; safe event-delivery verification is pending. `ADMIN_ROLE_ASSIGNMENTS` remains separate operational configuration. | Phase G |
 | PR-013 | Public plan catalog CORS for production pricing | Production verified | Source CORS allowlist includes Saturn public origins, Admin Worker is deployed, and live plan catalog CORS returns the Saturn public origin. | Phase G |
-| PR-014 | Public pricing copy and card layout | Production verified | Approved weekly/monthly/annual pricing, promotional trial language, localized differentiators, and responsive pricing visual fixture are implemented; GitHub Pages deployed the new public bundle and legacy pricing/provider tokens are absent from the live bundle. | Phase G |
+| PR-014 | Public pricing copy and card layout | Pending live frontend deployment | Approved weekly/monthly/annual pricing, promotional trial language, localized differentiators, and responsive pricing visual fixture are implemented in source/local build; GitHub Pages deployment and live bundle verification for the current commit are pending. | Phase G |
 
 ## Resolved Systemic Defects
 

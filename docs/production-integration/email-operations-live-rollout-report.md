@@ -38,13 +38,12 @@ was verified in D1.
 
 ### `email_jobs`
 
-- Job id: `8cd71df7-273a-4580-8715-f1a61081089f`
+- Job id: recorded in D1; redacted from the living report.
 - Type: `admin.email_test`
-- Recipient: `mashroh.499@gmail.com`
+- Recipient: configured through the approved admin recipient secret; value redacted from the living report.
 - Final status: `delivered`
 - Attempts: `1 / 5`
-- Provider message id stored:
-  `82805f93-1794-4b0e-8d25-f1daebabb6ab`
+- Provider message id stored in D1; value redacted from the living report.
 - `sent_at`: `2026-06-20 10:22:13`
 - `delivered_at`: `2026-06-20 10:22:16`
 

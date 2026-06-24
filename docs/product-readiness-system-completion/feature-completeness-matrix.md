@@ -2,7 +2,7 @@
 
 Updated: 2026-06-24
 
-Status meanings: `VERIFIED_AUTOMATED`, `PRODUCTION_DEPLOYED`, `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE`, `OPERATIONAL_CONFIGURATION_REQUIRED`, `WAITING_EXTERNAL`, `PREPARED_DISABLED`, `PREPARED_DISABLED_WITH_PRODUCER`, `PARTIALLY_IMPLEMENTED`, `PENDING_DEPLOYMENT_VERIFICATION`, `NOT_IMPLEMENTED`, `DEFERRED_TO_PHASE_G_MANUAL_ACCEPTANCE`, `QA_ARTIFACT_BUILT_PENDING_MANUAL_ACCEPTANCE`.
+Status meanings: `VERIFIED_AUTOMATED`, `PRODUCTION_DEPLOYED`, `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE`, `DEPLOYED_PENDING_SAFE_EVENT_VERIFICATION`, `OPERATIONAL_CONFIGURATION_REQUIRED`, `WAITING_EXTERNAL`, `PREPARED_DISABLED`, `PREPARED_DISABLED_WITH_PRODUCER`, `PARTIALLY_IMPLEMENTED`, `PENDING_DEPLOYMENT_VERIFICATION`, `NOT_IMPLEMENTED`, `DEFERRED_TO_PHASE_G_MANUAL_ACCEPTANCE`, `QA_ARTIFACT_BUILT_PENDING_MANUAL_ACCEPTANCE`.
 
 | Domain | Feature | Status | Evidence / limitation |
 | --- | --- | --- | --- |
@@ -41,9 +41,9 @@ Status meanings: `VERIFIED_AUTOMATED`, `PRODUCTION_DEPLOYED`, `PRODUCTION_DEPLOY
 | Email | Support messages | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Ticket confirmation, admin reply, and status change are linked; internal notes do not send email. |
 | Email | Billing messages | `PREPARED_DISABLED` | Disabled because no payment provider or committed payment event exists. |
 | Email | Release messages | `PREPARED_DISABLED` | Disabled until a real production release publication event exists. |
-| Email | Security messages | `PREPARED_DISABLED_WITH_PRODUCER` | Source producers exist for selected committed account/session events, but `EMAIL_SECURITY_ENABLED=false`; activation, recipient/preference behavior, and manual acceptance remain deferred. |
-| Email | Admin alert: email queue final failure | `OPERATIONAL_CONFIGURATION_REQUIRED` | Source producer exists with loop prevention, but `EMAIL_ADMIN_ALERTS_ENABLED=false` and `EMAIL_ADMIN_ALERT_RECIPIENTS` is not configured. |
-| Email | Other admin alert families | `OPERATIONAL_CONFIGURATION_REQUIRED` | Source producers now cover webhook verification failure, cleanup failure, storage configuration failure, schema mismatch, readiness degradation, and high-severity tamper signals. Delivery remains disabled until recipients and rollout are configured. |
+| Email | Security messages | `DEPLOYED_PENDING_SAFE_EVENT_VERIFICATION` | Source producers exist for selected committed account/session events, `EMAIL_SECURITY_ENABLED=true` is deployed on Auth/Admin/Policy, and lifecycle/idempotency/no-secret tests pass. No real lifecycle mutation was executed for verification. |
+| Email | Admin alert: email queue final failure | `DEPLOYED_PENDING_SAFE_EVENT_VERIFICATION` | Source producer exists with deterministic idempotency and loop prevention. `EMAIL_ADMIN_ALERTS_ENABLED=true` is deployed on Policy, the recipient secret is configured, and local alert tests pass. No false production incident was generated. |
+| Email | Other admin alert families | `DEPLOYED_PENDING_SAFE_EVENT_VERIFICATION` | Source producers cover webhook verification failure, cleanup failure, storage configuration failure, schema mismatch, readiness degradation, and high-severity tamper signals. Policy flag and recipient secret are deployed; safe alert-delivery verification is pending. |
 | Encoding | Arabic UTF-8 integrity | `VERIFIED_AUTOMATED` | Supabase plan data repaired; repository and email guards pass. |
 | Desktop distribution | Phase G QA Setup | `QA_ARTIFACT_BUILT_PENDING_MANUAL_ACCEPTANCE` | Built from `D:\SaturnWS\desktop-app` without changing `APP_VERSION`; artifact `D:\SaturnWS\build-output\phase-g-qa-installed-channel-20260624-131944\setup\SaturnWorkspace-Setup-1.0.7-beta-phase-g-qa.exe`; SHA256 `527C21D6A87720DB31E0EC4A8F59EA6FF2299C928C1B83447E2AC1E6AAA45DDD`; not published. |
 | Phase G | Consolidated manual acceptance | `DEFERRED_TO_PHASE_G_MANUAL_ACCEPTANCE` | Manual acceptance has not started. |

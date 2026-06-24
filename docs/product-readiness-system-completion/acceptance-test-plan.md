@@ -1,6 +1,6 @@
 # Phase G Consolidated Acceptance Plan
 
-Status: `PHASE_G_IMPLEMENTATION_COMPLETE_WITH_EXPLICIT_OPERATIONAL_CONFIGURATION_ITEMS`
+Status: `PHASE_G_PRE_ACCEPTANCE_COMPLETION_ACTIVE`
 
 This is the only manual acceptance gate. It has not started. Phase B, Phase C, Phase D, and Phase F are closed as `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE`. Phase E is complete except for the external payment-provider integration.
 
@@ -55,8 +55,8 @@ This is the only manual acceptance gate. It has not started. Phase B, Phase C, P
 - Verify support attachments with allowed files, rejected file types/sizes, customer ownership, admin access, deletion, and orphan cleanup.
 - Verify reply-by-email replay protection and provider event idempotency.
 - Confirm billing and release emails remain disabled until real committed provider/release events exist.
-- Confirm security email producers remain disabled until `EMAIL_SECURITY_ENABLED` is intentionally enabled.
-- Confirm admin alert delivery remains disabled until recipients and all required alert families are accepted.
+- Confirm security email producers enqueue only for committed events, with deterministic idempotency and no session tokens or device codes in payloads.
+- Confirm admin alert delivery uses the configured recipient, dedupes repeated incidents, and does not recursively alert on its own final failure.
 
 ## 7. Diagnostics and Audit
 

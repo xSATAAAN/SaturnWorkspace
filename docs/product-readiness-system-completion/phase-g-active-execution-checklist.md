@@ -1,0 +1,355 @@
+# Phase G Active Execution Checklist
+
+Updated: 2026-06-24
+
+Current state: `PHASE_G_PRE_ACCEPTANCE_COMPLETION_ACTIVE`
+
+This file is the persistent execution source for the current Phase G pre-acceptance continuation. Before each resumed session, read the effective global `AGENTS.md`, the project `AGENTS.md`, this file, and current Git status/HEAD, then continue from the first item not marked `COMPLETE_WITH_EVIDENCE`.
+
+Completion states used here:
+
+- `NOT_STARTED`
+- `IN_PROGRESS`
+- `BLOCKED`
+- `COMPLETE_WITH_EVIDENCE`
+
+Do not mark an item complete because code was written, a build passed, or a page shell returned HTTP 200. Completed entries must include files changed, tests, deployment evidence, live verification evidence, and remaining limitation.
+
+## 1. Session Continuity and No-Forgetting Protocol
+
+Status: `COMPLETE_WITH_EVIDENCE`
+
+Requirement:
+
+- Keep this checklist current with every numbered requirement in the active Phase G prompt.
+- Record files changed, tests, deployment evidence, live verification evidence, and remaining limitation for completed entries.
+- On every resume, read global `AGENTS.md`, project `AGENTS.md`, this checklist, Git status, and HEAD.
+- Continue from the first unfinished item.
+
+Evidence:
+
+- Files changed: `docs/product-readiness-system-completion/phase-g-active-execution-checklist.md`.
+- Tests: Git/HEAD/status and checklist existence were verified at session start.
+- Deployment evidence: not applicable for a documentation-only execution-control file.
+- Live verification evidence: not applicable.
+- Remaining limitation: this file remains active until all later entries are `COMPLETE_WITH_EVIDENCE`.
+
+## 2. Mandatory Global AGENTS.md Addition
+
+Status: `COMPLETE_WITH_EVIDENCE`
+
+Requirement:
+
+- Update `C:\Users\Admin\.codex\AGENTS.md`.
+- Insert the requested `Human Comprehension, Product Intent, and Proof of Quality` section.
+- Preserve product-quality meaning without introducing mojibake into active instructions.
+
+Evidence:
+
+- Files changed: `C:\Users\Admin\.codex\AGENTS.md`.
+- Tests: Node verification confirmed the section `Human Comprehension, Product Intent, and Proof of Quality`, `Every sentence needs a job`, and `Live workflow proof` are present.
+- Deployment evidence: not applicable.
+- Live verification evidence: not applicable.
+- Remaining limitation: global AGENTS is outside the repository and is not committed to Git.
+
+## 3. Mandatory Saturn Workspace AGENTS.md Addition
+
+Status: `COMPLETE_WITH_EVIDENCE`
+
+Requirement:
+
+- Update `D:\SaturnWS\github-deploy\SaturnWorkspace\AGENTS.md`.
+- Insert the requested human comprehension section.
+- Insert `Saturn Workspace Commerce and Terminology Truth`.
+- Preserve correct Arabic terminology and avoid adding mojibake to active project instructions.
+
+Evidence:
+
+- Files changed: `AGENTS.md`.
+- Tests: Node verification confirmed the human comprehension section, `Saturn Workspace Commerce and Terminology Truth`, and Arabic Unicode content are present without mojibake markers.
+- Deployment evidence: not applicable.
+- Live verification evidence: not applicable.
+- Remaining limitation: none for this instruction update.
+
+## 4. Operational Decisions Provided by the User
+
+Status: `IN_PROGRESS`
+
+Requirement:
+
+- Configure the current administrator as UID-based `super_admin` through `ADMIN_ROLE_ASSIGNMENTS`.
+- Resolve the current administrator UID securely from trusted admin identity.
+- Do not print UID in reports, logs, screenshots, or documentation.
+- Ensure at least one working super administrator remains before deployment.
+- Configure `EMAIL_ADMIN_ALERT_RECIPIENTS` securely to the approved recipient.
+- Do not expose the recipient in public UI or committed source.
+- Do not choose or invent an OTP QA recipient.
+
+Evidence:
+
+- Files changed: `workers/policy/wrangler.jsonc`, `workers/auth/wrangler.toml`, `workers/admin/wrangler.toml`.
+- Tests: `wrangler secret list` confirmed `EMAIL_ADMIN_ALERT_RECIPIENTS` exists on the Policy Worker and `ADMIN_EMAIL_ENQUEUE_TOKEN` exists on both Policy and Admin Workers. `workers/auth npm run test:phase-c`, `workers/policy npm run test:phase-g`, and `workers/admin npm run check:syntax && npm run test:phase-f` pass after the configuration changes.
+- Deployment evidence: Policy Worker `cec58841-cbc9-44e4-853f-054425d29ecc`, Auth Worker `53764ba0-207e-42e7-84f8-4e59741d0a06`, and Admin Worker `85b71833-73d3-445a-a498-d8c1f3b4e9ef` were deployed on 2026-06-24.
+- Live verification evidence: `https://api.saturnws.com/health` and `https://auth.saturnws.com/health` returned 200 after deployment. Post-deploy secret inventory confirmed `EMAIL_ADMIN_ALERT_RECIPIENTS` exists on Policy and `ADMIN_EMAIL_ENQUEUE_TOKEN` exists on Policy/Admin.
+- Remaining limitation: `ADMIN_ROLE_ASSIGNMENTS` is not configured. The current admin Firebase UID has not been resolved from a live trusted identity in this session, and it must not be guessed, printed, or derived from stale backups. UID-based super-admin assignment remains an operational blocker for closing this item.
+
+## 5. Pricing Page: Remove the Current Copy Model and Rebuild It
+
+Status: `IN_PROGRESS`
+
+Requirement:
+
+- Rebuild pricing information hierarchy, not individual sentences.
+- Communicate weekly, monthly, and annual plans.
+- Communicate that every current plan provides full access to the current tool.
+- Communicate differences by period, price, approved discount, and monthly/annual trial terms.
+- Communicate checkout unavailable until payment integration is active.
+- Say each fact once.
+- Remove abstract access language, launch-stage language, repeated discounts/trials, repeated unavailable copy, backend/provider narration, and misleading feature lists.
+- Rebalance plan card spacing and bidi rendering.
+- Review whether the popular badge remains justified.
+
+Evidence:
+
+- Files changed: `site/src/new-ui/pages/production/ProductionPages.tsx`, `site/src/new-ui/pages/public/PublicPages.tsx`, `site/src/new-ui/components/ui/ProductCards.tsx`, `site/src/new-ui/content/publicCopy.ts`, `site/src/new-ui/i18n/messages.ts`, `site/src/new-ui/foundation/components.css`, `site/src/new-ui/foundation/public.css`, `site/scripts/check-copy-quality.mjs`.
+- Tests: `site node scripts/check-copy-quality.mjs`, `site npm run test:phase-f`, `site npx tsc -p src/new-ui/tsconfig.json --noEmit`, and `site npm run build` pass. Build warning: main JS chunk exceeds 500 kB.
+- Deployment evidence: pending GitHub Pages deployment from the final commit. Admin Worker catalog CORS was deployed in `85b71833-73d3-445a-a498-d8c1f3b4e9ef`.
+- Live verification evidence: pending live pricing route/bundle check after deployment.
+- Remaining limitation: rendered live verification and screenshots are still required before this can be `COMPLETE_WITH_EVIDENCE`.
+
+## 6. Product-Wide Content Reconstruction
+
+Status: `IN_PROGRESS`
+
+Requirement:
+
+- Create a rendered-content inventory for all live routes and states.
+- For every visible sentence record route, state, user task, information job, repetition, keep/rewrite/remove, and reason.
+- Review homepage, product sections, pricing, downloads, contact, auth, verification, account pages, support, notifications, settings, account deletion, every Admin route, modals, drawers, emails, and loading/empty/disabled/unavailable/error/success states.
+- Replace or remove abstract and mechanically translated phrases, including the known account-management sentence family.
+- Implement corrections, not observations only.
+
+Evidence:
+
+- Files changed: `workers/admin/src/index.js`, `workers/admin/src/security/payments.js`, `workers/admin/src/routes/downloads.test.mjs`, `workers/admin/src/adminCors.test.mjs`, `workers/admin/package.json`, `site/src/new-ui/adapters/productionAdapters.ts`, `site/src/new-ui/pages/production/ProductionPages.tsx`, `site/scripts/check-phase-f-admin.mjs`.
+- Tests: `workers/admin npm run check:syntax`, `workers/admin npm run test:phase-f`, `site npm run test:phase-f`, `site npx tsc -p src/new-ui/tsconfig.json --noEmit`, and `site npm run build` pass. Admin CORS tests cover approved admin preflight, unknown-origin rejection, public catalog origin, and customer-download rejection from admin origin.
+- Deployment evidence: pending Admin Worker deploy and site deployment.
+- Live verification evidence: pending authenticated Admin Releases route sweep. No token or cookie inspection has been performed.
+- Remaining limitation: source and local contract tests are complete, but authenticated live verification remains required.
+
+## 7. Fix Admin Releases `forbidden_origin` as a Shared Contract Defect
+
+Status: `IN_PROGRESS`
+
+Requirement:
+
+- Reproduce the live authenticated Admin Releases failure through the real Admin flow.
+- Record method, target host, path, origin, preflight, credentials mode, and response headers without exposing tokens.
+- Inspect Admin SPA endpoint selection, Admin Worker origin validation, Admin API CORS, Policy proxy origin checks, preflight handling, origin normalization, approved origins, credentials mode, redirect behavior, direct routes, environment host values, and shared middleware.
+- Implement one canonical Admin API origin policy with exact approved origins, credentialed CORS, correct preflight, unknown-origin rejection, stable user-facing errors, and reuse across Admin route families.
+- Run authenticated Admin route sweep after the fix.
+
+Evidence:
+
+- Files changed: `workers/admin/src/index.js`, `workers/admin/src/security/payments.js`, `workers/admin/src/routes/downloads.test.mjs`, `workers/admin/src/adminCors.test.mjs`, `workers/admin/package.json`, `site/src/new-ui/adapters/productionAdapters.ts`, `site/src/new-ui/pages/production/ProductionPages.tsx`, `site/scripts/check-phase-f-admin.mjs`.
+- Tests: `workers/admin npm run check:syntax && npm run test:phase-f` passes and covers approved Admin preflight, unknown-origin rejection, public catalog origin, and customer-download rejection from Admin origin. `site npm run test:phase-f` passes and asserts Admin Releases uses the admin endpoint contract and maps origin errors before rendering.
+- Deployment evidence: Admin Worker `85b71833-73d3-445a-a498-d8c1f3b4e9ef` was deployed on 2026-06-24.
+- Live verification evidence: Admin Releases preflight from `https://admin.saturnws.com` returned 204 with credentialed CORS; unknown origin returned 403 `origin_not_allowed`; unauthenticated Admin Releases GET returned 401 `preauth_required` with the approved Admin origin. Public plan catalog from `https://saturnws.com` returned 200 through `admin-api.saturnws.com`.
+- Remaining limitation: authenticated Admin route sweep still requires a real Admin session. An unauthenticated 401 is not treated as proof that the protected UI/data flow is accepted.
+
+## 8. Activate Security Emails
+
+Status: `IN_PROGRESS`
+
+Requirement:
+
+- Review and complete reliable producers for new desktop device linked, session revoked, device revoked, all sessions revoked, account deletion requested/cancelled, account suspended/reactivated.
+- Enable `EMAIL_SECURITY_ENABLED=true` only after lifecycle verification.
+- Verify committed mutation timing, recipient, idempotency, deduplication, cooldown where needed, no preview send, no sensitive tokens/codes, Arabic/English templates, queue/retry, provider-event tracking, audit, and safe failure.
+
+Evidence:
+
+- Files changed: `workers/policy/wrangler.jsonc`, `workers/policy/package.json`, `workers/policy/scripts/check-phase-g-admin-alerts.mjs`.
+- Tests: `workers/policy npm run test:phase-g` passes and now includes admin alert checks for tamper-signature deduplication, email final-failure alerting, final-failure loop prevention, configured recipient path, provider message storage, and required producer source coverage.
+- Deployment evidence: Auth Worker `53764ba0-207e-42e7-84f8-4e59741d0a06`, Admin Worker `85b71833-73d3-445a-a498-d8c1f3b4e9ef`, and Policy Worker `cec58841-cbc9-44e4-853f-054425d29ecc` were deployed with `EMAIL_SECURITY_ENABLED=true` visible in deploy bindings.
+- Live verification evidence: `https://auth.saturnws.com/health` and `https://api.saturnws.com/health` returned 200 after deployment. No real account lifecycle mutation was executed for this verification.
+- Remaining limitation: live alert delivery should be verified with a safe fixture only; no alert storm or routine-success alert was generated.
+
+## 9. Configure and Activate Admin Alerts
+
+Status: `IN_PROGRESS`
+
+Requirement:
+
+- Configure approved admin alert recipient using Worker secret/config mechanism.
+- Complete and verify alert producers for email queue final failure, repeated webhook verification failure, cleanup failure, storage configuration failure, schema mismatch, readiness degradation, and high-severity tamper signal.
+- Verify severity, actionability, deduplication, cooldown, loop prevention, destination route, reference ID, audit, no secrets, no routine-success alert, and no alert storm.
+- Enable `EMAIL_ADMIN_ALERTS_ENABLED=true`.
+- Deploy Policy Worker and verify configuration without generating a false production incident.
+
+Evidence:
+
+- Files changed: `workers/auth/scripts/check-phase-c-device-linking.mjs`, `workers/policy/scripts/check-phase-g-admin-alerts.mjs`, `workers/policy/package.json`, `workers/admin/src/adminCors.test.mjs`, `site/scripts/check-copy-quality.mjs`, `site/scripts/check-phase-f-admin.mjs`.
+- Tests: `workers/auth npm run test:phase-c`, `workers/policy npm run test:phase-g`, `workers/admin npm run check:syntax && npm run test:phase-f`, and `site npm run build` pass.
+- Deployment evidence: Policy Worker `cec58841-cbc9-44e4-853f-054425d29ecc` was deployed with `EMAIL_ADMIN_ALERTS_ENABLED=true` visible in deploy bindings.
+- Live verification evidence: `https://api.saturnws.com/health` returned 200 after deployment, and post-deploy Policy secret inventory confirmed `EMAIL_ADMIN_ALERT_RECIPIENTS` remains configured. No false production incident was generated.
+- Remaining limitation: product-wide rendered route/control inventory and authenticated Admin route sweep remain unfinished.
+
+## 10. Email Copy Review Must Use the Same Human Standard
+
+Status: `IN_PROGRESS`
+
+Requirement:
+
+- Review active email templates as product UI: OTP request/resend, ticket created, support reply, support status changed, security emails, account lifecycle emails, and admin alerts.
+- Review prepared templates without enabling them: subscription grant, extension, replacement, recovery completion, billing, and release.
+- Remove repeated headings, generic greetings when unnecessary, filler, implementation narration, vague reassurance, raw operation names, unavailable CTAs, and repeated state explanations.
+
+Evidence:
+
+- Files changed: no template-copy file was changed in this continuation beyond the producer/alert tests already listed in items 8 and 9.
+- Tests: `workers/policy npm run test:phase-g` passes and includes `scripts/check-phase-g-email-content.mjs`, rendering Arabic/English HTML and plain text for active/prepared catalog events.
+- Deployment evidence: Policy Worker `cec58841-cbc9-44e4-853f-054425d29ecc` is deployed; billing and release email categories remain disabled.
+- Live verification evidence: no live email was sent for this review. Admin alert/security producer flags are live at Worker configuration level, but content acceptance remains pre-manual.
+- Remaining limitation: full human editorial review of every active and prepared template is still not complete; this item remains open.
+
+## 11. Real Feature and Control Verification
+
+Status: `IN_PROGRESS`
+
+Requirement:
+
+- Revalidate every operational inventory row using the correct proof level.
+- Public: verify rendered page and real live data.
+- Authenticated customer: verify authenticated QA/customer session where safe.
+- Admin: verify authenticated current super administrator.
+- Mutations: use preview, fixture, rollback, or reversible QA action.
+- External/destructive: classify honestly.
+- For every visible control, safely click/invoke, verify handler, backend response, state update, error behavior, direct refresh, and authorization.
+- Remove or reclassify no-op, hidden 500, raw backend error, `forbidden_origin`, shell-only action, fake success, unexplained permanently disabled control, and unused backend route.
+
+Evidence:
+
+- Files changed: Admin CORS/source files and site adapter files listed in item 7.
+- Tests: Admin CORS and site contract tests pass for the fixed Releases path and origin-error mapping.
+- Deployment evidence: Admin Worker `85b71833-73d3-445a-a498-d8c1f3b4e9ef` is deployed.
+- Live verification evidence: safe unauthenticated boundary checks passed for Admin Releases CORS, unknown-origin rejection, public catalog CORS, and protected-download origin separation.
+- Remaining limitation: the full authenticated current-super-admin route/control sweep is not complete and cannot be replaced by unauthenticated CORS checks.
+
+## 12. Rendered Visual and Content Evidence
+
+Status: `IN_PROGRESS`
+
+Requirement:
+
+- Capture real rendered evidence after corrections.
+- Public evidence: Arabic/English desktop, tablet, and mobile.
+- Representative authenticated evidence: Account overview, Subscription, Support, Admin Overview, Admin Users, Admin Releases after origin correction, Admin Communications.
+- For each reviewed page record user task, heading, retained copy, removed copy, repetition removed, state/action consistency, line wrapping, empty space, main action, live data success, and remaining manual acceptance item.
+- Screenshots must not contain secrets or sensitive user data.
+
+Evidence:
+
+- Files changed: pricing layout/copy files listed in item 5.
+- Tests: local pricing/source copy checks and `site npm run build` pass.
+- Deployment evidence: pending GitHub Pages deployment from the final commit.
+- Live verification evidence: prior local pricing fixture screenshots exist under `docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-pricing-fixture`; no new live rendered evidence was captured after this continuation's deployment.
+- Remaining limitation: required public Arabic/English breakpoint evidence and authenticated representative page evidence are not complete.
+
+## 13. Preserve Completed Safe Boundaries
+
+Status: `IN_PROGRESS`
+
+Requirement:
+
+- Do not integrate a real payment provider.
+- Do not send billing or release emails.
+- Do not execute a real customer grant or real recovery.
+- Do not publish a release.
+- Do not enable kill switch or force update.
+- Do not perform irreversible account deletion.
+- Do not publish QA Setup.
+- Keep billing and release categories disabled.
+- Do not block on user-run OTP manual delivery acceptance.
+
+Evidence:
+
+- Files changed: `workers/auth/scripts/check-phase-c-device-linking.mjs`, `workers/policy/scripts/check-phase-g-admin-alerts.mjs`, `workers/admin/src/adminCors.test.mjs`, `site/scripts/check-copy-quality.mjs`, `site/scripts/check-phase-f-admin.mjs`.
+- Tests: `workers/auth npm run test:phase-c`, `workers/policy npm run test:phase-g`, `workers/admin npm run check:syntax && npm run test:phase-f`, `site node scripts/check-copy-quality.mjs`, `site npm run test:phase-f`, `site npx tsc -p src/new-ui/tsconfig.json --noEmit`, `site npm run build`, and `git diff --check` all pass.
+- Deployment evidence: Policy/Auth/Admin Workers were deployed after passing local checks.
+- Live verification evidence: safe health and CORS checks passed for public and unauthenticated boundary behavior.
+- Remaining limitation: authenticated Admin route sweep, current super-admin role-assignment proof, rendered live bundle scan, and full feature/control verification remain unfinished.
+
+## 14. Required Tests
+
+Status: `IN_PROGRESS`
+
+Requirement:
+
+- Run relevant existing tests.
+- Add/run tests for authenticated Admin origin, Admin preflight, Admin route-family origin, Admin Releases live contract, raw `forbidden_origin` UI prevention, current super-admin role assignment, security email producers and flag-enabled behavior, admin-alert recipient and flag-enabled behavior, alert deduplication/cooldown/loop prevention, pricing information-once, trial/discount duplication prevention, no launch-language, natural subscription terminology, contextual workspace terminology, rendered Arabic/English fixtures, real live bundle copy scan, product-wide no-op inventory validation, and existing Auth/Policy/Admin/Site/Support/Attachment/RBAC/Recovery/Deletion/Pricing/encoding/email/schema suites.
+
+Evidence:
+
+- Files changed: `workers/policy/wrangler.jsonc`, `workers/auth/wrangler.toml`, `workers/admin/wrangler.toml`, Admin CORS/source files, pricing site files, and living documentation.
+- Tests: local Worker/Site checks listed in item 14 pass.
+- Deployment evidence: Policy/Auth/Admin Workers deployed on 2026-06-24. GitHub Pages deployment from the final commit is still pending.
+- Live verification evidence: policy/auth health checks returned 200; Admin Releases approved-origin preflight returned 204; unknown origins remain rejected; public catalog returned 200 from the public origin.
+- Remaining limitation: authenticated Admin routes, live frontend bundle after commit, rendered visual evidence, and manual acceptance remain pending.
+
+## 15. Deployment and Live Verification
+
+Status: `IN_PROGRESS`
+
+Requirement:
+
+- Deploy required Workers after local tests.
+- Deploy site.
+- Verify health, authenticated Admin routes, Releases, security email flags, admin alert configuration and flag, public Pricing, live bundle, no mojibake, no secrets, unknown origins rejected, approved Admin origin succeeds.
+- Do not use unauthenticated 401 alone as protected-route evidence.
+
+Evidence:
+
+- Files changed: active living documents are being updated in this continuation, including this checklist, product dashboard, issue tracker, feature/content/email matrices, operational inventory, acceptance plan, and Phase G summary.
+- Tests: documentation changes are covered by `git diff --check` plus the source/build checks in item 14.
+- Deployment evidence: documentation itself is pending commit/push.
+- Live verification evidence: deployment and CORS evidence is recorded in the relevant entries.
+- Remaining limitation: current-super-admin `ADMIN_ROLE_ASSIGNMENTS`, authenticated Admin route sweep, product-wide rendered evidence, and feature/control inventory are not yet closed.
+
+## 16. Living Documentation
+
+Status: `NOT_STARTED`
+
+Requirement:
+
+- Update `phase-g-active-execution-checklist.md`, `product-completion-dashboard.md`, `issues-and-phases.md`, `feature-completeness-matrix.md`, `operational-feature-inventory.md`, `acceptance-test-plan.md`, `content-quality-matrix.md`, `email-notification-matrix.md`, and `phase-g-pre-acceptance-completion.md`.
+- Correct prior false confidence.
+- Record Releases `forbidden_origin`, why previous verification missed it, shared origin fix, authenticated Admin route sweep, pricing reconstruction, product-wide copy findings, security email activation, admin alert activation, current super-admin configuration, and remaining manual/external items.
+- Do not keep unsupported `FULLY_OPERATIONAL_ENABLED` classifications.
+
+Evidence:
+
+- Files changed: pending.
+- Tests: pending.
+- Deployment evidence: pending.
+- Live verification evidence: pending.
+- Remaining limitation: pending.
+
+## 17. Completion Standard
+
+Status: `NOT_STARTED`
+
+Requirement:
+
+- Do not begin consolidated manual acceptance.
+- Use `PHASE_G_IMPLEMENTATION_COMPLETE_WITH_EXPLICIT_OPERATIONAL_CONFIGURATION_ITEMS` only when all completion criteria are met.
+- Otherwise retain `PHASE_G_PRE_ACCEPTANCE_COMPLETION_ACTIVE`.
+- Final report must include checklist completion, both AGENTS files, admin role configuration, admin alert configuration, Releases root cause/fix, authenticated Admin route results, pricing rationale, product-wide copy defects/corrections, security email activation, admin alert activation, email copy review, feature/control verification, visual evidence, tests, deployments, remaining manual/external items, and explicit non-actions.
+
+Evidence:
+
+- Files changed: pending.
+- Tests: pending.
+- Deployment evidence: pending.
+- Live verification evidence: pending.
+- Remaining limitation: pending.

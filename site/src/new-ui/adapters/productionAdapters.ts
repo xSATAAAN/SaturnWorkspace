@@ -723,8 +723,8 @@ export const productionAdapters: AppAdapters = {
       return (await updatePromoCodeState(id, active, reason)).item
     },
     async listReleases() {
-      const latest = await productionAdapters.releases.getLatest('beta')
-      return [latest.raw as AdminReleaseManifest].filter(Boolean)
+      const data = await fetchRemoteControls('beta')
+      return data.manifest ? [data.manifest as AdminReleaseManifest] : []
     },
     async uploadRelease(input) {
       return uploadReleaseBinary({ file: input.file, version: input.version, channel: input.channel, artifact_type: input.artifactType })
