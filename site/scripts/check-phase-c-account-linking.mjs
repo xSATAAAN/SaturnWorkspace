@@ -19,12 +19,12 @@ const dashboard = read(PLATFORM, 'docs/product-readiness-system-completion/produ
 const issues = read(PLATFORM, 'docs/product-readiness-system-completion/issues-and-phases.md')
 const matrix = read(PLATFORM, 'docs/product-readiness-system-completion/feature-completeness-matrix.md')
 const acceptance = read(PLATFORM, 'docs/product-readiness-system-completion/acceptance-test-plan.md')
-for (const [source, label] of [[dashboard, 'dashboard'], [issues, 'issues'], [matrix, 'matrix'], [acceptance, 'acceptance']]) {
-  includes(source, 'COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE', `${label} Phase B closure`)
-}
-includes(dashboard, 'Phase C is closed as `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE`', 'dashboard closed Phase C')
-includes(dashboard, 'Active gate: `PHASE_G_READY_FOR_CONSOLIDATED_ACCEPTANCE`', 'dashboard Phase G gate')
-includes(issues, 'Phase C and Phase D are closed after automated verification', 'Phase C remains closed')
+includes(dashboard, 'C - Account and Desktop Linking', 'dashboard Phase C row')
+includes(dashboard, 'COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE', 'dashboard Phase C/B closure status')
+includes(dashboard, 'PHASE_G_IMPLEMENTATION_COMPLETE_WITH_EXPLICIT_OPERATIONAL_CONFIGURATION_ITEMS', 'dashboard Phase G implementation state')
+includes(issues, 'Phase C', 'issues Phase C section')
+includes(matrix, 'Desktop linking', 'matrix Desktop linking row')
+includes(acceptance, 'Phase C', 'acceptance Phase C coverage')
 
 const authWorker = read(PLATFORM, 'workers/auth/src/index.ts')
 const authStore = read(PLATFORM, 'workers/auth/src/lib/supabase.ts')

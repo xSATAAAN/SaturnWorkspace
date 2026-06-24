@@ -13,7 +13,7 @@ const env = { SUPABASE_URL: 'https://example.supabase.co', SUPABASE_SERVICE_ROLE
 const uidEnv = {
   ...env,
   ADMIN_ROLE_ASSIGNMENTS: JSON.stringify({
-    by_uid: { 'firebase-admin-1': 'security' },
+    by_uid: { 'firebase-admin-1': 'security_auditor', 'firebase-admin-legacy': 'security' },
     by_email: { 'admin@example.com': 'billing' },
   }),
 }
@@ -30,10 +30,35 @@ test('role assignments enforce least privilege', () => {
   assert.doesNotThrow(() => requirePermission(adminContext(env, 'token-admin'), 'policies:write'))
   assert.equal(adminRoleAssignmentsState(env), 'configured')
   const uidContext = adminContext(uidEnv, { email: 'admin@example.com', uid: 'firebase-admin-1' })
-  assert.equal(uidContext.role, 'security')
+  assert.equal(uidContext.role, 'security_auditor')
   assert.doesNotThrow(() => requirePermission(uidContext, 'policies:write'))
   assert.throws(() => requirePermission(uidContext, 'subscriptions:write'), /admin_permission_denied/)
+  assert.equal(adminContext(uidEnv, { email: 'legacy@example.com', uid: 'firebase-admin-legacy' }).role, 'security_auditor')
   assert.equal(adminContext(uidEnv, 'unassigned@example.com').role, 'read_only')
+})
+
+test('supported roles have explicit direct-api permissions', () => {
+  const supported = {
+    super_admin: ['policies:write', 'subscriptions:write', 'releases:write', 'support:write'],
+    support: ['support:write'],
+    billing: ['subscriptions:write'],
+    release_manager: ['releases:write'],
+    security_auditor: ['policies:write', 'sessions:revoke'],
+    read_only: ['admin:read'],
+  }
+  const denied = {
+    support: ['subscriptions:write', 'releases:write', 'policies:write'],
+    billing: ['support:write', 'releases:write', 'policies:write'],
+    release_manager: ['support:write', 'subscriptions:write', 'policies:write'],
+    security_auditor: ['support:write', 'subscriptions:write', 'releases:write'],
+    read_only: ['support:write', 'subscriptions:write', 'releases:write', 'policies:write'],
+  }
+  for (const [role, permissions] of Object.entries(supported)) {
+    const context = adminContext({ ...env, ADMIN_ROLE_ASSIGNMENTS: JSON.stringify({ by_uid: { 'test-uid': role } }) }, { email: 'role@example.test', uid: 'test-uid' })
+    assert.equal(context.role, role)
+    for (const permission of permissions) assert.doesNotThrow(() => requirePermission(context, permission), `${role} should allow ${permission}`)
+    for (const permission of denied[role] || []) assert.throws(() => requirePermission(context, permission), /admin_permission_denied/, `${role} should deny ${permission}`)
+  }
 })
 
 test('account lifecycle preview is deterministic and revokes sessions for suspension', async () => {

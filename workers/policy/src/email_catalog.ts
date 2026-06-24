@@ -161,7 +161,7 @@ export const EMAIL_CATALOG: Record<string, EmailCatalogItem> = {
     retry_allowed: true,
     essential: false,
     requires_backend_event: true,
-    admin_test_allowed: true,
+    admin_test_allowed: false,
   }),
   "auth.email_verification": item({
     event_type: "auth.email_verification",
@@ -170,16 +170,16 @@ export const EMAIL_CATALOG: Record<string, EmailCatalogItem> = {
     sender_identity: "security",
     title_en: "Email verification code",
     title_ar: "رمز تأكيد البريد الإلكتروني",
-    description_en: "Prepared for Auth Worker email verification once the auth flow emits a server event.",
-    description_ar: "جاهزة لتأكيد البريد عند ربطها بحدث من خدمة المصادقة.",
+    description_en: "Sends a server-side SaturnWS email verification code.",
+    description_ar: "ترسل رمز تأكيد البريد من مسار المصادقة التشغيلي في SaturnWS.",
     default_subject_en: "Your SaturnWS verification code",
     default_subject_ar: "رمز تأكيد SaturnWS",
-    integration_status: "prepared",
+    integration_status: "linked",
     user_can_disable: false,
     retry_allowed: true,
     essential: true,
     requires_backend_event: true,
-    admin_test_allowed: true,
+    admin_test_allowed: false,
   }),
   "auth.verification_resend": item({
     event_type: "auth.verification_resend",
@@ -215,7 +215,7 @@ export const EMAIL_CATALOG: Record<string, EmailCatalogItem> = {
     retry_allowed: true,
     essential: true,
     requires_backend_event: true,
-    admin_test_allowed: true,
+    admin_test_allowed: false,
   }),
   "security.new_login": item({
     event_type: "security.new_login",
@@ -233,7 +233,7 @@ export const EMAIL_CATALOG: Record<string, EmailCatalogItem> = {
     retry_allowed: true,
     essential: true,
     requires_backend_event: true,
-    admin_test_allowed: true,
+    admin_test_allowed: false,
   }),
   "billing.payment_succeeded": item({
     event_type: "billing.payment_succeeded",
@@ -251,7 +251,7 @@ export const EMAIL_CATALOG: Record<string, EmailCatalogItem> = {
     retry_allowed: true,
     essential: true,
     requires_backend_event: true,
-    admin_test_allowed: true,
+    admin_test_allowed: false,
   }),
   "billing.payment_failed": item({
     event_type: "billing.payment_failed",
@@ -269,7 +269,7 @@ export const EMAIL_CATALOG: Record<string, EmailCatalogItem> = {
     retry_allowed: true,
     essential: true,
     requires_backend_event: true,
-    admin_test_allowed: true,
+    admin_test_allowed: false,
   }),
   "billing.subscription_expiring": item({
     event_type: "billing.subscription_expiring",
@@ -287,7 +287,7 @@ export const EMAIL_CATALOG: Record<string, EmailCatalogItem> = {
     retry_allowed: true,
     essential: false,
     requires_backend_event: true,
-    admin_test_allowed: true,
+    admin_test_allowed: false,
   }),
   "billing.subscription_expired": item({
     event_type: "billing.subscription_expired",
@@ -305,7 +305,7 @@ export const EMAIL_CATALOG: Record<string, EmailCatalogItem> = {
     retry_allowed: true,
     essential: true,
     requires_backend_event: true,
-    admin_test_allowed: true,
+    admin_test_allowed: false,
   }),
   "release.update_available": item({
     event_type: "release.update_available",
@@ -323,7 +323,7 @@ export const EMAIL_CATALOG: Record<string, EmailCatalogItem> = {
     retry_allowed: true,
     essential: false,
     requires_backend_event: true,
-    admin_test_allowed: true,
+    admin_test_allowed: false,
   }),
   "release.mandatory_update": item({
     event_type: "release.mandatory_update",
@@ -341,7 +341,7 @@ export const EMAIL_CATALOG: Record<string, EmailCatalogItem> = {
     retry_allowed: true,
     essential: true,
     requires_backend_event: true,
-    admin_test_allowed: true,
+    admin_test_allowed: false,
   }),
   "policy.kill_switch_notice": item({
     event_type: "policy.kill_switch_notice",
@@ -359,7 +359,7 @@ export const EMAIL_CATALOG: Record<string, EmailCatalogItem> = {
     retry_allowed: true,
     essential: true,
     requires_backend_event: true,
-    admin_test_allowed: true,
+    admin_test_allowed: false,
   }),
 }
 

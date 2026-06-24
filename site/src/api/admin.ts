@@ -300,7 +300,7 @@ export type AdminAuditLogItem = {
 export type AdminSession = {
   success: boolean
   email: string
-  role: 'super_admin' | 'support' | 'billing' | 'release_manager' | 'security' | 'auditor' | 'read_only'
+  role: 'super_admin' | 'support' | 'billing' | 'release_manager' | 'security_auditor' | 'read_only'
   permissions: string[]
 }
 

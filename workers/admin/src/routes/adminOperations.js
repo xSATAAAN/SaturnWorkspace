@@ -5,10 +5,19 @@ const ROLE_PERMISSIONS = Object.freeze({
   support: ["admin:read", "users:read", "support:write", "communications:write", "sessions:revoke"],
   billing: ["admin:read", "users:read", "subscriptions:read", "subscriptions:write", "promotions:write", "commerce:read"],
   release_manager: ["admin:read", "releases:read", "releases:write"],
-  security: ["admin:read", "users:read", "diagnostics:read", "diagnostics:write", "policies:read", "policies:write", "audit:read", "sessions:revoke"],
-  auditor: ["admin:read", "users:read", "subscriptions:read", "diagnostics:read", "policies:read", "audit:read"],
+  security_auditor: ["admin:read", "users:read", "subscriptions:read", "diagnostics:read", "diagnostics:write", "policies:read", "policies:write", "audit:read", "sessions:revoke"],
   read_only: ["admin:read", "users:read", "subscriptions:read", "releases:read", "diagnostics:read", "policies:read", "audit:read"],
 })
+
+const ROLE_ALIASES = Object.freeze({
+  security: "security_auditor",
+  auditor: "security_auditor",
+})
+
+function normalizeAdminRole(role) {
+  const normalized = String(role || "").trim().toLowerCase()
+  return ROLE_ALIASES[normalized] || normalized
+}
 
 const REASON_CODES = new Set([
   "admin_action",
@@ -36,12 +45,12 @@ function parseRoleAssignments(env) {
     const byEmail = Object.fromEntries(
       Object.entries(byEmailSource)
         .filter(([key]) => !["by_email", "by_uid"].includes(String(key).trim().toLowerCase()))
-        .map(([email, role]) => [String(email).trim().toLowerCase(), String(role).trim().toLowerCase()])
+        .map(([email, role]) => [String(email).trim().toLowerCase(), normalizeAdminRole(role)])
         .filter(([email, role]) => email && Object.hasOwn(ROLE_PERMISSIONS, role)),
     )
     const byUid = Object.fromEntries(
       Object.entries(byUidSource)
-        .map(([uid, role]) => [String(uid).trim(), String(role).trim().toLowerCase()])
+        .map(([uid, role]) => [String(uid).trim(), normalizeAdminRole(role)])
         .filter(([uid, role]) => uid && Object.hasOwn(ROLE_PERMISSIONS, role)),
     )
     return { byEmail, byUid, configured: Object.keys(byEmail).length > 0 || Object.keys(byUid).length > 0 }

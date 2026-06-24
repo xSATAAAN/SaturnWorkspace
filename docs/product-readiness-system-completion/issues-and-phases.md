@@ -1,46 +1,48 @@
 # Current Issues and Phase Ownership
 
-Updated: 2026-06-23
+Updated: 2026-06-24
 
-## Phase closure
+## Phase Closure
 
 - Phase B: `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE`.
 - Phase C: `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE`.
 - Phase D: `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE`.
 - Phase E: `COMPLETE_EXCEPT_WAITING_EXTERNAL_INTEGRATION`.
 - Phase F: `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE`.
-- Phase G: `PHASE_G_IMPLEMENTATION_COMPLETION_PENDING_CONSOLIDATED_MANUAL_ACCEPTANCE`.
-- No B.3/B.4, F.1/F.2, G.1, or additional dependency gate exists.
+- Phase G: `PHASE_G_IMPLEMENTATION_COMPLETE_WITH_EXPLICIT_OPERATIONAL_CONFIGURATION_ITEMS`.
+- No B.3/B.4, C.1, F.1/F.2, G.1, or additional dependency gate exists.
 
-## Current tracked items
+## Current Tracked Items
 
 | ID | Item | Type | Current state | Owner |
 | --- | --- | --- | --- | --- |
-| PR-001 | Real checkout provider and provider plan mappings | External integration | Backend catalog is authoritative; checkout fails closed until configured. | External / G |
-| PR-002 | OTP production email delivery | Operational rollout | Implemented and feature-flag enabled; manual acceptance remains Phase G. | G acceptance |
-| PR-003 | Support attachments | Implemented | Private R2 storage, authorization, projections, admin proxy, orphan cleanup, and tests are in place. | G acceptance |
-| PR-004 | Administrator role assignments | Configuration | Backend RBAC supports UID assignments; `ADMIN_ROLE_ASSIGNMENTS` is not visible in current secret list and must be configured operationally. | Operations / G |
-| PR-005 | Recovery evidence population | Integration contract | Replacement manual grants produce recovery evidence. Enriched fields require the additive Phase G Supabase migration; legacy ledger fallback remains safe. | G / migration channel |
-| PR-006 | Safe account deletion requests | Prepared disabled | Non-destructive request/cancel flow is implemented. Production operation waits for the additive `account_deletion_requests` Supabase migration. | G / migration channel |
+| PR-001 | Real checkout provider and provider plan mappings | External integration | Backend catalog is authoritative; checkout fails closed until configured. | External / Phase E-G |
+| PR-002 | OTP production email delivery | Operational rollout | Auth and Policy queue path is implemented and enabled; provider delivery remains pending QA recipient acceptance. | Phase G acceptance |
+| PR-003 | Support attachments | Implemented contract | Private R2 storage, authorization, projections, admin proxy, orphan cleanup, and tests are in place. Production manual acceptance remains Phase G. | Phase G acceptance |
+| PR-004 | Administrator role assignments | Configuration | Source supports UID-based assignments and least-privilege role matrix; `ADMIN_ROLE_ASSIGNMENTS` is not configured in the Admin Worker secret list. | Operations / Phase G |
+| PR-005 | Recovery evidence population | Schema and integration contract | Enriched ledger schema is applied. Replacement-grant evidence is tested without executing a real grant. | Phase G acceptance |
+| PR-006 | Safe account deletion requests | Implemented non-destructive workflow | Supabase table is applied; request/cancel/cooling-off state and session revocation contract are implemented. Disposable QA acceptance remains Phase G. | Phase G acceptance |
 | PR-007 | Irreversible account deletion | Destructive operation | Not implemented and not approved. Only request/cancel/cooling-off state exists. | Explicit future approval |
 | PR-008 | Legal/public content changes | Legal decision | Content remains static and versioned. | Legal approval |
-| PR-009 | Frontend main chunk above 500 kB | Performance debt | Build passes with a Vite warning; code splitting is recommended after acceptance. | Post-G optimization |
+| PR-009 | Frontend main chunk above 500 kB | Performance debt | Build can pass with a Vite warning; code splitting remains a post-acceptance optimization unless it blocks release. | Post-G optimization |
+| PR-010 | Desktop QA Setup | Distribution QA | Local QA setup was built at `D:\SaturnWS\build-output\phase-g-qa-installed-channel-20260624-131944\setup\SaturnWorkspace-Setup-1.0.7-beta-phase-g-qa.exe`; SHA256 `527C21D6A87720DB31E0EC4A8F59EA6FF2299C928C1B83447E2AC1E6AAA45DDD`; not published to OTA, GitHub Releases, or R2. Install/uninstall acceptance remains Phase G manual. | Phase G acceptance |
+| PR-011 | Arabic mojibake | Content/storage defect | Supabase plan catalog values and desktop startup/OAuth copy repaired; runtime/source/dist/package guards added. | Phase G prevention |
+| PR-012 | Automatic billing/release/security/admin-alert emails | Event activation | Billing/release remain disabled without real committed events. Security/admin alerts remain disabled until event producers and cooldown/dedup contracts are complete. | Phase G / future activation |
 
-## Resolved systemic defects
+## Resolved Systemic Defects
 
 | Defect | Resolution |
 | --- | --- |
 | New user displayed as `monthly` | Canonical resolver returns exact no-subscription state and ignores email-only legacy rows for ownership. |
-| Admin Users referenced nonexistent `account_profiles.firebase_user_id` | Admin queries now use `firebase_uid`; schema-contract test prevents regression. |
+| Admin Users referenced nonexistent identity field | Admin queries use `firebase_uid`; schema-contract tests prevent regression. |
 | Payment-provider absence hid valid plans | Plan visibility, activity, purchase readiness, provider readiness, and checkout enablement are separate states. |
 | Users and subscriptions shared one Admin surface | Separate routes and data sources now exist. |
 | Generic subscription PATCH | Removed with `410 explicit_subscription_operation_required`; explicit state transitions replace it. |
 | Admin actions lacked deterministic preview/idempotency | Operation requests, preview hashes, request IDs, locks, transition validation, and audit are implemented. |
-| Crash data exposed broad payloads | Admin projections redact sensitive fields and limit stack summaries. |
 | Invite one-per-user/device race | Atomic D1 claims and conditional consumption prevent concurrent reuse. |
-| Policy Controls legacy panel | The structured Policies route is the production control surface. |
-| Coverage shell | Readiness reads real health/config state without secret values. |
+| Account deletion schema pending state | Supabase schema is applied and status path now projects real none/pending/cancelled states instead of a prepared-disabled projection. |
+| Arabic plan catalog mojibake | Stored Supabase values repaired; API transport uses UTF-8 and repository guard prevents reintroduction. |
 
-## Phase G only
+## Phase G Boundary
 
-Phase G owns consolidated manual acceptance for B/C/D/F and the automated parts of E. It must not perform real payment, real subscription grant, production release publication, live kill-switch activation, or irreversible deletion unless a separate explicit approval is provided.
+Phase G owns consolidated manual acceptance. It must not perform real payment, real subscription grant, production release publication, live kill-switch activation, or irreversible deletion unless a separate explicit approval is provided.

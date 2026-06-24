@@ -8,6 +8,7 @@
     "test:phase-c": "node scripts/check-phase-c-entitlement-policy.mjs",
     "test:phase-d": "node scripts/check-phase-d-support-notifications.mjs",
     "test:phase-f": "node scripts/check-phase-f-invites.mjs",
+    "test:phase-g": "npm run check && npm run test:phase-c && npm run test:phase-d && npm run test:phase-f && node scripts/check-phase-g-email-content.mjs",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "migrate:local": "wrangler d1 migrations apply saturnws-policy --local",

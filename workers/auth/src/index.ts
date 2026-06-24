@@ -1272,17 +1272,6 @@ function accountDeletionProjection(row: Record<string, any> | null) {
   }
 }
 
-function accountDeletionUnavailableProjection() {
-  return {
-    state: "unavailable",
-    request: null,
-    purge_available: false,
-    purge_mode: "not_implemented_without_destructive_approval",
-    feature_available: false,
-    unavailable_reason: "schema_pending",
-  }
-}
-
 const ACCOUNT_DELETION_SCHEMA_PENDING = "__account_deletion_schema_pending__" as const
 
 function isAccountDeletionSchemaMissing(error: unknown): boolean {
@@ -1296,19 +1285,7 @@ async function handleAccountDeletionStatus(request: Request, env: Env): Promise<
   if (!idToken) return errorJson(request, "AUTH_SESSION_EXPIRED", 401, true)
   const firebaseUser = await verifyFirebaseUser(idToken, env)
   const profile = await getAccountProfileByFirebaseUid(env, firebaseUser.userId).catch(() => null)
-  let row: Record<string, any> | null = null
-  try {
-    row = await getAccountDeletionRequest(env, firebaseUser.userId)
-  } catch (error) {
-    if (isAccountDeletionSchemaMissing(error)) {
-      return json({
-        success: true,
-        account_status: profile?.account_status || "active",
-        deletion: accountDeletionUnavailableProjection(),
-      })
-    }
-    throw error
-  }
+  const row = await getAccountDeletionRequest(env, firebaseUser.userId)
   return json({
     success: true,
     account_status: profile?.account_status || "active",
