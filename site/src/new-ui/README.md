@@ -1,72 +1,59 @@
 # Saturn Workspace New UI
 
-This is an isolated development preview. It is not imported by the current `site/src/main.tsx` or `site/src/App.tsx`, and it is not part of the current production Vite entry.
+`site/src/new-ui` is the production UI source for the current Saturn Workspace website, account portal, and admin shell.
 
-## Run
+The production Vite entry is:
 
-From `D:\SaturnWS\web-platform\site`:
+`site/src/main.tsx`
 
-```powershell
-npm run dev:new-ui -- --host 127.0.0.1
-```
+It imports:
 
-Default preview URL:
-
-`http://127.0.0.1:4180/`
+`site/src/new-ui/production-main.tsx`
 
 ## Build
 
-```powershell
-npm run build:new-ui
-```
-
-The isolated output is written to:
-
-`D:\SaturnWS\web-platform\site\src\new-ui\dist`
-
-The current production build remains:
+From the canonical repository:
 
 ```powershell
+cd D:\SaturnWS\github-deploy\SaturnWorkspace\site
 npm run build
 ```
 
-## Preview Routes
+The production output is written to:
 
-The preview uses query-string routing so it does not add or replace production routes.
+`D:\SaturnWS\github-deploy\SaturnWorkspace\site\dist`
 
-| Surface | URL |
-|---|---|
-| Public home | `/?surface=public&page=home` |
-| Features/product | `/?surface=public&page=product` |
-| Pricing | `/?surface=public&page=pricing` |
-| Download | `/?surface=public&page=download` |
-| Releases | `/?surface=public&page=releases` |
-| Contact/support | `/?surface=public&page=contact` |
-| Sign in | `/?surface=auth&page=signin` |
-| Sign up | `/?surface=auth&page=signup` |
-| Email verification | `/?surface=auth&page=verify` |
-| Forgot password | `/?surface=auth&page=forgot` |
-| Checkout | `/?surface=checkout&page=checkout` |
-| Payment states | `/?surface=checkout&page=status&state=pending` |
-| Customer portal | `/?surface=portal&page=overview` |
-| Customer subscription | `/?surface=portal&page=subscription` |
-| Customer payments | `/?surface=portal&page=payments` |
-| Customer downloads | `/?surface=portal&page=downloads` |
-| Customer devices | `/?surface=portal&page=devices` |
-| Customer support | `/?surface=portal&page=support` |
-| Admin login | `/?surface=admin&page=login` |
-| Admin overview | `/?surface=admin&page=overview` |
-| Admin users | `/?surface=admin&page=users` |
-| Admin subscriptions | `/?surface=admin&page=subscriptions` |
-| Admin releases | `/?surface=admin&page=releases` |
-| Admin policies | `/?surface=admin&page=policies` |
-| Admin coverage | `/?surface=admin&page=coverage` |
-| System states | `/?surface=system&page=404` |
+## Local Preview
+
+After a production build:
+
+```powershell
+npm run preview -- --host 127.0.0.1
+```
+
+The local preview normally opens on a Vite preview port such as:
+
+`http://127.0.0.1:4173/`
+
+## Production Routes
+
+The new UI owns the current public, account, auth, system, and admin route shells. SPA fallback files are generated into `site/dist` by:
+
+```powershell
+node tools/publish-static-pages.mjs
+```
+
+The cutover check verifies that these fallbacks point at the same React app shell:
+
+```powershell
+cd D:\SaturnWS\github-deploy\SaturnWorkspace\site
+node scripts/check-frontend-cutover.mjs
+```
 
 ## Boundaries
 
-- Light is the first-visit default; Dark is manually selected and persisted.
-- English is the first-visit default; Arabic is manually selected and persisted.
-- Mock flows use `adapters/mockAdapter.ts` and are development-only.
-- No page calls a live payment, auth, OTA, policy, D1, or support mutation.
+- Production code must use production adapters, not development mock adapters.
+- Mock preview utilities must not appear in `site/dist`.
+- Old static HTML pages must not be copied into `site/dist`.
+- Legacy public bundle tokens such as outdated prices, old beta-access wording, old provider-specific copy, or old contact handles must not appear in the production bundle.
 - No secrets or credentials are stored in this folder.

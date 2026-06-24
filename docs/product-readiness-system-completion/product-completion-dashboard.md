@@ -11,12 +11,12 @@ Updated: 2026-06-24
 | D - Support and notifications | `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE` | Support ownership, webhook, retry, idempotency, rate-limit, lock, and private attachment contract tests pass. |
 | E - Commercial truth | `COMPLETE_EXCEPT_WAITING_EXTERNAL_INTEGRATION` | Plan catalog and entitlement truth are live; checkout remains disabled until a real payment provider is approved and mapped. |
 | F - Admin completion | `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE` | Admin schema contracts, RBAC paths, account/subscription operations, diagnostics, and readiness checks pass. |
-| G - Pre-acceptance completion | `PHASE_G_IMPLEMENTATION_COMPLETE_WITH_EXPLICIT_OPERATIONAL_CONFIGURATION_ITEMS` | Implementation remediation is complete for this batch. Consolidated manual acceptance has not started. |
+| G - Pre-acceptance completion | `PHASE_G_IMPLEMENTATION_COMPLETE_WITH_EXPLICIT_OPERATIONAL_CONFIGURATION_ITEMS` | Implementation work for the current Phase G pre-acceptance batch is complete. Consolidated manual acceptance has not started, and the remaining items are explicit operational configuration or manual-acceptance items. |
 
 ## Production Evidence
 
 - Canonical repository: `D:\SaturnWS\github-deploy\SaturnWorkspace`.
-- Current local HEAD and `origin/main`: `c3ae2689a9d2ce6ba285d51e5f5ac957f2de4b64` before the current Phase G worktree changes.
+- Current local HEAD and `origin/main`: `55a67e0efd108ed5873d0cb34fd3524014b35e31` before the current Phase G continuation worktree changes.
 - Supabase project: `Saturn Workspace` / ref `iqvwoivlamglyblftwez`.
 - Applied Supabase migrations:
   - `20260623214309 phase_g_recovery_deletion`
@@ -31,17 +31,22 @@ Updated: 2026-06-24
 - Worker flags in source:
   - Auth: `EMAIL_AUTH_ENABLED=true`.
   - Policy: `EMAIL_OUTBOUND_ENABLED=true`, `EMAIL_INBOUND_ENABLED=true`, `EMAIL_SUPPORT_ENABLED=true`, `EMAIL_AUTH_ENABLED=true`, `EMAIL_SCHEDULER_ENABLED=true`.
-  - Policy billing, release, security, and admin-alert email categories remain disabled.
+  - Security email producers exist in the current worktree for selected committed session, device, and account-lifecycle events, but `EMAIL_SECURITY_ENABLED=false`.
+  - Admin alert producers exist in the current worktree for final email queue failure, webhook verification failure, cleanup failure, storage configuration failure, schema mismatch, readiness degradation, and high-severity tamper signals; `EMAIL_ADMIN_ALERTS_ENABLED=false` and recipients are not configured.
+  - Billing and release email categories remain disabled.
 - Secret inventory:
   - Policy Worker has `RESEND_SEND_API_KEY`, `RESEND_RECEIVE_API_KEY`, and `RESEND_WEBHOOK_SECRET`.
   - Auth Worker has `AUTH_EMAIL_ENQUEUE_TOKEN` and `EMAIL_VERIFICATION_PEPPER`.
   - Admin Worker does not currently show `ADMIN_ROLE_ASSIGNMENTS`; multi-role RBAC is therefore `OPERATIONAL_CONFIGURATION_REQUIRED`.
+  - `EMAIL_ADMIN_ALERT_RECIPIENTS` is not configured; admin alert delivery must stay disabled.
 - Tests run during Phase G continuation:
   - Repository mojibake scan: passed.
   - Policy `test:phase-g`: passed.
   - Auth `check` and `test:phase-c`: passed.
   - Admin `check:syntax` and `test:phase-g`: passed.
   - Desktop Python compile, frontend build, and QA Setup build: passed.
+  - Site Phase B.1, Phase C, and Phase F checks: passed.
+  - Local visual QA generated public route screenshots and pricing-card fixture screenshots for Arabic/English desktop, tablet, and mobile layouts.
 
 ## State and Source-of-Truth Decisions
 
@@ -64,7 +69,11 @@ Updated: 2026-06-24
 - Repository-wide mojibake guard now scans runtime source, Workers, AGENTS, and generated `site/dist` when requested.
 - Email catalog Phase G test renders Arabic/English HTML and plain text for each template and blocks mojibake, missing charset, missing RTL/LTR wrappers, empty CTA URLs, unsafe interpolation, disabled test sends, and implementation vocabulary leakage.
 - Billing and release email templates remain disabled because no real committed payment/release event source is active.
-- Security/admin-alert email categories remain disabled until reliable actionable event producers, deduplication/cooldown, and destination rules are accepted.
+- Security email producers were added in source for new desktop device link, session revoke, device revoke, revoke-all, deletion request/cancel, account suspend, and account reactivate. The category remains disabled until activation, destination, preference, and acceptance decisions are complete.
+- Admin alert producer coverage is implemented in source for the required operational families with deterministic idempotency/cooldown. Delivery remains disabled until recipients, rollout, and manual acceptance are configured.
+- Public pricing copy and card presentation were updated to the approved current prices and promotional trial language. Backend catalog remains price/status truth, while user-facing plan differentiators are localized in the content layer.
+- Public plan catalog CORS source was repaired to allow Saturn public origins as well as Admin origins. Production CORS verification is required after Admin Worker deployment.
+- Legacy root static website artifacts were removed from source. GitHub Pages continues to publish `site/dist`, and the cutover guard now blocks known legacy public bundle tokens from returning.
 
 ## Operational Configuration Required
 
@@ -74,6 +83,8 @@ Updated: 2026-06-24
 | Real payment provider | `WAITING_EXTERNAL` | Approve provider, plan mappings, webhook contract, and rollout before checkout or billing emails are enabled. |
 | QA email delivery acceptance | `PENDING_MANUAL_ACCEPTANCE` | Use a dedicated QA recipient in Phase G to confirm provider delivery without exposing OTP values. |
 | QA Desktop Setup artifact | `QA_ARTIFACT_BUILT_PENDING_MANUAL_ACCEPTANCE` | Local artifact: `D:\SaturnWS\build-output\phase-g-qa-installed-channel-20260624-131944\setup\SaturnWorkspace-Setup-1.0.7-beta-phase-g-qa.exe`; SHA256 `527C21D6A87720DB31E0EC4A8F59EA6FF2299C928C1B83447E2AC1E6AAA45DDD`. Not published. |
+| Desktop reproducibility inventory | `RECORDED_PENDING_MANUAL_ACCEPTANCE` | Source manifest and artifact record are under `docs/product-readiness-system-completion/desktop-reproducibility`; no Desktop rebuild was performed in this continuation. |
+| Public plan CORS live verification | `PRODUCTION_VERIFIED_AUTOMATED` | Admin Worker was redeployed and `https://admin-api.saturnws.com/api/plans/catalog` returns `Access-Control-Allow-Origin: https://saturnws.com` for the public origin. |
 
 ## Explicit Non-Actions
 
@@ -84,4 +95,4 @@ Updated: 2026-06-24
 - No live kill switch or forced-update policy was enabled.
 - No irreversible account deletion or purge endpoint was implemented.
 
-Active state: `PHASE_G_IMPLEMENTATION_COMPLETE_WITH_EXPLICIT_OPERATIONAL_CONFIGURATION_ITEMS`.
+Implementation state: `PHASE_G_IMPLEMENTATION_COMPLETE_WITH_EXPLICIT_OPERATIONAL_CONFIGURATION_ITEMS`.

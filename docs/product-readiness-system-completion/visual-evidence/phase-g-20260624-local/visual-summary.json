@@ -1,0 +1,538 @@
+{
+  "target": "http://127.0.0.1:4173",
+  "generated_at": "2026-06-24T11:40:08.875Z",
+  "summary": [
+    {
+      "locale": "ar",
+      "route": "/pricing",
+      "viewport": {
+        "name": "desktop",
+        "width": 1366,
+        "height": 768
+      },
+      "screenshot": "D:\\SaturnWS\\github-deploy\\SaturnWorkspace\\docs\\product-readiness-system-completion\\visual-evidence\\phase-g-20260624-local\\ar-pricing-desktop.png",
+      "metrics": {
+        "title": "Saturn Workspace | Desktop Control Center",
+        "lang": "ar",
+        "dir": "rtl",
+        "bodyWidth": 1366,
+        "viewportWidth": 1366,
+        "horizontalOverflow": false,
+        "pricing": {
+          "headingText": "اختر مدة الوصول المناسبة لطريقة عملك.",
+          "headingWidth": 840,
+          "headingHeight": 131,
+          "headingLineHeight": 66,
+          "headingLineCount": 2,
+          "sharedBenefitsPresent": false,
+          "promoPresent": false,
+          "cardCount": 0,
+          "cardHeights": [],
+          "featuredLabel": "",
+          "disabledCards": 0
+        }
+      }
+    },
+    {
+      "locale": "ar",
+      "route": "/pricing",
+      "viewport": {
+        "name": "tablet",
+        "width": 768,
+        "height": 1024
+      },
+      "screenshot": "D:\\SaturnWS\\github-deploy\\SaturnWorkspace\\docs\\product-readiness-system-completion\\visual-evidence\\phase-g-20260624-local\\ar-pricing-tablet.png",
+      "metrics": {
+        "title": "Saturn Workspace | Desktop Control Center",
+        "lang": "ar",
+        "dir": "rtl",
+        "bodyWidth": 768,
+        "viewportWidth": 768,
+        "horizontalOverflow": false,
+        "pricing": {
+          "headingText": "اختر مدة الوصول المناسبة لطريقة عملك.",
+          "headingWidth": 728,
+          "headingHeight": 42,
+          "headingLineHeight": 42,
+          "headingLineCount": 1,
+          "sharedBenefitsPresent": false,
+          "promoPresent": false,
+          "cardCount": 0,
+          "cardHeights": [],
+          "featuredLabel": "",
+          "disabledCards": 0
+        }
+      }
+    },
+    {
+      "locale": "ar",
+      "route": "/pricing",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "screenshot": "D:\\SaturnWS\\github-deploy\\SaturnWorkspace\\docs\\product-readiness-system-completion\\visual-evidence\\phase-g-20260624-local\\ar-pricing-mobile.png",
+      "metrics": {
+        "title": "Saturn Workspace | Desktop Control Center",
+        "lang": "ar",
+        "dir": "rtl",
+        "bodyWidth": 390,
+        "viewportWidth": 390,
+        "horizontalOverflow": false,
+        "pricing": {
+          "headingText": "اختر مدة الوصول المناسبة لطريقة عملك.",
+          "headingWidth": 362,
+          "headingHeight": 140,
+          "headingLineHeight": 47,
+          "headingLineCount": 3,
+          "sharedBenefitsPresent": false,
+          "promoPresent": false,
+          "cardCount": 0,
+          "cardHeights": [],
+          "featuredLabel": "",
+          "disabledCards": 0
+        }
+      }
+    },
+    {
+      "locale": "ar",
+      "route": "/",
+      "viewport": {
+        "name": "desktop",
+        "width": 1366,
+        "height": 768
+      },
+      "screenshot": "D:\\SaturnWS\\github-deploy\\SaturnWorkspace\\docs\\product-readiness-system-completion\\visual-evidence\\phase-g-20260624-local\\ar-home-desktop.png",
+      "metrics": {
+        "title": "Saturn Workspace | Desktop Control Center",
+        "lang": "ar",
+        "dir": "rtl",
+        "bodyWidth": 1366,
+        "viewportWidth": 1366,
+        "horizontalOverflow": false,
+        "pricing": {
+          "headingText": "اختر مدة الوصول المناسبة لطريقة عملك.",
+          "headingWidth": 840,
+          "headingHeight": 131,
+          "headingLineHeight": 66,
+          "headingLineCount": 2,
+          "sharedBenefitsPresent": false,
+          "promoPresent": false,
+          "cardCount": 0,
+          "cardHeights": [],
+          "featuredLabel": "",
+          "disabledCards": 0
+        }
+      }
+    },
+    {
+      "locale": "ar",
+      "route": "/account/signin",
+      "viewport": {
+        "name": "desktop",
+        "width": 1366,
+        "height": 768
+      },
+      "screenshot": "D:\\SaturnWS\\github-deploy\\SaturnWorkspace\\docs\\product-readiness-system-completion\\visual-evidence\\phase-g-20260624-local\\ar-signin-desktop.png",
+      "metrics": {
+        "title": "Saturn Workspace | Desktop Control Center",
+        "lang": "ar",
+        "dir": "rtl",
+        "bodyWidth": 1366,
+        "viewportWidth": 1366,
+        "horizontalOverflow": false,
+        "pricing": null
+      }
+    },
+    {
+      "locale": "ar",
+      "route": "/account",
+      "viewport": {
+        "name": "desktop",
+        "width": 1366,
+        "height": 768
+      },
+      "screenshot": "D:\\SaturnWS\\github-deploy\\SaturnWorkspace\\docs\\product-readiness-system-completion\\visual-evidence\\phase-g-20260624-local\\ar-account-desktop.png",
+      "metrics": {
+        "title": "Saturn Workspace | Desktop Control Center",
+        "lang": "ar",
+        "dir": "rtl",
+        "bodyWidth": 1366,
+        "viewportWidth": 1366,
+        "horizontalOverflow": false,
+        "pricing": null
+      }
+    },
+    {
+      "locale": "ar",
+      "route": "/admin/communications",
+      "viewport": {
+        "name": "desktop",
+        "width": 1366,
+        "height": 768
+      },
+      "screenshot": "D:\\SaturnWS\\github-deploy\\SaturnWorkspace\\docs\\product-readiness-system-completion\\visual-evidence\\phase-g-20260624-local\\ar-admin-communications-desktop.png",
+      "metrics": {
+        "title": "Saturn Workspace | Desktop Control Center",
+        "lang": "ar",
+        "dir": "rtl",
+        "bodyWidth": 1366,
+        "viewportWidth": 1366,
+        "horizontalOverflow": false,
+        "pricing": null
+      }
+    },
+    {
+      "locale": "en",
+      "route": "/pricing",
+      "viewport": {
+        "name": "desktop",
+        "width": 1366,
+        "height": 768
+      },
+      "screenshot": "D:\\SaturnWS\\github-deploy\\SaturnWorkspace\\docs\\product-readiness-system-completion\\visual-evidence\\phase-g-20260624-local\\en-pricing-desktop.png",
+      "metrics": {
+        "title": "Saturn Workspace | Desktop Control Center",
+        "lang": "en",
+        "dir": "ltr",
+        "bodyWidth": 1366,
+        "viewportWidth": 1366,
+        "horizontalOverflow": false,
+        "pricing": {
+          "headingText": "Choose the access period that fits your work.",
+          "headingWidth": 840,
+          "headingHeight": 116,
+          "headingLineHeight": 58,
+          "headingLineCount": 2,
+          "sharedBenefitsPresent": false,
+          "promoPresent": false,
+          "cardCount": 0,
+          "cardHeights": [],
+          "featuredLabel": "",
+          "disabledCards": 0
+        }
+      }
+    },
+    {
+      "locale": "en",
+      "route": "/pricing",
+      "viewport": {
+        "name": "tablet",
+        "width": 768,
+        "height": 1024
+      },
+      "screenshot": "D:\\SaturnWS\\github-deploy\\SaturnWorkspace\\docs\\product-readiness-system-completion\\visual-evidence\\phase-g-20260624-local\\en-pricing-tablet.png",
+      "metrics": {
+        "title": "Saturn Workspace | Desktop Control Center",
+        "lang": "en",
+        "dir": "ltr",
+        "bodyWidth": 775,
+        "viewportWidth": 768,
+        "horizontalOverflow": true,
+        "pricing": {
+          "headingText": "Choose the access period that fits your work.",
+          "headingWidth": 728,
+          "headingHeight": 37,
+          "headingLineHeight": 37,
+          "headingLineCount": 1,
+          "sharedBenefitsPresent": false,
+          "promoPresent": false,
+          "cardCount": 0,
+          "cardHeights": [],
+          "featuredLabel": "",
+          "disabledCards": 0
+        }
+      }
+    },
+    {
+      "locale": "en",
+      "route": "/pricing",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "screenshot": "D:\\SaturnWS\\github-deploy\\SaturnWorkspace\\docs\\product-readiness-system-completion\\visual-evidence\\phase-g-20260624-local\\en-pricing-mobile.png",
+      "metrics": {
+        "title": "Saturn Workspace | Desktop Control Center",
+        "lang": "en",
+        "dir": "ltr",
+        "bodyWidth": 390,
+        "viewportWidth": 390,
+        "horizontalOverflow": false,
+        "pricing": {
+          "headingText": "Choose the access period that fits your work.",
+          "headingWidth": 362,
+          "headingHeight": 124,
+          "headingLineHeight": 41,
+          "headingLineCount": 3,
+          "sharedBenefitsPresent": false,
+          "promoPresent": false,
+          "cardCount": 0,
+          "cardHeights": [],
+          "featuredLabel": "",
+          "disabledCards": 0
+        }
+      }
+    },
+    {
+      "locale": "en",
+      "route": "/",
+      "viewport": {
+        "name": "desktop",
+        "width": 1366,
+        "height": 768
+      },
+      "screenshot": "D:\\SaturnWS\\github-deploy\\SaturnWorkspace\\docs\\product-readiness-system-completion\\visual-evidence\\phase-g-20260624-local\\en-home-desktop.png",
+      "metrics": {
+        "title": "Saturn Workspace | Desktop Control Center",
+        "lang": "en",
+        "dir": "ltr",
+        "bodyWidth": 1366,
+        "viewportWidth": 1366,
+        "horizontalOverflow": false,
+        "pricing": {
+          "headingText": "Choose the access period that fits your work.",
+          "headingWidth": 840,
+          "headingHeight": 116,
+          "headingLineHeight": 58,
+          "headingLineCount": 2,
+          "sharedBenefitsPresent": false,
+          "promoPresent": false,
+          "cardCount": 0,
+          "cardHeights": [],
+          "featuredLabel": "",
+          "disabledCards": 0
+        }
+      }
+    },
+    {
+      "locale": "en",
+      "route": "/account/signin",
+      "viewport": {
+        "name": "desktop",
+        "width": 1366,
+        "height": 768
+      },
+      "screenshot": "D:\\SaturnWS\\github-deploy\\SaturnWorkspace\\docs\\product-readiness-system-completion\\visual-evidence\\phase-g-20260624-local\\en-signin-desktop.png",
+      "metrics": {
+        "title": "Saturn Workspace | Desktop Control Center",
+        "lang": "en",
+        "dir": "ltr",
+        "bodyWidth": 1366,
+        "viewportWidth": 1366,
+        "horizontalOverflow": false,
+        "pricing": null
+      }
+    },
+    {
+      "locale": "en",
+      "route": "/account",
+      "viewport": {
+        "name": "desktop",
+        "width": 1366,
+        "height": 768
+      },
+      "screenshot": "D:\\SaturnWS\\github-deploy\\SaturnWorkspace\\docs\\product-readiness-system-completion\\visual-evidence\\phase-g-20260624-local\\en-account-desktop.png",
+      "metrics": {
+        "title": "Saturn Workspace | Desktop Control Center",
+        "lang": "en",
+        "dir": "ltr",
+        "bodyWidth": 1366,
+        "viewportWidth": 1366,
+        "horizontalOverflow": false,
+        "pricing": null
+      }
+    },
+    {
+      "locale": "en",
+      "route": "/admin/communications",
+      "viewport": {
+        "name": "desktop",
+        "width": 1366,
+        "height": 768
+      },
+      "screenshot": "D:\\SaturnWS\\github-deploy\\SaturnWorkspace\\docs\\product-readiness-system-completion\\visual-evidence\\phase-g-20260624-local\\en-admin-communications-desktop.png",
+      "metrics": {
+        "title": "Saturn Workspace | Desktop Control Center",
+        "lang": "en",
+        "dir": "ltr",
+        "bodyWidth": 1366,
+        "viewportWidth": 1366,
+        "horizontalOverflow": false,
+        "pricing": null
+      }
+    }
+  ],
+  "errors": [
+    {
+      "route": "/pricing",
+      "locale": "ar",
+      "viewport": "desktop",
+      "type": "console",
+      "message": "Access to fetch at 'https://admin-api.saturnws.com/api/plans/catalog' from origin 'http://127.0.0.1:4173' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://admin.saturnws.com' that is not equal to the supplied origin. Have the server send the header with a valid value."
+    },
+    {
+      "route": "/pricing",
+      "locale": "ar",
+      "viewport": "desktop",
+      "type": "console",
+      "message": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "route": "/pricing",
+      "locale": "ar",
+      "viewport": "tablet",
+      "type": "console",
+      "message": "Access to fetch at 'https://admin-api.saturnws.com/api/plans/catalog' from origin 'http://127.0.0.1:4173' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://admin.saturnws.com' that is not equal to the supplied origin. Have the server send the header with a valid value."
+    },
+    {
+      "route": "/pricing",
+      "locale": "ar",
+      "viewport": "tablet",
+      "type": "console",
+      "message": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "route": "/pricing",
+      "locale": "ar",
+      "viewport": "mobile",
+      "type": "console",
+      "message": "Access to fetch at 'https://admin-api.saturnws.com/api/plans/catalog' from origin 'http://127.0.0.1:4173' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://admin.saturnws.com' that is not equal to the supplied origin. Have the server send the header with a valid value."
+    },
+    {
+      "route": "/pricing",
+      "locale": "ar",
+      "viewport": "mobile",
+      "type": "console",
+      "message": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "route": "/",
+      "locale": "ar",
+      "viewport": "desktop",
+      "type": "console",
+      "message": "Access to fetch at 'https://admin-api.saturnws.com/api/plans/catalog' from origin 'http://127.0.0.1:4173' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://admin.saturnws.com' that is not equal to the supplied origin. Have the server send the header with a valid value."
+    },
+    {
+      "route": "/",
+      "locale": "ar",
+      "viewport": "desktop",
+      "type": "console",
+      "message": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "route": "/admin/communications",
+      "locale": "ar",
+      "viewport": "desktop",
+      "type": "console",
+      "message": "Access to fetch at 'https://admin.saturnws.com/api/admin/preauth/state' from origin 'http://127.0.0.1:4173' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://admin.saturnws.com' that is not equal to the supplied origin. Have the server send the header with a valid value."
+    },
+    {
+      "route": "/admin/communications",
+      "locale": "ar",
+      "viewport": "desktop",
+      "type": "console",
+      "message": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "route": "/admin/communications",
+      "locale": "ar",
+      "viewport": "desktop",
+      "type": "console",
+      "message": "Access to fetch at 'https://admin.saturnws.com/api/admin/session' from origin 'http://127.0.0.1:4173' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://admin.saturnws.com' that is not equal to the supplied origin. Have the server send the header with a valid value."
+    },
+    {
+      "route": "/admin/communications",
+      "locale": "ar",
+      "viewport": "desktop",
+      "type": "console",
+      "message": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "route": "/pricing",
+      "locale": "en",
+      "viewport": "desktop",
+      "type": "console",
+      "message": "Access to fetch at 'https://admin-api.saturnws.com/api/plans/catalog' from origin 'http://127.0.0.1:4173' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://admin.saturnws.com' that is not equal to the supplied origin. Have the server send the header with a valid value."
+    },
+    {
+      "route": "/pricing",
+      "locale": "en",
+      "viewport": "desktop",
+      "type": "console",
+      "message": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "route": "/pricing",
+      "locale": "en",
+      "viewport": "tablet",
+      "type": "console",
+      "message": "Access to fetch at 'https://admin-api.saturnws.com/api/plans/catalog' from origin 'http://127.0.0.1:4173' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://admin.saturnws.com' that is not equal to the supplied origin. Have the server send the header with a valid value."
+    },
+    {
+      "route": "/pricing",
+      "locale": "en",
+      "viewport": "tablet",
+      "type": "console",
+      "message": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "route": "/pricing",
+      "locale": "en",
+      "viewport": "mobile",
+      "type": "console",
+      "message": "Access to fetch at 'https://admin-api.saturnws.com/api/plans/catalog' from origin 'http://127.0.0.1:4173' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://admin.saturnws.com' that is not equal to the supplied origin. Have the server send the header with a valid value."
+    },
+    {
+      "route": "/pricing",
+      "locale": "en",
+      "viewport": "mobile",
+      "type": "console",
+      "message": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "route": "/",
+      "locale": "en",
+      "viewport": "desktop",
+      "type": "console",
+      "message": "Access to fetch at 'https://admin-api.saturnws.com/api/plans/catalog' from origin 'http://127.0.0.1:4173' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://admin.saturnws.com' that is not equal to the supplied origin. Have the server send the header with a valid value."
+    },
+    {
+      "route": "/",
+      "locale": "en",
+      "viewport": "desktop",
+      "type": "console",
+      "message": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "route": "/admin/communications",
+      "locale": "en",
+      "viewport": "desktop",
+      "type": "console",
+      "message": "Access to fetch at 'https://admin.saturnws.com/api/admin/session' from origin 'http://127.0.0.1:4173' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://admin.saturnws.com' that is not equal to the supplied origin. Have the server send the header with a valid value."
+    },
+    {
+      "route": "/admin/communications",
+      "locale": "en",
+      "viewport": "desktop",
+      "type": "console",
+      "message": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "route": "/admin/communications",
+      "locale": "en",
+      "viewport": "desktop",
+      "type": "console",
+      "message": "Access to fetch at 'https://admin.saturnws.com/api/admin/preauth/state' from origin 'http://127.0.0.1:4173' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://admin.saturnws.com' that is not equal to the supplied origin. Have the server send the header with a valid value."
+    },
+    {
+      "route": "/admin/communications",
+      "locale": "en",
+      "viewport": "desktop",
+      "type": "console",
+      "message": "Failed to load resource: net::ERR_FAILED"
+    }
+  ]
+}

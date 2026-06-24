@@ -98,6 +98,52 @@ function cleanRequestId(body) {
   return requestId
 }
 
+function cleanOperationalText(value, max = 160) {
+  return String(value ?? "").replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim().slice(0, max)
+}
+
+function emailSecurityEnabled(env) {
+  return String(env.EMAIL_SECURITY_ENABLED || "").trim().toLowerCase() === "true"
+}
+
+async function enqueueAccountLifecycleEmail(env, preview, requestId) {
+  if (!emailSecurityEnabled(env)) return { queued: false, skipped: "security_email_disabled" }
+  const url = String(env.ADMIN_EMAIL_ENQUEUE_URL || "").trim()
+  const token = String(env.ADMIN_EMAIL_ENQUEUE_TOKEN || "").trim()
+  const email = String(preview?.target?.email || "").trim().toLowerCase()
+  if (!url || !token) return { queued: false, skipped: "security_email_not_configured" }
+  if (!email || !email.includes("@")) return { queued: false, skipped: "recipient_missing" }
+
+  const eventType = preview.action === "suspend"
+    ? "account.suspended"
+    : preview.action === "reactivate"
+      ? "account.reactivated"
+      : ""
+  if (!eventType) return { queued: false, skipped: "event_not_required" }
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      event_type: eventType,
+      idempotency_key: `admin-account-lifecycle:${eventType}:${preview.target.firebase_uid}:${requestId}`,
+      user_id: preview.target.firebase_uid,
+      recipient: email,
+      locale: "ar",
+      payload: {
+        reason: cleanOperationalText(preview.reason_note || preview.reason_code || "admin_action", 240),
+        action_url: "https://saturnws.com/account",
+      },
+    }),
+  })
+  if (!response.ok) return { queued: false, skipped: `security_email_enqueue_${response.status}` }
+  const payload = await response.json().catch(() => ({}))
+  return { queued: Boolean(payload?.job_id), skipped: payload?.job_id ? undefined : "security_email_suppressed" }
+}
+
 async function sha256(value) {
   const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(value)))
   return [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, "0")).join("")
@@ -169,7 +215,7 @@ export async function executeAccountLifecycle(env, context, firebaseUid, body) {
   const requestId = cleanRequestId(body)
   const preview = await previewAccountLifecycle(env, context, firebaseUid, body)
   if (String(body?.preview_hash || "") !== preview.preview_hash) throw new Error("preview_changed")
-  return supabaseJson(env, "/rpc/admin_account_lifecycle_transition", {
+  const result = await supabaseJson(env, "/rpc/admin_account_lifecycle_transition", {
     method: "POST",
     body: JSON.stringify({
       p_firebase_uid: firebaseUid,
@@ -182,6 +228,8 @@ export async function executeAccountLifecycle(env, context, firebaseUid, body) {
       p_expected_updated_at: preview.expected_updated_at,
     }),
   })
+  await enqueueAccountLifecycleEmail(env, preview, requestId).catch(() => null)
+  return result
 }
 
 function previewSubscriptionResult(subscription, action, newExpiry) {

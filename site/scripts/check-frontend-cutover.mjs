@@ -74,6 +74,20 @@ const forbiddenBundleTokens = [
   'usePreviewRouter',
 ]
 
+const forbiddenLegacyPublicTokens = [
+  '$20',
+  '$120',
+  '$240',
+  'v1u_0',
+  'Bybit',
+  'IPRoyal',
+  'IProyal',
+  'Brave Browser',
+  'AdsPower و Brave',
+  'Saturn Workspace Beta Access',
+  'request beta access',
+]
+
 const assetsDir = path.join(dist, 'assets')
 if (fs.existsSync(assetsDir)) {
   for (const entry of fs.readdirSync(assetsDir)) {
@@ -82,6 +96,11 @@ if (fs.existsSync(assetsDir)) {
     for (const token of forbiddenBundleTokens) {
       if (content.includes(token)) {
         fail(`Development preview token leaked into production bundle: ${token} in ${entry}`)
+      }
+    }
+    for (const token of forbiddenLegacyPublicTokens) {
+      if (content.includes(token)) {
+        fail(`Legacy public token leaked into production bundle: ${token} in ${entry}`)
       }
     }
   }

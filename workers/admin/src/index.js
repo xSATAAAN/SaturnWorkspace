@@ -717,6 +717,10 @@ function serveAdminPolicyControlsScript() {
 function corsHeaders(request, env) {
   const origin = request.headers.get("Origin") || "";
   const allowedOrigins = [
+    "https://admin.saturnws.com",
+    "https://admin-api.saturnws.com",
+    "https://saturnws.com",
+    "https://www.saturnws.com",
     ...String(env.ADMIN_ORIGIN || "").split(","),
     ...String(env.PAYMENTS_ALLOWED_ORIGIN || "").split(","),
   ]

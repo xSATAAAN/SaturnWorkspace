@@ -31,6 +31,8 @@ This is the only manual acceptance gate. It has not started. Phase B, Phase C, P
 - Test no subscription, active, trial, grace, expired, suspended, lifetime, history-only, and integrity-conflict fixtures.
 - Confirm Customer and Admin projections agree and no plan is inferred from email or row order.
 - Verify protected downloads allow only entitled QA users.
+- Verify public pricing displays the approved weekly, monthly, and annual discount/trial presentation in Arabic and English, while checkout remains honestly disabled until the provider is configured.
+- Verify live public plan catalog CORS from `https://saturnws.com` after Admin Worker deployment.
 
 ## 4. Admin Users and Account Operations
 
@@ -53,6 +55,8 @@ This is the only manual acceptance gate. It has not started. Phase B, Phase C, P
 - Verify support attachments with allowed files, rejected file types/sizes, customer ownership, admin access, deletion, and orphan cleanup.
 - Verify reply-by-email replay protection and provider event idempotency.
 - Confirm billing and release emails remain disabled until real committed provider/release events exist.
+- Confirm security email producers remain disabled until `EMAIL_SECURITY_ENABLED` is intentionally enabled.
+- Confirm admin alert delivery remains disabled until recipients and all required alert families are accepted.
 
 ## 7. Diagnostics and Audit
 

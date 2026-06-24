@@ -45,6 +45,7 @@ interface Env {
   EMAIL_SECURITY_ENABLED?: string
   EMAIL_SCHEDULER_ENABLED?: string
   EMAIL_ADMIN_ALERTS_ENABLED?: string
+  EMAIL_ADMIN_ALERT_RECIPIENTS?: string
   EMAIL_FROM_SUPPORT?: string
   EMAIL_REPLY_DOMAIN?: string
   EMAIL_FROM_GENERAL?: string
@@ -53,6 +54,7 @@ interface Env {
   EMAIL_FROM_ACCOUNT?: string
   APP_PUBLIC_URL?: string
   AUTH_EMAIL_ENQUEUE_TOKEN?: string
+  ADMIN_EMAIL_ENQUEUE_TOKEN?: string
   EMAIL_SENSITIVE_PAYLOAD_KEY_B64?: string
 }
 
@@ -935,8 +937,19 @@ function envFlag(value: unknown, fallback = false): boolean {
   return fallback
 }
 
-const AUTH_EMAIL_ENQUEUE_EVENTS = new Set(["auth.email_verification", "auth.verification_resend"])
-const AUTH_EMAIL_ENQUEUE_MAX_BYTES = 4096
+const AUTH_EMAIL_VERIFICATION_EVENTS = new Set(["auth.email_verification", "auth.verification_resend"])
+const INTERNAL_EMAIL_ENQUEUE_EVENTS = new Set([
+  ...AUTH_EMAIL_VERIFICATION_EVENTS,
+  "security.new_login",
+  "security.session_revoked",
+  "security.device_revoked",
+  "security.all_sessions_revoked",
+  "account.deletion_requested",
+  "account.deletion_cancelled",
+  "account.suspended",
+  "account.reactivated",
+])
+const AUTH_EMAIL_ENQUEUE_MAX_BYTES = 8192
 
 function emailOutboundEnabled(env: Env): boolean {
   return envFlag(env.EMAIL_OUTBOUND_ENABLED, false) && Boolean(normalizeText(env.RESEND_SEND_API_KEY))
@@ -952,6 +965,19 @@ function emailSchedulerEnabled(env: Env): boolean {
 
 function appPublicUrl(env: Env): string {
   return normalizeText(env.APP_PUBLIC_URL).replace(/\/+$/, "") || "https://saturnws.com"
+}
+
+function adminAlertRecipients(env: Env): string[] {
+  return [...new Set(String(env.EMAIL_ADMIN_ALERT_RECIPIENTS || "")
+    .split(/[\s,;]+/g)
+    .map((item) => normalizeEmailAddress(item))
+    .filter(Boolean))]
+}
+
+function adminAlertBucket(hours = 1): string {
+  const now = new Date()
+  if (hours >= 24) return now.toISOString().slice(0, 10)
+  return now.toISOString().slice(0, 13)
 }
 
 function emailReplyDomain(env: Env): string {
@@ -970,6 +996,7 @@ function emailFeatureEnabled(env: Env, eventType: string): boolean {
   if (event.category === "billing") return envFlag(env.EMAIL_BILLING_ENABLED, false)
   if (event.category === "release") return envFlag(env.EMAIL_RELEASE_ENABLED, false)
   if (event.category === "security" || event.category === "policy") return envFlag(env.EMAIL_SECURITY_ENABLED, false)
+  if (event.category === "admin" && eventType !== "admin.email_test") return envFlag(env.EMAIL_ADMIN_ALERTS_ENABLED, false)
   return true
 }
 
@@ -1251,13 +1278,70 @@ async function enqueueEmailJob(
   return stored?.id || null
 }
 
-async function requireInternalAuthEmailToken(request: Request, env: Env): Promise<Response | null> {
-  const configured = normalizeText(env.AUTH_EMAIL_ENQUEUE_TOKEN)
-  const supplied = bearerToken(request)
-  if (!configured || !supplied || !(await safeEqualHashed(supplied, configured))) {
-    return json({ success: false, error: "unauthorized" }, 401)
+async function enqueueAdminAlert(
+  env: Env,
+  input: {
+    idempotencyKey: string
+    eventType: string
+    referenceId: string
+    failedEventType?: string | null
+    lastError?: string | null
+    severity?: "warning" | "critical"
+    summary?: string | null
+    actionUrl?: string | null
+    destinationLabel?: string | null
+  },
+): Promise<{ queued: number; skipped: number }> {
+  if (!envFlag(env.EMAIL_ADMIN_ALERTS_ENABLED, false)) return { queued: 0, skipped: 0 }
+  const recipients = adminAlertRecipients(env)
+  if (!recipients.length) return { queued: 0, skipped: 0 }
+  const eventType = resolveEmailEventType(input.eventType)
+  if (!eventType) return { queued: 0, skipped: recipients.length }
+  const templateData = {
+    locale: "en",
+    reference_id: clampText(input.referenceId, 160),
+    failed_event_type: clampText(input.failedEventType || "", 160),
+    last_error: clampText(input.lastError || "", 500),
+    severity: input.severity || "warning",
+    summary: clampText(input.summary || "", 500),
+    action_url: clampText(input.actionUrl || "https://admin.saturnws.com/communications", 500),
+    destination_label: clampText(input.destinationLabel || "", 120),
   }
-  return null
+  const rendered = renderTransactionalEmail(eventType, templateData, "en")
+  let queued = 0
+  let skipped = 0
+  for (const recipient of recipients) {
+    const jobId = await enqueueEmailJob(env, {
+      idempotencyKey: `${input.idempotencyKey}:${recipient}`,
+      emailType: eventType,
+      recipient,
+      subject: rendered.subject,
+      html: rendered.html,
+      text: rendered.text,
+      templateData,
+      headers: {
+        "Message-ID": emailMessageId(eventType.replace(/[^a-z0-9]+/gi, "-"), `${input.idempotencyKey}:${recipient}`),
+        "Auto-Submitted": "auto-generated",
+        "X-SaturnWS-Admin-Alert": eventType,
+      },
+    })
+    if (jobId) queued += 1
+    else skipped += 1
+  }
+  return { queued, skipped }
+}
+
+async function requireInternalEmailToken(request: Request, env: Env, eventType: string): Promise<Response | null> {
+  const supplied = bearerToken(request)
+  const candidateTokens = [
+    normalizeText(env.AUTH_EMAIL_ENQUEUE_TOKEN),
+    eventType.startsWith("account.") || eventType.startsWith("admin.") ? normalizeText(env.ADMIN_EMAIL_ENQUEUE_TOKEN) : "",
+  ].filter(Boolean)
+  if (!supplied || candidateTokens.length === 0) return json({ success: false, error: "unauthorized" }, 401)
+  for (const configured of candidateTokens) {
+    if (await safeEqualHashed(supplied, configured)) return null
+  }
+  return json({ success: false, error: "unauthorized" }, 401)
 }
 
 async function readLimitedJson(request: Request, maxBytes: number): Promise<Record<string, unknown> | null> {
@@ -1297,76 +1381,103 @@ async function cancelSupersededAuthEmailJobs(
 
 async function handleInternalAuthEmailEnqueue(request: Request, env: Env): Promise<Response> {
   if (request.method !== "POST") return json({ success: false, error: "method_not_allowed" }, 405)
-  const authError = await requireInternalAuthEmailToken(request, env)
-  if (authError) return authError
-  if (!envFlag(env.EMAIL_AUTH_ENABLED, false)) {
-    return json({ success: false, error: "email_auth_disabled" }, 503)
-  }
-
   const body = await readLimitedJson(request, AUTH_EMAIL_ENQUEUE_MAX_BYTES)
   if (!body) return json({ success: false, error: "invalid_payload" }, 400)
 
   const eventType = normalizeLower(body.event_type)
-  if (!AUTH_EMAIL_ENQUEUE_EVENTS.has(eventType)) {
+  if (!INTERNAL_EMAIL_ENQUEUE_EVENTS.has(eventType)) {
     return json({ success: false, error: "email_event_not_allowed" }, 400)
   }
+  const authError = await requireInternalEmailToken(request, env, eventType)
+  if (authError) return authError
   const recipient = normalizeEmailAddress(body.recipient)
   if (!recipient) return json({ success: false, error: "recipient_required" }, 400)
   const idempotencyKey = clampText(body.idempotency_key, 240)
-  const verificationRequestId = clampText(body.verification_request_id, 120)
   const userId = clampText(body.user_id, 160)
-  const purpose = normalizeLower(body.purpose || "email_verification")
-  if (!idempotencyKey || !verificationRequestId) {
-    return json({ success: false, error: "idempotency_or_verification_id_required" }, 400)
+  if (!idempotencyKey) {
+    return json({ success: false, error: "idempotency_required" }, 400)
   }
 
   const payload = body.payload && typeof body.payload === "object" && !Array.isArray(body.payload)
     ? body.payload as Record<string, unknown>
     : {}
-  const code = normalizeText(payload.code).replace(/\D/g, "").slice(0, 6)
-  const expiresAt = normalizeText(payload.expires_at)
-  if (code.length !== 6 || !Number.isFinite(Date.parse(expiresAt))) {
-    return json({ success: false, error: "verification_payload_invalid" }, 400)
-  }
-
   const locale = normalizeLower(body.locale).startsWith("en") ? "en" : "ar"
-  const displayName = clampText(payload.display_name, 120)
-  if (purpose !== "email_verification") return json({ success: false, error: "verification_purpose_invalid" }, 400)
-  await cancelSupersededAuthEmailJobs(env, { userId, recipient, purpose, currentIdempotencyKey: idempotencyKey })
   const catalog = EMAIL_CATALOG[eventType]
   const subject = locale === "ar" ? catalog.default_subject_ar : catalog.default_subject_en
   let jobId: string | null = null
   try {
+    if (AUTH_EMAIL_VERIFICATION_EVENTS.has(eventType)) {
+      if (!envFlag(env.EMAIL_AUTH_ENABLED, false)) {
+        return json({ success: false, error: "email_auth_disabled" }, 503)
+      }
+      const verificationRequestId = clampText(body.verification_request_id, 120)
+      const purpose = normalizeLower(body.purpose || "email_verification")
+      if (!verificationRequestId) return json({ success: false, error: "verification_id_required" }, 400)
+      const code = normalizeText(payload.code).replace(/\D/g, "").slice(0, 6)
+      const expiresAt = normalizeText(payload.expires_at)
+      if (code.length !== 6 || !Number.isFinite(Date.parse(expiresAt))) {
+        return json({ success: false, error: "verification_payload_invalid" }, 400)
+      }
+      const displayName = clampText(payload.display_name, 120)
+      if (purpose !== "email_verification") return json({ success: false, error: "verification_purpose_invalid" }, 400)
+      await cancelSupersededAuthEmailJobs(env, { userId, recipient, purpose, currentIdempotencyKey: idempotencyKey })
+      jobId = await enqueueEmailJob(env, {
+        idempotencyKey,
+        emailType: eventType,
+        recipient,
+        subject,
+        html: "",
+        text: "",
+        linkedUserId: userId || null,
+        templateData: {
+          verification_request_id: verificationRequestId,
+          purpose,
+          expires_at: expiresAt,
+          locale,
+          code_redacted: true,
+          sensitive_payload: "encrypted",
+        },
+        sensitivePayload: {
+          code,
+          display_name: displayName || undefined,
+          expires_at: expiresAt,
+          locale,
+          message: locale === "ar"
+            ? "استخدم رمز التحقق التالي لتأكيد بريدك الإلكتروني في Saturn Workspace."
+            : "Use the following verification code to confirm your Saturn Workspace email address.",
+        },
+        sensitivePayloadExpiresAt: expiresAt,
+        headers: {
+          "Message-ID": emailMessageId("auth-email-verification", verificationRequestId),
+          "Auto-Submitted": "auto-generated",
+          "X-SaturnWS-Verification-Request": verificationRequestId,
+        },
+      })
+      return json({ success: true, status: jobId ? "queued" : "suppressed", job_id: jobId })
+    }
+
+    const templateData = {
+      ...payload,
+      locale,
+      event_type: eventType,
+    }
+    const rendered = renderTransactionalEmail(eventType, templateData, locale)
     jobId = await enqueueEmailJob(env, {
       idempotencyKey,
       emailType: eventType,
       recipient,
-      subject,
-      html: "",
-      text: "",
+      subject: rendered.subject,
+      html: rendered.html,
+      text: rendered.text,
       linkedUserId: userId || null,
       templateData: {
-        verification_request_id: verificationRequestId,
-        purpose,
-        expires_at: expiresAt,
+        ...templateData,
         locale,
-        code_redacted: true,
-        sensitive_payload: "encrypted",
       },
-      sensitivePayload: {
-        code,
-        display_name: displayName || undefined,
-        expires_at: expiresAt,
-        locale,
-        message: locale === "ar"
-          ? "استخدم رمز التحقق التالي لتأكيد بريدك الإلكتروني في Saturn Workspace."
-          : "Use the following verification code to confirm your Saturn Workspace email address.",
-      },
-      sensitivePayloadExpiresAt: expiresAt,
       headers: {
-        "Message-ID": emailMessageId("auth-email-verification", verificationRequestId),
+        "Message-ID": emailMessageId(eventType.replace(/[^a-z0-9]+/gi, "-"), idempotencyKey),
         "Auto-Submitted": "auto-generated",
-        "X-SaturnWS-Verification-Request": verificationRequestId,
+        "X-SaturnWS-Email-Event": eventType,
       },
     })
   } catch (error) {
@@ -1561,6 +1672,16 @@ async function processEmailOutbox(env: Env, limit = EMAIL_OUTBOX_BATCH_LIMIT): P
           .run()
         await updatePortalNotificationEmailStatus(env, job.id, "failed")
         await purgeSensitiveEmailPayload(env, job.id)
+        if (job.email_type !== "admin.email_queue_final_failure") {
+          await enqueueAdminAlert(env, {
+            idempotencyKey: `email-final-failure:${job.id}`,
+            eventType: "admin.email_queue_final_failure",
+            referenceId: job.id,
+            failedEventType: job.email_type,
+            lastError: message,
+            severity: "warning",
+          }).catch(() => null)
+        }
       } else {
         await env.DB.prepare("UPDATE email_jobs SET status = 'queued', last_error = ?1, next_attempt_at = datetime('now', ?2), updated_at = datetime('now') WHERE id = ?3")
           .bind(message, `+${retryBackoffSeconds(attempts)} seconds`, job.id)
@@ -1658,7 +1779,20 @@ async function cleanupEmailOperations(env: Env): Promise<{ sensitivePurged: numb
 }
 
 async function cleanupSupportAttachmentOrphans(env: Env): Promise<{ attachmentsDeleted: number }> {
-  if (!env.SUPPORT_ATTACHMENTS) return { attachmentsDeleted: 0 }
+  if (!env.SUPPORT_ATTACHMENTS) {
+    await enqueueAdminAlert(env, {
+      idempotencyKey: `storage-config:support-attachments:${adminAlertBucket(24)}`,
+      eventType: "admin.storage_config_failure",
+      referenceId: "support_attachments_binding",
+      failedEventType: "support.attachments.cleanup",
+      lastError: "support_attachments_binding_missing",
+      severity: "critical",
+      summary: "Support attachment orphan cleanup could not access the configured private storage binding.",
+      actionUrl: "https://admin.saturnws.com/diagnostics",
+      destinationLabel: "Open diagnostics",
+    }).catch(() => null)
+    return { attachmentsDeleted: 0 }
+  }
   const rows = await env.DB.prepare(
     "SELECT id, object_key FROM support_attachments WHERE message_id IS NULL AND status = 'complete' AND deleted_at IS NULL AND datetime(created_at) < datetime('now', '-24 hours') LIMIT 50"
   ).all<{ id: string; object_key: string }>().catch(() => ({ results: [] as { id: string; object_key: string }[] }))
@@ -1688,13 +1822,53 @@ async function runEmailCron(env: Env): Promise<{ skipped: boolean; reason?: stri
   try {
     const scheduled = await processScheduledEmailNotifications(env)
     const outbox = await processEmailOutbox(env)
-    const emailCleanup = await cleanupEmailOperations(env)
-    const attachmentCleanup = await cleanupSupportAttachmentOrphans(env)
-    const cleanup = { ...emailCleanup, ...attachmentCleanup }
+    let cleanup = empty.cleanup
+    try {
+      const emailCleanup = await cleanupEmailOperations(env)
+      const attachmentCleanup = await cleanupSupportAttachmentOrphans(env)
+      cleanup = { ...emailCleanup, ...attachmentCleanup }
+    } catch (error) {
+      const message = clampText(error instanceof Error ? error.message : String(error || "cleanup_failed"), 500)
+      await enqueueAdminAlert(env, {
+        idempotencyKey: `email-cleanup-failure:${adminAlertBucket()}:${message.slice(0, 80)}`,
+        eventType: "admin.email_cleanup_failure",
+        referenceId: "email_cron_cleanup",
+        failedEventType: "email.cleanup",
+        lastError: message,
+        severity: "warning",
+        summary: "Scheduled email cleanup failed after the scheduler started.",
+        actionUrl: "https://admin.saturnws.com/communications",
+        destinationLabel: "Open email operations",
+      }).catch(() => null)
+      throw error
+    }
     return { skipped: false, scheduled, outbox, cleanup }
   } finally {
     await releaseEmailCronLock(env, lock)
   }
+}
+
+async function emailSchemaDiagnostics(env: Env): Promise<{ ok: boolean; missing: string[] }> {
+  const required: Record<string, string[]> = {
+    email_jobs: ["id", "idempotency_key", "email_type", "recipient", "status", "provider_message_id", "catalog_event_type", "template_key", "template_version", "email_category"],
+    email_events: ["id", "provider", "provider_event_id", "event_type", "processed_at"],
+    inbound_email_messages: ["id", "provider_event_id", "thread_id", "status", "processed_at"],
+    notification_schedule: ["id", "event_type", "recipient", "status", "scheduled_for", "attempts"],
+    portal_notifications: ["id", "user_id", "type", "email_job_id", "email_status"],
+  }
+  const missing: string[] = []
+  for (const [table, columns] of Object.entries(required)) {
+    const rows = await env.DB.prepare(`PRAGMA table_info(${table})`).all<{ name: string }>().catch(() => ({ results: [] as { name: string }[] }))
+    const names = new Set((rows.results || []).map((row) => normalizeLower(row.name)))
+    if (!names.size) {
+      missing.push(`${table}.*`)
+      continue
+    }
+    for (const column of columns) {
+      if (!names.has(column)) missing.push(`${table}.${column}`)
+    }
+  }
+  return { ok: missing.length === 0, missing }
 }
 
 function scheduleEmailProcessing(env: Env, ctx?: ExecutionContext): void {
@@ -2162,7 +2336,22 @@ async function handleResendWebhook(request: Request, env: Env): Promise<Response
   try {
     signature = await verifyResendWebhookSignature(request, rawBody, env)
   } catch (error) {
-    return json({ success: false, error: error instanceof Error ? error.message : "webhook_signature_invalid" }, 401)
+    const message = clampText(error instanceof Error ? error.message : "webhook_signature_invalid", 240)
+    const tamperSignal = message === "webhook_signature_invalid" || message === "webhook_timestamp_invalid"
+    await enqueueAdminAlert(env, {
+      idempotencyKey: `${tamperSignal ? "tamper" : "webhook-failure"}:resend:${message}:${adminAlertBucket()}`,
+      eventType: tamperSignal ? "admin.tamper_detected" : "admin.webhook_repeated_failure",
+      referenceId: "resend_webhook",
+      failedEventType: "resend.webhook",
+      lastError: message,
+      severity: tamperSignal ? "critical" : "warning",
+      summary: tamperSignal
+        ? "A Resend webhook request failed signature or timestamp verification."
+        : "A Resend webhook request could not be verified.",
+      actionUrl: "https://admin.saturnws.com/communications",
+      destinationLabel: "Open email operations",
+    }).catch(() => null)
+    return json({ success: false, error: message }, 401)
   }
 
   let payload: Record<string, unknown>
@@ -2251,6 +2440,23 @@ async function handleAdminEmailStatus(env: Env): Promise<Response> {
     .all()
     .catch(() => ({ results: [] }))
   const catalog = emailCatalogList()
+  const schema = await emailSchemaDiagnostics(env).catch((error) => ({
+    ok: false,
+    missing: [`diagnostic_error:${clampText(error instanceof Error ? error.message : String(error || "unknown"), 120)}`],
+  }))
+  if (!schema.ok) {
+    await enqueueAdminAlert(env, {
+      idempotencyKey: `schema-mismatch:email-operations:${adminAlertBucket(24)}`,
+      eventType: "admin.schema_mismatch",
+      referenceId: "email_operations_schema",
+      failedEventType: "email.schema",
+      lastError: schema.missing.slice(0, 8).join(", "),
+      severity: "critical",
+      summary: "Email operations schema diagnostics found a missing table or column.",
+      actionUrl: "https://admin.saturnws.com/diagnostics",
+      destinationLabel: "Open diagnostics",
+    }).catch(() => null)
+  }
   const now = new Date().toISOString()
   return json({
     success: true,
@@ -2278,6 +2484,7 @@ async function handleAdminEmailStatus(env: Env): Promise<Response> {
       },
       reply_domain: emailReplyDomain(env),
       webhook_path: "/api/webhooks/resend",
+      schema,
     },
     generated_at: now,
     catalog,
@@ -4134,8 +4341,20 @@ async function handleAdminRequest(request: Request, env: Env, ctx?: ExecutionCon
 
 export default {
   async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    ctx.waitUntil(runEmailCron(env).catch((error) => {
+    ctx.waitUntil(runEmailCron(env).catch(async (error) => {
+      const message = clampText(error instanceof Error ? error.message : String(error), 500)
       console.error(JSON.stringify({ event: "email_cron_failed", error: error instanceof Error ? error.message : String(error) }))
+      await enqueueAdminAlert(env, {
+        idempotencyKey: `email-cron-failed:${adminAlertBucket()}:${message.slice(0, 80)}`,
+        eventType: "admin.readiness_degraded",
+        referenceId: "email_cron",
+        failedEventType: "email.scheduler",
+        lastError: message,
+        severity: "critical",
+        summary: "The scheduled email operations handler failed before completing normally.",
+        actionUrl: "https://admin.saturnws.com/diagnostics",
+        destinationLabel: "Open diagnostics",
+      }).catch(() => null)
     }))
   },
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {

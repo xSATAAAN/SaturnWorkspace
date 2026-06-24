@@ -9,8 +9,47 @@ export function FeatureCard({ icon, title, body, children }: { icon: ReactNode; 
   return <article className="product-feature"><span className="product-feature__icon">{icon}</span><h3>{title}</h3><p>{body}</p>{children}</article>
 }
 
-export function PricingCard({ name, description, price, originalPrice, period, features, cta, featured, disabled, featuredLabel, trialLabel, onClick }: { name: string; description: string; price: string; originalPrice?: string; period?: string; features: string[]; cta: string; featured?: boolean; disabled?: boolean; featuredLabel?: string; trialLabel?: string; onClick?: () => void }) {
-  return <Card className={`pricing-card${featured ? ' is-featured' : ''}`}><div className="pricing-card__head"><h3>{name}</h3>{featured && featuredLabel ? <Badge tone="info">{featuredLabel}</Badge> : null}</div><p>{description}</p>{trialLabel ? <div className="pricing-card__trial"><Sparkles size={15} /><strong>{trialLabel}</strong></div> : <div className="pricing-card__trial-placeholder" aria-hidden="true" />}<div className="pricing-card__price">{originalPrice ? <del>{originalPrice}</del> : null}<strong>{price}</strong>{period ? <span>{period}</span> : null}</div><ul>{features.map((feature) => <li key={feature}><Check size={15} />{feature}</li>)}</ul><Button variant={featured ? 'primary' : 'secondary'} fullWidth disabled={disabled} onClick={onClick}>{cta}</Button></Card>
+export function PricingCard({
+  name,
+  description,
+  price,
+  originalPrice,
+  period,
+  features,
+  cta,
+  featured,
+  disabled,
+  featuredLabel,
+  trialLabel,
+  savingsLabel,
+  availabilityLabel,
+  onClick,
+}: {
+  name: string
+  description?: string
+  price: string
+  originalPrice?: string
+  period?: string
+  features: string[]
+  cta: string
+  featured?: boolean
+  disabled?: boolean
+  featuredLabel?: string
+  trialLabel?: string
+  savingsLabel?: string
+  availabilityLabel?: string
+  onClick?: () => void
+}) {
+  return <Card className={`pricing-card${featured ? ' is-featured' : ''}${disabled ? ' is-disabled' : ''}`}>
+    <div className="pricing-card__head"><h3>{name}</h3>{featured && featuredLabel ? <Badge tone="info">{featuredLabel}</Badge> : null}</div>
+    {description ? <p className="pricing-card__description">{description}</p> : null}
+    <div className="pricing-card__price">{originalPrice ? <del><bdi>{originalPrice}</bdi></del> : null}<strong><bdi>{price}</bdi></strong>{period ? <span>{period}</span> : null}</div>
+    {savingsLabel ? <div className="pricing-card__saving">{savingsLabel}</div> : null}
+    {trialLabel ? <div className="pricing-card__trial"><Sparkles size={15} /><strong>{trialLabel}</strong></div> : null}
+    {features.length ? <ul>{features.map((feature) => <li key={feature}><Check size={15} />{feature}</li>)}</ul> : null}
+    {availabilityLabel ? <p className="pricing-card__availability">{availabilityLabel}</p> : null}
+    <Button variant={featured && !disabled ? 'primary' : 'secondary'} fullWidth disabled={disabled} onClick={onClick}>{cta}</Button>
+  </Card>
 }
 
 export function DownloadCard({ title, version, meta, buttonLabel, disabled, onClick }: { title: ReactNode; version: ReactNode; meta: ReactNode[]; buttonLabel: ReactNode; disabled?: boolean; onClick?: () => void }) {

@@ -458,7 +458,17 @@ function PricingSection({ page, routeState, plans, loading, error, reload, navig
   const { t, locale } = useExperience()
   const { ready, user } = useAuthState()
   const c = publicCopy[locale]
-  const featuresForPlan = () => [c.featureWorkspace, c.featureProfiles, c.featureUpdates]
+  const sharedBenefits = [c.featureWorkspace, c.featureProfiles, c.featureRecovery, c.featureUpdates]
+  const differentiatorsForPlan = (plan: PlanInfo) => {
+    if (plan.id === 'weekly') return [copyByLocale(locale, 'Weekly flexibility without a long commitment.', 'مرونة أسبوعية بدون التزام طويل.')]
+    if (plan.id === 'monthly') return [copyByLocale(locale, 'Current launch pricing for regular use.', 'سعر إطلاق حالي للاستخدام المنتظم.')]
+    return [copyByLocale(locale, 'Largest current discount for long-term use.', 'أكبر خصم حالي للاستخدام طويل المدة.')]
+  }
+  const savingsLabelForPlan = (plan: PlanInfo) => {
+    if (!plan.originalPrice) return undefined
+    return copyByLocale(locale, `Current discount from ${plan.originalPrice} to ${plan.price}`, `خصم حالي من ${plan.originalPrice} إلى ${plan.price}`)
+  }
+  const checkoutFeaturesForPlan = (plan: PlanInfo | null) => plan ? [...sharedBenefits, ...differentiatorsForPlan(plan)] : []
   const [selectedPlan, setSelectedPlan] = useState<PlanInfo | null>(null)
   const requestedPlan = readCheckoutPlan(routeState)
   const requestedCheckoutPlan = ready && user && requestedPlan && !loading
@@ -483,11 +493,11 @@ function PricingSection({ page, routeState, plans, loading, error, reload, navig
     if (user) return locale === 'ar' ? 'اختر الخطة' : 'Choose plan'
     return plan.trialDays > 0 ? (locale === 'ar' ? 'ابدأ التجربة المجانية' : 'Start free trial') : t('getStarted')
   }
-  return <section className={`marketing-section pricing-section${compact ? '' : ' pricing-page'}`}><div className="container"><header className="marketing-heading marketing-heading--center">{compact ? <h2>{c.pricingTitle}</h2> : <h1>{c.pricingTitle}</h1>}<p>{c.pricingBody}</p></header>{loading ? <LoadingBlock label={t('loading')} /> : error ? <EmptyState icon={CreditCard} title={copyByLocale(locale, 'Prices could not be loaded', 'تعذر تحميل الأسعار')} body={copyByLocale(locale, 'Try again to load the available plans.', 'أعد المحاولة لتحميل الخطط المتاحة.')} action={<Button onClick={reload}>{t('retry')}</Button>} /> : plans.length ? <><div className="pricing-grid">{plans.map((plan) => {
-    const features = plan.features.length ? plan.features : featuresForPlan()
-    const trialLabel = plan.trialDays > 0 ? (locale === 'ar' ? `ابدأ بـ ${plan.trialDays} أيام مجانًا` : `Start with ${plan.trialDays} days free`) : undefined
-    return <PricingCard key={`${plan.id}:${plan.version}`} name={plan.name} description={plan.description} price={plan.price} originalPrice={plan.originalPrice} period={plan.period} features={features} cta={getCta(plan)} featured={plan.id === 'monthly'} featuredLabel={c.recommended} trialLabel={trialLabel} disabled={!ready || !plan.enabled || !plan.checkoutEnabled} onClick={() => choosePlan(plan)} />
-  })}</div><p className="pricing-trust-note"><ShieldCheck size={15} />{c.trustNote}</p></> : <EmptyState icon={CreditCard} title={copyByLocale(locale, 'No plans are published', 'لا توجد خطط منشورة')} body="" />}</div><CheckoutDialog open={Boolean(activeCheckoutPlan)} plan={activeCheckoutPlan} user={user} features={activeCheckoutPlan ? (activeCheckoutPlan.features.length ? activeCheckoutPlan.features : featuresForPlan()) : []} onClose={closeCheckout} /></section>
+  return <section className={`marketing-section pricing-section${compact ? '' : ' pricing-page'}`}><div className="container"><header className="marketing-heading marketing-heading--center marketing-heading--wide">{compact ? <h2>{c.pricingTitle}</h2> : <h1>{c.pricingTitle}</h1>}<p>{c.pricingBody}</p></header>{loading ? <LoadingBlock label={t('loading')} /> : error ? <EmptyState icon={CreditCard} title={copyByLocale(locale, 'Prices could not be loaded', 'تعذر تحميل الأسعار')} body={copyByLocale(locale, 'Try again to load the available plans.', 'أعد المحاولة لتحميل الخطط المتاحة.')} action={<Button onClick={reload}>{t('retry')}</Button>} /> : plans.length ? <><div className="pricing-promo">{c.trialPromo}</div><div className="pricing-included"><strong>{c.compareTitle}</strong>{sharedBenefits.map((feature) => <span key={feature}><Check size={14} />{feature}</span>)}</div><div className="pricing-grid">{plans.map((plan) => {
+    const trialLabel = plan.trialDays > 0 ? copyByLocale(locale, `${plan.trialDays} free trial days before first charge`, `${plan.trialDays} أيام تجربة مجانية قبل أول تحصيل`) : undefined
+    const availabilityLabel = ready && (!plan.enabled || !plan.checkoutEnabled) ? copyByLocale(locale, 'Subscription action is not available now.', 'إجراء الاشتراك غير متاح الآن.') : undefined
+    return <PricingCard key={`${plan.id}:${plan.version}`} name={plan.name} description={plan.description} price={plan.price} originalPrice={plan.originalPrice} period={plan.period} features={differentiatorsForPlan(plan)} cta={getCta(plan)} featured={plan.id === 'monthly'} featuredLabel={c.recommended} trialLabel={trialLabel} savingsLabel={savingsLabelForPlan(plan)} availabilityLabel={availabilityLabel} disabled={!ready || !plan.enabled || !plan.checkoutEnabled} onClick={() => choosePlan(plan)} />
+  })}</div><p className="pricing-trust-note"><ShieldCheck size={15} />{c.trustNote}</p></> : <EmptyState icon={CreditCard} title={copyByLocale(locale, 'No plans are published', 'لا توجد خطط منشورة')} body="" />}</div><CheckoutDialog open={Boolean(activeCheckoutPlan)} plan={activeCheckoutPlan} user={user} features={checkoutFeaturesForPlan(activeCheckoutPlan)} onClose={closeCheckout} /></section>
 }
 
 function FaqSection() {

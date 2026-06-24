@@ -1,0 +1,1210 @@
+﻿{
+    "generated_at":  "2026-06-24T11:50:05.2264929Z",
+    "desktop_root":  "D:\\SaturnWS\\desktop-app",
+    "canonical_repo":  "D:\\SaturnWS\\github-deploy\\SaturnWorkspace",
+    "source_file_count":  217,
+    "excluded_directories":  [
+                                 "node_modules",
+                                 "dist",
+                                 "build",
+                                 "build-output",
+                                 "__pycache__",
+                                 ".git",
+                                 ".venv",
+                                 "venv",
+                                 ".pytest_cache",
+                                 ".mypy_cache",
+                                 "logs",
+                                 "tmp",
+                                 "temp",
+                                 "cache",
+                                 "caches",
+                                 "local-secrets",
+                                 "private-backups",
+                                 ".ruff_cache"
+                             ],
+    "excluded_file_patterns":  [
+                                   "*.env*",
+                                   "*.pem",
+                                   "*.key",
+                                   "*.pfx",
+                                   "*.p12",
+                                   "*secret*",
+                                   "*credential*",
+                                   "*token*",
+                                   "*password*",
+                                   "google_drive_client*.json",
+                                   "private_update_signing_key*"
+                               ],
+    "dependency_and_build_files":  [
+                                       {
+                                           "path":  "src/frontend/package-lock.json",
+                                           "size":  93513,
+                                           "sha256":  "1362A45E3A4ABBC2EFD78B29AB9B4FC26669F8257D7307456B2B6D553DB7BD2A"
+                                       },
+                                       {
+                                           "path":  "requirements.txt",
+                                           "size":  176,
+                                           "sha256":  "DB50FF3ABDB457542DC74FA3DE7CEFF09C55EA4B73A2E3D3F91F273FFE244741"
+                                       },
+                                       {
+                                           "path":  "src/backend/requirements.txt",
+                                           "size":  17,
+                                           "sha256":  "27EABF3AC1C5F06A7635A7793FA32E672E2B5E425D796AD63B615FA9D7B81A32"
+                                       },
+                                       {
+                                           "path":  "pyinstaller.app-onedir.spec",
+                                           "size":  2813,
+                                           "sha256":  "83D9C969147985A4D25B477357A5143104712650F22B451DF47BADE8C9A8D378"
+                                       },
+                                       {
+                                           "path":  "pyinstaller.launcher.spec",
+                                           "size":  618,
+                                           "sha256":  "0D1A4C5E3F43714CE8D17B3951F187AEB9E172BF7F77138E8F20857DD717370E"
+                                       },
+                                       {
+                                           "path":  "pyinstaller.spec",
+                                           "size":  3522,
+                                           "sha256":  "D4454EC5EF994F31542D87C403E4008985A105B9FAC361892412C7CCFA518E1E"
+                                       },
+                                       {
+                                           "path":  "pyinstaller.update-helper.spec",
+                                           "size":  627,
+                                           "sha256":  "3E044D49923C551B76DC6406F0512830D181C67B3A618EB9423BF0CB4E646B36"
+                                       },
+                                       {
+                                           "path":  "installer/SaturnWorkspace.iss",
+                                           "size":  30188,
+                                           "sha256":  "157EB8B8CE7019EC127742F9CD5878CE5199502D6862A578519ECC39E3F533CE"
+                                       },
+                                       {
+                                           "path":  "build_installed_channel.ps1",
+                                           "size":  10461,
+                                           "sha256":  "5AB1677F944CE21CDDEEBD9A2195DCBE736084CFE7D5DF861FF0E1C401FD9A56"
+                                       },
+                                       {
+                                           "path":  "build_installed_repair_components.ps1",
+                                           "size":  4305,
+                                           "sha256":  "04827CDCC79F03FC66E31823450657E70C8C8B9A02B9C5CC567D76E3B691B331"
+                                       },
+                                       {
+                                           "path":  "build_installed_update_package.ps1",
+                                           "size":  3143,
+                                           "sha256":  "9E1D17801CC174253E8258F85E3284712D1F646C8CB7C8C16F238FB45E1E0FC3"
+                                       },
+                                       {
+                                           "path":  "build_installer_visual_test.ps1",
+                                           "size":  1721,
+                                           "sha256":  "4B28624194F2996B87ED720BC31AD08A12FDC9B5EC0BC84FA8EAC575858A5C1C"
+                                       },
+                                       {
+                                           "path":  "build_onefile.ps1",
+                                           "size":  9757,
+                                           "sha256":  "C64FA31A6EE951B0CFD55AB422A221FCCBBBC28A4EDDF49D8248A9AE0B08D238"
+                                       },
+                                       {
+                                           "path":  "build.bat",
+                                           "size":  279,
+                                           "sha256":  "D8FF8D513C8AB7179BB4C0F9604A14DD789663232CC798368D03137F53158361"
+                                       }
+                                   ],
+    "files":  [
+                  {
+                      "path":  ".gitignore",
+                      "size":  568,
+                      "sha256":  "A0E49206204FD80815FD3D0A9B495EDC942F0E5F05BB6C9FEF7B0BA9F2FFA655"
+                  },
+                  {
+                      "path":  "build.bat",
+                      "size":  279,
+                      "sha256":  "D8FF8D513C8AB7179BB4C0F9604A14DD789663232CC798368D03137F53158361"
+                  },
+                  {
+                      "path":  "build_installed_channel.ps1",
+                      "size":  10461,
+                      "sha256":  "5AB1677F944CE21CDDEEBD9A2195DCBE736084CFE7D5DF861FF0E1C401FD9A56"
+                  },
+                  {
+                      "path":  "build_installed_repair_components.ps1",
+                      "size":  4305,
+                      "sha256":  "04827CDCC79F03FC66E31823450657E70C8C8B9A02B9C5CC567D76E3B691B331"
+                  },
+                  {
+                      "path":  "build_installed_update_package.ps1",
+                      "size":  3143,
+                      "sha256":  "9E1D17801CC174253E8258F85E3284712D1F646C8CB7C8C16F238FB45E1E0FC3"
+                  },
+                  {
+                      "path":  "build_installer_visual_test.ps1",
+                      "size":  1721,
+                      "sha256":  "4B28624194F2996B87ED720BC31AD08A12FDC9B5EC0BC84FA8EAC575858A5C1C"
+                  },
+                  {
+                      "path":  "build_onefile.ps1",
+                      "size":  9757,
+                      "sha256":  "C64FA31A6EE951B0CFD55AB422A221FCCBBBC28A4EDDF49D8248A9AE0B08D238"
+                  },
+                  {
+                      "path":  "pyinstaller.app-onedir.spec",
+                      "size":  2813,
+                      "sha256":  "83D9C969147985A4D25B477357A5143104712650F22B451DF47BADE8C9A8D378"
+                  },
+                  {
+                      "path":  "pyinstaller.launcher.spec",
+                      "size":  618,
+                      "sha256":  "0D1A4C5E3F43714CE8D17B3951F187AEB9E172BF7F77138E8F20857DD717370E"
+                  },
+                  {
+                      "path":  "pyinstaller.spec",
+                      "size":  3522,
+                      "sha256":  "D4454EC5EF994F31542D87C403E4008985A105B9FAC361892412C7CCFA518E1E"
+                  },
+                  {
+                      "path":  "pyinstaller.update-helper.spec",
+                      "size":  627,
+                      "sha256":  "3E044D49923C551B76DC6406F0512830D181C67B3A618EB9423BF0CB4E646B36"
+                  },
+                  {
+                      "path":  "requirements.txt",
+                      "size":  176,
+                      "sha256":  "DB50FF3ABDB457542DC74FA3DE7CEFF09C55EA4B73A2E3D3F91F273FFE244741"
+                  },
+                  {
+                      "path":  "ROOT_STRUCTURE.txt",
+                      "size":  1074,
+                      "sha256":  "18239F1D8E0E3A5BBB813F45F43F2F5F2C46C2571E964AF4DFA83BF1C1A85937"
+                  },
+                  {
+                      "path":  "SECURITY_RELEASE.md",
+                      "size":  3174,
+                      "sha256":  "1CC0938EF69217D4ABEDEE6124D46A0EEA45BF9EB3366A1214D88C97A354A126"
+                  },
+                  {
+                      "path":  ".cursor/rules/build-after-edit.mdc",
+                      "size":  831,
+                      "sha256":  "68F8BDF0E442BE9F41B51F28AE5A498C297FC6712FCAAC66547446BA511D4DF3"
+                  },
+                  {
+                      "path":  "assets/extensions/SaturnWS-Extension-Icon.png",
+                      "size":  675820,
+                      "sha256":  "353D3BAD93CCDE313B1618FF92F383FD564A7B2534FF5AF86CF51E04F0E34130"
+                  },
+                  {
+                      "path":  "assets/extensions/SaturnWS-Extension.zip",
+                      "size":  2704121,
+                      "sha256":  "D943E9722AA7319E40D99AA22F2023CCA80CA892858CE1FA466DB1FD96BAA63A"
+                  },
+                  {
+                      "path":  "assets/extensions/saturnws-bybit/content.js",
+                      "size":  8135,
+                      "sha256":  "6E2CE64F9E2776A9DC379D94A7FBDF912932EE30BCEC6CF544946D37578B6B05"
+                  },
+                  {
+                      "path":  "assets/extensions/saturnws-bybit/injected.js",
+                      "size":  11458,
+                      "sha256":  "0E1A1927A091D1847E1A3387F639A748F0DD78AF5B6F9148644F1AA5BB618F09"
+                  },
+                  {
+                      "path":  "assets/extensions/saturnws-bybit/manifest.json",
+                      "size":  1502,
+                      "sha256":  "BF5A59E233A92E55343186E05D45D07A49AA01F487B46A3671D8CB9C810D6D85"
+                  },
+                  {
+                      "path":  "assets/extensions/saturnws-bybit/service_worker.js",
+                      "size":  7731,
+                      "sha256":  "FACB1F8376EB337F170B13C2F4D2222165912998711EBDE453556B85ED312A89"
+                  },
+                  {
+                      "path":  "assets/extensions/saturnws-bybit/icons/icon128.png",
+                      "size":  675820,
+                      "sha256":  "353D3BAD93CCDE313B1618FF92F383FD564A7B2534FF5AF86CF51E04F0E34130"
+                  },
+                  {
+                      "path":  "assets/extensions/saturnws-bybit/icons/icon16.png",
+                      "size":  675820,
+                      "sha256":  "353D3BAD93CCDE313B1618FF92F383FD564A7B2534FF5AF86CF51E04F0E34130"
+                  },
+                  {
+                      "path":  "assets/extensions/saturnws-bybit/icons/icon32.png",
+                      "size":  675820,
+                      "sha256":  "353D3BAD93CCDE313B1618FF92F383FD564A7B2534FF5AF86CF51E04F0E34130"
+                  },
+                  {
+                      "path":  "assets/extensions/saturnws-bybit/icons/icon48.png",
+                      "size":  675820,
+                      "sha256":  "353D3BAD93CCDE313B1618FF92F383FD564A7B2534FF5AF86CF51E04F0E34130"
+                  },
+                  {
+                      "path":  "assets/icons/icon-128.png",
+                      "size":  19195,
+                      "sha256":  "AC78CF9F5F9D409DCFD31CD050D900A990B45BCBD6FD79849A507364843A81AE"
+                  },
+                  {
+                      "path":  "assets/icons/icon-16.png",
+                      "size":  907,
+                      "sha256":  "3593BD97944077BC6403C6BA27F44E2C8422A4B86825E32BC9BA8FD1A086CFCE"
+                  },
+                  {
+                      "path":  "assets/icons/icon-180.png",
+                      "size":  33485,
+                      "sha256":  "CCBB0A70912B984EAE47657E9FC360EDD84078B66C7541C680CED0230F01809E"
+                  },
+                  {
+                      "path":  "assets/icons/icon-192.png",
+                      "size":  37431,
+                      "sha256":  "A0F97E8417FF681DC9A25A26C6F0359DE763F5F5571BD525F014EB0006157AB3"
+                  },
+                  {
+                      "path":  "assets/icons/icon-24.png",
+                      "size":  1630,
+                      "sha256":  "EECB1AB12BB2E154324391D509E71F7163A95EC4F94D9625C5E606D72576299A"
+                  },
+                  {
+                      "path":  "assets/icons/icon-256.png",
+                      "size":  62915,
+                      "sha256":  "BFE798CFF46FF54101827689641E296BDB4EC17A02A68F68F2BE1B4DFCF325F6"
+                  },
+                  {
+                      "path":  "assets/icons/icon-32.png",
+                      "size":  2464,
+                      "sha256":  "2D4548AB7648FFD8988D331446EA8A3F3FD3C9B8931FD69024F5AD7F800CD175"
+                  },
+                  {
+                      "path":  "assets/icons/icon-48.png",
+                      "size":  4393,
+                      "sha256":  "AA43397549EB2B7E543C3B8E01C47B2339FE69B82E1A24AFEC4310C18F1F6527"
+                  },
+                  {
+                      "path":  "assets/icons/icon-512.png",
+                      "size":  221839,
+                      "sha256":  "2BE6376E0CE02B98D3C862C2F70409543F19D13D7C82F89EB64BA1B9D67614C0"
+                  },
+                  {
+                      "path":  "assets/icons/icon-64.png",
+                      "size":  6663,
+                      "sha256":  "3926F8E461C72EEBABC76BE8A09837B9213D2728DB2A454080C797585F8E0D07"
+                  },
+                  {
+                      "path":  "assets/icons/icon.ico",
+                      "size":  103247,
+                      "sha256":  "6490FB22B5E856C572F11CC772690F8F26E528A70D942C882FDD237D3ECECFE7"
+                  },
+                  {
+                      "path":  "assets/icons/icon.png",
+                      "size":  675820,
+                      "sha256":  "353D3BAD93CCDE313B1618FF92F383FD564A7B2534FF5AF86CF51E04F0E34130"
+                  },
+                  {
+                      "path":  "assets/installer-ui/saturn-setup.ico",
+                      "size":  76299,
+                      "sha256":  "2B8CA3B599B60DC52699EF99F301DD367F94630193A0D521D1B2DBB2B05B14A2"
+                  },
+                  {
+                      "path":  "assets/installer-ui/wizard-side-preview.png",
+                      "size":  34257,
+                      "sha256":  "0F0E1AEE956254FCD8C2641E0151069A56294E5E9E31B3925E6FA8CB5B87156F"
+                  },
+                  {
+                      "path":  "assets/installer-ui/wizard-side.bmp",
+                      "size":  154542,
+                      "sha256":  "CAF9C966839B267BBF1D07A1CFE0F2F63128C793D0607F7E51FBB97FA6781EF1"
+                  },
+                  {
+                      "path":  "assets/installer-ui/wizard-small-preview.png",
+                      "size":  3291,
+                      "sha256":  "3C0201FE441B695F77EE6AA945CA98B396D3D65E9C9D0482658F429E91A5C768"
+                  },
+                  {
+                      "path":  "assets/installer-ui/wizard-small.bmp",
+                      "size":  9294,
+                      "sha256":  "82BA86B1A51D6BF424A5D13E0B782103C7FA3985712E8A320162C196621A5C74"
+                  },
+                  {
+                      "path":  "assets/installers/BraveBrowserSetup-BRV010.exe",
+                      "size":  1277280,
+                      "sha256":  "B0CE89D74E85406AC7A17EB0339BED1183A3A4FF863FE6CC2CF80E5E15E9902C"
+                  },
+                  {
+                      "path":  "assets/security/runtime_integrity_manifest.json",
+                      "size":  901,
+                      "sha256":  "07DF46CCBACBF777B4A0051A76CEC5256C39F95C9B0A8EDD1505D40BDB1B5753"
+                  },
+                  {
+                      "path":  "installer/SaturnWorkspace.iss",
+                      "size":  30188,
+                      "sha256":  "157EB8B8CE7019EC127742F9CD5878CE5199502D6862A578519ECC39E3F533CE"
+                  },
+                  {
+                      "path":  "src/api.py",
+                      "size":  69777,
+                      "sha256":  "B2DA6FFCF851492CFD0AD1A03AC4E70071E007E03A40BAFB78F6694932B20E7B"
+                  },
+                  {
+                      "path":  "src/app.py",
+                      "size":  106992,
+                      "sha256":  "A905825E49609599ED5E53B1874E986E8C39BAB550D4CA51C4DE261D947BBCCA"
+                  },
+                  {
+                      "path":  "src/launcher_main.py",
+                      "size":  5339,
+                      "sha256":  "593C0DCE366F5A949CC6AA46327B8023C859F12FC07AC20C984C2E12E3E4EBB6"
+                  },
+                  {
+                      "path":  "src/update_helper_main.py",
+                      "size":  19264,
+                      "sha256":  "5566098F4F28E399B8106AEB5C68052450283E816F69782514EE231CB2C8664C"
+                  },
+                  {
+                      "path":  "src/window_theme.py",
+                      "size":  3102,
+                      "sha256":  "2B8BFAE5B0BC6EDBBABCCBD5518506174CF5B56E3F269441D05DC6E16A962C05"
+                  },
+                  {
+                      "path":  "src/backend/app_bootstrap.py",
+                      "size":  7407,
+                      "sha256":  "67ADDD808F4FFCF01BB601536958C34DEEE5CB90D0421E4565B581AE04983A8D"
+                  },
+                  {
+                      "path":  "src/backend/app_version.py",
+                      "size":  196,
+                      "sha256":  "F95441A3A678C2734CDFF5F60013725C7A309FE1730C9C2D2BD370C498685711"
+                  },
+                  {
+                      "path":  "src/backend/requirements.txt",
+                      "size":  17,
+                      "sha256":  "27EABF3AC1C5F06A7635A7793FA32E672E2B5E425D796AD63B615FA9D7B81A32"
+                  },
+                  {
+                      "path":  "src/backend/__init__.py",
+                      "size":  25,
+                      "sha256":  "618BA0B3A0A029A4F8108014907630EA2F21309AF93C6B1DC753FAA3C40EF3AE"
+                  },
+                  {
+                      "path":  "src/backend/adapters/adspower.py",
+                      "size":  145303,
+                      "sha256":  "550FD15A971E6712F0093A77CC0D856F888256D6F9895B5926B018DEDF21EDED"
+                  },
+                  {
+                      "path":  "src/backend/adapters/backup.py",
+                      "size":  1621,
+                      "sha256":  "71B3DA27E62431D760246FA35588C646065217D1A64769F3E591405276876872"
+                  },
+                  {
+                      "path":  "src/backend/adapters/brave.py",
+                      "size":  14177,
+                      "sha256":  "7EC4152CC6FDA35F50A4D4EBEF2192020DDD301FF10D9708482CE742C1684CCC"
+                  },
+                  {
+                      "path":  "src/backend/adapters/bridge.py",
+                      "size":  1681,
+                      "sha256":  "8524EF9B0970C5BBFAD964AA1137A9034BD00D7A5DD47B0B77561E12E2CBE7F1"
+                  },
+                  {
+                      "path":  "src/backend/adapters/bybit.py",
+                      "size":  12511,
+                      "sha256":  "EA152F588B0983503E65CF8E7EFCF83DB3D591E53008E7D2419F236805139875"
+                  },
+                  {
+                      "path":  "src/backend/adapters/bybit_extension.py",
+                      "size":  21238,
+                      "sha256":  "49399E130DECCA53E095B575ED8FE882F4FD5C5ED701BF6273E52AA2F107B8F3"
+                  },
+                  {
+                      "path":  "src/backend/adapters/clipboard.py",
+                      "size":  2829,
+                      "sha256":  "4A73C38CFBF76B72D76C3C2561683B2D5049890D3FFAE8814A6EC1BEFED283F9"
+                  },
+                  {
+                      "path":  "src/backend/adapters/cloud_payload_crypto.py",
+                      "size":  4678,
+                      "sha256":  "202064AE5058493EE3E241360304A268E6B8D71D2CC7F31F855971FFFF39C0A8"
+                  },
+                  {
+                      "path":  "src/backend/adapters/cloud_sync.py",
+                      "size":  75145,
+                      "sha256":  "569F3E1817FFEB665D7CC8320DBAC2B58D057BF5EA254380DB372E4997EFCE11"
+                  },
+                  {
+                      "path":  "src/backend/adapters/gmail.py",
+                      "size":  5993,
+                      "sha256":  "663FFC71842D07603A53E24AFDCE0514B25FE0B25FE7EAD0CFD8995E9F9F1576"
+                  },
+                  {
+                      "path":  "src/backend/adapters/ips.py",
+                      "size":  1054,
+                      "sha256":  "CCA5E123B8145A62F51C50AC3FD37E27516E6B78A76281CFA085256007B8AA5D"
+                  },
+                  {
+                      "path":  "src/backend/adapters/legacy_facade.py",
+                      "size":  2330,
+                      "sha256":  "C9A224F65D80FD1DF8A1FEB2F61DA0D513F6A3372B143E1634195D683009EC30"
+                  },
+                  {
+                      "path":  "src/backend/adapters/network.py",
+                      "size":  5350,
+                      "sha256":  "347FF5FFDF91519EF77DCC8A2E8BBE4832A0BBFA78CF093B38A20F03219F4D2E"
+                  },
+                  {
+                      "path":  "src/backend/adapters/notify.py",
+                      "size":  16081,
+                      "sha256":  "428B2E2202F26A7B2F2FBD7C4801EF22ABCE017F87CE2BDEFA1F93DC24AFF2A6"
+                  },
+                  {
+                      "path":  "src/backend/adapters/session.py",
+                      "size":  14736,
+                      "sha256":  "C2E52E139330585D43C400EB6711CA55AB4E3815D7B50864538D895C5268FF43"
+                  },
+                  {
+                      "path":  "src/backend/adapters/settings.py",
+                      "size":  12535,
+                      "sha256":  "A404760B61BBCF7F9441592CFEAB66CD5C496B5CD2F91316D1D67261C52C7C1D"
+                  },
+                  {
+                      "path":  "src/backend/adapters/smart_import.py",
+                      "size":  26838,
+                      "sha256":  "38289DBE38B7077001036200077279468726B8CED4C443E4E8BA22C22A8C41FC"
+                  },
+                  {
+                      "path":  "src/backend/adapters/storage_v2.py",
+                      "size":  92663,
+                      "sha256":  "0BC30B29FC3C16A975E5ECAD913E01D8D74ABCA12A7032053CE2167908C2BE3B"
+                  },
+                  {
+                      "path":  "src/backend/adapters/support.py",
+                      "size":  3923,
+                      "sha256":  "DEC4B4BB15D51A85EA08BA5EE049D40ED5B4F58F6FD0B5B4FC088912BA6C2FA5"
+                  },
+                  {
+                      "path":  "src/backend/adapters/updater.py",
+                      "size":  128987,
+                      "sha256":  "6DB8F9C330597AB83DEFE26671C2AF580608D92090D2B15CED1F7A0C8CA6A362"
+                  },
+                  {
+                      "path":  "src/backend/adapters/update_operation_state.py",
+                      "size":  4923,
+                      "sha256":  "B2A2C9966613200E5AE9C730BD749962AA1A86310F40B94E59920B6B4AA57472"
+                  },
+                  {
+                      "path":  "src/backend/adapters/user_export.py",
+                      "size":  10806,
+                      "sha256":  "A80262781DCAE46948A1EF2C7B1EA8119389268315539F0043FE3567D653F7D5"
+                  },
+                  {
+                      "path":  "src/backend/adapters/utils.py",
+                      "size":  264,
+                      "sha256":  "B0C947A062608E2311689D9B8636688EE040D807C38801D22B891131D56A8AC8"
+                  },
+                  {
+                      "path":  "src/backend/adapters/vault.py",
+                      "size":  670,
+                      "sha256":  "97A2C7C69ECDD2E1D2132F055B40C973BBBB70E214395429FA78D4391E7A6FA9"
+                  },
+                  {
+                      "path":  "src/backend/adapters/world_time.py",
+                      "size":  5037,
+                      "sha256":  "76B1AB3DE9FFA8C85F52E96CA6ED15E7400EED20749BBD0751CC5639F5EA507F"
+                  },
+                  {
+                      "path":  "src/backend/adapters/__init__.py",
+                      "size":  26,
+                      "sha256":  "8DE288F8276F9E8D00BB71AE284B0501B6263F50E5B6DFA5BE9DFD5BD4853409"
+                  },
+                  {
+                      "path":  "src/backend/api_bridge/auth_policy_bridge.py",
+                      "size":  11478,
+                      "sha256":  "776D45BDEE039F36EEEF6C0553CD7229270F9BC3BEF11EFC25E897DBBB4A6D84"
+                  },
+                  {
+                      "path":  "src/backend/api_bridge/cloud_bridge.py",
+                      "size":  3019,
+                      "sha256":  "695ACBF3C04B673927BD5A0E3E07A65B59F707B61F2773C7C72B149BB76670CF"
+                  },
+                  {
+                      "path":  "src/backend/api_bridge/error_reporting.py",
+                      "size":  2011,
+                      "sha256":  "A7417ECE7649AE4479FD370233EF465722931BDC79104CDE1DA29F7B1FEF7413"
+                  },
+                  {
+                      "path":  "src/backend/api_bridge/native_bridge.py",
+                      "size":  6137,
+                      "sha256":  "E2054568518663AEE774BF47D756F52D215BDB94183CB8FF790FC03BFB5E0141"
+                  },
+                  {
+                      "path":  "src/backend/api_bridge/session_bridge.py",
+                      "size":  1396,
+                      "sha256":  "440B358BB6C9015B2AEB3A7EB7AB7C6A885CEA8AD60B3C2535B10EF73A248C29"
+                  },
+                  {
+                      "path":  "src/backend/api_bridge/storage_bridge.py",
+                      "size":  5259,
+                      "sha256":  "B9C2F3E46629EA6BD169C8A9FA046554E37FBEECE05234E40C6BA7D0764F2F59"
+                  },
+                  {
+                      "path":  "src/backend/api_bridge/update_bridge.py",
+                      "size":  3615,
+                      "sha256":  "D6ECF3536B1F57871A9529C988191C02CA7CFFA9A4C8F6CAB2BF36830C4F047C"
+                  },
+                  {
+                      "path":  "src/backend/api_bridge/__init__.py",
+                      "size":  0,
+                      "sha256":  "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+                  },
+                  {
+                      "path":  "src/backend/platform/app_identity.py",
+                      "size":  418,
+                      "sha256":  "E6600F3C337B080BFD6B5ABF96461A2722120819C9E671DCED50D6D5D5548201"
+                  },
+                  {
+                      "path":  "src/backend/platform/data_migration.py",
+                      "size":  3414,
+                      "sha256":  "5892B47D2D9E2DBFD73FF6FCA43F0FB8783B91B4E3AC920D74398687776DDE08"
+                  },
+                  {
+                      "path":  "src/backend/platform/factory.py",
+                      "size":  508,
+                      "sha256":  "D9A8EEFC6C8E907AAC2943951E10BBE53A44932234E1F12CE5EA3159E3A24E07"
+                  },
+                  {
+                      "path":  "src/backend/platform/installed_update_acl.py",
+                      "size":  12948,
+                      "sha256":  "6120352C331164DCCDD5FFCFBE31B7BD96F02602F74CACE2254BA37F082D6B4B"
+                  },
+                  {
+                      "path":  "src/backend/platform/installed_update_apply.py",
+                      "size":  51582,
+                      "sha256":  "1F38FF4BFDD68B657B356E6F02998AA64F8287B1B99011E6B7E7B4EA158DD3E0"
+                  },
+                  {
+                      "path":  "src/backend/platform/installed_update_cleanup.py",
+                      "size":  13161,
+                      "sha256":  "1C9A0A619BA63EF4AD63904F399705A1B35363DBDDBA43A604ECC7D8CACDE790"
+                  },
+                  {
+                      "path":  "src/backend/platform/installed_update_commit.py",
+                      "size":  49168,
+                      "sha256":  "48AD40FF888FC72BE6B8F7F242242C5AC85C22B5A9F3E20FA9EAEBA99CD1EC40"
+                  },
+                  {
+                      "path":  "src/backend/platform/installed_update_metadata_repair.py",
+                      "size":  14867,
+                      "sha256":  "0DE6BFD07ECB62EC2C8E787D6EC75D244E638559B4776ED7CD327B1022AB9AAF"
+                  },
+                  {
+                      "path":  "src/backend/platform/installed_update_repair.py",
+                      "size":  13166,
+                      "sha256":  "95BFE20A6FBEC9F8CFB6CD198E4CA1D0990154417FAC995B4B1AEBD6E5E895C4"
+                  },
+                  {
+                      "path":  "src/backend/platform/installed_update_staging.py",
+                      "size":  31347,
+                      "sha256":  "D9D70DAE6B50F2FD8561EF2636B675ADF70F928BCB61886D417FC12EE4DC8C1B"
+                  },
+                  {
+                      "path":  "src/backend/platform/install_context.py",
+                      "size":  10878,
+                      "sha256":  "7F36B5C5F0B34A83074588D6C18CD472D25C7506B434E107672FA2646ADC1F8F"
+                  },
+                  {
+                      "path":  "src/backend/platform/runtime.py",
+                      "size":  853,
+                      "sha256":  "C3256420CA20087FA5EFF9685E49DCBE4A39B51D64655E720F2312D885A72AAA"
+                  },
+                  {
+                      "path":  "src/backend/platform/runtime_instances.py",
+                      "size":  14628,
+                      "sha256":  "03079BB23DBE7CEBDE84254296944FEE45C729AFF7D7796FDEEFA67A74FBA229"
+                  },
+                  {
+                      "path":  "src/backend/platform/services.py",
+                      "size":  1126,
+                      "sha256":  "865D69B88D2B37EC6BF5F291079F8EA45E0E1AF3DD7A88A6D76BAEC1755469A7"
+                  },
+                  {
+                      "path":  "src/backend/platform/windows_impl.py",
+                      "size":  3270,
+                      "sha256":  "A7A7D71EE7E756D816EE9BA08C5F5044A5892F87931C82809EE00DA7EA42466C"
+                  },
+                  {
+                      "path":  "src/backend/platform/__init__.py",
+                      "size":  164,
+                      "sha256":  "7085EE2912C960651F582E3B63D75106D23EFA78DFBF32CF58A1768761C6368D"
+                  },
+                  {
+                      "path":  "src/backend/security/audit.py",
+                      "size":  1247,
+                      "sha256":  "1C0808C7143C10411D52A8B991CB842CCA1D107920FD560D6137FD74414E9F9F"
+                  },
+                  {
+                      "path":  "src/backend/security/crash_reporter.py",
+                      "size":  19060,
+                      "sha256":  "13EC6DE564416A96ABB1A960C9E388A52F9D8A34B9B32E11021236AEFF6AFE17"
+                  },
+                  {
+                      "path":  "src/backend/security/debug_guard.py",
+                      "size":  509,
+                      "sha256":  "7F9E0D008C297010924903A0CD0EFEA34AA9FC226C6B059514F12D6AAAEA91BC"
+                  },
+                  {
+                      "path":  "src/backend/security/device_auth.py",
+                      "size":  23014,
+                      "sha256":  "31975805BE83BEFFE3657CF374CD2995C840F2D71216D8E2D1CA35FCDCE31FB6"
+                  },
+                  {
+                      "path":  "src/backend/security/http_fallback.py",
+                      "size":  6825,
+                      "sha256":  "94178EB75334B68F9D52917C763F9BFA96B365D39CB1CE75DD7FDCF47CCB32F3"
+                  },
+                  {
+                      "path":  "src/backend/security/invite_unlock.py",
+                      "size":  3283,
+                      "sha256":  "EFD8ED05187DE8E11A59D2B5E8ED6FC9EAC85AEE7D8A72FEAE82EA19ADD3B003"
+                  },
+                  {
+                      "path":  "src/backend/security/license_client.py",
+                      "size":  2138,
+                      "sha256":  "D968AD792A92F2C8CCA7D1661BC66B02FDF7A863FCED11B6A3D06C58F135E98C"
+                  },
+                  {
+                      "path":  "src/backend/security/policy_client.py",
+                      "size":  15097,
+                      "sha256":  "3B02A5746675B55AB6C666D787FF4158F177F1C8C17DA4E8BB6BF13F8FF95035"
+                  },
+                  {
+                      "path":  "src/backend/security/rate_limit.py",
+                      "size":  713,
+                      "sha256":  "080A8DCFF55DB100D1408251D1479C49DF91A3D875F9DEB2EB24B27D8E16E8BC"
+                  },
+                  {
+                      "path":  "src/backend/security/runtime_guard.py",
+                      "size":  5250,
+                      "sha256":  "B3B9D425FDF491598E56453CC20F6EB0ABEDBE9157668CC2E4B392B0DD3E17CA"
+                  },
+                  {
+                      "path":  "src/backend/security/runtime_state.py",
+                      "size":  1363,
+                      "sha256":  "AAD63F68CFF5E74C17B2ED136F3D84D7386661734BA159CD42E8EC876DFDD558"
+                  },
+                  {
+                      "path":  "src/backend/security/update_signature.py",
+                      "size":  1278,
+                      "sha256":  "D078535F55B573AE916677A27DDBE12D11156492B10B5E6E44684D3BAF2E6263"
+                  },
+                  {
+                      "path":  "src/backend/security/__init__.py",
+                      "size":  420,
+                      "sha256":  "4A0F6A74387B8104996C8C807633C2F6DC858036D629CC91C6B7259AE1B09679"
+                  },
+                  {
+                      "path":  "src/backend/tests/test_adspower_webrtc_and_readiness.py",
+                      "size":  27672,
+                      "sha256":  "9805019B788EC55D416EAB14061A92D27EAB3523549438465C4CDE4BD6F305EB"
+                  },
+                  {
+                      "path":  "src/backend/tests/test_bybit_adapter.py",
+                      "size":  798,
+                      "sha256":  "68911F41AF18777F270237C0E3CDEF55C48647010730F44A453018AD8B6FD92B"
+                  },
+                  {
+                      "path":  "src/backend/tests/test_cloud_sync_not_connected.py",
+                      "size":  1503,
+                      "sha256":  "BBD8644C5C6FCC26806384512A4BEA0FF588ADA22916252A019BCCDCF93EF952"
+                  },
+                  {
+                      "path":  "src/backend/tests/test_cloud_sync_oauth_flow.py",
+                      "size":  2014,
+                      "sha256":  "958B999EA2E35CB0E6E372869BE81F28016A67F5D35C3973E60889FF3A3C8B85"
+                  },
+                  {
+                      "path":  "src/backend/tests/test_device_auth_phase_c.py",
+                      "size":  6156,
+                      "sha256":  "95514554349315DEDF1941C59AFA2EBCA3746659398DFE0F1538BDDCB1ABBF59"
+                  },
+                  {
+                      "path":  "src/backend/tests/test_installed_update_acl.py",
+                      "size":  1988,
+                      "sha256":  "CB2786F8EB30145AEADF2A207590A1CD326A6755C0FBC67A915B27F1D2136FB7"
+                  },
+                  {
+                      "path":  "src/backend/tests/test_installed_update_commit.py",
+                      "size":  12218,
+                      "sha256":  "1DA19426AD4801F2A8914E868ACB33DB5BC388180753FF751DDC472C0A166064"
+                  },
+                  {
+                      "path":  "src/backend/tests/test_installed_update_targeted_prepare.py",
+                      "size":  2417,
+                      "sha256":  "5B43F0CA26B32962B635A47E5A59EF40E746F89E10505403E78ACB7EA0372A45"
+                  },
+                  {
+                      "path":  "src/backend/tests/test_installed_update_targeted_staging.py",
+                      "size":  3503,
+                      "sha256":  "CA5C97AA85F31052707A7A160FAD5E261C29BBBFC28CEE21E2018420CCBE2584"
+                  },
+                  {
+                      "path":  "src/backend/tests/test_legacy_facade_parity.py",
+                      "size":  1233,
+                      "sha256":  "0578A9A05C2013CDCB72F1A613482A844634DC1F84C001C5917F45E4EB8DAAE3"
+                  },
+                  {
+                      "path":  "src/backend/tests/test_security_policy_client.py",
+                      "size":  4640,
+                      "sha256":  "A786213669E5E05E05D898922A82AE89F6F1640FE02319309565C66F356D3BEB"
+                  },
+                  {
+                      "path":  "src/backend/tests/test_settings_store_guard.py",
+                      "size":  828,
+                      "sha256":  "03AFDD0D71D7864CE2F0EE1C17ECFD843EB260D13E39198E2E97FCCCA7E0B53B"
+                  },
+                  {
+                      "path":  "src/backend/tests/test_single_instance_entrypoints.py",
+                      "size":  4444,
+                      "sha256":  "4FCE949D306BC007B354E11F5FCB1F8FAC7DBC87B55C5B8E7798ECA33CEB8B3B"
+                  },
+                  {
+                      "path":  "src/backend/tests/test_storage_adspower_config.py",
+                      "size":  5573,
+                      "sha256":  "4D83C5162FC77112D9BE3DB1D96D8ABD73C13CA2C5ECBA7E1385A9B70BC3E507"
+                  },
+                  {
+                      "path":  "src/backend/tests/test_storage_backup_delete_matching.py",
+                      "size":  7981,
+                      "sha256":  "A26570A4630B036F43E8CD01D2821BDB48479B69F5403F5B7955427940C9F699"
+                  },
+                  {
+                      "path":  "src/backend/tests/test_updater_operation.py",
+                      "size":  30712,
+                      "sha256":  "41A2E9FF27407EFE62E5E6A077DB3E52D5F7E0B480A6BDA8AF94B109DB5DEBE7"
+                  },
+                  {
+                      "path":  "src/backend/tests/test_vault_review_schedule.py",
+                      "size":  2986,
+                      "sha256":  "EFB31E9F35E7A2E2152372B52C6C7204D5F3FE20420098A5D3D6889559DA8310"
+                  },
+                  {
+                      "path":  "src/backend/tests/test_world_time_timezone.py",
+                      "size":  627,
+                      "sha256":  "A3005ADBDB498845DAF90409CF5F63FAC48CCB75EE98D67E4C3DFAFDCA84EDBB"
+                  },
+                  {
+                      "path":  "src/frontend/.gitignore",
+                      "size":  253,
+                      "sha256":  "FE718E7BABB14F3CBAD2D97F08889B9CE5215ED3FE0E43B2B8CFBFB3B9B844E8"
+                  },
+                  {
+                      "path":  "src/frontend/eslint.config.js",
+                      "size":  616,
+                      "sha256":  "4EFE97B16D1200FAC0EAF07AA00930A8668B1F96A0BE1891ACE8C1E712FF0CCB"
+                  },
+                  {
+                      "path":  "src/frontend/index.html",
+                      "size":  1672,
+                      "sha256":  "41EDE1935DEF42193A9943313ED5D9CFBD8F86320791872C6367F1BABC2CDA7C"
+                  },
+                  {
+                      "path":  "src/frontend/package-lock.json",
+                      "size":  93513,
+                      "sha256":  "1362A45E3A4ABBC2EFD78B29AB9B4FC26669F8257D7307456B2B6D553DB7BD2A"
+                  },
+                  {
+                      "path":  "src/frontend/package.json",
+                      "size":  665,
+                      "sha256":  "FB46A9A6E170914CF05467D779FC5E9B4011956630DD0ABC93BBEAE6EB17C0BC"
+                  },
+                  {
+                      "path":  "src/frontend/postcss.config.js",
+                      "size":  82,
+                      "sha256":  "562B233231EDA28D68A1A53CF72AC4C72CBA9F8D379829AE07AA967469CD8E97"
+                  },
+                  {
+                      "path":  "src/frontend/README.md",
+                      "size":  2555,
+                      "sha256":  "F58B5B17F83DB63C09A9F2C059EC435AC8A3FEB66F9337391ED5F3F62CFF4E63"
+                  },
+                  {
+                      "path":  "src/frontend/tailwind.config.js",
+                      "size":  379,
+                      "sha256":  "F41A90FBC3E8A86D07DA080824466BDEC6FBF79CB65D996520122044FAB3BC01"
+                  },
+                  {
+                      "path":  "src/frontend/tsconfig.app.json",
+                      "size":  732,
+                      "sha256":  "922BC5BFB41BDC0768023B2487D54B3AE23C587D999024D4F32CDE879AE6F4D8"
+                  },
+                  {
+                      "path":  "src/frontend/tsconfig.json",
+                      "size":  630,
+                      "sha256":  "CB4DD1777BC7F478CB417906C32099AE5E661865B3181DF116AC70790E9A1A7E"
+                  },
+                  {
+                      "path":  "src/frontend/tsconfig.node.json",
+                      "size":  223,
+                      "sha256":  "6EC602B8AA146888C76F0B41CA3515F91F95919F6E6417A4670DECABA8FCB982"
+                  },
+                  {
+                      "path":  "src/frontend/vite.config.ts",
+                      "size":  1030,
+                      "sha256":  "9479765827CF387BB349FCE3511E1F109105ED37CFFDEFA750EF501106E67572"
+                  },
+                  {
+                      "path":  "src/frontend/public/favicon.png",
+                      "size":  5239,
+                      "sha256":  "DDCF5CE5DE8D4FBD1CBB5B490C0EA771A684DE9E07F2379A596B4D93A841A577"
+                  },
+                  {
+                      "path":  "src/frontend/public/icon-192.png",
+                      "size":  27300,
+                      "sha256":  "3BF3404ABC473B246996E87C0A60496EFEE18590252D8A61F65A7516F3CC50B4"
+                  },
+                  {
+                      "path":  "src/frontend/public/icon-512.png",
+                      "size":  149093,
+                      "sha256":  "7C03BAFD2A399F28145A5FB08BF5DC9E5D60E2AFDA78FD4DBE97875F9D044F12"
+                  },
+                  {
+                      "path":  "src/frontend/public/vite.svg",
+                      "size":  1497,
+                      "sha256":  "4A748AFD443918BB16591C834C401DAE33E87861AB5DBAD0811C3A3B4A9214FB"
+                  },
+                  {
+                      "path":  "src/frontend/public/fonts/Tajawal-EN-ExtraBold.ttf",
+                      "size":  59648,
+                      "sha256":  "3D1298B747C22579F9E1BDEB0D4165064CB17F7E66145E2F43F9DEB12AD7A2CF"
+                  },
+                  {
+                      "path":  "src/frontend/scripts/build_dashboard_modules.py",
+                      "size":  2821,
+                      "sha256":  "0926C0599AAD7DEFA306FFFBE8EDB91F2F4FA9A55018124ECACD7742C981C6B3"
+                  },
+                  {
+                      "path":  "src/frontend/scripts/gen_dashboard_prelude.py",
+                      "size":  2399,
+                      "sha256":  "2F3AA3CCA98EA5230DE565B16EA2986BEB670AE8D980DFE3893F37108C19BC03"
+                  },
+                  {
+                      "path":  "src/frontend/scripts/list_prelude_exports.py",
+                      "size":  636,
+                      "sha256":  "0318D6742ADD1FDB21EBB8DEF3EAC643E3D6909B53617985B4213371782BCCA0"
+                  },
+                  {
+                      "path":  "src/frontend/scripts/patch_app_import_prelude.py",
+                      "size":  1277,
+                      "sha256":  "9841AAEAA020B70FAC29F1FBBB5E56E3F022F4F004097EA98C1549173D1EE71C"
+                  },
+                  {
+                      "path":  "src/frontend/scripts/prune_app_prelude_imports.py",
+                      "size":  1940,
+                      "sha256":  "048C651A26D6ED0AA8881D44C53E00F2F34791928029679A353169E107E558C8"
+                  },
+                  {
+                      "path":  "src/frontend/src/App.tsx",
+                      "size":  551312,
+                      "sha256":  "014F1C679ED1D7452B0D4084D3F41F184A71E28F7CE6DA37B5D73BB43B8DEE78"
+                  },
+                  {
+                      "path":  "src/frontend/src/index.css",
+                      "size":  299,
+                      "sha256":  "FE509AFA911E0F2B484E61B4B95E2400294E90A872CAC0A3D5212B6EE9E1064F"
+                  },
+                  {
+                      "path":  "src/frontend/src/main.tsx",
+                      "size":  1760,
+                      "sha256":  "1BD1CCBB82DA5702E6FFC4C10DBE139C5BBB261E83A3D5C6DBB362ADF0AD2930"
+                  },
+                  {
+                      "path":  "src/frontend/src/vite-env.d.ts",
+                      "size":  188,
+                      "sha256":  "BAD7F1492992D35D95753763EA39AA08BEBAA6D8585EA230EB99194B95484144"
+                  },
+                  {
+                      "path":  "src/frontend/src/app/appDashboardPrelude.tsx",
+                      "size":  323,
+                      "sha256":  "E9805FF45BA2414E61E72F0D6DC34EB9CCA62AB096BE88698EE814CAD7D7EF5C"
+                  },
+                  {
+                      "path":  "src/frontend/src/app/appHelpers.ts",
+                      "size":  26238,
+                      "sha256":  "4DE5946A1CFFE16ECD42448A766F91D821CD6B2F69683CC891DCCA55D79F049B"
+                  },
+                  {
+                      "path":  "src/frontend/src/app/formatCloudCountsSummary.ts",
+                      "size":  419,
+                      "sha256":  "97D56FA3112D00CF4D66896BB8AED78F1D6F952BE2C1BAC5C75B85CDC9B635E4"
+                  },
+                  {
+                      "path":  "src/frontend/src/app/dashboard/appTypes.ts",
+                      "size":  3077,
+                      "sha256":  "0039822F3E62177208981A7344FEEB988BD86E7DCB9F0C8BA3BC3F8C43AE164D"
+                  },
+                  {
+                      "path":  "src/frontend/src/app/dashboard/dateSplashSortVault.ts",
+                      "size":  23765,
+                      "sha256":  "A6DA1D3F878772150E67FD4342C42CF944C462B5D839D5D004E2203A58155343"
+                  },
+                  {
+                      "path":  "src/frontend/src/app/dashboard/GoogleDriveMark.tsx",
+                      "size":  278,
+                      "sha256":  "9C5A80219CE791321380763AD031D96541E71E0B20D6B1381D4C69D24240F36E"
+                  },
+                  {
+                      "path":  "src/frontend/src/app/dashboard/index.ts",
+                      "size":  197,
+                      "sha256":  "177C45CEBCF0D21C2CE8F28B84E894AF6F4A945F275BDBA11BCAD5664D9CCABE"
+                  },
+                  {
+                      "path":  "src/frontend/src/app/dashboard/sessionWizardAndPagination.tsx",
+                      "size":  28085,
+                      "sha256":  "1AACCA81419DE8D9152465D87073682EE3C6AA87587318E0ED5D7F5F759A972D"
+                  },
+                  {
+                      "path":  "src/frontend/src/app/dashboard/vaultUiAndSettingsChrome.tsx",
+                      "size":  21320,
+                      "sha256":  "190BD340932B03F259B5DFF4AC0315813CECADE59FB62FB2711B557C839D1471"
+                  },
+                  {
+                      "path":  "src/frontend/src/assets/brand-logo.png",
+                      "size":  400394,
+                      "sha256":  "BFD8C899021C0BB96DA9B60C9C268B3115DFAC475E82475CE923E24FAF46FB4B"
+                  },
+                  {
+                      "path":  "src/frontend/src/assets/google-drive.svg",
+                      "size":  755,
+                      "sha256":  "3D14C519AF7B2252C512D0113759C2FF5EA22FF99BF52DE0E4421AF5B87C3AD4"
+                  },
+                  {
+                      "path":  "src/frontend/src/assets/react.svg",
+                      "size":  4126,
+                      "sha256":  "35EF61ED53B323AE94A16A8EC659B3D0AF3880698791133F23B084085AB1C2E5"
+                  },
+                  {
+                      "path":  "src/frontend/src/assets/saturn-logo.svg",
+                      "size":  473,
+                      "sha256":  "FDA81CC627BEB436660C311D54C5DA8BA0B207C99B0F33347E4454AFCF840920"
+                  },
+                  {
+                      "path":  "src/frontend/src/assets/telegram-logo.svg",
+                      "size":  1152,
+                      "sha256":  "597765EFB6434C89E76781B67A34AD83324F8B88068838A2540DAE5AD93DB1E1"
+                  },
+                  {
+                      "path":  "src/frontend/src/assets/fonts/Cairo-300.ttf",
+                      "size":  89832,
+                      "sha256":  "EFB4C0EC37ACA0CCEB91C8FE10DF2798D8A1A6A60581EA760F4A59550496BDCB"
+                  },
+                  {
+                      "path":  "src/frontend/src/assets/fonts/Cairo-400.ttf",
+                      "size":  91500,
+                      "sha256":  "7ECB9B6A465072BCE7B0E2A6D2D0355ADD8151FA9F8F342B516B57B26A2914C6"
+                  },
+                  {
+                      "path":  "src/frontend/src/assets/fonts/Cairo-500.ttf",
+                      "size":  91676,
+                      "sha256":  "361766F154AE7CAB731B8AEF8EE4470B64D7C8D1A4C9AD25B91A85B7BD2F1A1D"
+                  },
+                  {
+                      "path":  "src/frontend/src/assets/fonts/Cairo-600.ttf",
+                      "size":  91724,
+                      "sha256":  "ED4ACAA1F0BC99766193CB9536D166DAA74AA09EA412E9CE7448FFDF75A997DA"
+                  },
+                  {
+                      "path":  "src/frontend/src/assets/fonts/Cairo-700.ttf",
+                      "size":  91664,
+                      "sha256":  "CAD8564334938A5867E2B8200E9B882067811BC09E26314F2D3AA95CCFE54015"
+                  },
+                  {
+                      "path":  "src/frontend/src/assets/fonts/Tajawal-EN-ExtraBold.ttf",
+                      "size":  59648,
+                      "sha256":  "3D1298B747C22579F9E1BDEB0D4165064CB17F7E66145E2F43F9DEB12AD7A2CF"
+                  },
+                  {
+                      "path":  "src/frontend/src/components/BrandLogo.tsx",
+                      "size":  327,
+                      "sha256":  "2110E5F82C70142832D542C503BCE7497AA6E34A871E413B1F84C171B1B75D82"
+                  },
+                  {
+                      "path":  "src/frontend/src/lib/api.ts",
+                      "size":  50900,
+                      "sha256":  "787D751B53789D9C22068085DDFC1B7FEAB3C1A32AEA3334BC0976313D1BDBC6"
+                  },
+                  {
+                      "path":  "src/frontend/src/styles/base-shell.css",
+                      "size":  51461,
+                      "sha256":  "F009892B8C8C5D73FB9E7D97E2C51AD4848D238C64F3BE8192980592794C1951"
+                  },
+                  {
+                      "path":  "src/frontend/src/styles/data-page-layout.css",
+                      "size":  2879,
+                      "sha256":  "89F62ED08679025AEC53EF1E65299405E4FCF8BC1A44C54BA443D656B9D1F3C9"
+                  },
+                  {
+                      "path":  "src/frontend/src/styles/modals-console.css",
+                      "size":  48572,
+                      "sha256":  "04383BD9C678082D8F35DEFC36AF27D34513CF6F124BDEA02BB6D95CF535D012"
+                  },
+                  {
+                      "path":  "src/frontend/src/styles/session-polish-overrides.css",
+                      "size":  20842,
+                      "sha256":  "A2F4F0567011DDCA58853FDC661F3A9F6B70D8EBF710ED07AB9EF62B4AC0AD29"
+                  },
+                  {
+                      "path":  "src/frontend/src/styles/session-workflow.css",
+                      "size":  21985,
+                      "sha256":  "A2B3812376E63493276F01B8497F2D95F99F5DD295F57B598F107708E58745A9"
+                  },
+                  {
+                      "path":  "src/frontend/src/styles/settings-controls.css",
+                      "size":  74619,
+                      "sha256":  "56AD1A0204BB3A7E360AD07F2690BDF5D55097EC4F68AA1DA393B42A2890F1C5"
+                  },
+                  {
+                      "path":  "src/frontend/src/styles/toasts-responsive.css",
+                      "size":  21730,
+                      "sha256":  "3F31CC5C34C2BE97AE6B08976E0C6551F84981F479648BACC064E13DB48AA363"
+                  },
+                  {
+                      "path":  "src/Source/data/store/manifest.json",
+                      "size":  428,
+                      "sha256":  "F1EAC0908DA2671A066835FA351C7E368E47270D8A3B29805B815E34241F48ED"
+                  },
+                  {
+                      "path":  "src/Source/data/store/indexes/accounts_by_email.json",
+                      "size":  2,
+                      "sha256":  "44136FA355B3678A1146AD16F7E8649E94FB4FC21FE77E8310C060F61CAAFF8A"
+                  },
+                  {
+                      "path":  "src/Source/data/store/indexes/gmails_by_email.json",
+                      "size":  2,
+                      "sha256":  "44136FA355B3678A1146AD16F7E8649E94FB4FC21FE77E8310C060F61CAAFF8A"
+                  },
+                  {
+                      "path":  "src/Source/data/store/indexes/ips_by_identity.json",
+                      "size":  2,
+                      "sha256":  "44136FA355B3678A1146AD16F7E8649E94FB4FC21FE77E8310C060F61CAAFF8A"
+                  },
+                  {
+                      "path":  "src/Source/data/store/meta/export_index.json",
+                      "size":  62,
+                      "sha256":  "1041BE5E8B002F6A8D2058286BE624B98CE1F2E547B2625C9621FCD0D57DA3AA"
+                  },
+                  {
+                      "path":  "src/Source/data/store/meta/export_index.json.87c0fcb5c71c41ea950545e526d4df8a.tmp",
+                      "size":  62,
+                      "sha256":  "18AC3AF931DD7E8AEAFCDA2F83AC11673BEE117748611C7CB164A0D067CFDD61"
+                  },
+                  {
+                      "path":  "src/Source/data/store/_compat/databases/gmails_db.json",
+                      "size":  2,
+                      "sha256":  "4F53CDA18C2BAA0C0354BB5F9A3ECBE5ED12AB4D8E11BA873C2F11161202B945"
+                  },
+                  {
+                      "path":  "src/Source/data/store/_compat/databases/gmail_db.txt",
+                      "size":  0,
+                      "sha256":  "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+                  },
+                  {
+                      "path":  "src/Source/data/store/_compat/databases/reminders.json",
+                      "size":  2,
+                      "sha256":  "4F53CDA18C2BAA0C0354BB5F9A3ECBE5ED12AB4D8E11BA873C2F11161202B945"
+                  },
+                  {
+                      "path":  "src/Source/data/store/_compat/databases/used_ips.json",
+                      "size":  2,
+                      "sha256":  "4F53CDA18C2BAA0C0354BB5F9A3ECBE5ED12AB4D8E11BA873C2F11161202B945"
+                  },
+                  {
+                      "path":  "src/Source/data/store/_compat/databases/used_ips.json.2e8ac8251f9f4807bd444be93e3381fa.tmp",
+                      "size":  2,
+                      "sha256":  "4F53CDA18C2BAA0C0354BB5F9A3ECBE5ED12AB4D8E11BA873C2F11161202B945"
+                  },
+                  {
+                      "path":  "src/Source/satan/main.py",
+                      "size":  5217,
+                      "sha256":  "D6C58970877337C9EA862091DD0C9B4A077CA803257F5B62C7E0944C64ADB2BA"
+                  },
+                  {
+                      "path":  "src/Source/satan/core/fingerprint.py",
+                      "size":  1532,
+                      "sha256":  "67B9E6D6A9AC4DB74DF19E6BDE9F9B1D3C577FC969329F833D02CA781F2E2F44"
+                  },
+                  {
+                      "path":  "src/Source/satan/core/gmail_manager.py",
+                      "size":  5866,
+                      "sha256":  "48E4F64836941BA99249F3D3274094D31E6FF040BD023F9B36F66B4E01295437"
+                  },
+                  {
+                      "path":  "src/Source/satan/core/mac_changer.py",
+                      "size":  4711,
+                      "sha256":  "6055B3C8623737169928085C82EB17E0C2B7463540152C330953535E44D6913A"
+                  },
+                  {
+                      "path":  "src/Source/satan/core/network.py",
+                      "size":  9500,
+                      "sha256":  "37537B945EA1709F39DE7FA14E5DBB370BAE76ECC8AAD593504BCE08D7F96BB6"
+                  },
+                  {
+                      "path":  "src/Source/satan/core/paths.py",
+                      "size":  38850,
+                      "sha256":  "A4ED3FEC77CB699601970AFC906418ED66B6FC0365EDDD93BA475AFD1D8DA68D"
+                  },
+                  {
+                      "path":  "src/Source/satan/core/vault.py",
+                      "size":  34303,
+                      "sha256":  "70BF666FAF555B10DB9E19F7FC511A42A7D89DF332BB5EBCF90D6E17F2736739"
+                  },
+                  {
+                      "path":  "src/Source/satan/scripts/pre_account_cleaner.py",
+                      "size":  19267,
+                      "sha256":  "3A04F7FBC0091E0E105C621410DBB0268C80C80000714460B883A4BE9CD7DD27"
+                  },
+                  {
+                      "path":  "src/Source/satan/tools/account_cleaner.py",
+                      "size":  7740,
+                      "sha256":  "619141420DFDE5AF54A4DCBCE18A3F5315E405FB6EC148FC51E3B557FA7E0DB7"
+                  },
+                  {
+                      "path":  "tools/scripts/audit_data_encryption.py",
+                      "size":  3225,
+                      "sha256":  "22D0DEDF13BEB7F3573A8F5F7472B6B9E3FC1474049DD99470B6502FCA88C941"
+                  },
+                  {
+                      "path":  "tools/scripts/backend_smoke.py",
+                      "size":  987,
+                      "sha256":  "174E7F95B39CBE464EDAE047B7DC9A525C5C5422A39716323E9FA4FE49D89C13"
+                  },
+                  {
+                      "path":  "tools/scripts/export_update_manifest_public_key.py",
+                      "size":  1271,
+                      "sha256":  "A8D6F7798154F3D374935A2665B1A11573E5034DA8393D30B1F97EF90046C7DF"
+                  },
+                  {
+                      "path":  "tools/scripts/generate_runtime_integrity_manifest.py",
+                      "size":  1171,
+                      "sha256":  "B79CDCB6E4B6566F0F74B92593C20AA8D404CFE2BB51F0858A6D3CD2E2B6D8A3"
+                  },
+                  {
+                      "path":  "tools/scripts/migrate_data_encryption.py",
+                      "size":  4683,
+                      "sha256":  "4609C9B32D19926A9690A8C6EE564B49AEF033CC6568D2903F256D9D364C135C"
+                  },
+                  {
+                      "path":  "tools/scripts/sign_update_manifest.py",
+                      "size":  1852,
+                      "sha256":  "49333812A67EF0619568CF769F325A564A3D9AE2B98AAF0E1948DFCBB8374C23"
+                  },
+                  {
+                      "path":  "tools/scripts/update_manifest.sample.json",
+                      "size":  999,
+                      "sha256":  "A8029F30CDF03D33C780D77A214365AE5D828826871A4C85E2E277C891C4A5F9"
+                  }
+              ],
+    "existing_qa_setup":  {
+                              "path":  "D:\\SaturnWS\\build-output\\phase-g-qa-installed-channel-20260624-131944\\setup\\SaturnWorkspace-Setup-1.0.7-beta-phase-g-qa.exe",
+                              "size":  42469032,
+                              "sha256":  "527C21D6A87720DB31E0EC4A8F59EA6FF2299C928C1B83447E2AC1E6AAA45DDD"
+                          },
+    "build_command":  "Existing pipeline only; no rebuild executed for this record.",
+    "build_environment":  {
+                              "os":  "Microsoft Windows 11 Pro",
+                              "os_version":  "10.0.26100",
+                              "powershell":  "5.1.26100.7920",
+                              "machine_arch":  "AMD64"
+                          }
+}

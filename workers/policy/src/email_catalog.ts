@@ -224,11 +224,263 @@ export const EMAIL_CATALOG: Record<string, EmailCatalogItem> = {
     sender_identity: "security",
     title_en: "New login alert",
     title_ar: "تنبيه تسجيل دخول جديد",
-    description_en: "Prepared security alert for new device or unusual login events.",
-    description_ar: "تنبيه أمني جاهز لتسجيل الدخول من جهاز جديد أو نشاط غير معتاد.",
+    description_en: "Notifies the account owner after a desktop device is linked.",
+    description_ar: "تنبيه لصاحب الحساب بعد ربط جهاز سطح مكتب.",
     default_subject_en: "New SaturnWS login",
     default_subject_ar: "تسجيل دخول جديد إلى SaturnWS",
-    integration_status: "prepared",
+    integration_status: "linked",
+    user_can_disable: false,
+    retry_allowed: true,
+    essential: true,
+    requires_backend_event: true,
+    admin_test_allowed: false,
+  }),
+  "security.session_revoked": item({
+    event_type: "security.session_revoked",
+    template_key: "security_session_revoked",
+    category: "security",
+    sender_identity: "security",
+    title_en: "Session ended",
+    title_ar: "تم إنهاء جلسة",
+    description_en: "Notifies the account owner when a signed-in session is revoked.",
+    description_ar: "تنبيه لصاحب الحساب عند إنهاء جلسة مسجلة.",
+    default_subject_en: "A SaturnWS session was ended",
+    default_subject_ar: "تم إنهاء جلسة في SaturnWS",
+    integration_status: "linked",
+    user_can_disable: false,
+    retry_allowed: true,
+    essential: true,
+    requires_backend_event: true,
+    admin_test_allowed: false,
+  }),
+  "security.device_revoked": item({
+    event_type: "security.device_revoked",
+    template_key: "security_device_revoked",
+    category: "security",
+    sender_identity: "security",
+    title_en: "Device access revoked",
+    title_ar: "تم إلغاء وصول جهاز",
+    description_en: "Notifies the account owner when a linked device is revoked.",
+    description_ar: "تنبيه لصاحب الحساب عند إلغاء وصول جهاز مرتبط.",
+    default_subject_en: "A SaturnWS device was revoked",
+    default_subject_ar: "تم إلغاء وصول جهاز في SaturnWS",
+    integration_status: "linked",
+    user_can_disable: false,
+    retry_allowed: true,
+    essential: true,
+    requires_backend_event: true,
+    admin_test_allowed: false,
+  }),
+  "security.all_sessions_revoked": item({
+    event_type: "security.all_sessions_revoked",
+    template_key: "security_all_sessions_revoked",
+    category: "security",
+    sender_identity: "security",
+    title_en: "All sessions ended",
+    title_ar: "تم إنهاء كل الجلسات",
+    description_en: "Notifies the account owner when all account sessions are revoked.",
+    description_ar: "تنبيه لصاحب الحساب عند إنهاء كل جلسات الحساب.",
+    default_subject_en: "All SaturnWS sessions were ended",
+    default_subject_ar: "تم إنهاء كل جلسات SaturnWS",
+    integration_status: "linked",
+    user_can_disable: false,
+    retry_allowed: true,
+    essential: true,
+    requires_backend_event: true,
+    admin_test_allowed: false,
+  }),
+  "account.deletion_requested": item({
+    event_type: "account.deletion_requested",
+    template_key: "account_deletion_requested",
+    category: "security",
+    sender_identity: "security",
+    title_en: "Account deletion requested",
+    title_ar: "تم طلب حذف الحساب",
+    description_en: "Confirms that an account deletion request was created.",
+    description_ar: "تأكيد إنشاء طلب حذف الحساب.",
+    default_subject_en: "SaturnWS account deletion request",
+    default_subject_ar: "طلب حذف حساب SaturnWS",
+    integration_status: "linked",
+    user_can_disable: false,
+    retry_allowed: true,
+    essential: true,
+    requires_backend_event: true,
+    admin_test_allowed: false,
+  }),
+  "account.deletion_cancelled": item({
+    event_type: "account.deletion_cancelled",
+    template_key: "account_deletion_cancelled",
+    category: "security",
+    sender_identity: "security",
+    title_en: "Account deletion cancelled",
+    title_ar: "تم إلغاء حذف الحساب",
+    description_en: "Confirms that a pending account deletion request was cancelled.",
+    description_ar: "تأكيد إلغاء طلب حذف حساب معلّق.",
+    default_subject_en: "SaturnWS account deletion was cancelled",
+    default_subject_ar: "تم إلغاء حذف حساب SaturnWS",
+    integration_status: "linked",
+    user_can_disable: false,
+    retry_allowed: true,
+    essential: true,
+    requires_backend_event: true,
+    admin_test_allowed: false,
+  }),
+  "account.suspended": item({
+    event_type: "account.suspended",
+    template_key: "account_suspended",
+    category: "security",
+    sender_identity: "security",
+    title_en: "Account suspended",
+    title_ar: "تم إيقاف الحساب",
+    description_en: "Notifies the account owner when account access is suspended.",
+    description_ar: "تنبيه لصاحب الحساب عند إيقاف الوصول للحساب.",
+    default_subject_en: "SaturnWS account access was suspended",
+    default_subject_ar: "تم إيقاف الوصول إلى حساب SaturnWS",
+    integration_status: "linked",
+    user_can_disable: false,
+    retry_allowed: true,
+    essential: true,
+    requires_backend_event: true,
+    admin_test_allowed: false,
+  }),
+  "account.reactivated": item({
+    event_type: "account.reactivated",
+    template_key: "account_reactivated",
+    category: "security",
+    sender_identity: "security",
+    title_en: "Account reactivated",
+    title_ar: "تمت إعادة تفعيل الحساب",
+    description_en: "Notifies the account owner when account access is restored.",
+    description_ar: "تنبيه لصاحب الحساب عند استعادة الوصول للحساب.",
+    default_subject_en: "SaturnWS account access was restored",
+    default_subject_ar: "تمت استعادة الوصول إلى حساب SaturnWS",
+    integration_status: "linked",
+    user_can_disable: false,
+    retry_allowed: true,
+    essential: true,
+    requires_backend_event: true,
+    admin_test_allowed: false,
+  }),
+  "admin.email_queue_final_failure": item({
+    event_type: "admin.email_queue_final_failure",
+    template_key: "admin_email_queue_final_failure",
+    category: "admin",
+    sender_identity: "general",
+    title_en: "Email delivery needs attention",
+    title_ar: "تسليم بريد يحتاج متابعة",
+    description_en: "Alerts administrators when an email job reaches final failure after retries.",
+    description_ar: "تنبيه للإدارة عند فشل رسالة بريد نهائيًا بعد المحاولات.",
+    default_subject_en: "SaturnWS email delivery failed",
+    default_subject_ar: "فشل تسليم بريد من SaturnWS",
+    integration_status: "linked",
+    user_can_disable: false,
+    retry_allowed: true,
+    essential: true,
+    requires_backend_event: true,
+    admin_test_allowed: false,
+  }),
+  "admin.webhook_repeated_failure": item({
+    event_type: "admin.webhook_repeated_failure",
+    template_key: "admin_webhook_repeated_failure",
+    category: "admin",
+    sender_identity: "general",
+    title_en: "Webhook verification needs attention",
+    title_ar: "التحقق من Webhook يحتاج متابعة",
+    description_en: "Alerts administrators when webhook verification failures repeat within a cooldown window.",
+    description_ar: "تنبيه للإدارة عند تكرار فشل التحقق من Webhook داخل فترة تهدئة.",
+    default_subject_en: "SaturnWS webhook verification needs attention",
+    default_subject_ar: "التحقق من Webhook في SaturnWS يحتاج متابعة",
+    integration_status: "linked",
+    user_can_disable: false,
+    retry_allowed: true,
+    essential: true,
+    requires_backend_event: true,
+    admin_test_allowed: false,
+  }),
+  "admin.email_cleanup_failure": item({
+    event_type: "admin.email_cleanup_failure",
+    template_key: "admin_email_cleanup_failure",
+    category: "admin",
+    sender_identity: "general",
+    title_en: "Scheduled email cleanup needs attention",
+    title_ar: "تنظيف البريد المجدول يحتاج متابعة",
+    description_en: "Alerts administrators when scheduled email cleanup fails after the scheduler starts.",
+    description_ar: "تنبيه للإدارة عند فشل تنظيف البريد المجدول بعد بدء المجدول.",
+    default_subject_en: "SaturnWS scheduled cleanup needs attention",
+    default_subject_ar: "تنظيف البريد المجدول في SaturnWS يحتاج متابعة",
+    integration_status: "linked",
+    user_can_disable: false,
+    retry_allowed: true,
+    essential: true,
+    requires_backend_event: true,
+    admin_test_allowed: false,
+  }),
+  "admin.storage_config_failure": item({
+    event_type: "admin.storage_config_failure",
+    template_key: "admin_storage_config_failure",
+    category: "admin",
+    sender_identity: "general",
+    title_en: "Storage configuration needs attention",
+    title_ar: "إعداد التخزين يحتاج متابعة",
+    description_en: "Alerts administrators when a required storage binding is unavailable for an operational cleanup path.",
+    description_ar: "تنبيه للإدارة عند غياب ربط تخزين مطلوب لمسار تنظيف تشغيلي.",
+    default_subject_en: "SaturnWS storage configuration needs attention",
+    default_subject_ar: "إعداد التخزين في SaturnWS يحتاج متابعة",
+    integration_status: "linked",
+    user_can_disable: false,
+    retry_allowed: true,
+    essential: true,
+    requires_backend_event: true,
+    admin_test_allowed: false,
+  }),
+  "admin.schema_mismatch": item({
+    event_type: "admin.schema_mismatch",
+    template_key: "admin_schema_mismatch",
+    category: "admin",
+    sender_identity: "general",
+    title_en: "Operational schema needs attention",
+    title_ar: "مخطط التشغيل يحتاج متابعة",
+    description_en: "Alerts administrators when a runtime schema check finds a missing operational column or table.",
+    description_ar: "تنبيه للإدارة عند اكتشاف نقص في جدول أو عمود تشغيلي أثناء الفحص.",
+    default_subject_en: "SaturnWS schema check needs attention",
+    default_subject_ar: "فحص مخطط SaturnWS يحتاج متابعة",
+    integration_status: "linked",
+    user_can_disable: false,
+    retry_allowed: true,
+    essential: true,
+    requires_backend_event: true,
+    admin_test_allowed: false,
+  }),
+  "admin.readiness_degraded": item({
+    event_type: "admin.readiness_degraded",
+    template_key: "admin_readiness_degraded",
+    category: "admin",
+    sender_identity: "general",
+    title_en: "Operational readiness needs attention",
+    title_ar: "جاهزية التشغيل تحتاج متابعة",
+    description_en: "Alerts administrators when a critical operational readiness check degrades.",
+    description_ar: "تنبيه للإدارة عند تراجع فحص جاهزية تشغيلي مهم.",
+    default_subject_en: "SaturnWS readiness needs attention",
+    default_subject_ar: "جاهزية SaturnWS تحتاج متابعة",
+    integration_status: "linked",
+    user_can_disable: false,
+    retry_allowed: true,
+    essential: true,
+    requires_backend_event: true,
+    admin_test_allowed: false,
+  }),
+  "admin.tamper_detected": item({
+    event_type: "admin.tamper_detected",
+    template_key: "admin_tamper_detected",
+    category: "admin",
+    sender_identity: "general",
+    title_en: "Security signal needs review",
+    title_ar: "إشارة أمان تحتاج مراجعة",
+    description_en: "Alerts administrators when a high-severity tamper or replay signal is detected.",
+    description_ar: "تنبيه للإدارة عند رصد إشارة عبث أو إعادة تشغيل عالية الخطورة.",
+    default_subject_en: "SaturnWS security signal needs review",
+    default_subject_ar: "إشارة أمان في SaturnWS تحتاج مراجعة",
+    integration_status: "linked",
     user_can_disable: false,
     retry_allowed: true,
     essential: true,
@@ -481,6 +733,142 @@ function supportBody(eventType: string, data: TemplateData, locale: EmailLocale)
   return { title, bodyHtml: paragraph(lines) + cta(locale === "ar" ? "فتح التذكرة" : "Open ticket", ticketUrl), text: lines.concat(ticketUrl ? [ticketUrl] : []).join("\n") }
 }
 
+function securityBody(eventType: string, data: TemplateData, locale: EmailLocale): { title: string; bodyHtml: string; text: string } {
+  const actionUrl = value(data, "action_url", value(data, "url"))
+  const deviceName = value(data, "device_name")
+  const platform = value(data, "platform")
+  const occurredAt = value(data, "occurred_at", value(data, "created_at"))
+  const adminReason = value(data, "reason")
+  const coolingOffUntil = value(data, "cooling_off_until")
+  const label = locale === "ar" ? "فتح الحساب" : "Open account"
+
+  if (eventType === "security.new_login") {
+    const title = locale === "ar" ? "تم ربط جهاز جديد" : "New device linked"
+    const lines =
+      locale === "ar"
+        ? [
+            "تم ربط جهاز جديد بحسابك في Saturn Workspace.",
+            deviceName ? `الجهاز: ${deviceName}` : "",
+            platform ? `النظام: ${platform}` : "",
+            occurredAt ? `الوقت: ${occurredAt}` : "",
+            "إذا لم تكن أنت من قام بذلك، أنهِ الجلسات من حسابك وتواصل مع الدعم.",
+          ]
+        : [
+            "A new device was linked to your Saturn Workspace account.",
+            deviceName ? `Device: ${deviceName}` : "",
+            platform ? `Platform: ${platform}` : "",
+            occurredAt ? `Time: ${occurredAt}` : "",
+            "If this was not you, end active sessions from your account and contact support.",
+          ]
+    return { title, bodyHtml: paragraph(lines) + cta(label, actionUrl), text: lines.filter(Boolean).concat(actionUrl ? [actionUrl] : []).join("\n") }
+  }
+
+  if (eventType === "security.session_revoked" || eventType === "security.device_revoked" || eventType === "security.all_sessions_revoked") {
+    const title =
+      locale === "ar"
+        ? eventType === "security.device_revoked"
+          ? "تم إلغاء وصول جهاز"
+          : eventType === "security.all_sessions_revoked"
+            ? "تم إنهاء كل الجلسات"
+            : "تم إنهاء جلسة"
+        : eventType === "security.device_revoked"
+          ? "Device access revoked"
+          : eventType === "security.all_sessions_revoked"
+            ? "All sessions ended"
+            : "Session ended"
+    const lines =
+      locale === "ar"
+        ? [
+            title + ".",
+            deviceName ? `الجهاز: ${deviceName}` : "",
+            occurredAt ? `الوقت: ${occurredAt}` : "",
+            "إذا لم تكن تتوقع هذا الإجراء، راجع جلسات حسابك.",
+          ]
+        : [
+            `${title}.`,
+            deviceName ? `Device: ${deviceName}` : "",
+            occurredAt ? `Time: ${occurredAt}` : "",
+            "If you did not expect this action, review your account sessions.",
+          ]
+    return { title, bodyHtml: paragraph(lines) + cta(label, actionUrl), text: lines.filter(Boolean).concat(actionUrl ? [actionUrl] : []).join("\n") }
+  }
+
+  if (eventType === "account.deletion_requested") {
+    const title = locale === "ar" ? "تم طلب حذف الحساب" : "Account deletion requested"
+    const lines =
+      locale === "ar"
+        ? [
+            "تم إنشاء طلب حذف لحسابك في Saturn Workspace.",
+            coolingOffUntil ? `يمكن إلغاء الطلب قبل: ${coolingOffUntil}` : "",
+            "لن يتم تنفيذ الحذف النهائي قبل انتهاء فترة المراجعة.",
+          ]
+        : [
+            "An account deletion request was created for your Saturn Workspace account.",
+            coolingOffUntil ? `You can cancel it before: ${coolingOffUntil}` : "",
+            "Final deletion will not run before the review period ends.",
+          ]
+    return { title, bodyHtml: paragraph(lines) + cta(label, actionUrl), text: lines.filter(Boolean).concat(actionUrl ? [actionUrl] : []).join("\n") }
+  }
+
+  if (eventType === "account.deletion_cancelled") {
+    const title = locale === "ar" ? "تم إلغاء حذف الحساب" : "Account deletion cancelled"
+    const lines =
+      locale === "ar"
+        ? ["تم إلغاء طلب حذف حسابك. يمكنك استخدام حسابك مرة أخرى إذا كان نشطًا."]
+        : ["Your account deletion request was cancelled. You can continue using the account if it is active."]
+    return { title, bodyHtml: paragraph(lines) + cta(label, actionUrl), text: lines.filter(Boolean).concat(actionUrl ? [actionUrl] : []).join("\n") }
+  }
+
+  if (eventType === "account.suspended" || eventType === "account.reactivated") {
+    const suspended = eventType === "account.suspended"
+    const title = locale === "ar" ? (suspended ? "تم إيقاف الحساب" : "تمت إعادة تفعيل الحساب") : suspended ? "Account suspended" : "Account reactivated"
+    const lines =
+      locale === "ar"
+        ? [
+            suspended ? "تم إيقاف الوصول إلى حسابك." : "تمت استعادة الوصول إلى حسابك.",
+            adminReason ? `السبب: ${adminReason}` : "",
+            suspended ? "إذا كنت تحتاج مساعدة، تواصل مع الدعم." : "",
+          ]
+        : [
+            suspended ? "Access to your account was suspended." : "Access to your account was restored.",
+            adminReason ? `Reason: ${adminReason}` : "",
+            suspended ? "Contact support if you need help." : "",
+          ]
+    return { title, bodyHtml: paragraph(lines) + cta(label, actionUrl), text: lines.filter(Boolean).concat(actionUrl ? [actionUrl] : []).join("\n") }
+  }
+
+  return genericBody(eventType, data, locale)
+}
+
+function adminAlertBody(eventType: string, data: TemplateData, locale: EmailLocale): { title: string; bodyHtml: string; text: string } {
+  const catalog = EMAIL_CATALOG[eventType] || EMAIL_CATALOG["admin.email_queue_final_failure"]
+  const actionUrl = value(data, "action_url", value(data, "url"))
+  const reference = value(data, "reference_id", value(data, "job_id"))
+  const failedEvent = value(data, "failed_event_type", value(data, "email_type"))
+  const lastError = value(data, "last_error")
+  const summary = value(data, "summary")
+  const severity = value(data, "severity")
+  const destinationLabel = value(data, "destination_label", locale === "ar" ? "فتح لوحة المتابعة" : "Open admin view")
+  const title = value(data, "alert_title", locale === "ar" ? catalog.default_subject_ar : catalog.default_subject_en)
+  const lines =
+    locale === "ar"
+      ? [
+          summary || "يوجد تنبيه تشغيلي يحتاج مراجعة.",
+          severity ? `الأولوية: ${severity}` : "",
+          reference ? `المرجع: ${reference}` : "",
+          failedEvent ? `النوع: ${failedEvent}` : "",
+          lastError ? `آخر خطأ: ${lastError}` : "",
+        ]
+      : [
+          summary || "An operational alert needs review.",
+          severity ? `Severity: ${severity}` : "",
+          reference ? `Reference: ${reference}` : "",
+          failedEvent ? `Type: ${failedEvent}` : "",
+          lastError ? `Last error: ${lastError}` : "",
+        ]
+  return { title, bodyHtml: paragraph(lines) + cta(destinationLabel, actionUrl), text: lines.filter(Boolean).concat(actionUrl ? [actionUrl] : []).join("\n") }
+}
+
 function genericBody(eventType: string, data: TemplateData, locale: EmailLocale): { title: string; bodyHtml: string; text: string } {
   const catalog = EMAIL_CATALOG[eventType] || EMAIL_CATALOG["admin.email_test"]
   const title = locale === "ar" ? catalog.default_subject_ar : catalog.default_subject_en
@@ -513,7 +901,13 @@ export function renderTransactionalEmail(eventTypeInput: string, data: TemplateD
   const eventType = resolveEmailEventType(eventTypeInput) || "admin.email_test"
   const catalog = EMAIL_CATALOG[eventType]
   const locale = normalizeLocale(localeInput || data.locale)
-  const body = eventType.startsWith("support.") ? supportBody(eventType, data, locale) : genericBody(eventType, data, locale)
+  const body = eventType.startsWith("support.")
+    ? supportBody(eventType, data, locale)
+    : eventType.startsWith("security.") || eventType.startsWith("account.")
+      ? securityBody(eventType, data, locale)
+      : eventType.startsWith("admin.") && eventType !== "admin.email_test"
+        ? adminAlertBody(eventType, data, locale)
+        : genericBody(eventType, data, locale)
   const subjectOverride = value(data, "subject")
   const subject = clampHeader(subjectOverride || body.title || (locale === "ar" ? catalog.default_subject_ar : catalog.default_subject_en))
   const sender = senderForEvent(eventType, replyToOverride)
@@ -543,6 +937,14 @@ export function sampleTemplateData(eventType: string): TemplateData {
     amount: "$35.00",
     plan: "Monthly",
     expires_at: now,
+    occurred_at: now,
+    cooling_off_until: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    device_name: "Desktop device",
+    platform: "Windows",
+    reference_id: "sample-job",
+    failed_event_type: "support.admin_replied",
+    last_error: "provider_timeout",
+    reason: "Security review",
     action_url: "https://saturnws.com/account",
     generated_at: now,
   }

@@ -125,6 +125,18 @@ Do not expose source of truth, Supabase write, Firebase UID required, provider m
 
 Copy-quality automation should include state fixtures, component snapshots for major states, status/description/CTA consistency assertions, Arabic and English cases, source scanning, production-dist scanning, Mojibake checks, raw-enum checks, and implementation-vocabulary checks.
 
+## Saturn Product Language
+
+Use `Saturn Workspace`, `الأداة`, or `أداة Saturn Workspace` naturally according to sentence context. Do not mechanically translate the product name to `مساحة العمل`.
+
+Use `مساحة العمل` only when the actual concept is a workspace, work area, or workspace category. It must not appear as a repeated substitute for the product name.
+
+Arabic copy must be natural, contemporary, and task-oriented. Avoid literal translation, repeated product-name insertion, excessive reassurance, and AI-style filler.
+
+Pricing content must help the user compare plans: price, billing period, original/current price where relevant, savings, trial terms, renewal behavior, availability, and real differentiators. Shared identical facts should appear once globally, not repeated in every plan card.
+
+Provider/backend/payment readiness is not customer-facing narration. Plans may remain visible while checkout is unavailable, but unavailable actions must use honest disabled states and copy that does not imply payment can be completed now.
+
 ## 10. Encoding Integrity
 
 UTF-8 is mandatory end-to-end.

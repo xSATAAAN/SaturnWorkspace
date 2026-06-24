@@ -425,6 +425,63 @@ async function deliverEmailVerificationCode(
   return { transport: "email_operations" }
 }
 
+function cleanOperationalText(value: unknown, max = 160): string {
+  return String(value ?? "").replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim().slice(0, max)
+}
+
+function accountPortalUrl(env: Env): string {
+  const raw = String(env.DEVICE_LOGIN_URL || "https://saturnws.com/account/signin").trim()
+  try {
+    const parsed = new URL(raw)
+    return `${parsed.origin}/account`
+  } catch {
+    return "https://saturnws.com/account"
+  }
+}
+
+async function enqueueSecurityEmail(
+  env: Env,
+  input: {
+    eventType: string
+    idempotencyKey: string
+    recipient?: string | null
+    userId?: string | null
+    locale?: string | null
+    payload?: Record<string, unknown>
+  },
+): Promise<{ queued: boolean; skipped?: string }> {
+  if (String(env.EMAIL_SECURITY_ENABLED || "").trim().toLowerCase() !== "true") return { queued: false, skipped: "security_email_disabled" }
+  const url = String(env.AUTH_EMAIL_ENQUEUE_URL || "").trim()
+  const token = String(env.AUTH_EMAIL_ENQUEUE_TOKEN || "").trim()
+  const recipient = String(input.recipient || "").trim().toLowerCase()
+  const eventType = cleanOperationalText(input.eventType, 120)
+  const idempotencyKey = cleanOperationalText(input.idempotencyKey, 220)
+  if (!url || !token) return { queued: false, skipped: "security_email_not_configured" }
+  if (!recipient || !recipient.includes("@") || !eventType || !idempotencyKey) return { queued: false, skipped: "security_email_invalid_input" }
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      event_type: eventType,
+      idempotency_key: idempotencyKey,
+      user_id: input.userId || null,
+      recipient,
+      locale: String(input.locale || "ar").toLowerCase().startsWith("en") ? "en" : "ar",
+      payload: {
+        ...(input.payload || {}),
+        action_url: accountPortalUrl(env),
+        occurred_at: new Date().toISOString(),
+      },
+    }),
+  })
+  if (!response.ok) return { queued: false, skipped: `security_email_enqueue_${response.status}` }
+  const payload = (await response.json().catch(() => ({}))) as { job_id?: string | null }
+  return { queued: Boolean(payload.job_id), skipped: payload.job_id ? undefined : "security_email_suppressed" }
+}
+
 async function auditEmailVerification(
   env: Env,
   input: {
@@ -806,6 +863,18 @@ async function issueDesktopSession(
       user_id: user.userId,
       user_email: user.email,
     })
+    await enqueueSecurityEmail(env, {
+      eventType: "security.new_login",
+      idempotencyKey: `security-new-login:${pending.id}`,
+      recipient: user.email,
+      userId: user.userId,
+      payload: {
+        device_name: cleanOperationalText(pending?.metadata?.device_name || pending.hwid || "Desktop device", 120),
+        platform: cleanOperationalText(pending?.metadata?.platform || "", 80),
+        os_version: cleanOperationalText(pending?.metadata?.os_version || "", 80),
+        app_version: cleanOperationalText(pending?.metadata?.app_version || "", 80),
+      },
+    }).catch(() => ({ queued: false }))
     const runtime = buildSubscriptionRuntime(subscriptionResolution || subscription, "verified", user)
     return json({
       success: true,
@@ -1140,6 +1209,16 @@ async function handleAccountSessionRevoke(request: Request, env: Env): Promise<R
   } else if (!owned.revoked_at) {
     await revokeAppSessionByIdForUser(env, sessionId, firebaseUser.userId)
   }
+  await enqueueSecurityEmail(env, {
+    eventType: scope === "device" ? "security.device_revoked" : "security.session_revoked",
+    idempotencyKey: `security-${scope}-revoked:${firebaseUser.userId}:${sessionId}`,
+    recipient: firebaseUser.email,
+    userId: firebaseUser.userId,
+    payload: {
+      device_name: cleanOperationalText((owned.metadata as Record<string, unknown> | null)?.device_name || owned.hwid || "Desktop device", 120),
+      platform: cleanOperationalText((owned.metadata as Record<string, unknown> | null)?.platform || "", 80),
+    },
+  }).catch(() => ({ queued: false }))
   return json({ success: true, revoked_scope: scope })
 }
 
@@ -1148,7 +1227,22 @@ async function handleAccountSessionsRevokeAll(request: Request, env: Env): Promi
   const idToken = firebaseTokenFromRequest(request, body)
   if (!idToken) return errorJson(request, "AUTH_SESSION_EXPIRED", 401, true)
   const firebaseUser = await verifyFirebaseUser(idToken, env)
+  const sessionsBeforeRevoke = await listAppSessionsForUser(env, firebaseUser.userId).catch(() => [] as AppSessionRow[])
+  const activeSessionFingerprint = await sha256Hex(
+    sessionsBeforeRevoke
+      .filter((session) => !session.revoked_at)
+      .map((session) => String(session.id || ""))
+      .filter(Boolean)
+      .sort()
+      .join(":") || firebaseUser.userId,
+  )
   await revokeAppSessionsForUser(env, firebaseUser.userId)
+  await enqueueSecurityEmail(env, {
+    eventType: "security.all_sessions_revoked",
+    idempotencyKey: `security-all-sessions-revoked:${firebaseUser.userId}:${activeSessionFingerprint}`,
+    recipient: firebaseUser.email,
+    userId: firebaseUser.userId,
+  }).catch(() => ({ queued: false }))
   return json({ success: true, revoked_scope: "all" })
 }
 
@@ -1321,6 +1415,15 @@ async function handleAccountDeletionRequest(request: Request, env: Env): Promise
   })
   await updateAccountProfileStatus(env, firebaseUser.userId, "pending_deletion").catch(() => undefined)
   await revokeAppSessionsForUser(env, firebaseUser.userId).catch(() => undefined)
+  await enqueueSecurityEmail(env, {
+    eventType: "account.deletion_requested",
+    idempotencyKey: `account-deletion-requested:${row.id}`,
+    recipient: firebaseUser.email,
+    userId: firebaseUser.userId,
+    payload: {
+      cooling_off_until: row.cooling_off_until || coolingOffUntil,
+    },
+  }).catch(() => ({ queued: false }))
   return json({ success: true, deletion: accountDeletionProjection(row) })
 }
 
@@ -1335,6 +1438,14 @@ async function handleAccountDeletionCancel(request: Request, env: Env): Promise<
   })
   if (row === ACCOUNT_DELETION_SCHEMA_PENDING) return errorJson(request, "ACCOUNT_DELETION_UNAVAILABLE", 503, true)
   if (row) await updateAccountProfileStatus(env, firebaseUser.userId, "active").catch(() => undefined)
+  if (row) {
+    await enqueueSecurityEmail(env, {
+      eventType: "account.deletion_cancelled",
+      idempotencyKey: `account-deletion-cancelled:${row.id}:${row.cancelled_at || "cancelled"}`,
+      recipient: firebaseUser.email,
+      userId: firebaseUser.userId,
+    }).catch(() => ({ queued: false }))
+  }
   return json({ success: true, deletion: accountDeletionProjection(row) })
 }
 

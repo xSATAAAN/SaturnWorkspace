@@ -1,0 +1,236 @@
+{
+  "target": "http://127.0.0.1:4173",
+  "fixture": "local intercepted public plan catalog; checkout disabled",
+  "generated_at": "2026-06-24T11:47:39.711Z",
+  "summary": [
+    {
+      "locale": "ar",
+      "viewport": {
+        "name": "desktop",
+        "width": 1366,
+        "height": 768
+      },
+      "screenshot": "D:\\SaturnWS\\github-deploy\\SaturnWorkspace\\docs\\product-readiness-system-completion\\visual-evidence\\phase-g-20260624-pricing-fixture\\ar-pricing-desktop.png",
+      "metrics": {
+        "lang": "ar",
+        "dir": "rtl",
+        "horizontalOverflow": false,
+        "headingText": "اختر مدة الوصول المناسبة لطريقة عملك.",
+        "headingWidth": 840,
+        "headingHeight": 131,
+        "headingLineCount": 2,
+        "sharedBenefitsPresent": true,
+        "promoText": "الاشتراك الشهري والسنوي يشملان 7 أيام تجربة مجانية قبل أول تحصيل.",
+        "cardCount": 3,
+        "cardHeights": [
+          457,
+          457,
+          457
+        ],
+        "featuredLabel": "",
+        "disabledCards": 3,
+        "priceTexts": [
+          "‏١٥٫٠٠ US$‏١٠٫٠٠ US$أسبوعيًا",
+          "‏٥٠٫٠٠ US$‏٣٥٫٠٠ US$شهريًا",
+          "‏٦٠٠٫٠٠ US$‏٣٥٠٫٠٠ US$سنويًا"
+        ],
+        "ctaTexts": [
+          "",
+          "",
+          ""
+        ]
+      }
+    },
+    {
+      "locale": "ar",
+      "viewport": {
+        "name": "tablet",
+        "width": 768,
+        "height": 1024
+      },
+      "screenshot": "D:\\SaturnWS\\github-deploy\\SaturnWorkspace\\docs\\product-readiness-system-completion\\visual-evidence\\phase-g-20260624-pricing-fixture\\ar-pricing-tablet.png",
+      "metrics": {
+        "lang": "ar",
+        "dir": "rtl",
+        "horizontalOverflow": false,
+        "headingText": "اختر مدة الوصول المناسبة لطريقة عملك.",
+        "headingWidth": 728,
+        "headingHeight": 42,
+        "headingLineCount": 1,
+        "sharedBenefitsPresent": true,
+        "promoText": "الاشتراك الشهري والسنوي يشملان 7 أيام تجربة مجانية قبل أول تحصيل.",
+        "cardCount": 3,
+        "cardHeights": [
+          447,
+          447,
+          447
+        ],
+        "featuredLabel": "",
+        "disabledCards": 3,
+        "priceTexts": [
+          "‏١٥٫٠٠ US$‏١٠٫٠٠ US$أسبوعيًا",
+          "‏٥٠٫٠٠ US$‏٣٥٫٠٠ US$شهريًا",
+          "‏٦٠٠٫٠٠ US$‏٣٥٠٫٠٠ US$سنويًا"
+        ],
+        "ctaTexts": [
+          "",
+          "",
+          ""
+        ]
+      }
+    },
+    {
+      "locale": "ar",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "screenshot": "D:\\SaturnWS\\github-deploy\\SaturnWorkspace\\docs\\product-readiness-system-completion\\visual-evidence\\phase-g-20260624-pricing-fixture\\ar-pricing-mobile.png",
+      "metrics": {
+        "lang": "ar",
+        "dir": "rtl",
+        "horizontalOverflow": false,
+        "headingText": "اختر مدة الوصول المناسبة لطريقة عملك.",
+        "headingWidth": 362,
+        "headingHeight": 140,
+        "headingLineCount": 3,
+        "sharedBenefitsPresent": true,
+        "promoText": "الاشتراك الشهري والسنوي يشملان 7 أيام تجربة مجانية قبل أول تحصيل.",
+        "cardCount": 3,
+        "cardHeights": [
+          395,
+          447,
+          447
+        ],
+        "featuredLabel": "",
+        "disabledCards": 3,
+        "priceTexts": [
+          "‏١٥٫٠٠ US$‏١٠٫٠٠ US$أسبوعيًا",
+          "‏٥٠٫٠٠ US$‏٣٥٫٠٠ US$شهريًا",
+          "‏٦٠٠٫٠٠ US$‏٣٥٠٫٠٠ US$سنويًا"
+        ],
+        "ctaTexts": [
+          "",
+          "",
+          ""
+        ]
+      }
+    },
+    {
+      "locale": "en",
+      "viewport": {
+        "name": "desktop",
+        "width": 1366,
+        "height": 768
+      },
+      "screenshot": "D:\\SaturnWS\\github-deploy\\SaturnWorkspace\\docs\\product-readiness-system-completion\\visual-evidence\\phase-g-20260624-pricing-fixture\\en-pricing-desktop.png",
+      "metrics": {
+        "lang": "en",
+        "dir": "ltr",
+        "horizontalOverflow": false,
+        "headingText": "Choose the access period that fits your work.",
+        "headingWidth": 840,
+        "headingHeight": 116,
+        "headingLineCount": 2,
+        "sharedBenefitsPresent": true,
+        "promoText": "Monthly and annual access include 7 free trial days before the first charge.",
+        "cardCount": 3,
+        "cardHeights": [
+          457,
+          457,
+          457
+        ],
+        "featuredLabel": "",
+        "disabledCards": 3,
+        "priceTexts": [
+          "$15.00$10.00per week",
+          "$50.00$35.00per month",
+          "$600.00$350.00per year"
+        ],
+        "ctaTexts": [
+          "",
+          "",
+          ""
+        ]
+      }
+    },
+    {
+      "locale": "en",
+      "viewport": {
+        "name": "tablet",
+        "width": 768,
+        "height": 1024
+      },
+      "screenshot": "D:\\SaturnWS\\github-deploy\\SaturnWorkspace\\docs\\product-readiness-system-completion\\visual-evidence\\phase-g-20260624-pricing-fixture\\en-pricing-tablet.png",
+      "metrics": {
+        "lang": "en",
+        "dir": "ltr",
+        "horizontalOverflow": false,
+        "headingText": "Choose the access period that fits your work.",
+        "headingWidth": 728,
+        "headingHeight": 37,
+        "headingLineCount": 1,
+        "sharedBenefitsPresent": true,
+        "promoText": "Monthly and annual access include 7 free trial days before the first charge.",
+        "cardCount": 3,
+        "cardHeights": [
+          447,
+          447,
+          447
+        ],
+        "featuredLabel": "",
+        "disabledCards": 3,
+        "priceTexts": [
+          "$15.00$10.00per week",
+          "$50.00$35.00per month",
+          "$600.00$350.00per year"
+        ],
+        "ctaTexts": [
+          "",
+          "",
+          ""
+        ]
+      }
+    },
+    {
+      "locale": "en",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "screenshot": "D:\\SaturnWS\\github-deploy\\SaturnWorkspace\\docs\\product-readiness-system-completion\\visual-evidence\\phase-g-20260624-pricing-fixture\\en-pricing-mobile.png",
+      "metrics": {
+        "lang": "en",
+        "dir": "ltr",
+        "horizontalOverflow": false,
+        "headingText": "Choose the access period that fits your work.",
+        "headingWidth": 362,
+        "headingHeight": 124,
+        "headingLineCount": 3,
+        "sharedBenefitsPresent": true,
+        "promoText": "Monthly and annual access include 7 free trial days before the first charge.",
+        "cardCount": 3,
+        "cardHeights": [
+          443,
+          447,
+          471
+        ],
+        "featuredLabel": "",
+        "disabledCards": 3,
+        "priceTexts": [
+          "$15.00$10.00per week",
+          "$50.00$35.00per month",
+          "$600.00$350.00per year"
+        ],
+        "ctaTexts": [
+          "",
+          "",
+          ""
+        ]
+      }
+    }
+  ],
+  "errors": []
+}

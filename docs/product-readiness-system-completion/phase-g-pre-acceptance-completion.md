@@ -4,7 +4,7 @@ Updated: 2026-06-24
 
 Status: `PHASE_G_IMPLEMENTATION_COMPLETE_WITH_EXPLICIT_OPERATIONAL_CONFIGURATION_ITEMS`
 
-Consolidated manual acceptance has not started. This report records implementation, deployment, and automated verification evidence for the pre-acceptance completion batch only.
+Consolidated manual acceptance has not started. This report preserves the implementation, deployment, and automated verification evidence for the current Phase G pre-acceptance batch; remaining items are explicit operational configuration or manual-acceptance items.
 
 ## Effective Instructions
 
@@ -54,7 +54,9 @@ Consolidated manual acceptance has not started. This report records implementati
 - No OTP value is returned in normal API responses or Admin queue projection.
 - Provider delivery acceptance still requires a dedicated QA recipient in consolidated Phase G manual acceptance.
 - Billing and release email categories remain `PREPARED_DISABLED` because no real payment or production-release event source exists.
-- Security/admin-alert categories remain `PREPARED_DISABLED` until reliable actionable event producers, destination rules, deduplication, and cooldown are accepted.
+- Security email producers are implemented in source for selected reliable events: new desktop device link, session revoke, device revoke, revoke-all, account deletion request/cancel, account suspend, and account reactivate. `EMAIL_SECURITY_ENABLED=false`, so delivery remains disabled until activation and acceptance.
+- Admin alert producer coverage is implemented in source for final email queue failure, webhook verification failure, cleanup failure, storage configuration failure, schema mismatch, readiness degradation, and high-severity tamper signals. Delivery remains disabled until recipients, rollout, and manual acceptance are configured.
+- `EMAIL_ADMIN_ALERT_RECIPIENTS` is not configured, so admin alert delivery must remain disabled.
 
 ## Encoding and Content
 
@@ -63,6 +65,10 @@ Consolidated manual acceptance has not started. This report records implementati
 - Repository mojibake guard scans runtime source, Workers, `AGENTS.md`, and generated `site/dist`.
 - Desktop source/package product scan is clean, excluding the intentional detector in `vault.py` and third-party library metadata.
 - Email content guard renders Arabic/English HTML and plain text and blocks mojibake, missing charset, missing RTL/LTR wrappers, empty CTA URLs, unsafe interpolation, disabled test sends, and implementation wording.
+- Public pricing content uses approved weekly/monthly/annual discounted prices, current promotional trial language, and localized plan differentiators instead of raw backend feature text.
+- Public pricing visual evidence was captured for Arabic/English desktop, tablet, and mobile layouts using a static local catalog fixture. This is implementation evidence only, not manual acceptance.
+- Legacy root static website artifacts were removed from source: root `index.html`, old root legal/contact HTML pages, and root generated `assets/index-*` bundles. The active publish path remains `site/dist`.
+- `site/scripts/check-frontend-cutover.mjs` now blocks legacy public bundle tokens including outdated pricing, old contact handles, provider-specific public copy, and old beta-access wording.
 
 ## Support Attachments
 
@@ -92,6 +98,14 @@ Artifact:
 
 Install/uninstall smoke was not executed because it would modify the real local installed application and user environment. It remains part of consolidated Phase G manual acceptance.
 
+## Desktop Reproducibility Inventory
+
+- Existing QA Setup artifact remains the artifact of record; it was not rebuilt in this continuation because Desktop source and packaging were not changed.
+- Desktop source manifest: `docs/product-readiness-system-completion/desktop-reproducibility/desktop-source-manifest-20260624-145000.json`.
+- Reproducibility report: `docs/product-readiness-system-completion/desktop-reproducibility/desktop-reproducibility-20260624-145000.md`.
+- Source file count recorded: `217`.
+- Existing QA artifact SHA256 remains `527C21D6A87720DB31E0EC4A8F59EA6FF2299C928C1B83447E2AC1E6AAA45DDD`.
+
 ## Automated Verification
 
 - `node scripts/check-no-mojibake.mjs`
@@ -101,7 +115,11 @@ Install/uninstall smoke was not executed because it would modify the real local 
 - `npm run check` and `npm run test:phase-c` in `workers/auth`
 - `npm run check:syntax` and `npm run test:phase-g` in `workers/admin`
 - `npm run test:phase-c` and `npm run test:phase-f` in `site`
+- `npm run test:phase-b1` in `site`
 - `npm run build` in `site`
+- `node tools/publish-static-pages.mjs`
+- `node scripts/check-frontend-cutover.mjs` in `site`
+- Local visual QA for public pricing and key routes with Playwright screenshots.
 - Desktop Python compile
 - Desktop frontend build
 - Desktop high-severity npm audit
@@ -115,9 +133,9 @@ Known warnings:
 
 ## Production Deployments
 
-- Auth Worker version deployed during this batch: `13f5516e-bec4-41fb-99d5-0fa4f81b1c18`.
-- Policy Worker version deployed during this batch: `59c737d8-426b-4292-879e-b981a9640ac8`.
-- Admin Worker version deployed during this batch: `ea20ecb1-9d3c-48b1-b0b1-8430a709d219`.
+- Auth Worker version deployed during this batch: `a3c1bc77-3e4a-4735-8600-00d62c98535e`.
+- Policy Worker version deployed during this batch: `006489c4-d877-4263-bcc1-868084e1a8df`.
+- Admin Worker version deployed during this batch: `f674579d-1400-43ff-9371-bab8c7f794df`.
 - Live health checks:
   - `https://auth.saturnws.com/health`: 200.
   - `https://api.saturnws.com/health`: 200.
@@ -142,5 +160,7 @@ Known warnings:
 | QA email recipient | `PENDING_MANUAL_ACCEPTANCE` | Use a dedicated QA recipient to confirm provider delivery without exposing OTP values. |
 | Payment provider | `WAITING_EXTERNAL` | Approve and configure real provider, mappings, webhooks, rollback, and billing email activation. |
 | Manual Desktop install/uninstall acceptance | `PENDING_MANUAL_ACCEPTANCE` | Test install, launch, shortcuts, Add/Remove Programs, repair/upgrade, uninstall, logs, and data retention in Phase G manual acceptance. |
+| Public plan CORS deployment verification | `PRODUCTION_VERIFIED_AUTOMATED` | Admin Worker was redeployed and the live plan catalog allows `https://saturnws.com` as an origin. |
+| Admin alert recipient and rollout configuration | `OPERATIONAL_CONFIGURATION_REQUIRED` | Required admin alert producers exist in source, but delivery remains disabled until recipients, rollout, and manual acceptance are configured. |
 
-Final implementation state: `PHASE_G_IMPLEMENTATION_COMPLETE_WITH_EXPLICIT_OPERATIONAL_CONFIGURATION_ITEMS`.
+Current implementation state: `PHASE_G_IMPLEMENTATION_COMPLETE_WITH_EXPLICIT_OPERATIONAL_CONFIGURATION_ITEMS`.

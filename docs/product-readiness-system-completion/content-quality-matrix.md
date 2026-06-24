@@ -10,7 +10,9 @@ Scope: public website, customer portal, admin UI, operational email, and rendere
 | --- | --- | --- |
 | Repository mojibake guard | `VERIFIED_AUTOMATED` | `node scripts/check-no-mojibake.mjs` passes. |
 | Site copy quality guard | `ACTIVE` | Production build runs `site/scripts/check-copy-quality.mjs` against source and generated `dist`. |
+| Frontend cutover guard | `ACTIVE` | `site/scripts/check-frontend-cutover.mjs` verifies SPA fallbacks and blocks development-preview tokens plus legacy public bundle tokens such as outdated prices, old contact handles, provider-specific public copy, and old beta-access wording. |
 | Email content guard | `VERIFIED_AUTOMATED` | `workers/policy/scripts/check-phase-g-email-content.mjs` renders Arabic/English HTML and plain text for catalog events. |
+| Public pricing visual fixture | `VERIFIED_LOCAL_FIXTURE` | Arabic/English pricing cards were rendered at desktop, tablet, and mobile sizes with a local static catalog fixture. No horizontal overflow was found after the responsive header fix. |
 | Semantic contradiction review | `IN_PHASE_G_PRE_ACCEPTANCE` | Automated checks cover known high-risk copy patterns; manual semantic acceptance remains Phase G. |
 
 ## Copy Classification Rules
@@ -34,6 +36,7 @@ Scope: public website, customer portal, admin UI, operational email, and rendere
 - Normal-state copy must not be reused for unavailable, disabled, partial, error, or empty states when the meaning changes.
 - A disabled feature must explain the user-relevant state without implementation jargon.
 - No payment, billing, release, grant, recovery, or deletion success may be stated before the underlying committed event exists.
+- Public pricing may display approved plan names and prices while checkout is honestly disabled. It must not expose raw backend feature text or provider-readiness narration to customers.
 
 ## Terminology Baseline
 
@@ -68,3 +71,5 @@ Scope: public website, customer portal, admin UI, operational email, and rendere
 | Full manual semantic review | `DEFERRED_TO_PHASE_G_MANUAL_ACCEPTANCE` | Manual acceptance has not started. |
 | Legal copy approval | `WAITING_EXTERNAL` | Requires legal/product approval separate from implementation. |
 | Payment copy after provider mapping | `WAITING_EXTERNAL` | Requires real payment provider and approved checkout flow. |
+| Pricing fixture screenshots | `RECORDED` | `docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-pricing-fixture` contains Arabic/English desktop, tablet, and mobile evidence. |
+| Legacy root static website artifacts | `REMOVED_FROM_SOURCE` | Root `index.html`, legacy root legal/contact HTML pages, and root generated `assets/index-*` bundles were removed from Git-tracked source. The active GitHub Pages workflow publishes only `site/dist`. |

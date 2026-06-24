@@ -82,7 +82,29 @@ for (const item of catalog) {
   }
 }
 
-for (const required of ["auth.email_verification", "auth.verification_resend", "support.ticket_created", "support.admin_replied", "support.status_changed", "admin.email_test"]) {
+for (const required of [
+  "auth.email_verification",
+  "auth.verification_resend",
+  "support.ticket_created",
+  "support.admin_replied",
+  "support.status_changed",
+  "security.new_login",
+  "security.session_revoked",
+  "security.device_revoked",
+  "security.all_sessions_revoked",
+  "account.deletion_requested",
+  "account.deletion_cancelled",
+  "account.suspended",
+  "account.reactivated",
+  "admin.email_queue_final_failure",
+  "admin.webhook_repeated_failure",
+  "admin.email_cleanup_failure",
+  "admin.storage_config_failure",
+  "admin.schema_mismatch",
+  "admin.readiness_degraded",
+  "admin.tamper_detected",
+  "admin.email_test",
+]) {
   assert.ok(byEvent.has(required), `required event missing: ${required}`)
   assert.equal(byEvent.get(required).integration_status, "linked", `required linked event is not linked: ${required}`)
 }

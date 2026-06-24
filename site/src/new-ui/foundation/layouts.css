@@ -44,6 +44,9 @@
   .topbar-search { width: 200px; }.workspace-topbar__tools > .ui-dropdown, .account-trigger div { display: none; }
   .public-footer__grid { grid-template-columns: 1.5fr repeat(2, 1fr); }.public-footer__grid > div:nth-last-child(-n+2) { margin-top: var(--space-6); }
 }
+@media (max-width: 900px) {
+  .public-header__actions .ui-button--primary { display: none; }
+}
 @media (max-width: 767px) {
   .public-header__inner, [dir='rtl'] .public-header__inner { display: flex; }.public-header__menu { display: grid; }.public-header nav { position: fixed; inset-inline: 14px; inset-block-start: 78px; display: none; flex-direction: column; align-items: stretch; padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface-elevated); box-shadow: var(--shadow-raised); }.public-header nav.is-open { display: flex; }.public-header nav button { text-align: start; }.public-header__actions { margin-inline-start: auto; }.public-header__actions .ui-button--primary { display: none; }
   .public-footer__grid { grid-template-columns: repeat(2, 1fr); }.public-footer__brand { grid-column: 1 / -1; }.public-footer__bottom { align-items: flex-start; flex-direction: column; justify-content: center; }

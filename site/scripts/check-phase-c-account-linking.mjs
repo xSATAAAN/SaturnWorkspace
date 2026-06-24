@@ -21,7 +21,9 @@ const matrix = read(PLATFORM, 'docs/product-readiness-system-completion/feature-
 const acceptance = read(PLATFORM, 'docs/product-readiness-system-completion/acceptance-test-plan.md')
 includes(dashboard, 'C - Account and Desktop Linking', 'dashboard Phase C row')
 includes(dashboard, 'COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE', 'dashboard Phase C/B closure status')
-includes(dashboard, 'PHASE_G_IMPLEMENTATION_COMPLETE_WITH_EXPLICIT_OPERATIONAL_CONFIGURATION_ITEMS', 'dashboard Phase G implementation state')
+if (!dashboard.includes('PHASE_G_IMPLEMENTATION_COMPLETE_WITH_EXPLICIT_OPERATIONAL_CONFIGURATION_ITEMS') && !dashboard.includes('PHASE_G_PRE_ACCEPTANCE_COMPLETION_ACTIVE')) {
+  throw new Error('dashboard Phase G implementation state: missing accepted Phase G state')
+}
 includes(issues, 'Phase C', 'issues Phase C section')
 includes(matrix, 'Desktop linking', 'matrix Desktop linking row')
 includes(acceptance, 'Phase C', 'acceptance Phase C coverage')
