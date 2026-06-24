@@ -16,7 +16,7 @@ Updated: 2026-06-24
 ## Production Evidence
 
 - Canonical repository: `D:\SaturnWS\github-deploy\SaturnWorkspace`.
-- Current local HEAD and `origin/main`: `55a67e0efd108ed5873d0cb34fd3524014b35e31` before the current Phase G continuation worktree changes.
+- Canonical `main` contains the Phase G pre-acceptance hardening changes. Live frontend verification is recorded against the GitHub Pages deployment and bundle below.
 - Supabase project: `Saturn Workspace` / ref `iqvwoivlamglyblftwez`.
 - Applied Supabase migrations:
   - `20260623214309 phase_g_recovery_deletion`
@@ -73,7 +73,7 @@ Updated: 2026-06-24
 - Admin alert producer coverage is implemented in source for the required operational families with deterministic idempotency/cooldown. Delivery remains disabled until recipients, rollout, and manual acceptance are configured.
 - Public pricing copy and card presentation were updated to the approved current prices and promotional trial language. Backend catalog remains price/status truth, while user-facing plan differentiators are localized in the content layer.
 - Public plan catalog CORS source was repaired to allow Saturn public origins as well as Admin origins. Production CORS verification is required after Admin Worker deployment.
-- Legacy root static website artifacts were removed from source. GitHub Pages continues to publish `site/dist`, and the cutover guard now blocks known legacy public bundle tokens from returning.
+- Legacy root static website artifacts were removed from source. GitHub Pages continues to publish `site/dist`, and the cutover guard now blocks known legacy public bundle tokens from returning. Live bundle verification for this batch: `/assets/index-C4mJsmbc.js` contained the approved weekly/monthly/annual pricing and no legacy public tokens.
 
 ## Operational Configuration Required
 

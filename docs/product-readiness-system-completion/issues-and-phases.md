@@ -29,7 +29,7 @@ Updated: 2026-06-24
 | PR-011 | Arabic mojibake | Content/storage defect | Supabase plan catalog values and desktop startup/OAuth copy repaired; runtime/source/dist/package guards added. | Phase G prevention |
 | PR-012 | Automatic billing/release/security/admin-alert emails | Event activation | Billing/release remain disabled without real committed events. Security email producers exist for selected reliable events but remain disabled. Admin alert producers now cover the required operational families in source with deterministic idempotency/cooldown, but delivery remains disabled until recipients, rollout, and acceptance are configured. | Phase G / future activation |
 | PR-013 | Public plan catalog CORS for production pricing | Production verified | Source CORS allowlist includes Saturn public origins, Admin Worker is deployed, and live plan catalog CORS returns the Saturn public origin. | Phase G |
-| PR-014 | Public pricing copy and card layout | Implemented pending deployment | Approved weekly/monthly/annual pricing, promotional trial language, localized differentiators, and responsive pricing visual fixture are implemented in source. | Phase G deployment verification |
+| PR-014 | Public pricing copy and card layout | Production verified | Approved weekly/monthly/annual pricing, promotional trial language, localized differentiators, and responsive pricing visual fixture are implemented; GitHub Pages deployed the new public bundle and legacy pricing/provider tokens are absent from the live bundle. | Phase G |
 
 ## Resolved Systemic Defects
 

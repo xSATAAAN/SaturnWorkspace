@@ -68,7 +68,7 @@ Consolidated manual acceptance has not started. This report preserves the implem
 - Public pricing content uses approved weekly/monthly/annual discounted prices, current promotional trial language, and localized plan differentiators instead of raw backend feature text.
 - Public pricing visual evidence was captured for Arabic/English desktop, tablet, and mobile layouts using a static local catalog fixture. This is implementation evidence only, not manual acceptance.
 - Legacy root static website artifacts were removed from source: root `index.html`, old root legal/contact HTML pages, and root generated `assets/index-*` bundles. The active publish path remains `site/dist`.
-- `site/scripts/check-frontend-cutover.mjs` now blocks legacy public bundle tokens including outdated pricing, old contact handles, provider-specific public copy, and old beta-access wording.
+- `site/scripts/check-frontend-cutover.mjs` now blocks legacy public bundle tokens including outdated pricing, old contact handles, provider-specific public copy, and old beta-access wording. Live bundle verification for this batch checked `/assets/index-C4mJsmbc.js`.
 
 ## Support Attachments
 
@@ -161,6 +161,7 @@ Known warnings:
 | Payment provider | `WAITING_EXTERNAL` | Approve and configure real provider, mappings, webhooks, rollback, and billing email activation. |
 | Manual Desktop install/uninstall acceptance | `PENDING_MANUAL_ACCEPTANCE` | Test install, launch, shortcuts, Add/Remove Programs, repair/upgrade, uninstall, logs, and data retention in Phase G manual acceptance. |
 | Public plan CORS deployment verification | `PRODUCTION_VERIFIED_AUTOMATED` | Admin Worker was redeployed and the live plan catalog allows `https://saturnws.com` as an origin. |
+| Public pricing Pages deployment | `PRODUCTION_VERIFIED_AUTOMATED` | GitHub Pages deployed the new public bundle; approved discount/trial pricing is present and legacy pricing/provider tokens are absent from the live bundle. |
 | Admin alert recipient and rollout configuration | `OPERATIONAL_CONFIGURATION_REQUIRED` | Required admin alert producers exist in source, but delivery remains disabled until recipients, rollout, and manual acceptance are configured. |
 
 Current implementation state: `PHASE_G_IMPLEMENTATION_COMPLETE_WITH_EXPLICIT_OPERATIONAL_CONFIGURATION_ITEMS`.
