@@ -331,7 +331,7 @@ Evidence:
 
 - Files changed: this checklist, product dashboard, issue tracker, feature/content/email matrices, operational inventory, acceptance plan, Phase G summary, and the redacted email rollout report.
 - Tests: documentation changes are covered by `git diff --check` plus the source/build checks in item 14.
-- Deployment evidence: documentation/source updates were committed through `3e090fb198429cf26d5f3866f9adc41c1651dfdf`; final live-public-visual-evidence documentation and screenshots are pending a follow-up commit/push.
+- Deployment evidence: site-source updates were deployed through `3e090fb198429cf26d5f3866f9adc41c1651dfdf`; live-public-visual-evidence documentation and screenshots are committed in the current branch after that site-source deploy.
 - Live verification evidence: deployment, live bundle, and CORS evidence is recorded in the relevant entries.
 - Remaining limitation: current-super-admin `ADMIN_ROLE_ASSIGNMENTS`, authenticated Admin route sweep, authenticated rendered evidence, and feature/control inventory are not yet closed.
 

@@ -16,7 +16,7 @@ Updated: 2026-06-24
 ## Production Evidence
 
 - Canonical repository: `D:\SaturnWS\github-deploy\SaturnWorkspace`.
-- Canonical `main` contains the current Phase G pre-acceptance hardening changes at commit `3e090fb198429cf26d5f3866f9adc41c1651dfdf`. GitHub Pages workflow run `28120228875` deployed the site successfully.
+- Canonical `main` is the current source of truth. The latest code-bearing public site change in this continuation is commit `3e090fb198429cf26d5f3866f9adc41c1651dfdf`; GitHub Pages workflow run `28120228875` deployed that site source successfully. Later commits in this batch may update only living documentation and captured evidence.
 - Supabase project: `Saturn Workspace` / ref `iqvwoivlamglyblftwez`.
 - Applied Supabase migrations:
   - `20260623214309 phase_g_recovery_deletion`
