@@ -11,7 +11,7 @@ Status meanings: `VERIFIED_AUTOMATED`, `PRODUCTION_DEPLOYED`, `PRODUCTION_DEPLOY
 | Auth | OTP no-secret exposure | `VERIFIED_AUTOMATED` | Tests and source checks assert no OTP in normal API response/log/admin queue projection. |
 | Subscription truth | No-subscription projection | `VERIFIED_AUTOMATED` | No default plan or fake expiry; UID ownership only. |
 | Subscription truth | Current/history separation | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Canonical resolver and Admin projections are implemented. |
-| Plan catalog | Visible plans without provider checkout | `PENDING_DEPLOYMENT_VERIFICATION` | Weekly/monthly/annual plans remain visible while checkout is disabled until provider mappings exist. Public pricing copy/cards are updated in source; Admin Worker CORS source is repaired and needs live verification after deployment. |
+| Plan catalog | Visible plans without provider checkout | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Weekly/monthly/annual plans remain visible while checkout is disabled until provider mappings exist. Public pricing copy/cards are deployed; live bundle and public catalog CORS verification passed. |
 | Payments | Real checkout | `WAITING_EXTERNAL` | Provider, plan mappings, webhook source, rollback, and billing email contracts are required before enablement. |
 | Desktop linking | Connection/entitlement separation | `VERIFIED_AUTOMATED` | Phase C cross-layer and Auth Worker tests pass; installed-app acceptance remains Phase G. |
 | Support | Customer tickets, admin replies, email operations | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Phase D automated suite passes. |

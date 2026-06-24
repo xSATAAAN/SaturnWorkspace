@@ -68,7 +68,7 @@ Consolidated manual acceptance has not started. This report preserves the implem
 - Public pricing content uses approved weekly/monthly/annual discounted prices, current promotional trial language, and localized plan differentiators instead of raw backend feature text.
 - Public pricing visual evidence was captured for Arabic/English desktop, tablet, and mobile layouts using a static local catalog fixture. This is implementation evidence only, not manual acceptance.
 - Legacy root static website artifacts were removed from source: root `index.html`, old root legal/contact HTML pages, and root generated `assets/index-*` bundles. The active publish path remains `site/dist`.
-- `site/scripts/check-frontend-cutover.mjs` blocks legacy public bundle tokens including outdated pricing, old contact handles, provider-specific public copy, and old beta-access wording. The current local build produced `/assets/index-CIRJ2UvB.js`; GitHub Pages deployment and live bundle verification are pending.
+- `site/scripts/check-frontend-cutover.mjs` blocks legacy public bundle tokens including outdated pricing, old contact handles, provider-specific public copy, and old beta-access wording. GitHub Pages workflow run `28118915884` deployed commit `5b7294dbef6ca035fd1c81f0d71c6f345ef3ac1d`; live HTML references `/assets/index-BPJ91n49.js`.
 
 ## Support Attachments
 
@@ -161,7 +161,7 @@ Known warnings:
 | Payment provider | `WAITING_EXTERNAL` | Approve and configure real provider, mappings, webhooks, rollback, and billing email activation. |
 | Manual Desktop install/uninstall acceptance | `PENDING_MANUAL_ACCEPTANCE` | Test install, launch, shortcuts, Add/Remove Programs, repair/upgrade, uninstall, logs, and data retention in Phase G manual acceptance. |
 | Public plan CORS deployment verification | `PRODUCTION_VERIFIED_AUTOMATED` | Admin Worker was redeployed and the live plan catalog allows `https://saturnws.com` as an origin. |
-| Public pricing Pages deployment | `PENDING_DEPLOYMENT_VERIFICATION` | Current source and local build contain the reconstructed pricing section; GitHub Pages deployment and live bundle verification are pending. |
+| Public pricing Pages deployment | `PRODUCTION_VERIFIED_AUTOMATED` | GitHub Pages deployed the current commit. Live bundle `assets/index-BPJ91n49.js` contains the approved weekly/monthly/annual prices, omits public provider-name copy, and has no mojibake markers. |
 | Admin alert rollout verification | `DEPLOYED_PENDING_SAFE_EVENT_VERIFICATION` | Required admin alert producers exist, the recipient secret is configured, and Policy flag is deployed. Safe alert-delivery verification is pending. |
 
 Current state: `PHASE_G_PRE_ACCEPTANCE_COMPLETION_ACTIVE`.

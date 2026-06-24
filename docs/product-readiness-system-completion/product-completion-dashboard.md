@@ -16,7 +16,7 @@ Updated: 2026-06-24
 ## Production Evidence
 
 - Canonical repository: `D:\SaturnWS\github-deploy\SaturnWorkspace`.
-- Canonical local worktree contains the current Phase G pre-acceptance hardening changes. These changes are pending commit/push for GitHub Pages deployment and final live frontend bundle verification.
+- Canonical `main` contains the current Phase G pre-acceptance hardening changes at commit `5b7294dbef6ca035fd1c81f0d71c6f345ef3ac1d`. GitHub Pages workflow run `28118915884` deployed the site successfully.
 - Supabase project: `Saturn Workspace` / ref `iqvwoivlamglyblftwez`.
 - Applied Supabase migrations:
   - `20260623214309 phase_g_recovery_deletion`
@@ -71,9 +71,9 @@ Updated: 2026-06-24
 - Billing and release email templates remain disabled because no real committed payment/release event source is active.
 - Security email producers were added in source for new desktop device link, session revoke, device revoke, revoke-all, deletion request/cancel, account suspend, and account reactivate. Local producer tests pass, category flags are deployed, and no production lifecycle mutation was executed for verification.
 - Admin alert producer coverage is implemented in source for the required operational families with deterministic idempotency/cooldown. The approved recipient is configured as a Worker secret, category flags are deployed, and no false production incident was generated.
-- Public pricing copy and card presentation were updated to the approved current prices and promotional trial language. Backend catalog remains price/status truth, while user-facing plan differentiators are localized in the content layer. GitHub Pages deployment and live bundle verification are pending for the current worktree.
+- Public pricing copy and card presentation were updated to the approved current prices and promotional trial language. Backend catalog remains price/status truth, while user-facing plan differentiators are localized in the content layer. Live bundle `assets/index-BPJ91n49.js` contains the approved weekly/monthly/annual price values and no provider-name public copy or mojibake markers.
 - Public plan catalog CORS source was repaired to allow Saturn public origins as well as Admin origins. Post-deploy verification confirmed `https://admin-api.saturnws.com/api/plans/catalog` returns 200 with `Access-Control-Allow-Origin: https://saturnws.com` for the public origin.
-- Legacy root static website artifacts were removed from source. GitHub Pages continues to publish `site/dist`, and the cutover guard blocks known legacy public bundle tokens from returning. The current local build produced `site/dist/assets/index-CIRJ2UvB.js`; live bundle verification is pending until the final commit is pushed and GitHub Pages deploys it.
+- Legacy root static website artifacts were removed from source. GitHub Pages continues to publish `site/dist`, and the cutover guard blocks known legacy public bundle tokens from returning. Live HTML references `assets/index-BPJ91n49.js` from workflow run `28118915884`.
 
 ## Operational Configuration Required
 
