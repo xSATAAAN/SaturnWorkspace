@@ -9,6 +9,7 @@ This inventory classifies visible or callable product capabilities by operationa
 ## State Legend
 
 - `FULLY_OPERATIONAL_ENABLED`: source and backend contract exist, automated checks pass, and the feature is intended to be available.
+- `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE`: source, build, deployment, and production-safe automated/live checks pass for the stated scope, but consolidated Phase G manual acceptance has not started.
 - `COMPLETE_EXTERNALLY_BLOCKED`: implementation is present but a real external provider, recipient, or operational secret is required before enablement.
 - `INTENTIONALLY_HIDDEN_OR_REMOVED`: not presented as a callable production capability.
 - `DESTRUCTIVE_APPROVAL_GATED`: implementation or UI is gated because executing it would publish, force, delete, grant, recover, or otherwise mutate production state materially.
@@ -18,7 +19,7 @@ This inventory classifies visible or callable product capabilities by operationa
 | Surface | Capability group | Frontend handler / route | Backend route / worker | Storage | Permission | Required flag/config | Current production state | Automated evidence | Manual acceptance |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Public | Landing, product, FAQ, contact, legal, downloads shell | `site/src/new-ui/pages/production/ProductionPages.tsx` | Static site / Admin download catalog for downloads | Static / release metadata | Public | Firebase public config for runtime boot | `FULLY_OPERATIONAL_ENABLED` except protected downloads require entitlement | `site npm run build`, `test:phase-b1` | Phase G |
-| Public | Pricing display | `/pricing`, `PricingSection` | `GET /api/plans/catalog` on Admin Worker | Supabase `commercial_plans` | Public read | Payment provider not required for display | `FULLY_OPERATIONAL_ENABLED` after CORS source repair; checkout remains disabled | Admin Phase E catalog tests, pricing visual fixture | Phase G |
+| Public | Pricing display | `/pricing`, `PricingSection` | `GET /api/plans/catalog` on Admin Worker | Supabase `commercial_plans` | Public read | Payment provider not required for display | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE`; checkout remains disabled | Admin Phase E catalog tests, public catalog CORS smoke, live bundle scan, pricing fixture, live public screenshots | Phase G |
 | Public | Checkout action | `CheckoutDialog` / `createPaymentIntent` | `POST /api/payments/create` | Supabase orders/payments | Authenticated customer | Real payment provider and mappings | `COMPLETE_EXTERNALLY_BLOCKED` | Admin order tests fail closed when provider unavailable | Phase G after provider |
 | Auth | Email/password and Google sign-in | `/account/signin`, `/account/signup` | Firebase + Auth Worker account APIs | Firebase, Supabase account profile | Customer | Firebase public config, Auth Worker secrets | `FULLY_OPERATIONAL_ENABLED` | Site Phase C, Auth Phase C | Phase G |
 | Auth | Email verification OTP | Auth production adapter | Auth Worker -> Policy internal email enqueue | Supabase OTP hash, D1 email queue | Customer | `EMAIL_AUTH_ENABLED=true`, email secrets, QA recipient for acceptance | `FULLY_OPERATIONAL_ENABLED` for queue path; provider delivery acceptance pending | Policy Phase D/G, Auth Phase C | Phase G |
@@ -46,9 +47,10 @@ This inventory classifies visible or callable product capabilities by operationa
 
 ## Findings From This Continuation
 
-- Public pricing had a production-risk CORS dependency: live `admin-api.saturnws.com` allowed only the Admin origin. Source now includes Saturn public origins in the Admin Worker CORS allowlist. Production verification is required after deployment.
+- Public pricing had a production-risk CORS dependency: live `admin-api.saturnws.com` allowed only the Admin origin. Source now includes Saturn public origins in the Admin Worker CORS allowlist, and production-safe verification confirmed the public origin is allowed.
 - Public Arabic pricing previously trusted raw backend `features` text. Public pricing now uses localized plan differentiators from the content layer while keeping backend catalog as price/status truth.
 - Tablet public header overflow at 768px was caused by the secondary header CTA. A responsive header rule removes that CTA before it can create horizontal scroll.
+- Live Contact mobile overflow was found during public rendered evidence capture. The page-specific contact grid overrode the generic mobile one-column rule, and long contact email links lacked defensive wrapping. `site/src/new-ui/foundation/public.css` now fixes both conditions, and recaptured live screenshots report zero horizontal overflow.
 
 ## Explicit Non-Operational Items
 

@@ -16,7 +16,7 @@ Updated: 2026-06-24
 ## Production Evidence
 
 - Canonical repository: `D:\SaturnWS\github-deploy\SaturnWorkspace`.
-- Canonical `main` contains the current Phase G pre-acceptance hardening changes at commit `5b7294dbef6ca035fd1c81f0d71c6f345ef3ac1d`. GitHub Pages workflow run `28118915884` deployed the site successfully.
+- Canonical `main` contains the current Phase G pre-acceptance hardening changes at commit `3e090fb198429cf26d5f3866f9adc41c1651dfdf`. GitHub Pages workflow run `28120228875` deployed the site successfully.
 - Supabase project: `Saturn Workspace` / ref `iqvwoivlamglyblftwez`.
 - Applied Supabase migrations:
   - `20260623214309 phase_g_recovery_deletion`
@@ -46,7 +46,7 @@ Updated: 2026-06-24
   - Admin `check:syntax` and `test:phase-g`: passed.
   - Desktop Python compile, frontend build, and QA Setup build: passed.
   - Site Phase B.1, Phase C, and Phase F checks: passed.
-  - Local visual QA generated public route screenshots and pricing-card fixture screenshots for Arabic/English desktop, tablet, and mobile layouts.
+  - Local visual QA generated pricing-card fixture screenshots. Live public-route visual evidence now covers Arabic/English desktop, tablet, and mobile layouts for `/`, `/pricing`, `/downloads`, `/contact`, and `/account/signin`.
 
 ## State and Source-of-Truth Decisions
 
@@ -71,9 +71,10 @@ Updated: 2026-06-24
 - Billing and release email templates remain disabled because no real committed payment/release event source is active.
 - Security email producers were added in source for new desktop device link, session revoke, device revoke, revoke-all, deletion request/cancel, account suspend, and account reactivate. Local producer tests pass, category flags are deployed, and no production lifecycle mutation was executed for verification.
 - Admin alert producer coverage is implemented in source for the required operational families with deterministic idempotency/cooldown. The approved recipient is configured as a Worker secret, category flags are deployed, and no false production incident was generated.
-- Public pricing copy and card presentation were updated to the approved current prices and promotional trial language. Backend catalog remains price/status truth, while user-facing plan differentiators are localized in the content layer. Live bundle `assets/index-BPJ91n49.js` contains the approved weekly/monthly/annual price values and no provider-name public copy or mojibake markers.
+- Public pricing copy and card presentation were updated to the approved current prices and promotional trial language. Backend catalog remains price/status truth, while user-facing plan differentiators are localized in the content layer. Live bundle `assets/index-CWMQLj65.js` contains the approved weekly/monthly/annual price values and no provider-name public copy or mojibake markers.
+- Live public rendered evidence for commit `3e090fb198429cf26d5f3866f9adc41c1651dfdf` found and fixed a Contact mobile overflow defect. Recaptured screenshots under `docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public` show 30/30 public route/locale/viewport captures returning 200 with correct RTL/LTR direction and zero horizontal overflow.
 - Public plan catalog CORS source was repaired to allow Saturn public origins as well as Admin origins. Post-deploy verification confirmed `https://admin-api.saturnws.com/api/plans/catalog` returns 200 with `Access-Control-Allow-Origin: https://saturnws.com` for the public origin.
-- Legacy root static website artifacts were removed from source. GitHub Pages continues to publish `site/dist`, and the cutover guard blocks known legacy public bundle tokens from returning. Live HTML references `assets/index-BPJ91n49.js` from workflow run `28118915884`.
+- Legacy root static website artifacts were removed from source. GitHub Pages continues to publish `site/dist`, and the cutover guard blocks known legacy public bundle tokens from returning. Live HTML references `assets/index-CWMQLj65.js` and `assets/index-C_PYWi_F.css` from workflow run `28120228875`.
 
 ## Operational Configuration Required
 

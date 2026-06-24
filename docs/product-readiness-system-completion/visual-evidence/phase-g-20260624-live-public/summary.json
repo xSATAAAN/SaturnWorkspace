@@ -1,0 +1,1286 @@
+{
+  "capturedAt": "2026-06-24T18:23:02.084Z",
+  "targetOrigin": "https://saturnws.com",
+  "commit": "3e090fb198429cf26d5f3866f9adc41c1651dfdf",
+  "assetExpected": "assets/index-CWMQLj65.js",
+  "screenshots": [
+    {
+      "route": "/",
+      "routeName": "home",
+      "locale": "ar",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "url": "https://saturnws.com/?lang=ar&theme=light&phaseg=3e090fb",
+      "status": 200,
+      "screenshot": "D:/SaturnWS/github-deploy/SaturnWorkspace/docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public/home-ar-desktop.png",
+      "consoleMessages": [],
+      "failedRequests": [],
+      "evidence": {
+        "lang": "ar",
+        "dir": "rtl",
+        "title": "Saturn Workspace | Desktop Control Center",
+        "headings": [
+          "أدِر كل حساب من مساحة عمل واحدة منظمة.",
+          "جهّز الجلسة ضمن خطوات واضحة ومترابطة.",
+          "الحسابات والتذكيرات والحالة في مكان واحد.",
+          "اجعل الاستعادة واضحة قبل أن تحتاجها.",
+          "خطط اشتراك Saturn Workspace",
+          "اجعل بدء الجلسة التالية أسهل."
+        ],
+        "buttons": [
+          "Saturn Workspace",
+          "المنتج",
+          "الأسعار",
+          "التنزيلات",
+          "الأسئلة الشائعة",
+          "تواصل معنا",
+          "العربية",
+          "فاتح",
+          "داكن",
+          "تسجيل الدخول"
+        ],
+        "bodyTextSample": "Saturn Workspace المنتج الأسعار التنزيلات الأسئلة الشائعة تواصل معنا فاتح داكن تسجيل الدخول ابدأ الآن طريقة أوضح لتجهيز جلسات الحسابات والعودة إليها أدِر كل حساب من مساحة عمل واحدة منظمة. يجمع Saturn Workspace بيانات الحسابات وملفات المتصفح المجهزة والتذكيرات والبريد المحفوظ والاستعادة داخل مساحة عمل واحدة لويندوز. إنشاء حساب الأسعار ملفات متصفح مجهزة سياق الحساب محفوظ معًا استعادة محلية وسحابية جهّز الجلسة ضمن خطوات واضحة ومترابطة. اختر الحساب وبيئة المتصفح والوجهة وإعدادات الاتصال. يحافظ Satur",
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "documentWidth": 1440,
+        "horizontalOverflow": 0,
+        "activeElement": "BODY"
+      }
+    },
+    {
+      "route": "/pricing",
+      "routeName": "pricing",
+      "locale": "ar",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "url": "https://saturnws.com/pricing?lang=ar&theme=light&phaseg=3e090fb",
+      "status": 200,
+      "screenshot": "D:/SaturnWS/github-deploy/SaturnWorkspace/docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public/pricing-ar-desktop.png",
+      "consoleMessages": [],
+      "failedRequests": [],
+      "evidence": {
+        "lang": "ar",
+        "dir": "rtl",
+        "title": "Saturn Workspace | Desktop Control Center",
+        "headings": [
+          "خطط اشتراك Saturn Workspace"
+        ],
+        "buttons": [
+          "Saturn Workspace",
+          "المنتج",
+          "الأسعار",
+          "التنزيلات",
+          "الأسئلة الشائعة",
+          "تواصل معنا",
+          "العربية",
+          "فاتح",
+          "داكن",
+          "تسجيل الدخول"
+        ],
+        "bodyTextSample": "Saturn Workspace المنتج الأسعار التنزيلات الأسئلة الشائعة تواصل معنا فاتح داكن تسجيل الدخول ابدأ الآن خطط اشتراك Saturn Workspace جميع الخطط الحالية تشمل نفس ميزات Saturn Workspace. الاختلاف في مدة الاشتراك والسعر وشروط التجربة المجانية. مشمول في كل خطة كامل ميزات Saturn Workspace الخطتان الشهرية والسنوية تشملان 7 أيام تجربة مجانية. الدفع غير متاح حاليًا الدفع غير متاح حاليًا. يمكنك إنشاء حساب ومراجعة الخطط. أسبوعي تجدد أسبوعيًا. ‏١٥٫٠٠ US$ ‏١٠٫٠٠ US$ أسبوعيًا غير متاح حاليًا شهري رائج تجدد شهري",
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "documentWidth": 1440,
+        "horizontalOverflow": 0,
+        "activeElement": "BODY"
+      }
+    },
+    {
+      "route": "/downloads",
+      "routeName": "downloads",
+      "locale": "ar",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "url": "https://saturnws.com/downloads?lang=ar&theme=light&phaseg=3e090fb",
+      "status": 200,
+      "screenshot": "D:/SaturnWS/github-deploy/SaturnWorkspace/docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public/downloads-ar-desktop.png",
+      "consoleMessages": [],
+      "failedRequests": [],
+      "evidence": {
+        "lang": "ar",
+        "dir": "rtl",
+        "title": "Saturn Workspace | Desktop Control Center",
+        "headings": [
+          "تنزيل Saturn Workspace"
+        ],
+        "buttons": [
+          "Saturn Workspace",
+          "المنتج",
+          "الأسعار",
+          "التنزيلات",
+          "الأسئلة الشائعة",
+          "تواصل معنا",
+          "العربية",
+          "فاتح",
+          "داكن",
+          "تسجيل الدخول"
+        ],
+        "bodyTextSample": "Saturn Workspace المنتج الأسعار التنزيلات الأسئلة الشائعة تواصل معنا فاتح داكن تسجيل الدخول ابدأ الآن تنزيل Saturn Workspace نزّل إصدار Windows المعتمد عندما يكون متاحًا لحسابك. لا يوجد إصدار متاح. لا يوجد إصدار متاح حاليًا. تسجيل الدخول Saturn Workspace نظّم الحسابات وجلسات المتصفح المجهزة والتذكيرات والبريد المحفوظ والاستعادة داخل أداة Windows واحدة. المنتج المنتج المميزات الأسعار التنزيلات الحساب تسجيل الدخول إنشاء حساب الاشتراك الدعم المصادر الأسئلة الشائعة تواصل معنا قانوني سياسة الخصوصية ش",
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "documentWidth": 1440,
+        "horizontalOverflow": 0,
+        "activeElement": "BODY"
+      }
+    },
+    {
+      "route": "/contact",
+      "routeName": "contact",
+      "locale": "ar",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "url": "https://saturnws.com/contact?lang=ar&theme=light&phaseg=3e090fb",
+      "status": 200,
+      "screenshot": "D:/SaturnWS/github-deploy/SaturnWorkspace/docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public/contact-ar-desktop.png",
+      "consoleMessages": [],
+      "failedRequests": [],
+      "evidence": {
+        "lang": "ar",
+        "dir": "rtl",
+        "title": "Saturn Workspace | Desktop Control Center",
+        "headings": [
+          "تواصل معنا",
+          "الفوترة",
+          "الأمان",
+          "استفسار عام",
+          "الدعم"
+        ],
+        "buttons": [
+          "Saturn Workspace",
+          "المنتج",
+          "الأسعار",
+          "التنزيلات",
+          "الأسئلة الشائعة",
+          "تواصل معنا",
+          "العربية",
+          "فاتح",
+          "داكن",
+          "تسجيل الدخول"
+        ],
+        "bodyTextSample": "Saturn Workspace المنتج الأسعار التنزيلات الأسئلة الشائعة تواصل معنا فاتح داكن تسجيل الدخول ابدأ الآن تواصل معنا اختر الموضوع المناسب لطلبك. الفوترة الفواتير والتجديد وأسئلة الاشتراك. billing@saturnws.com الأمان الوصول للحساب ونشاط الأجهزة وطلبات الخصوصية. security@saturnws.com استفسار عام أسئلة المنتج قبل إنشاء الحساب. hello@saturnws.com الدعم للمساعدة المتعلقة بالحساب، أنشئ تذكرة بعد تسجيل الدخول. إنشاء تذكرة الأسئلة الشائعة Saturn Workspace نظّم الحسابات وجلسات المتصفح المجهزة والتذكيرات والب",
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "documentWidth": 1440,
+        "horizontalOverflow": 0,
+        "activeElement": "BODY"
+      }
+    },
+    {
+      "route": "/account/signin",
+      "routeName": "signin",
+      "locale": "ar",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "url": "https://saturnws.com/account/signin?lang=ar&theme=light&phaseg=3e090fb",
+      "status": 200,
+      "screenshot": "D:/SaturnWS/github-deploy/SaturnWorkspace/docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public/signin-ar-desktop.png",
+      "consoleMessages": [],
+      "failedRequests": [],
+      "evidence": {
+        "lang": "ar",
+        "dir": "rtl",
+        "title": "Saturn Workspace | Desktop Control Center",
+        "headings": [
+          "مرحبًا بعودتك"
+        ],
+        "buttons": [
+          "Saturn Workspace",
+          "العربية",
+          "فاتح",
+          "داكن",
+          "نسيت كلمة المرور؟",
+          "تسجيل الدخول",
+          "المتابعة باستخدام Google",
+          "إنشاء حساب",
+          "رجوع"
+        ],
+        "bodyTextSample": "Saturn Workspace العربية فاتح داكن مرحبًا بعودتك سجّل الدخول للمتابعة. البريد الإلكتروني * كلمة المرور * نسيت كلمة المرور؟ تسجيل الدخول أو تابع باستخدام المتابعة باستخدام Google جديد في Saturn Workspace؟ إنشاء حساب رجوع",
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "documentWidth": 1440,
+        "horizontalOverflow": 0,
+        "activeElement": "BODY"
+      }
+    },
+    {
+      "route": "/",
+      "routeName": "home",
+      "locale": "ar",
+      "viewport": {
+        "name": "tablet",
+        "width": 834,
+        "height": 1112
+      },
+      "url": "https://saturnws.com/?lang=ar&theme=light&phaseg=3e090fb",
+      "status": 200,
+      "screenshot": "D:/SaturnWS/github-deploy/SaturnWorkspace/docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public/home-ar-tablet.png",
+      "consoleMessages": [],
+      "failedRequests": [],
+      "evidence": {
+        "lang": "ar",
+        "dir": "rtl",
+        "title": "Saturn Workspace | Desktop Control Center",
+        "headings": [
+          "أدِر كل حساب من مساحة عمل واحدة منظمة.",
+          "جهّز الجلسة ضمن خطوات واضحة ومترابطة.",
+          "الحسابات والتذكيرات والحالة في مكان واحد.",
+          "اجعل الاستعادة واضحة قبل أن تحتاجها.",
+          "خطط اشتراك Saturn Workspace",
+          "اجعل بدء الجلسة التالية أسهل."
+        ],
+        "buttons": [
+          "Saturn Workspace",
+          "المنتج",
+          "الأسعار",
+          "التنزيلات",
+          "الأسئلة الشائعة",
+          "تواصل معنا",
+          "العربية",
+          "فاتح",
+          "داكن",
+          "تسجيل الدخول"
+        ],
+        "bodyTextSample": "Saturn Workspace المنتج الأسعار التنزيلات الأسئلة الشائعة تواصل معنا فاتح داكن طريقة أوضح لتجهيز جلسات الحسابات والعودة إليها أدِر كل حساب من مساحة عمل واحدة منظمة. يجمع Saturn Workspace بيانات الحسابات وملفات المتصفح المجهزة والتذكيرات والبريد المحفوظ والاستعادة داخل مساحة عمل واحدة لويندوز. إنشاء حساب الأسعار ملفات متصفح مجهزة سياق الحساب محفوظ معًا استعادة محلية وسحابية جهّز الجلسة ضمن خطوات واضحة ومترابطة. اختر الحساب وبيئة المتصفح والوجهة وإعدادات الاتصال. يحافظ Saturn على بساطة الخطوات ويت",
+        "viewportWidth": 834,
+        "viewportHeight": 1112,
+        "documentWidth": 834,
+        "horizontalOverflow": 0,
+        "activeElement": "BODY"
+      }
+    },
+    {
+      "route": "/pricing",
+      "routeName": "pricing",
+      "locale": "ar",
+      "viewport": {
+        "name": "tablet",
+        "width": 834,
+        "height": 1112
+      },
+      "url": "https://saturnws.com/pricing?lang=ar&theme=light&phaseg=3e090fb",
+      "status": 200,
+      "screenshot": "D:/SaturnWS/github-deploy/SaturnWorkspace/docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public/pricing-ar-tablet.png",
+      "consoleMessages": [],
+      "failedRequests": [],
+      "evidence": {
+        "lang": "ar",
+        "dir": "rtl",
+        "title": "Saturn Workspace | Desktop Control Center",
+        "headings": [
+          "خطط اشتراك Saturn Workspace"
+        ],
+        "buttons": [
+          "Saturn Workspace",
+          "المنتج",
+          "الأسعار",
+          "التنزيلات",
+          "الأسئلة الشائعة",
+          "تواصل معنا",
+          "العربية",
+          "فاتح",
+          "داكن",
+          "تسجيل الدخول"
+        ],
+        "bodyTextSample": "Saturn Workspace المنتج الأسعار التنزيلات الأسئلة الشائعة تواصل معنا فاتح داكن خطط اشتراك Saturn Workspace جميع الخطط الحالية تشمل نفس ميزات Saturn Workspace. الاختلاف في مدة الاشتراك والسعر وشروط التجربة المجانية. مشمول في كل خطة كامل ميزات Saturn Workspace الخطتان الشهرية والسنوية تشملان 7 أيام تجربة مجانية. الدفع غير متاح حاليًا الدفع غير متاح حاليًا. يمكنك إنشاء حساب ومراجعة الخطط. أسبوعي تجدد أسبوعيًا. ‏١٥٫٠٠ US$ ‏١٠٫٠٠ US$ أسبوعيًا غير متاح حاليًا شهري رائج تجدد شهريًا. ‏٥٠٫٠٠ US$ ‏٣٥٫٠٠ U",
+        "viewportWidth": 834,
+        "viewportHeight": 1112,
+        "documentWidth": 834,
+        "horizontalOverflow": 0,
+        "activeElement": "BODY"
+      }
+    },
+    {
+      "route": "/downloads",
+      "routeName": "downloads",
+      "locale": "ar",
+      "viewport": {
+        "name": "tablet",
+        "width": 834,
+        "height": 1112
+      },
+      "url": "https://saturnws.com/downloads?lang=ar&theme=light&phaseg=3e090fb",
+      "status": 200,
+      "screenshot": "D:/SaturnWS/github-deploy/SaturnWorkspace/docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public/downloads-ar-tablet.png",
+      "consoleMessages": [],
+      "failedRequests": [],
+      "evidence": {
+        "lang": "ar",
+        "dir": "rtl",
+        "title": "Saturn Workspace | Desktop Control Center",
+        "headings": [
+          "تنزيل Saturn Workspace"
+        ],
+        "buttons": [
+          "Saturn Workspace",
+          "المنتج",
+          "الأسعار",
+          "التنزيلات",
+          "الأسئلة الشائعة",
+          "تواصل معنا",
+          "العربية",
+          "فاتح",
+          "داكن",
+          "تسجيل الدخول"
+        ],
+        "bodyTextSample": "Saturn Workspace المنتج الأسعار التنزيلات الأسئلة الشائعة تواصل معنا فاتح داكن تنزيل Saturn Workspace نزّل إصدار Windows المعتمد عندما يكون متاحًا لحسابك. لا يوجد إصدار متاح. لا يوجد إصدار متاح حاليًا. تسجيل الدخول Saturn Workspace نظّم الحسابات وجلسات المتصفح المجهزة والتذكيرات والبريد المحفوظ والاستعادة داخل أداة Windows واحدة. المنتج المنتج المميزات الأسعار التنزيلات الحساب تسجيل الدخول إنشاء حساب الاشتراك الدعم المصادر الأسئلة الشائعة تواصل معنا قانوني سياسة الخصوصية شروط الخدمة سياسة الاستر",
+        "viewportWidth": 834,
+        "viewportHeight": 1112,
+        "documentWidth": 834,
+        "horizontalOverflow": 0,
+        "activeElement": "BODY"
+      }
+    },
+    {
+      "route": "/contact",
+      "routeName": "contact",
+      "locale": "ar",
+      "viewport": {
+        "name": "tablet",
+        "width": 834,
+        "height": 1112
+      },
+      "url": "https://saturnws.com/contact?lang=ar&theme=light&phaseg=3e090fb",
+      "status": 200,
+      "screenshot": "D:/SaturnWS/github-deploy/SaturnWorkspace/docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public/contact-ar-tablet.png",
+      "consoleMessages": [],
+      "failedRequests": [],
+      "evidence": {
+        "lang": "ar",
+        "dir": "rtl",
+        "title": "Saturn Workspace | Desktop Control Center",
+        "headings": [
+          "تواصل معنا",
+          "الفوترة",
+          "الأمان",
+          "استفسار عام",
+          "الدعم"
+        ],
+        "buttons": [
+          "Saturn Workspace",
+          "المنتج",
+          "الأسعار",
+          "التنزيلات",
+          "الأسئلة الشائعة",
+          "تواصل معنا",
+          "العربية",
+          "فاتح",
+          "داكن",
+          "تسجيل الدخول"
+        ],
+        "bodyTextSample": "Saturn Workspace المنتج الأسعار التنزيلات الأسئلة الشائعة تواصل معنا فاتح داكن تواصل معنا اختر الموضوع المناسب لطلبك. الفوترة الفواتير والتجديد وأسئلة الاشتراك. billing@saturnws.com الأمان الوصول للحساب ونشاط الأجهزة وطلبات الخصوصية. security@saturnws.com استفسار عام أسئلة المنتج قبل إنشاء الحساب. hello@saturnws.com الدعم للمساعدة المتعلقة بالحساب، أنشئ تذكرة بعد تسجيل الدخول. إنشاء تذكرة الأسئلة الشائعة Saturn Workspace نظّم الحسابات وجلسات المتصفح المجهزة والتذكيرات والبريد المحفوظ والاستعادة ",
+        "viewportWidth": 834,
+        "viewportHeight": 1112,
+        "documentWidth": 834,
+        "horizontalOverflow": 0,
+        "activeElement": "BODY"
+      }
+    },
+    {
+      "route": "/account/signin",
+      "routeName": "signin",
+      "locale": "ar",
+      "viewport": {
+        "name": "tablet",
+        "width": 834,
+        "height": 1112
+      },
+      "url": "https://saturnws.com/account/signin?lang=ar&theme=light&phaseg=3e090fb",
+      "status": 200,
+      "screenshot": "D:/SaturnWS/github-deploy/SaturnWorkspace/docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public/signin-ar-tablet.png",
+      "consoleMessages": [],
+      "failedRequests": [],
+      "evidence": {
+        "lang": "ar",
+        "dir": "rtl",
+        "title": "Saturn Workspace | Desktop Control Center",
+        "headings": [
+          "مرحبًا بعودتك"
+        ],
+        "buttons": [
+          "Saturn Workspace",
+          "العربية",
+          "فاتح",
+          "داكن",
+          "نسيت كلمة المرور؟",
+          "تسجيل الدخول",
+          "المتابعة باستخدام Google",
+          "إنشاء حساب",
+          "رجوع"
+        ],
+        "bodyTextSample": "Saturn Workspace العربية فاتح داكن مرحبًا بعودتك سجّل الدخول للمتابعة. البريد الإلكتروني * كلمة المرور * نسيت كلمة المرور؟ تسجيل الدخول أو تابع باستخدام المتابعة باستخدام Google جديد في Saturn Workspace؟ إنشاء حساب رجوع",
+        "viewportWidth": 834,
+        "viewportHeight": 1112,
+        "documentWidth": 834,
+        "horizontalOverflow": 0,
+        "activeElement": "BODY"
+      }
+    },
+    {
+      "route": "/",
+      "routeName": "home",
+      "locale": "ar",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "url": "https://saturnws.com/?lang=ar&theme=light&phaseg=3e090fb",
+      "status": 200,
+      "screenshot": "D:/SaturnWS/github-deploy/SaturnWorkspace/docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public/home-ar-mobile.png",
+      "consoleMessages": [],
+      "failedRequests": [],
+      "evidence": {
+        "lang": "ar",
+        "dir": "rtl",
+        "title": "Saturn Workspace | Desktop Control Center",
+        "headings": [
+          "أدِر كل حساب من مساحة عمل واحدة منظمة.",
+          "جهّز الجلسة ضمن خطوات واضحة ومترابطة.",
+          "الحسابات والتذكيرات والحالة في مكان واحد.",
+          "اجعل الاستعادة واضحة قبل أن تحتاجها.",
+          "خطط اشتراك Saturn Workspace",
+          "اجعل بدء الجلسة التالية أسهل."
+        ],
+        "buttons": [
+          "Saturn Workspace",
+          "المنتج",
+          "الأسعار",
+          "التنزيلات",
+          "الأسئلة الشائعة",
+          "تواصل معنا",
+          "العربية",
+          "فاتح",
+          "داكن",
+          "تسجيل الدخول"
+        ],
+        "bodyTextSample": "Saturn Workspace فاتح داكن طريقة أوضح لتجهيز جلسات الحسابات والعودة إليها أدِر كل حساب من مساحة عمل واحدة منظمة. يجمع Saturn Workspace بيانات الحسابات وملفات المتصفح المجهزة والتذكيرات والبريد المحفوظ والاستعادة داخل مساحة عمل واحدة لويندوز. إنشاء حساب الأسعار ملفات متصفح مجهزة سياق الحساب محفوظ معًا استعادة محلية وسحابية جهّز الجلسة ضمن خطوات واضحة ومترابطة. اختر الحساب وبيئة المتصفح والوجهة وإعدادات الاتصال. يحافظ Saturn على بساطة الخطوات ويتذكر السياق الذي ستحتاجه لاحقًا. اختر الحساب جهّز الب",
+        "viewportWidth": 390,
+        "viewportHeight": 844,
+        "documentWidth": 390,
+        "horizontalOverflow": 0,
+        "activeElement": "BODY"
+      }
+    },
+    {
+      "route": "/pricing",
+      "routeName": "pricing",
+      "locale": "ar",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "url": "https://saturnws.com/pricing?lang=ar&theme=light&phaseg=3e090fb",
+      "status": 200,
+      "screenshot": "D:/SaturnWS/github-deploy/SaturnWorkspace/docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public/pricing-ar-mobile.png",
+      "consoleMessages": [],
+      "failedRequests": [],
+      "evidence": {
+        "lang": "ar",
+        "dir": "rtl",
+        "title": "Saturn Workspace | Desktop Control Center",
+        "headings": [
+          "خطط اشتراك Saturn Workspace"
+        ],
+        "buttons": [
+          "Saturn Workspace",
+          "المنتج",
+          "الأسعار",
+          "التنزيلات",
+          "الأسئلة الشائعة",
+          "تواصل معنا",
+          "العربية",
+          "فاتح",
+          "داكن",
+          "تسجيل الدخول"
+        ],
+        "bodyTextSample": "Saturn Workspace فاتح داكن خطط اشتراك Saturn Workspace جميع الخطط الحالية تشمل نفس ميزات Saturn Workspace. الاختلاف في مدة الاشتراك والسعر وشروط التجربة المجانية. مشمول في كل خطة كامل ميزات Saturn Workspace الخطتان الشهرية والسنوية تشملان 7 أيام تجربة مجانية. الدفع غير متاح حاليًا الدفع غير متاح حاليًا. يمكنك إنشاء حساب ومراجعة الخطط. أسبوعي تجدد أسبوعيًا. ‏١٥٫٠٠ US$ ‏١٠٫٠٠ US$ أسبوعيًا غير متاح حاليًا شهري رائج تجدد شهريًا. ‏٥٠٫٠٠ US$ ‏٣٥٫٠٠ US$ شهريًا غير متاح حاليًا سنوي تجدد سنويًا. ‏٦٠٠٫٠٠ ",
+        "viewportWidth": 390,
+        "viewportHeight": 844,
+        "documentWidth": 390,
+        "horizontalOverflow": 0,
+        "activeElement": "BODY"
+      }
+    },
+    {
+      "route": "/downloads",
+      "routeName": "downloads",
+      "locale": "ar",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "url": "https://saturnws.com/downloads?lang=ar&theme=light&phaseg=3e090fb",
+      "status": 200,
+      "screenshot": "D:/SaturnWS/github-deploy/SaturnWorkspace/docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public/downloads-ar-mobile.png",
+      "consoleMessages": [],
+      "failedRequests": [],
+      "evidence": {
+        "lang": "ar",
+        "dir": "rtl",
+        "title": "Saturn Workspace | Desktop Control Center",
+        "headings": [
+          "تنزيل Saturn Workspace"
+        ],
+        "buttons": [
+          "Saturn Workspace",
+          "المنتج",
+          "الأسعار",
+          "التنزيلات",
+          "الأسئلة الشائعة",
+          "تواصل معنا",
+          "العربية",
+          "فاتح",
+          "داكن",
+          "تسجيل الدخول"
+        ],
+        "bodyTextSample": "Saturn Workspace فاتح داكن تنزيل Saturn Workspace نزّل إصدار Windows المعتمد عندما يكون متاحًا لحسابك. لا يوجد إصدار متاح. لا يوجد إصدار متاح حاليًا. تسجيل الدخول Saturn Workspace نظّم الحسابات وجلسات المتصفح المجهزة والتذكيرات والبريد المحفوظ والاستعادة داخل أداة Windows واحدة. المنتج المنتج المميزات الأسعار التنزيلات الحساب تسجيل الدخول إنشاء حساب الاشتراك الدعم المصادر الأسئلة الشائعة تواصل معنا قانوني سياسة الخصوصية شروط الخدمة سياسة الاسترداد الاستخدام المقبول © 2026 Saturn Workspace. جميع ",
+        "viewportWidth": 390,
+        "viewportHeight": 844,
+        "documentWidth": 390,
+        "horizontalOverflow": 0,
+        "activeElement": "BODY"
+      }
+    },
+    {
+      "route": "/contact",
+      "routeName": "contact",
+      "locale": "ar",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "url": "https://saturnws.com/contact?lang=ar&theme=light&phaseg=3e090fb",
+      "status": 200,
+      "screenshot": "D:/SaturnWS/github-deploy/SaturnWorkspace/docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public/contact-ar-mobile.png",
+      "consoleMessages": [],
+      "failedRequests": [],
+      "evidence": {
+        "lang": "ar",
+        "dir": "rtl",
+        "title": "Saturn Workspace | Desktop Control Center",
+        "headings": [
+          "تواصل معنا",
+          "الفوترة",
+          "الأمان",
+          "استفسار عام",
+          "الدعم"
+        ],
+        "buttons": [
+          "Saturn Workspace",
+          "المنتج",
+          "الأسعار",
+          "التنزيلات",
+          "الأسئلة الشائعة",
+          "تواصل معنا",
+          "العربية",
+          "فاتح",
+          "داكن",
+          "تسجيل الدخول"
+        ],
+        "bodyTextSample": "Saturn Workspace فاتح داكن تواصل معنا اختر الموضوع المناسب لطلبك. الفوترة الفواتير والتجديد وأسئلة الاشتراك. billing@saturnws.com الأمان الوصول للحساب ونشاط الأجهزة وطلبات الخصوصية. security@saturnws.com استفسار عام أسئلة المنتج قبل إنشاء الحساب. hello@saturnws.com الدعم للمساعدة المتعلقة بالحساب، أنشئ تذكرة بعد تسجيل الدخول. إنشاء تذكرة الأسئلة الشائعة Saturn Workspace نظّم الحسابات وجلسات المتصفح المجهزة والتذكيرات والبريد المحفوظ والاستعادة داخل أداة Windows واحدة. المنتج المنتج المميزات الأس",
+        "viewportWidth": 390,
+        "viewportHeight": 844,
+        "documentWidth": 390,
+        "horizontalOverflow": 0,
+        "activeElement": "BODY"
+      }
+    },
+    {
+      "route": "/account/signin",
+      "routeName": "signin",
+      "locale": "ar",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "url": "https://saturnws.com/account/signin?lang=ar&theme=light&phaseg=3e090fb",
+      "status": 200,
+      "screenshot": "D:/SaturnWS/github-deploy/SaturnWorkspace/docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public/signin-ar-mobile.png",
+      "consoleMessages": [],
+      "failedRequests": [],
+      "evidence": {
+        "lang": "ar",
+        "dir": "rtl",
+        "title": "Saturn Workspace | Desktop Control Center",
+        "headings": [
+          "مرحبًا بعودتك"
+        ],
+        "buttons": [
+          "Saturn Workspace",
+          "العربية",
+          "فاتح",
+          "داكن",
+          "نسيت كلمة المرور؟",
+          "تسجيل الدخول",
+          "المتابعة باستخدام Google",
+          "إنشاء حساب",
+          "رجوع"
+        ],
+        "bodyTextSample": "Saturn Workspace فاتح داكن مرحبًا بعودتك سجّل الدخول للمتابعة. البريد الإلكتروني * كلمة المرور * نسيت كلمة المرور؟ تسجيل الدخول أو تابع باستخدام المتابعة باستخدام Google جديد في Saturn Workspace؟ إنشاء حساب رجوع",
+        "viewportWidth": 390,
+        "viewportHeight": 844,
+        "documentWidth": 390,
+        "horizontalOverflow": 0,
+        "activeElement": "BODY"
+      }
+    },
+    {
+      "route": "/",
+      "routeName": "home",
+      "locale": "en",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "url": "https://saturnws.com/?lang=en&theme=light&phaseg=3e090fb",
+      "status": 200,
+      "screenshot": "D:/SaturnWS/github-deploy/SaturnWorkspace/docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public/home-en-desktop.png",
+      "consoleMessages": [],
+      "failedRequests": [],
+      "evidence": {
+        "lang": "en",
+        "dir": "ltr",
+        "title": "Saturn Workspace | Desktop Control Center",
+        "headings": [
+          "Run every account from one organized workspace.",
+          "Prepare a session in one deliberate flow.",
+          "Accounts, reminders, and status in one view.",
+          "Recovery is visible before you need it.",
+          "Saturn Workspace plans",
+          "Make the next session easier to start."
+        ],
+        "buttons": [
+          "Saturn Workspace",
+          "Product",
+          "Pricing",
+          "Downloads",
+          "FAQ",
+          "Contact",
+          "English",
+          "Light",
+          "Dark",
+          "Sign in"
+        ],
+        "bodyTextSample": "Saturn Workspace Product Pricing Downloads FAQ Contact Light Dark Sign in Get started A clearer way to prepare and return to every account session Run every account from one organized workspace. Saturn Workspace brings account records, prepared browser profiles, reminders, saved email, and recovery into one focused Windows workspace. Create your account Pricing Prepared browser profiles Account context stays together Local and cloud recovery Prepare a session in one deliberate flow. Choose the a",
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "documentWidth": 1440,
+        "horizontalOverflow": 0,
+        "activeElement": "BODY"
+      }
+    },
+    {
+      "route": "/pricing",
+      "routeName": "pricing",
+      "locale": "en",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "url": "https://saturnws.com/pricing?lang=en&theme=light&phaseg=3e090fb",
+      "status": 200,
+      "screenshot": "D:/SaturnWS/github-deploy/SaturnWorkspace/docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public/pricing-en-desktop.png",
+      "consoleMessages": [],
+      "failedRequests": [],
+      "evidence": {
+        "lang": "en",
+        "dir": "ltr",
+        "title": "Saturn Workspace | Desktop Control Center",
+        "headings": [
+          "Saturn Workspace plans"
+        ],
+        "buttons": [
+          "Saturn Workspace",
+          "Product",
+          "Pricing",
+          "Downloads",
+          "FAQ",
+          "Contact",
+          "English",
+          "Light",
+          "Dark",
+          "Sign in"
+        ],
+        "bodyTextSample": "Saturn Workspace Product Pricing Downloads FAQ Contact Light Dark Sign in Get started Saturn Workspace plans Every current plan includes the same Saturn Workspace features. The difference is subscription period, price, and free-trial terms. Included with every plan Full Saturn Workspace features Monthly and annual plans include 7 free trial days. Checkout unavailable Checkout is not available right now. You can still create an account and review the plans. Weekly Renews weekly. $15.00 $10.00 per",
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "documentWidth": 1440,
+        "horizontalOverflow": 0,
+        "activeElement": "BODY"
+      }
+    },
+    {
+      "route": "/downloads",
+      "routeName": "downloads",
+      "locale": "en",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "url": "https://saturnws.com/downloads?lang=en&theme=light&phaseg=3e090fb",
+      "status": 200,
+      "screenshot": "D:/SaturnWS/github-deploy/SaturnWorkspace/docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public/downloads-en-desktop.png",
+      "consoleMessages": [],
+      "failedRequests": [],
+      "evidence": {
+        "lang": "en",
+        "dir": "ltr",
+        "title": "Saturn Workspace | Desktop Control Center",
+        "headings": [
+          "Download Saturn Workspace"
+        ],
+        "buttons": [
+          "Saturn Workspace",
+          "Product",
+          "Pricing",
+          "Downloads",
+          "FAQ",
+          "Contact",
+          "English",
+          "Light",
+          "Dark",
+          "Sign in"
+        ],
+        "bodyTextSample": "Saturn Workspace Product Pricing Downloads FAQ Contact Light Dark Sign in Get started Download Saturn Workspace Download the approved Windows release when it is available for your account. No release is available. No release is available right now. Sign in Saturn Workspace Organize accounts, prepared browser sessions, reminders, saved email, and recovery in one focused Windows workspace. Product Product Features Pricing Downloads Account Sign in Create account Subscription Support Resources FAQ ",
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "documentWidth": 1440,
+        "horizontalOverflow": 0,
+        "activeElement": "BODY"
+      }
+    },
+    {
+      "route": "/contact",
+      "routeName": "contact",
+      "locale": "en",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "url": "https://saturnws.com/contact?lang=en&theme=light&phaseg=3e090fb",
+      "status": 200,
+      "screenshot": "D:/SaturnWS/github-deploy/SaturnWorkspace/docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public/contact-en-desktop.png",
+      "consoleMessages": [],
+      "failedRequests": [],
+      "evidence": {
+        "lang": "en",
+        "dir": "ltr",
+        "title": "Saturn Workspace | Desktop Control Center",
+        "headings": [
+          "Contact",
+          "Billing",
+          "Security",
+          "General",
+          "Support"
+        ],
+        "buttons": [
+          "Saturn Workspace",
+          "Product",
+          "Pricing",
+          "Downloads",
+          "FAQ",
+          "Contact",
+          "English",
+          "Light",
+          "Dark",
+          "Sign in"
+        ],
+        "bodyTextSample": "Saturn Workspace Product Pricing Downloads FAQ Contact Light Dark Sign in Get started Contact Choose the topic that matches your request. Billing Invoices, renewal, and subscription questions. billing@saturnws.com Security Account access, device activity, and privacy concerns. security@saturnws.com General Product questions before creating an account. hello@saturnws.com Support For account help, create a ticket after signing in. Create ticket FAQ Saturn Workspace Organize accounts, prepared brow",
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "documentWidth": 1440,
+        "horizontalOverflow": 0,
+        "activeElement": "BODY"
+      }
+    },
+    {
+      "route": "/account/signin",
+      "routeName": "signin",
+      "locale": "en",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "url": "https://saturnws.com/account/signin?lang=en&theme=light&phaseg=3e090fb",
+      "status": 200,
+      "screenshot": "D:/SaturnWS/github-deploy/SaturnWorkspace/docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public/signin-en-desktop.png",
+      "consoleMessages": [],
+      "failedRequests": [],
+      "evidence": {
+        "lang": "en",
+        "dir": "ltr",
+        "title": "Saturn Workspace | Desktop Control Center",
+        "headings": [
+          "Welcome back"
+        ],
+        "buttons": [
+          "Saturn Workspace",
+          "English",
+          "Light",
+          "Dark",
+          "Forgot password?",
+          "Sign in",
+          "Continue with Google",
+          "Create account",
+          "Back"
+        ],
+        "bodyTextSample": "Saturn Workspace English Light Dark Welcome back Sign in to continue. Email address * Password * Forgot password? Sign in Or continue with Continue with Google New to Saturn Workspace? Create account Back",
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "documentWidth": 1440,
+        "horizontalOverflow": 0,
+        "activeElement": "BODY"
+      }
+    },
+    {
+      "route": "/",
+      "routeName": "home",
+      "locale": "en",
+      "viewport": {
+        "name": "tablet",
+        "width": 834,
+        "height": 1112
+      },
+      "url": "https://saturnws.com/?lang=en&theme=light&phaseg=3e090fb",
+      "status": 200,
+      "screenshot": "D:/SaturnWS/github-deploy/SaturnWorkspace/docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public/home-en-tablet.png",
+      "consoleMessages": [],
+      "failedRequests": [],
+      "evidence": {
+        "lang": "en",
+        "dir": "ltr",
+        "title": "Saturn Workspace | Desktop Control Center",
+        "headings": [
+          "Run every account from one organized workspace.",
+          "Prepare a session in one deliberate flow.",
+          "Accounts, reminders, and status in one view.",
+          "Recovery is visible before you need it.",
+          "Saturn Workspace plans",
+          "Make the next session easier to start."
+        ],
+        "buttons": [
+          "Saturn Workspace",
+          "Product",
+          "Pricing",
+          "Downloads",
+          "FAQ",
+          "Contact",
+          "English",
+          "Light",
+          "Dark",
+          "Sign in"
+        ],
+        "bodyTextSample": "Saturn Workspace Product Pricing Downloads FAQ Contact Light Dark A clearer way to prepare and return to every account session Run every account from one organized workspace. Saturn Workspace brings account records, prepared browser profiles, reminders, saved email, and recovery into one focused Windows workspace. Create your account Pricing Prepared browser profiles Account context stays together Local and cloud recovery Prepare a session in one deliberate flow. Choose the account, browser envi",
+        "viewportWidth": 834,
+        "viewportHeight": 1112,
+        "documentWidth": 834,
+        "horizontalOverflow": 0,
+        "activeElement": "BODY"
+      }
+    },
+    {
+      "route": "/pricing",
+      "routeName": "pricing",
+      "locale": "en",
+      "viewport": {
+        "name": "tablet",
+        "width": 834,
+        "height": 1112
+      },
+      "url": "https://saturnws.com/pricing?lang=en&theme=light&phaseg=3e090fb",
+      "status": 200,
+      "screenshot": "D:/SaturnWS/github-deploy/SaturnWorkspace/docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public/pricing-en-tablet.png",
+      "consoleMessages": [],
+      "failedRequests": [],
+      "evidence": {
+        "lang": "en",
+        "dir": "ltr",
+        "title": "Saturn Workspace | Desktop Control Center",
+        "headings": [
+          "Saturn Workspace plans"
+        ],
+        "buttons": [
+          "Saturn Workspace",
+          "Product",
+          "Pricing",
+          "Downloads",
+          "FAQ",
+          "Contact",
+          "English",
+          "Light",
+          "Dark",
+          "Sign in"
+        ],
+        "bodyTextSample": "Saturn Workspace Product Pricing Downloads FAQ Contact Light Dark Saturn Workspace plans Every current plan includes the same Saturn Workspace features. The difference is subscription period, price, and free-trial terms. Included with every plan Full Saturn Workspace features Monthly and annual plans include 7 free trial days. Checkout unavailable Checkout is not available right now. You can still create an account and review the plans. Weekly Renews weekly. $15.00 $10.00 per week Not available ",
+        "viewportWidth": 834,
+        "viewportHeight": 1112,
+        "documentWidth": 834,
+        "horizontalOverflow": 0,
+        "activeElement": "BODY"
+      }
+    },
+    {
+      "route": "/downloads",
+      "routeName": "downloads",
+      "locale": "en",
+      "viewport": {
+        "name": "tablet",
+        "width": 834,
+        "height": 1112
+      },
+      "url": "https://saturnws.com/downloads?lang=en&theme=light&phaseg=3e090fb",
+      "status": 200,
+      "screenshot": "D:/SaturnWS/github-deploy/SaturnWorkspace/docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public/downloads-en-tablet.png",
+      "consoleMessages": [],
+      "failedRequests": [],
+      "evidence": {
+        "lang": "en",
+        "dir": "ltr",
+        "title": "Saturn Workspace | Desktop Control Center",
+        "headings": [
+          "Download Saturn Workspace"
+        ],
+        "buttons": [
+          "Saturn Workspace",
+          "Product",
+          "Pricing",
+          "Downloads",
+          "FAQ",
+          "Contact",
+          "English",
+          "Light",
+          "Dark",
+          "Sign in"
+        ],
+        "bodyTextSample": "Saturn Workspace Product Pricing Downloads FAQ Contact Light Dark Download Saturn Workspace Download the approved Windows release when it is available for your account. No release is available. No release is available right now. Sign in Saturn Workspace Organize accounts, prepared browser sessions, reminders, saved email, and recovery in one focused Windows workspace. Product Product Features Pricing Downloads Account Sign in Create account Subscription Support Resources FAQ Contact Legal Privac",
+        "viewportWidth": 834,
+        "viewportHeight": 1112,
+        "documentWidth": 834,
+        "horizontalOverflow": 0,
+        "activeElement": "BODY"
+      }
+    },
+    {
+      "route": "/contact",
+      "routeName": "contact",
+      "locale": "en",
+      "viewport": {
+        "name": "tablet",
+        "width": 834,
+        "height": 1112
+      },
+      "url": "https://saturnws.com/contact?lang=en&theme=light&phaseg=3e090fb",
+      "status": 200,
+      "screenshot": "D:/SaturnWS/github-deploy/SaturnWorkspace/docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public/contact-en-tablet.png",
+      "consoleMessages": [],
+      "failedRequests": [],
+      "evidence": {
+        "lang": "en",
+        "dir": "ltr",
+        "title": "Saturn Workspace | Desktop Control Center",
+        "headings": [
+          "Contact",
+          "Billing",
+          "Security",
+          "General",
+          "Support"
+        ],
+        "buttons": [
+          "Saturn Workspace",
+          "Product",
+          "Pricing",
+          "Downloads",
+          "FAQ",
+          "Contact",
+          "English",
+          "Light",
+          "Dark",
+          "Sign in"
+        ],
+        "bodyTextSample": "Saturn Workspace Product Pricing Downloads FAQ Contact Light Dark Contact Choose the topic that matches your request. Billing Invoices, renewal, and subscription questions. billing@saturnws.com Security Account access, device activity, and privacy concerns. security@saturnws.com General Product questions before creating an account. hello@saturnws.com Support For account help, create a ticket after signing in. Create ticket FAQ Saturn Workspace Organize accounts, prepared browser sessions, remind",
+        "viewportWidth": 834,
+        "viewportHeight": 1112,
+        "documentWidth": 834,
+        "horizontalOverflow": 0,
+        "activeElement": "BODY"
+      }
+    },
+    {
+      "route": "/account/signin",
+      "routeName": "signin",
+      "locale": "en",
+      "viewport": {
+        "name": "tablet",
+        "width": 834,
+        "height": 1112
+      },
+      "url": "https://saturnws.com/account/signin?lang=en&theme=light&phaseg=3e090fb",
+      "status": 200,
+      "screenshot": "D:/SaturnWS/github-deploy/SaturnWorkspace/docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public/signin-en-tablet.png",
+      "consoleMessages": [],
+      "failedRequests": [],
+      "evidence": {
+        "lang": "en",
+        "dir": "ltr",
+        "title": "Saturn Workspace | Desktop Control Center",
+        "headings": [
+          "Welcome back"
+        ],
+        "buttons": [
+          "Saturn Workspace",
+          "English",
+          "Light",
+          "Dark",
+          "Forgot password?",
+          "Sign in",
+          "Continue with Google",
+          "Create account",
+          "Back"
+        ],
+        "bodyTextSample": "Saturn Workspace English Light Dark Welcome back Sign in to continue. Email address * Password * Forgot password? Sign in Or continue with Continue with Google New to Saturn Workspace? Create account Back",
+        "viewportWidth": 834,
+        "viewportHeight": 1112,
+        "documentWidth": 834,
+        "horizontalOverflow": 0,
+        "activeElement": "BODY"
+      }
+    },
+    {
+      "route": "/",
+      "routeName": "home",
+      "locale": "en",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "url": "https://saturnws.com/?lang=en&theme=light&phaseg=3e090fb",
+      "status": 200,
+      "screenshot": "D:/SaturnWS/github-deploy/SaturnWorkspace/docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public/home-en-mobile.png",
+      "consoleMessages": [],
+      "failedRequests": [],
+      "evidence": {
+        "lang": "en",
+        "dir": "ltr",
+        "title": "Saturn Workspace | Desktop Control Center",
+        "headings": [
+          "Run every account from one organized workspace.",
+          "Prepare a session in one deliberate flow.",
+          "Accounts, reminders, and status in one view.",
+          "Recovery is visible before you need it.",
+          "Saturn Workspace plans",
+          "Make the next session easier to start."
+        ],
+        "buttons": [
+          "Saturn Workspace",
+          "Product",
+          "Pricing",
+          "Downloads",
+          "FAQ",
+          "Contact",
+          "English",
+          "Light",
+          "Dark",
+          "Sign in"
+        ],
+        "bodyTextSample": "Saturn Workspace Light Dark A clearer way to prepare and return to every account session Run every account from one organized workspace. Saturn Workspace brings account records, prepared browser profiles, reminders, saved email, and recovery into one focused Windows workspace. Create your account Pricing Prepared browser profiles Account context stays together Local and cloud recovery Prepare a session in one deliberate flow. Choose the account, browser environment, destination, and connection s",
+        "viewportWidth": 390,
+        "viewportHeight": 844,
+        "documentWidth": 390,
+        "horizontalOverflow": 0,
+        "activeElement": "BODY"
+      }
+    },
+    {
+      "route": "/pricing",
+      "routeName": "pricing",
+      "locale": "en",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "url": "https://saturnws.com/pricing?lang=en&theme=light&phaseg=3e090fb",
+      "status": 200,
+      "screenshot": "D:/SaturnWS/github-deploy/SaturnWorkspace/docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public/pricing-en-mobile.png",
+      "consoleMessages": [],
+      "failedRequests": [],
+      "evidence": {
+        "lang": "en",
+        "dir": "ltr",
+        "title": "Saturn Workspace | Desktop Control Center",
+        "headings": [
+          "Saturn Workspace plans"
+        ],
+        "buttons": [
+          "Saturn Workspace",
+          "Product",
+          "Pricing",
+          "Downloads",
+          "FAQ",
+          "Contact",
+          "English",
+          "Light",
+          "Dark",
+          "Sign in"
+        ],
+        "bodyTextSample": "Saturn Workspace Light Dark Saturn Workspace plans Every current plan includes the same Saturn Workspace features. The difference is subscription period, price, and free-trial terms. Included with every plan Full Saturn Workspace features Monthly and annual plans include 7 free trial days. Checkout unavailable Checkout is not available right now. You can still create an account and review the plans. Weekly Renews weekly. $15.00 $10.00 per week Not available Monthly Popular Renews monthly. $50.00",
+        "viewportWidth": 390,
+        "viewportHeight": 844,
+        "documentWidth": 390,
+        "horizontalOverflow": 0,
+        "activeElement": "BODY"
+      }
+    },
+    {
+      "route": "/downloads",
+      "routeName": "downloads",
+      "locale": "en",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "url": "https://saturnws.com/downloads?lang=en&theme=light&phaseg=3e090fb",
+      "status": 200,
+      "screenshot": "D:/SaturnWS/github-deploy/SaturnWorkspace/docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public/downloads-en-mobile.png",
+      "consoleMessages": [],
+      "failedRequests": [],
+      "evidence": {
+        "lang": "en",
+        "dir": "ltr",
+        "title": "Saturn Workspace | Desktop Control Center",
+        "headings": [
+          "Download Saturn Workspace"
+        ],
+        "buttons": [
+          "Saturn Workspace",
+          "Product",
+          "Pricing",
+          "Downloads",
+          "FAQ",
+          "Contact",
+          "English",
+          "Light",
+          "Dark",
+          "Sign in"
+        ],
+        "bodyTextSample": "Saturn Workspace Light Dark Download Saturn Workspace Download the approved Windows release when it is available for your account. No release is available. No release is available right now. Sign in Saturn Workspace Organize accounts, prepared browser sessions, reminders, saved email, and recovery in one focused Windows workspace. Product Product Features Pricing Downloads Account Sign in Create account Subscription Support Resources FAQ Contact Legal Privacy policy Terms of service Refund polic",
+        "viewportWidth": 390,
+        "viewportHeight": 844,
+        "documentWidth": 390,
+        "horizontalOverflow": 0,
+        "activeElement": "BODY"
+      }
+    },
+    {
+      "route": "/contact",
+      "routeName": "contact",
+      "locale": "en",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "url": "https://saturnws.com/contact?lang=en&theme=light&phaseg=3e090fb",
+      "status": 200,
+      "screenshot": "D:/SaturnWS/github-deploy/SaturnWorkspace/docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public/contact-en-mobile.png",
+      "consoleMessages": [],
+      "failedRequests": [],
+      "evidence": {
+        "lang": "en",
+        "dir": "ltr",
+        "title": "Saturn Workspace | Desktop Control Center",
+        "headings": [
+          "Contact",
+          "Billing",
+          "Security",
+          "General",
+          "Support"
+        ],
+        "buttons": [
+          "Saturn Workspace",
+          "Product",
+          "Pricing",
+          "Downloads",
+          "FAQ",
+          "Contact",
+          "English",
+          "Light",
+          "Dark",
+          "Sign in"
+        ],
+        "bodyTextSample": "Saturn Workspace Light Dark Contact Choose the topic that matches your request. Billing Invoices, renewal, and subscription questions. billing@saturnws.com Security Account access, device activity, and privacy concerns. security@saturnws.com General Product questions before creating an account. hello@saturnws.com Support For account help, create a ticket after signing in. Create ticket FAQ Saturn Workspace Organize accounts, prepared browser sessions, reminders, saved email, and recovery in one ",
+        "viewportWidth": 390,
+        "viewportHeight": 844,
+        "documentWidth": 390,
+        "horizontalOverflow": 0,
+        "activeElement": "BODY"
+      }
+    },
+    {
+      "route": "/account/signin",
+      "routeName": "signin",
+      "locale": "en",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "url": "https://saturnws.com/account/signin?lang=en&theme=light&phaseg=3e090fb",
+      "status": 200,
+      "screenshot": "D:/SaturnWS/github-deploy/SaturnWorkspace/docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public/signin-en-mobile.png",
+      "consoleMessages": [],
+      "failedRequests": [],
+      "evidence": {
+        "lang": "en",
+        "dir": "ltr",
+        "title": "Saturn Workspace | Desktop Control Center",
+        "headings": [
+          "Welcome back"
+        ],
+        "buttons": [
+          "Saturn Workspace",
+          "English",
+          "Light",
+          "Dark",
+          "Forgot password?",
+          "Sign in",
+          "Continue with Google",
+          "Create account",
+          "Back"
+        ],
+        "bodyTextSample": "Saturn Workspace Light Dark Welcome back Sign in to continue. Email address * Password * Forgot password? Sign in Or continue with Continue with Google New to Saturn Workspace? Create account Back",
+        "viewportWidth": 390,
+        "viewportHeight": 844,
+        "documentWidth": 390,
+        "horizontalOverflow": 0,
+        "activeElement": "BODY"
+      }
+    }
+  ]
+}

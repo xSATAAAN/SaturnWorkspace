@@ -113,9 +113,9 @@ Evidence:
 
 - Files changed: `site/src/new-ui/pages/production/ProductionPages.tsx`, `site/src/new-ui/pages/public/PublicPages.tsx`, `site/src/new-ui/components/ui/ProductCards.tsx`, `site/src/new-ui/content/publicCopy.ts`, `site/src/new-ui/i18n/messages.ts`, `site/src/new-ui/foundation/components.css`, `site/src/new-ui/foundation/public.css`, `site/scripts/check-copy-quality.mjs`.
 - Tests: `site node scripts/check-copy-quality.mjs`, `site npm run test:phase-f`, `site npx tsc -p src/new-ui/tsconfig.json --noEmit`, and `site npm run build` pass. Build warning: main JS chunk exceeds 500 kB.
-- Deployment evidence: GitHub Pages workflow run `28118915884` completed successfully for commit `5b7294dbef6ca035fd1c81f0d71c6f345ef3ac1d`. Live HTML now references `assets/index-BPJ91n49.js`. Admin Worker catalog CORS was deployed in `85b71833-73d3-445a-a498-d8c1f3b4e9ef`.
-- Live verification evidence: live bundle `assets/index-BPJ91n49.js` contains the approved weekly/monthly/annual pricing values, contains the popular Arabic badge text, does not contain the old current-weekly `$15/week` phrasing, does not contain public provider names, and has no mojibake markers. `/pricing`, `/downloads`, `/contact`, and `/account/signin` returned 200 and load the same live bundle.
-- Remaining limitation: rendered visual screenshot evidence and full product-wide copy route inventory are still required before this can be `COMPLETE_WITH_EVIDENCE`.
+- Deployment evidence: GitHub Pages workflow run `28120228875` completed successfully for commit `3e090fb198429cf26d5f3866f9adc41c1651dfdf`. Live HTML now references `assets/index-CWMQLj65.js` and `assets/index-C_PYWi_F.css`. Admin Worker catalog CORS was deployed in `85b71833-73d3-445a-a498-d8c1f3b4e9ef`.
+- Live verification evidence: live bundle `assets/index-CWMQLj65.js` returns 200 through browser/Node/curl checks, contains the approved weekly/monthly/annual pricing values, contains the popular Arabic badge text, does not contain the old current-weekly `$15/week` phrasing, does not contain public provider names, and has no mojibake markers. `/pricing`, `/downloads`, `/contact`, and `/account/signin` returned 200 and load the same live bundle. Public rendered screenshots were recaptured after deployment under `docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public`.
+- Remaining limitation: full product-wide copy route inventory beyond the public route screenshot set is still required before this can be `COMPLETE_WITH_EVIDENCE`.
 
 ## 6. Product-Wide Content Reconstruction
 
@@ -133,9 +133,9 @@ Evidence:
 
 - Files changed: `workers/admin/src/index.js`, `workers/admin/src/security/payments.js`, `workers/admin/src/routes/downloads.test.mjs`, `workers/admin/src/adminCors.test.mjs`, `workers/admin/package.json`, `site/src/new-ui/adapters/productionAdapters.ts`, `site/src/new-ui/pages/production/ProductionPages.tsx`, `site/scripts/check-phase-f-admin.mjs`.
 - Tests: `workers/admin npm run check:syntax`, `workers/admin npm run test:phase-f`, `site npm run test:phase-f`, `site npx tsc -p src/new-ui/tsconfig.json --noEmit`, and `site npm run build` pass. Admin CORS tests cover approved admin preflight, unknown-origin rejection, public catalog origin, and customer-download rejection from admin origin.
-- Deployment evidence: Admin Worker `85b71833-73d3-445a-a498-d8c1f3b4e9ef` and GitHub Pages workflow run `28118915884` are deployed.
-- Live verification evidence: safe Admin/Public CORS checks passed, and live public routes load `assets/index-BPJ91n49.js`.
-- Remaining limitation: product-wide rendered route inventory and authenticated live Admin route verification remain required.
+- Deployment evidence: Admin Worker `85b71833-73d3-445a-a498-d8c1f3b4e9ef` and GitHub Pages workflow run `28120228875` are deployed.
+- Live verification evidence: safe Admin/Public CORS checks passed, and live public routes load `assets/index-CWMQLj65.js`. Public rendered route evidence covers `/`, `/pricing`, `/downloads`, `/contact`, and `/account/signin` in Arabic/English desktop, tablet, and mobile. The first live pass found Contact mobile overflow; the shared contact CSS was fixed and recaptured evidence shows 30/30 route/locale/viewport captures with 200 responses, correct RTL/LTR direction, no console errors, no real resource failures, and zero horizontal overflow.
+- Remaining limitation: product-wide rendered route inventory across authenticated customer/Admin surfaces and authenticated live Admin route verification remain required.
 
 ## 7. Fix Admin Releases `forbidden_origin` as a Shared Contract Defect
 
@@ -252,9 +252,9 @@ Evidence:
 
 - Files changed: pricing layout/copy files listed in item 5.
 - Tests: local pricing/source copy checks and `site npm run build` pass.
-- Deployment evidence: GitHub Pages workflow run `28118915884` deployed commit `5b7294dbef6ca035fd1c81f0d71c6f345ef3ac1d`.
-- Live verification evidence: prior local pricing fixture screenshots exist under `docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-pricing-fixture`; no new live rendered evidence was captured after this continuation's deployment.
-- Remaining limitation: required public Arabic/English breakpoint evidence and authenticated representative page evidence are not complete.
+- Deployment evidence: GitHub Pages workflow run `28120228875` deployed commit `3e090fb198429cf26d5f3866f9adc41c1651dfdf`.
+- Live verification evidence: local pricing fixture screenshots exist under `docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-pricing-fixture`. Live public screenshots exist under `docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public` and cover Arabic/English desktop, tablet, and mobile for `/`, `/pricing`, `/downloads`, `/contact`, and `/account/signin`. Summary: 30 screenshots, 30 HTTP 200 responses, correct RTL/LTR direction, no console errors, no real resource request failures, and zero horizontal overflow after the Contact mobile grid fix.
+- Remaining limitation: authenticated representative page evidence for Account overview, Subscription, Support, Admin Overview, Admin Users, Admin Releases, and Admin Communications is not complete.
 
 ## 13. Preserve Completed Safe Boundaries
 
@@ -295,7 +295,7 @@ Evidence:
 - Tests: `workers/auth npm run test:phase-c`, `workers/policy npm run test:phase-g`, `workers/admin npm run check:syntax && npm run test:phase-f`, `site node scripts/check-copy-quality.mjs`, `site npm run test:phase-f`, `site npx tsc -p src/new-ui/tsconfig.json --noEmit`, `site npm run build`, and `git diff --check` pass.
 - Deployment evidence: tests ran before Worker deployment and GitHub Pages deployment.
 - Live verification evidence: live bundle and CORS checks provide additional deployed evidence for the relevant test families.
-- Remaining limitation: authenticated Admin route sweep, current super-admin role-assignment proof, full product-wide no-op inventory validation, and rendered page evidence remain unfinished.
+- Remaining limitation: authenticated Admin route sweep, current super-admin role-assignment proof, full product-wide no-op inventory validation, and authenticated rendered page evidence remain unfinished. Public route rendered evidence is recorded separately in item 12.
 
 ## 15. Deployment and Live Verification
 
@@ -312,8 +312,8 @@ Evidence:
 
 - Files changed: `workers/policy/wrangler.jsonc`, `workers/auth/wrangler.toml`, `workers/admin/wrangler.toml`, Admin CORS/source files, pricing site files, and living documentation.
 - Tests: local Worker/Site checks listed in item 14 pass.
-- Deployment evidence: Policy/Auth/Admin Workers deployed on 2026-06-24. GitHub Pages workflow run `28118915884` completed successfully for commit `5b7294dbef6ca035fd1c81f0d71c6f345ef3ac1d`.
-- Live verification evidence: policy/auth health checks returned 200; Admin Releases approved-origin preflight returned 204; unknown origins remain rejected; public catalog returned 200 from the public origin; live public routes load `assets/index-BPJ91n49.js`.
+- Deployment evidence: Policy/Auth/Admin Workers deployed on 2026-06-24. GitHub Pages workflow run `28120228875` completed successfully for commit `3e090fb198429cf26d5f3866f9adc41c1651dfdf`.
+- Live verification evidence: policy/auth health checks returned 200; Admin Releases approved-origin preflight returned 204; unknown origins remain rejected; public catalog returned 200 from the public origin; live public routes load `assets/index-CWMQLj65.js` and `assets/index-C_PYWi_F.css`; live public rendered screenshots captured for Arabic/English desktop/tablet/mobile show zero horizontal overflow.
 - Remaining limitation: authenticated Admin routes, rendered visual evidence, safe event-delivery verification, and manual acceptance remain pending.
 
 ## 16. Living Documentation
@@ -331,9 +331,9 @@ Evidence:
 
 - Files changed: this checklist, product dashboard, issue tracker, feature/content/email matrices, operational inventory, acceptance plan, Phase G summary, and the redacted email rollout report.
 - Tests: documentation changes are covered by `git diff --check` plus the source/build checks in item 14.
-- Deployment evidence: initial documentation updates were committed in `5b7294dbef6ca035fd1c81f0d71c6f345ef3ac1d`; final live-evidence documentation update is pending a follow-up commit/push.
+- Deployment evidence: documentation/source updates were committed through `3e090fb198429cf26d5f3866f9adc41c1651dfdf`; final live-public-visual-evidence documentation and screenshots are pending a follow-up commit/push.
 - Live verification evidence: deployment, live bundle, and CORS evidence is recorded in the relevant entries.
-- Remaining limitation: current-super-admin `ADMIN_ROLE_ASSIGNMENTS`, authenticated Admin route sweep, product-wide rendered evidence, and feature/control inventory are not yet closed.
+- Remaining limitation: current-super-admin `ADMIN_ROLE_ASSIGNMENTS`, authenticated Admin route sweep, authenticated rendered evidence, and feature/control inventory are not yet closed.
 
 ## 17. Completion Standard
 

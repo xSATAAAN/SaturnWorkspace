@@ -33,6 +33,7 @@ This is the only manual acceptance gate. It has not started. Phase B, Phase C, P
 - Verify protected downloads allow only entitled QA users.
 - Verify public pricing displays the approved weekly, monthly, and annual discount/trial presentation in Arabic and English, while checkout remains honestly disabled until the provider is configured.
 - Verify live public plan catalog CORS from `https://saturnws.com` after Admin Worker deployment.
+- Public rendered-route evidence for `/`, `/pricing`, `/downloads`, `/contact`, and `/account/signin` is recorded for Arabic/English desktop, tablet, and mobile under `docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public`; manual acceptance still needs human review of the screenshots and authenticated account/Admin surfaces.
 
 ## 4. Admin Users and Account Operations
 

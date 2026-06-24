@@ -67,8 +67,9 @@ Consolidated manual acceptance has not started. This report preserves the implem
 - Email content guard renders Arabic/English HTML and plain text and blocks mojibake, missing charset, missing RTL/LTR wrappers, empty CTA URLs, unsafe interpolation, disabled test sends, and implementation wording.
 - Public pricing content uses approved weekly/monthly/annual discounted prices, current promotional trial language, and localized plan differentiators instead of raw backend feature text.
 - Public pricing visual evidence was captured for Arabic/English desktop, tablet, and mobile layouts using a static local catalog fixture. This is implementation evidence only, not manual acceptance.
+- Live public rendered evidence was captured from `https://saturnws.com` for `/`, `/pricing`, `/downloads`, `/contact`, and `/account/signin` in Arabic/English desktop, tablet, and mobile layouts. The first live pass found Contact mobile horizontal overflow; the shared contact CSS was fixed and the recaptured summary records 30/30 route/locale/viewport combinations returning 200, correct RTL/LTR direction, no console errors, no real resource failures, and zero horizontal overflow.
 - Legacy root static website artifacts were removed from source: root `index.html`, old root legal/contact HTML pages, and root generated `assets/index-*` bundles. The active publish path remains `site/dist`.
-- `site/scripts/check-frontend-cutover.mjs` blocks legacy public bundle tokens including outdated pricing, old contact handles, provider-specific public copy, and old beta-access wording. GitHub Pages workflow run `28118915884` deployed commit `5b7294dbef6ca035fd1c81f0d71c6f345ef3ac1d`; live HTML references `/assets/index-BPJ91n49.js`.
+- `site/scripts/check-frontend-cutover.mjs` blocks legacy public bundle tokens including outdated pricing, old contact handles, provider-specific public copy, and old beta-access wording. GitHub Pages workflow run `28120228875` deployed commit `3e090fb198429cf26d5f3866f9adc41c1651dfdf`; live HTML references `/assets/index-CWMQLj65.js` and `/assets/index-C_PYWi_F.css`.
 
 ## Support Attachments
 
@@ -133,9 +134,9 @@ Known warnings:
 
 ## Production Deployments
 
-- Auth Worker version deployed during this batch: `a3c1bc77-3e4a-4735-8600-00d62c98535e`.
-- Policy Worker version deployed during this batch: `006489c4-d877-4263-bcc1-868084e1a8df`.
-- Admin Worker version deployed during this batch: `f674579d-1400-43ff-9371-bab8c7f794df`.
+- Auth Worker version deployed during this batch: `53764ba0-207e-42e7-84f8-4e59741d0a06`.
+- Policy Worker version deployed during this batch: `cec58841-cbc9-44e4-853f-054425d29ecc`.
+- Admin Worker version deployed during this batch: `85b71833-73d3-445a-a498-d8c1f3b4e9ef`.
 - Live health checks:
   - `https://auth.saturnws.com/health`: 200.
   - `https://api.saturnws.com/health`: 200.
@@ -161,7 +162,7 @@ Known warnings:
 | Payment provider | `WAITING_EXTERNAL` | Approve and configure real provider, mappings, webhooks, rollback, and billing email activation. |
 | Manual Desktop install/uninstall acceptance | `PENDING_MANUAL_ACCEPTANCE` | Test install, launch, shortcuts, Add/Remove Programs, repair/upgrade, uninstall, logs, and data retention in Phase G manual acceptance. |
 | Public plan CORS deployment verification | `PRODUCTION_VERIFIED_AUTOMATED` | Admin Worker was redeployed and the live plan catalog allows `https://saturnws.com` as an origin. |
-| Public pricing Pages deployment | `PRODUCTION_VERIFIED_AUTOMATED` | GitHub Pages deployed the current commit. Live bundle `assets/index-BPJ91n49.js` contains the approved weekly/monthly/annual prices, omits public provider-name copy, and has no mojibake markers. |
+| Public pricing Pages deployment | `PRODUCTION_VERIFIED_AUTOMATED` | GitHub Pages deployed the current commit. Live bundle `assets/index-CWMQLj65.js` contains the approved weekly/monthly/annual prices, omits public provider-name copy, and has no mojibake markers. |
 | Admin alert rollout verification | `DEPLOYED_PENDING_SAFE_EVENT_VERIFICATION` | Required admin alert producers exist, the recipient secret is configured, and Policy flag is deployed. Safe alert-delivery verification is pending. |
 
 Current state: `PHASE_G_PRE_ACCEPTANCE_COMPLETION_ACTIVE`.
