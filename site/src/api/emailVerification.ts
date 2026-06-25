@@ -34,6 +34,12 @@ export type EmailVerificationStatusResult = {
   error?: string
 }
 
+export type EmailVerificationCancelResult = {
+  success: boolean
+  status?: string
+  error?: string
+}
+
 export type EmailVerificationRequestInput = {
   displayName?: string
   locale?: 'ar' | 'en'
@@ -64,6 +70,13 @@ export async function verifyEmailVerificationCode(idToken: string, email: string
 
 export async function fetchEmailVerificationStatus(idToken: string, email: string): Promise<EmailVerificationStatusResult> {
   return postJson<EmailVerificationStatusResult>(`${authApiBase()}/email-verification/status`, {
+    id_token: idToken,
+    email,
+  }, { headers: { Authorization: `Bearer ${idToken}` } })
+}
+
+export async function cancelEmailVerificationCode(idToken: string, email: string): Promise<EmailVerificationCancelResult> {
+  return postJson<EmailVerificationCancelResult>(`${authApiBase()}/email-verification/cancel`, {
     id_token: idToken,
     email,
   }, { headers: { Authorization: `Bearer ${idToken}` } })

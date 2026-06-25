@@ -15,6 +15,7 @@ export function PricingCard({
   price,
   originalPrice,
   period,
+  note,
   features,
   cta,
   featured,
@@ -27,6 +28,7 @@ export function PricingCard({
   price: string
   originalPrice?: string
   period?: string
+  note?: string
   features: string[]
   cta: string
   featured?: boolean
@@ -38,6 +40,7 @@ export function PricingCard({
     <div className="pricing-card__head"><h3>{name}</h3>{featured && featuredLabel ? <Badge tone="info">{featuredLabel}</Badge> : null}</div>
     {description ? <p className="pricing-card__description">{description}</p> : null}
     <div className="pricing-card__price">{originalPrice ? <del><bdi>{originalPrice}</bdi></del> : null}<strong><bdi>{price}</bdi></strong>{period ? <span>{period}</span> : null}</div>
+    {note ? <p className="pricing-card__note">{note}</p> : null}
     {features.length ? <ul>{features.map((feature) => <li key={feature}><Check size={15} />{feature}</li>)}</ul> : null}
     <Button variant={featured && !disabled ? 'primary' : 'secondary'} fullWidth disabled={disabled} onClick={onClick}>{cta}</Button>
   </Card>

@@ -13,6 +13,9 @@
 html[lang='ar'] .auth-form > header h1 { letter-spacing: 0; }
 .auth-form > header p { max-width: 360px; margin: var(--space-2) auto 0; color: var(--text-secondary); }
 .auth-form--center { align-items: center; text-align: center; }.auth-form--center > * { width: 100%; }.auth-form--center .auth-icon { width: 50px; }.auth-form--center > header strong { display: block; margin-top: var(--space-2); }
+.verification-destination { display: inline-grid; gap: 2px; min-width: min(100%, 320px); margin-top: var(--space-4); padding: var(--space-3) var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--background-subtle); text-align: center; }
+.verification-destination span { color: var(--text-muted); font-size: var(--text-caption); }
+.verification-destination strong { margin: 0; color: var(--text-primary); overflow-wrap: anywhere; }
 .auth-icon { display: grid; place-items: center; width: 50px; height: 50px; margin-inline: auto; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--background-subtle); color: var(--brand-primary); }
 .auth-divider { position: relative; display: flex; justify-content: center; color: var(--text-muted); font-size: var(--text-caption); }.auth-divider::before { content: ''; position: absolute; inset-inline: 0; top: 50%; height: 1px; background: var(--border); }.auth-divider span { position: relative; padding: 0 var(--space-3); background: var(--surface); }
 .auth-switch { margin: 0; text-align: center; color: var(--text-secondary); }.auth-switch button, .auth-resend button { border: 0; background: transparent; color: var(--brand-primary); padding: 0; cursor: pointer; font-weight: 600; }.auth-resend { display: flex; align-items: center; justify-content: center; gap: var(--space-2); color: var(--text-secondary); }.auth-resend button:disabled { color: var(--text-muted); cursor: not-allowed; }

@@ -176,6 +176,7 @@ export type AuthAdapter = {
   sendPasswordReset(email: string): Promise<void>
   requestEmailVerification(email: string, input?: { displayName?: string; locale?: 'ar' | 'en'; termsAccepted?: boolean; termsVersion?: string; termsAcceptedAt?: string }): Promise<{ success: boolean; status?: string; expiresAt?: string; error?: string }>
   verifyEmailCode(email: string, code: string): Promise<{ success: boolean; status?: string; verifiedAt?: string; error?: string }>
+  cancelEmailVerification?(email: string): Promise<{ success: boolean; status?: string; error?: string }>
   signOut(): Promise<void>
   getIdToken(forceRefresh?: boolean): Promise<string | null>
 }

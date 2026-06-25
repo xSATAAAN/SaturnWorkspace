@@ -43,6 +43,12 @@ const emailVerificationPage = sliceBetween(
   'export function PortalProductionPages',
   'email verification page block',
 )
+const pricingSection = sliceBetween(
+  productionPages,
+  'function PricingSection',
+  'function FaqSection',
+  'pricing section block',
+)
 
 for (const token of ['email_verified_at', 'verification_source']) {
   assertIncludes(authTypes, token, `auth profile type ${token}`)
@@ -64,6 +70,9 @@ assertIncludes(authWorker, 'auth.email_verification', 'auth email verification e
 assertIncludes(authWorker, 'auth.verification_resend', 'auth verification resend event')
 assertNotIncludes(authWorker, 'auth.email_verification_requested', 'legacy auth verification event must not be emitted')
 assertIncludes(authWorker, 'function emailVerificationResolveError', 'auth worker email verification error normalizer')
+assertIncludes(authWorker, 'handleEmailVerificationCancel', 'auth worker email verification cancel handler')
+assertIncludes(authWorker, 'apiPath === "/email-verification/cancel"', 'auth worker email verification cancel route')
+assertIncludes(authWorker, 'superseded_by_email_change', 'auth worker records superseded email verification audit result')
 assertIncludes(authWorker, 'AUTH_SESSION_EXPIRED', 'auth worker unauthenticated verification response')
 assertIncludes(authWorker, 'EMAIL_REQUIRED', 'auth worker email-required verification response')
 assertIncludes(authWorker, 'if (user instanceof Response) return user', 'auth worker verification handlers return normalized resolve errors')
@@ -99,7 +108,20 @@ assertIncludes(productionAdapters, 'async function refreshAuthenticatedAccountSt
 assertIncludes(productionAdapters, 'await refreshAuthenticatedAccountState(true)', 'frontend OTP verification refreshes profile source of truth')
 assertIncludes(productionAdapters, 'clearAccountBootstrap()', 'frontend OTP verification clears stale account bootstrap cache')
 assertIncludes(productionPages, 'function emailRequiredMessage', 'frontend localized email-required message')
+assertIncludes(productionPages, 'function loadPendingEmailVerification', 'frontend verification context loader')
+assertIncludes(productionPages, 'function savePendingEmailVerification', 'frontend verification context writer')
 assertIncludes(emailVerificationPage, 'setError(authErrorMessage(err, t))', 'frontend verification errors use stable user-safe copy')
+assertIncludes(emailVerificationPage, 'verification-destination', 'frontend verification destination is shown as fixed account context')
+assertIncludes(emailVerificationPage, 'auth.cancelEmailVerification', 'frontend change-email path cancels the active verification')
+assertIncludes(emailVerificationPage, 'saveSignupPrefill', 'frontend change-email path preserves safe registration fields')
+assertNotIncludes(emailVerificationPage, 'id="verify-email"', 'frontend verification page must not render an editable email input')
+assertNotIncludes(emailVerificationPage, 'setEmail', 'frontend verification page must not mutate the verification email')
+assertNotIncludes(emailVerificationPage, 'window.sessionStorage.setItem(PENDING_EMAIL_VERIFICATION_KEY, event.target.value)', 'frontend verification page must not store arbitrary email input')
+assertNotIncludes(pricingSection, 'pricing-included', 'pricing must not render the old shared feature strip')
+assertNotIncludes(pricingSection, 'checkoutUnavailable', 'pricing must not render a large checkout-unavailable banner')
+assertNotIncludes(pricingSection, 'descriptionForPlan', 'pricing cards must not imply feature differences through plan descriptions')
+assertIncludes(pricingSection, 'trialNoteForPlan', 'pricing cards must place trial terms inside eligible plan cards')
+assertIncludes(pricingSection, "plan.id !== 'monthly' && plan.id !== 'annual'", 'weekly pricing card must not receive trial copy')
 assertNotIncludes(productionPages, "setError('email_required')", 'frontend must not expose raw email_required')
 assertNotIncludes(emailVerificationPage, "setError(err instanceof Error ? err.message", 'frontend verification page must not expose raw provider errors')
 

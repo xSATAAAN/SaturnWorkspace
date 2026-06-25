@@ -67,7 +67,7 @@ import {
 import { createPaymentIntent, fetchPlanCatalog, type PlanCatalogItem } from '../../api/payments'
 import { fetchProtectedReleaseCatalog, fetchProtectedReleaseFile, type ProtectedRelease } from '../../api/downloads'
 import { archivePortalNotification, fetchPortalNotifications, markAllPortalNotificationsRead, markPortalNotificationRead } from '../../api/notifications'
-import { requestEmailVerificationCode, verifyEmailVerificationCode } from '../../api/emailVerification'
+import { cancelEmailVerificationCode, requestEmailVerificationCode, verifyEmailVerificationCode } from '../../api/emailVerification'
 import {
   createWebSupportTicket,
   fetchWebSupportThread,
@@ -401,6 +401,12 @@ export const productionAdapters: AppAdapters = {
         await refreshAuthenticatedAccountState(true)
       }
       return { success: result.success, status: result.status, verifiedAt: result.verified_at, error: result.error }
+    },
+    async cancelEmailVerification(email) {
+      const token = await productionAdapters.auth.getIdToken(false)
+      if (!token) return { success: false, error: 'not_authenticated' }
+      const result = await cancelEmailVerificationCode(token, email.trim())
+      return { success: result.success, status: result.status, error: result.error }
     },
     async signOut() {
       publishAuthState({ ...currentAuthState, status: 'signing_out' })

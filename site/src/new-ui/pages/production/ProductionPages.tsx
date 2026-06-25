@@ -66,9 +66,27 @@ import {
 type ResourceStatus = 'idle' | 'bootstrapping' | 'loading_initial' | 'refreshing' | 'success' | 'empty' | 'partial' | 'error_recoverable' | 'error_terminal'
 type AsyncResource<T> = { status: ResourceStatus; loading: boolean; refreshing: boolean; data: T | null; error: string | null; reload: () => void }
 const PENDING_EMAIL_VERIFICATION_KEY = 'saturnws.production.pendingEmailVerification.v1'
+const SIGNUP_PREFILL_KEY = 'saturnws.production.signupPrefill.v1'
 const ACTIVATION_STORAGE_KEY = 'saturnws.activation.payload.v1'
 const AUTH_BASE = 'https://auth.saturnws.com'
 const EMAIL_SUPPORT_ENABLED = true
+
+type PendingEmailVerificationContext = {
+  kind: 'registration' | 'account'
+  email: string
+  displayName?: string
+  locale?: 'ar' | 'en'
+  termsAccepted?: boolean
+  termsVersion?: string
+  termsAcceptedAt?: string
+  createdAt: string
+}
+
+type SignupPrefill = {
+  email?: string
+  displayName?: string
+  termsAccepted?: boolean
+}
 
 type ActivationPayload = {
   ticket: string
@@ -81,6 +99,72 @@ function copyByLocale(locale: 'ar' | 'en', en: string, ar: string) {
 
 function emailRequiredMessage(locale: 'ar' | 'en') {
   return copyByLocale(locale, 'Enter your email address.', 'اكتب البريد الإلكتروني.')
+}
+
+function normalizeEmailInput(value: unknown): string {
+  return String(value || '').trim().toLowerCase()
+}
+
+function loadPendingEmailVerification(): PendingEmailVerificationContext | null {
+  if (typeof window === 'undefined') return null
+  const raw = window.sessionStorage.getItem(PENDING_EMAIL_VERIFICATION_KEY)
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as Partial<PendingEmailVerificationContext>
+    const email = normalizeEmailInput(parsed.email)
+    if (!email || !email.includes('@')) return null
+    const kind = parsed.kind === 'account' ? 'account' : 'registration'
+    return {
+      kind,
+      email,
+      displayName: typeof parsed.displayName === 'string' ? parsed.displayName : undefined,
+      locale: parsed.locale === 'en' ? 'en' : 'ar',
+      termsAccepted: Boolean(parsed.termsAccepted),
+      termsVersion: typeof parsed.termsVersion === 'string' ? parsed.termsVersion : undefined,
+      termsAcceptedAt: typeof parsed.termsAcceptedAt === 'string' ? parsed.termsAcceptedAt : undefined,
+      createdAt: typeof parsed.createdAt === 'string' ? parsed.createdAt : new Date().toISOString(),
+    }
+  } catch {
+    const email = normalizeEmailInput(raw)
+    if (!email || !email.includes('@')) return null
+    return { kind: 'account', email, createdAt: new Date().toISOString() }
+  }
+}
+
+function savePendingEmailVerification(context: PendingEmailVerificationContext) {
+  if (typeof window === 'undefined') return
+  window.sessionStorage.setItem(PENDING_EMAIL_VERIFICATION_KEY, JSON.stringify({ ...context, email: normalizeEmailInput(context.email) }))
+}
+
+function clearPendingEmailVerification() {
+  if (typeof window === 'undefined') return
+  window.sessionStorage.removeItem(PENDING_EMAIL_VERIFICATION_KEY)
+}
+
+function loadSignupPrefill(): SignupPrefill | null {
+  if (typeof window === 'undefined') return null
+  const raw = window.sessionStorage.getItem(SIGNUP_PREFILL_KEY)
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as SignupPrefill
+    return {
+      email: typeof parsed.email === 'string' ? parsed.email : undefined,
+      displayName: typeof parsed.displayName === 'string' ? parsed.displayName : undefined,
+      termsAccepted: Boolean(parsed.termsAccepted),
+    }
+  } catch {
+    return null
+  }
+}
+
+function saveSignupPrefill(input: SignupPrefill) {
+  if (typeof window === 'undefined') return
+  window.sessionStorage.setItem(SIGNUP_PREFILL_KEY, JSON.stringify(input))
+}
+
+function clearSignupPrefill() {
+  if (typeof window === 'undefined') return
+  window.sessionStorage.removeItem(SIGNUP_PREFILL_KEY)
 }
 
 function loadActivationPayload(routeState?: string): ActivationPayload | null {
@@ -494,16 +578,15 @@ function PricingSection({ page, routeState, plans, loading, error, reload, navig
     if (!plan.enabled || !plan.checkoutEnabled) return copyByLocale(locale, 'Not available', 'غير متاح حاليًا')
     return user ? copyByLocale(locale, 'Subscribe', 'اشترك') : t('signUp')
   }
-  const descriptionForPlan = (plan: PlanInfo) => {
-    if (plan.id === 'weekly') return c.weeklyBody
-    if (plan.id === 'monthly') return c.monthlyBody
-    if (plan.id === 'annual' || plan.id === 'yearly') return c.annualBody
-    return ''
+  const trialNoteForPlan = (plan: PlanInfo) => {
+    if (plan.id !== 'monthly' && plan.id !== 'annual') return ''
+    const days = Number(plan.trialDays || 0)
+    if (!Number.isFinite(days) || days <= 0) return ''
+    return copyByLocale(locale, `${days} days free trial`, `${days} أيام تجربة مجانية`)
   }
-  const checkoutUnavailable = plans.length > 0 && !plans.some((plan) => plan.enabled && plan.checkoutEnabled)
-  return <section className={`marketing-section pricing-section${compact ? '' : ' pricing-page'}`}><div className="container"><header className="marketing-heading marketing-heading--center marketing-heading--wide">{compact ? <h2>{c.pricingTitle}</h2> : <h1>{c.pricingTitle}</h1>}<p>{c.pricingBody}</p></header>{loading ? <LoadingBlock label={t('loading')} /> : error ? <EmptyState icon={CreditCard} title={copyByLocale(locale, 'Prices could not be loaded', 'تعذر تحميل الأسعار')} body={copyByLocale(locale, 'Try again to load the available plans.', 'أعد المحاولة لتحميل الخطط المتاحة.')} action={<Button onClick={reload}>{t('retry')}</Button>} /> : plans.length ? <><div className="pricing-included"><strong>{c.compareTitle}</strong><span>{c.featureWorkspace}</span><span>{c.trialPromo}</span></div>{checkoutUnavailable ? <Alert title={copyByLocale(locale, 'Checkout unavailable', 'الدفع غير متاح حاليًا')} tone="info">{c.trustNote}</Alert> : null}<div className="pricing-grid">{plans.map((plan) => {
-    return <PricingCard key={`${plan.id}:${plan.version}`} name={plan.name} description={descriptionForPlan(plan)} price={plan.price} originalPrice={plan.originalPrice} period={plan.period} features={[]} cta={getCta(plan)} featured={plan.id === 'monthly'} featuredLabel={c.recommended} disabled={!ready || !plan.enabled || !plan.checkoutEnabled} onClick={() => choosePlan(plan)} />
-  })}</div></> : <EmptyState icon={CreditCard} title={copyByLocale(locale, 'No plans are published', 'لا توجد خطط منشورة')} body="" />}</div><CheckoutDialog open={Boolean(activeCheckoutPlan)} plan={activeCheckoutPlan} user={user} features={checkoutFeaturesForPlan(activeCheckoutPlan)} onClose={closeCheckout} /></section>
+  return <section className={`marketing-section pricing-section${compact ? '' : ' pricing-page'}`}><div className="container"><header className="marketing-heading marketing-heading--center marketing-heading--wide">{compact ? <h2>{c.pricingTitle}</h2> : <h1>{c.pricingTitle}</h1>}<p>{c.pricingBody}</p></header>{loading ? <LoadingBlock label={t('loading')} /> : error ? <EmptyState icon={CreditCard} title={copyByLocale(locale, 'Prices could not be loaded', 'تعذر تحميل الأسعار')} body={copyByLocale(locale, 'Try again to load the available plans.', 'أعد المحاولة لتحميل الخطط المتاحة.')} action={<Button onClick={reload}>{t('retry')}</Button>} /> : plans.length ? <div className="pricing-grid">{plans.map((plan) => {
+    return <PricingCard key={`${plan.id}:${plan.version}`} name={plan.name} price={plan.price} originalPrice={plan.originalPrice} period={plan.period} note={trialNoteForPlan(plan)} features={[]} cta={getCta(plan)} featured={plan.id === 'monthly'} featuredLabel={c.recommended} disabled={!ready || !plan.enabled || !plan.checkoutEnabled} onClick={() => choosePlan(plan)} />
+  })}</div> : <EmptyState icon={CreditCard} title={copyByLocale(locale, 'No plans are published', 'لا توجد خطط منشورة')} body="" />}</div><CheckoutDialog open={Boolean(activeCheckoutPlan)} plan={activeCheckoutPlan} user={user} features={checkoutFeaturesForPlan(activeCheckoutPlan)} onClose={closeCheckout} /></section>
 }
 
 function FaqSection() {
@@ -626,6 +709,15 @@ function EmailPasswordProductionPage({ page, routeState, navigate }: { page: str
     return true
   }, [activationPayload, auth, navigate])
   useEffect(() => {
+    if (!signup) return
+    const prefill = loadSignupPrefill()
+    if (!prefill) return
+    setFullName(prefill.displayName || '')
+    setEmail(prefill.email || '')
+    setAcceptedTerms(Boolean(prefill.termsAccepted))
+    clearSignupPrefill()
+  }, [signup])
+  useEffect(() => {
     if (!activationPayload || !authState.ready || !authState.user || completionStartedRef.current) return
     let cancelled = false
     queueMicrotask(() => {
@@ -667,6 +759,7 @@ function EmailPasswordProductionPage({ page, routeState, navigate }: { page: str
     setLoading(true)
     try {
       if (signup) {
+        const termsAcceptedAt = new Date().toISOString()
         await auth.signUpWithEmail({
           displayName: fullName,
           email,
@@ -681,10 +774,19 @@ function EmailPasswordProductionPage({ page, routeState, navigate }: { page: str
             locale,
             termsAccepted: acceptedTerms,
             termsVersion: '2026-06',
-            termsAcceptedAt: new Date().toISOString(),
+            termsAcceptedAt,
           })
           if (!verification.success) throw new Error(verification.error || 'email_verification_failed')
-          window.sessionStorage.setItem(PENDING_EMAIL_VERIFICATION_KEY, email.trim())
+          savePendingEmailVerification({
+            kind: 'registration',
+            email,
+            displayName: fullName,
+            locale,
+            termsAccepted: acceptedTerms,
+            termsVersion: '2026-06',
+            termsAcceptedAt,
+            createdAt: new Date().toISOString(),
+          })
           navigate({ surface: 'auth', page: 'verify', state: routeState })
           return
         }
@@ -721,14 +823,15 @@ function EmailPasswordProductionPage({ page, routeState, navigate }: { page: str
 function EmailVerificationProductionPage({ routeState, navigate }: { routeState?: string; navigate: Navigate }) {
   const { t, locale } = useExperience()
   const { auth } = useAdapters()
-  const [email, setEmail] = useState(() => window.sessionStorage.getItem(PENDING_EMAIL_VERIFICATION_KEY) || '')
+  const [pending, setPending] = useState<PendingEmailVerificationContext | null>(() => loadPendingEmailVerification())
   const [code, setCode] = useState('')
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [loading, setLoading] = useState(false)
+  const email = pending?.email || ''
   const verify = async () => {
-    if (!email.trim()) {
-      setError(emailRequiredMessage(locale))
+    if (!pending) {
+      setError(copyByLocale(locale, 'Start registration again to request a new code.', 'ابدأ التسجيل مرة أخرى لطلب رمز جديد.'))
       return
     }
     setLoading(true)
@@ -736,7 +839,7 @@ function EmailVerificationProductionPage({ routeState, navigate }: { routeState?
     try {
       const result = await auth.verifyEmailCode(email, code)
       if (!result.success) throw new Error(result.error || 'EMAIL_CODE_INVALID')
-      window.sessionStorage.removeItem(PENDING_EMAIL_VERIFICATION_KEY)
+      clearPendingEmailVerification()
       navigate(destinationAfterAuth(routeState))
     } catch (err) {
       setError(authErrorMessage(err, t))
@@ -745,15 +848,21 @@ function EmailVerificationProductionPage({ routeState, navigate }: { routeState?
     }
   }
   const resend = async () => {
-    if (!email.trim()) {
-      setError(emailRequiredMessage(locale))
+    if (!pending) {
+      setError(copyByLocale(locale, 'Start registration again to request a new code.', 'ابدأ التسجيل مرة أخرى لطلب رمز جديد.'))
       return
     }
     setLoading(true)
     setError('')
     setNotice('')
     try {
-      const result = await auth.requestEmailVerification(email)
+      const result = await auth.requestEmailVerification(email, pending.kind === 'registration' ? {
+        displayName: pending.displayName,
+        locale: pending.locale || locale,
+        termsAccepted: pending.termsAccepted,
+        termsVersion: pending.termsVersion,
+        termsAcceptedAt: pending.termsAcceptedAt,
+      } : undefined)
       if (!result.success) throw new Error(result.error || 'EMAIL_RESEND_LIMITED')
       setNotice(t('success'))
     } catch (err) {
@@ -762,7 +871,36 @@ function EmailVerificationProductionPage({ routeState, navigate }: { routeState?
       setLoading(false)
     }
   }
-  return <ProductionAuthShell navigate={navigate}><div className="auth-card"><div className="auth-form auth-form--center"><span className="auth-icon"><Mail size={23} /></span><header><h1>{t('verificationTitle')}</h1><p>{t('verificationBody')}</p>{email ? <strong>{email}</strong> : null}</header><form className="stack" onSubmit={(event) => { event.preventDefault(); void verify() }}><FormField label={t('email')} htmlFor="verify-email" required><Input id="verify-email" type="email" value={email} onChange={(event) => { setEmail(event.target.value); window.sessionStorage.setItem(PENDING_EMAIL_VERIFICATION_KEY, event.target.value) }} required /></FormField><OTPInput value={code} onChange={setCode} label={t('codeLabel')} />{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}<Button type="submit" variant="primary" size="lg" fullWidth loading={loading} disabled={code.length !== 6}>{t('continue')}</Button><div className="cluster"><Button type="button" variant="text" onClick={resend} disabled={loading}>{t('resend')}</Button><Button type="button" variant="text" onClick={() => navigate({ surface: 'auth', page: 'signup', state: routeState })}>{t('changeEmail')}</Button></div></form></div></div></ProductionAuthShell>
+  const changeEmail = async () => {
+    if (!pending) {
+      navigate({ surface: 'auth', page: 'signup', state: routeState })
+      return
+    }
+    setLoading(true)
+    setError('')
+    try {
+      if (!auth.cancelEmailVerification) throw new Error('verification_cancel_unavailable')
+      const cancelled = await auth.cancelEmailVerification(email)
+      if (!cancelled.success) throw new Error(cancelled.error || 'verification_cancel_failed')
+      saveSignupPrefill({
+        email,
+        displayName: pending.displayName,
+        termsAccepted: pending.termsAccepted,
+      })
+      clearPendingEmailVerification()
+      setPending(null)
+      await auth.signOut()
+      navigate({ surface: 'auth', page: 'signup', state: routeState })
+    } catch (err) {
+      setError(authErrorMessage(err, t))
+    } finally {
+      setLoading(false)
+    }
+  }
+  if (!pending) {
+    return <ProductionAuthShell navigate={navigate}><div className="auth-card"><div className="auth-form auth-form--center"><span className="auth-icon"><Mail size={23} /></span><header><h1>{t('verificationTitle')}</h1><p>{copyByLocale(locale, 'Create an account or sign in to request a verification code.', 'أنشئ حسابًا أو سجّل الدخول لطلب رمز تحقق.')}</p></header>{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}<Button type="button" variant="primary" size="lg" fullWidth onClick={() => navigate({ surface: 'auth', page: 'signup', state: routeState })}>{t('signUp')}</Button><Button type="button" variant="text" onClick={() => navigate({ surface: 'auth', page: 'signin', state: routeState })}>{t('signIn')}</Button></div></div></ProductionAuthShell>
+  }
+  return <ProductionAuthShell navigate={navigate}><div className="auth-card"><div className="auth-form auth-form--center"><span className="auth-icon"><Mail size={23} /></span><header><h1>{t('verificationTitle')}</h1><p>{t('verificationBody')}</p><div className="verification-destination"><span>{t('email')}</span><strong>{email}</strong></div></header><form className="stack" onSubmit={(event) => { event.preventDefault(); void verify() }}><OTPInput value={code} onChange={setCode} label={t('codeLabel')} />{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}<Button type="submit" variant="primary" size="lg" fullWidth loading={loading} disabled={code.length !== 6}>{t('continue')}</Button><div className="cluster"><Button type="button" variant="text" onClick={resend} disabled={loading}>{t('resend')}</Button><Button type="button" variant="text" onClick={() => void changeEmail()} disabled={loading}>{t('changeEmail')}</Button></div></form></div></div></ProductionAuthShell>
 }
 
 export function PortalProductionPages({ page, navigate }: { page: string; navigate: Navigate }) {
@@ -783,7 +921,7 @@ export function PortalProductionPages({ page, navigate }: { page: string; naviga
   if (!authState.ready) return <WorkspaceShell surface="portal" page={page} title={title} groups={groups} navigate={navigate}><PortalRouteSkeleton page={page} /></WorkspaceShell>
   if (!authState.user) return <FullPageState icon={KeyRound} title={t('signIn')} body={t('signInBody')} primaryLabel={t('signIn')} onPrimary={() => navigate(createAuthRoute('signin', { returnTo: currentInternalLocation() }))} secondaryLabel={t('signUp')} onSecondary={() => navigate(createAuthRoute('signup', { returnTo: currentInternalLocation() }))} />
   if (isProductionFeatureEnabled('emailVerification') && authState.emailVerificationState && !['verified', 'not_required'].includes(authState.emailVerificationState)) {
-    return <FullPageState icon={Mail} title={t('verificationTitle')} body={copyByLocale(locale, 'Enter the code sent to your email to continue.', 'أدخل رمز التحقق المرسل إلى بريدك للمتابعة.')} primaryLabel={t('continue')} onPrimary={() => { window.sessionStorage.setItem(PENDING_EMAIL_VERIFICATION_KEY, authState.user?.email || ''); navigate(createAuthRoute('verify', { returnTo: currentInternalLocation() })) }} />
+    return <FullPageState icon={Mail} title={t('verificationTitle')} body={copyByLocale(locale, 'Enter the code sent to your email to continue.', 'أدخل رمز التحقق المرسل إلى بريدك للمتابعة.')} primaryLabel={t('continue')} onPrimary={() => { savePendingEmailVerification({ kind: 'account', email: authState.user?.email || '', locale, createdAt: new Date().toISOString() }); navigate(createAuthRoute('verify', { returnTo: currentInternalLocation() })) }} />
   }
   return <WorkspaceShell surface="portal" page={page} title={title} groups={groups} navigate={navigate}>{page === 'subscription' ? <PortalSubscription /> : page === 'downloads' ? <PortalDownloads /> : page === 'support' ? <PortalSupport /> : page === 'security' || page === 'settings' ? <PortalSettings /> : page === 'payments' ? <PortalPayments /> : page === 'devices' ? <PortalDevices /> : page === 'notifications' ? <PortalNotifications navigate={navigate} /> : <PortalOverview navigate={navigate} />}</WorkspaceShell>
 }

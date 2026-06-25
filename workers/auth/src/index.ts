@@ -799,6 +799,45 @@ async function handleEmailVerificationStatus(request: Request, env: Env): Promis
   })
 }
 
+async function handleEmailVerificationCancel(request: Request, env: Env): Promise<Response> {
+  const body = await request.json<any>().catch(() => null)
+  const user = await resolveEmailVerificationUser(request, env, body).catch((error) => {
+    const response = emailVerificationResolveError(request, error)
+    if (response) return response
+    throw error
+  })
+  if (user instanceof Response) return user
+  const row = await getLatestEmailVerification(env, {
+    email: user.email,
+    firebaseUserId: user.userId,
+    purpose: "email_verification",
+    status: "pending",
+  })
+  if (!row) {
+    await auditEmailVerification(env, { firebaseUserId: user.userId, email: user.email, action: "cancel", result: "not_found", request })
+    return json({ success: true, status: "not_found" })
+  }
+  const now = new Date().toISOString()
+  const metadata = typeof row.metadata === "object" && row.metadata ? row.metadata : {}
+  await updateEmailVerification(env, row.id, {
+    status: "blocked",
+    metadata: {
+      ...metadata,
+      superseded_by: "email_change",
+      superseded_at: now,
+    },
+  })
+  await auditEmailVerification(env, {
+    verificationId: row.id,
+    firebaseUserId: user.userId,
+    email: user.email,
+    action: "cancel",
+    result: "superseded_by_email_change",
+    request,
+  })
+  return json({ success: true, status: "superseded" })
+}
+
 function mapFirebasePasswordError(message: string): string {
   const code = String(message || "").trim().toUpperCase()
   switch (code) {
@@ -1665,6 +1704,10 @@ export default {
       }
       if (request.method === "POST" && apiPath === "/email-verification/status") {
         const res = await handleEmailVerificationStatus(request, env)
+        return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
+      }
+      if (request.method === "POST" && apiPath === "/email-verification/cancel") {
+        const res = await handleEmailVerificationCancel(request, env)
         return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
       }
       if (request.method === "GET" && apiPath === "/oauth/google-drive-config") {

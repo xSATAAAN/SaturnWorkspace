@@ -224,10 +224,34 @@ const verificationRequest = await call('/email-verification/request', {
 assert.equal(verificationRequest.status, 200)
 assert.equal(verificationRequest.body.status, 'sent')
 assert.equal(String(verificationRequest.body.test_code || '').length, 6)
-const verificationComplete = await call('/email-verification/verify', {
+const verificationCancel = await call('/email-verification/cancel', {
+  id_token: 'token-pending-email',
+  email: 'pending@example.test',
+}, 'token-pending-email')
+assert.equal(verificationCancel.status, 200)
+assert.equal(verificationCancel.body.status, 'superseded')
+const supersededVerification = await call('/email-verification/verify', {
   id_token: 'token-pending-email',
   email: 'pending@example.test',
   code: verificationRequest.body.test_code,
+}, 'token-pending-email')
+assert.equal(supersededVerification.status, 404)
+assert.equal(supersededVerification.body.error, 'VERIFICATION_CODE_INVALID')
+const verificationRequestAfterCancel = await call('/email-verification/request', {
+  id_token: 'token-pending-email',
+  email: 'pending@example.test',
+  display_name: 'Pending Saturn Name',
+  locale: 'en',
+  terms_accepted: true,
+  terms_version: '2026-06',
+}, 'token-pending-email')
+assert.equal(verificationRequestAfterCancel.status, 200)
+assert.equal(verificationRequestAfterCancel.body.status, 'sent')
+assert.equal(String(verificationRequestAfterCancel.body.test_code || '').length, 6)
+const verificationComplete = await call('/email-verification/verify', {
+  id_token: 'token-pending-email',
+  email: 'pending@example.test',
+  code: verificationRequestAfterCancel.body.test_code,
 }, 'token-pending-email')
 assert.equal(verificationComplete.status, 200)
 assert.equal(verificationComplete.body.status, 'verified')
