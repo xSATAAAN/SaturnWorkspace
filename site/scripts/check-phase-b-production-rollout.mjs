@@ -55,8 +55,9 @@ for (const source of ['firebase_google', 'saturnws_otp', 'admin', 'legacy_unknow
 }
 
 assertIncludes(authVerificationMigration, 'delivery_failed', 'email verification delivery failed status')
-assertIncludes(authWorker, 'markAccountProfileEmailVerified(env, user.userId, user.email, "saturnws_otp")', 'OTP verification source')
-assertIncludes(authWorker, 'verification_source: verifiedByFirebaseGoogle ? "firebase_google"', 'Google verification source')
+assertIncludes(authWorker, 'verificationSource: "saturnws_otp"', 'OTP verification source')
+assertIncludes(authWorker, 'isTrustedGoogleIdentity(firebaseUser)', 'Google verification source')
+assertIncludes(authWorker, 'EMAIL_VERIFICATION_REQUIRED', 'protected account endpoints gate unverified email/password users')
 assertIncludes(authWorker, 'AUTH_EMAIL_ENQUEUE_URL', 'auth email enqueue URL')
 assertIncludes(authWorker, 'AUTH_EMAIL_ENQUEUE_TOKEN', 'auth email enqueue token')
 assertIncludes(authWorker, 'auth.email_verification', 'auth email verification event')
@@ -67,12 +68,12 @@ assertIncludes(authWorker, 'AUTH_SESSION_EXPIRED', 'auth worker unauthenticated 
 assertIncludes(authWorker, 'EMAIL_REQUIRED', 'auth worker email-required verification response')
 assertIncludes(authWorker, 'if (user instanceof Response) return user', 'auth worker verification handlers return normalized resolve errors')
 
-assertIncludes(authWrangler, 'EMAIL_AUTH_ENABLED = "false"', 'auth production email flag default')
+assertIncludes(authWrangler, 'EMAIL_AUTH_ENABLED = "true"', 'auth production email flag enabled')
 assertNotIncludes(authWrangler, 'EMAIL_VERIFICATION_TEST_TRANSPORT', 'auth production test transport')
 
 assertIncludes(policyWorker, '/v1/internal/email/auth/enqueue', 'policy internal auth email route')
 assertIncludes(policyWorker, 'AUTH_EMAIL_ENQUEUE_TOKEN', 'policy internal auth token')
-assertIncludes(policyWorker, 'AUTH_EMAIL_ENQUEUE_EVENTS', 'policy auth email event allowlist')
+assertIncludes(policyWorker, 'AUTH_EMAIL_VERIFICATION_EVENTS', 'policy auth email event allowlist')
 assertIncludes(policyWorker, 'readLimitedJson', 'policy payload size limit')
 assertIncludes(policyWorker, 'code_redacted: true', 'policy redacted template data')
 assertIncludes(policyWorker, 'EMAIL_SENSITIVE_PAYLOAD_KEY_B64', 'policy sensitive payload key')
@@ -92,6 +93,7 @@ assertIncludes(policySensitiveMigration, 'sensitive_payload_purged_at', 'policy 
 
 assertNotIncludes(productionAdapters, 'baseUser.emailVerified || profile?.email_verified', 'frontend Firebase/profile verification drift')
 assertNotIncludes(productionAdapters, 'user.emailVerified || provisioned.profile.email_verified', 'frontend signup verification drift')
+assertNotIncludes(productionAdapters, 'return provisionCurrentFirebaseUser({\n          displayName: input.displayName', 'frontend email/password signup must not provision profile before OTP')
 assertIncludes(productionAdapters, "emailVerificationState: 'verification_pending'", 'frontend initial hydration state')
 assertIncludes(productionAdapters, 'async function refreshAuthenticatedAccountState', 'frontend shared auth refresh helper')
 assertIncludes(productionAdapters, 'await refreshAuthenticatedAccountState(true)', 'frontend OTP verification refreshes profile source of truth')

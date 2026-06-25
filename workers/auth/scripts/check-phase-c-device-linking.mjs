@@ -30,6 +30,7 @@ const users = new Map([
   ['token-lifetime', { localId: 'uid-lifetime', email: 'lifetime@example.test', emailVerified: true }],
   ['token-grace', { localId: 'uid-grace', email: 'grace@example.test', emailVerified: true }],
   ['token-other', { localId: 'uid-other', email: 'other@example.test', emailVerified: true }],
+  ['token-pending-email', { localId: 'uid-pending-email', email: 'pending@example.test', emailVerified: false, displayName: 'Pending Provider Name' }],
 ])
 const securityEmailToken = 'phase-c-security-email-token'
 const securityEmailRequests = []
@@ -41,7 +42,16 @@ users.set(recentDeletionToken, { localId: 'uid-delete', email: 'delete@example.t
 users.set(staleDeletionToken, { localId: 'uid-stale-delete', email: 'stale-delete@example.test', emailVerified: true })
 
 const db = {
-  account_profiles: [],
+  account_profiles: [
+    { id: 'profile-none', firebase_uid: 'uid-none', normalized_email: 'none@example.test', display_name: 'No Subscription', email_verified: true, email_verified_at: past(10), verification_source: 'saturnws_otp', auth_providers: ['password'], locale: 'en', account_status: 'active', terms_version: '2026-06', terms_accepted_at: past(10), metadata: {}, created_at: past(10), updated_at: past(10) },
+    { id: 'profile-active', firebase_uid: 'uid-active', normalized_email: 'active@example.test', display_name: 'Active User', email_verified: true, email_verified_at: past(10), verification_source: 'saturnws_otp', auth_providers: ['password'], locale: 'en', account_status: 'active', terms_version: '2026-06', terms_accepted_at: past(10), metadata: {}, created_at: past(10), updated_at: past(10) },
+    { id: 'profile-expired', firebase_uid: 'uid-expired', normalized_email: 'expired@example.test', display_name: 'Expired User', email_verified: true, email_verified_at: past(10), verification_source: 'saturnws_otp', auth_providers: ['password'], locale: 'en', account_status: 'active', terms_version: '2026-06', terms_accepted_at: past(10), metadata: {}, created_at: past(10), updated_at: past(10) },
+    { id: 'profile-lifetime', firebase_uid: 'uid-lifetime', normalized_email: 'lifetime@example.test', display_name: 'Lifetime User', email_verified: true, email_verified_at: past(10), verification_source: 'saturnws_otp', auth_providers: ['password'], locale: 'en', account_status: 'active', terms_version: '2026-06', terms_accepted_at: past(10), metadata: {}, created_at: past(10), updated_at: past(10) },
+    { id: 'profile-grace', firebase_uid: 'uid-grace', normalized_email: 'grace@example.test', display_name: 'Grace User', email_verified: true, email_verified_at: past(10), verification_source: 'saturnws_otp', auth_providers: ['password'], locale: 'en', account_status: 'active', terms_version: '2026-06', terms_accepted_at: past(10), metadata: {}, created_at: past(10), updated_at: past(10) },
+    { id: 'profile-other', firebase_uid: 'uid-other', normalized_email: 'other@example.test', display_name: 'Other User', email_verified: true, email_verified_at: past(10), verification_source: 'saturnws_otp', auth_providers: ['password'], locale: 'en', account_status: 'active', terms_version: '2026-06', terms_accepted_at: past(10), metadata: {}, created_at: past(10), updated_at: past(10) },
+    { id: 'profile-delete', firebase_uid: 'uid-delete', normalized_email: 'delete@example.test', display_name: 'Delete User', email_verified: true, email_verified_at: past(10), verification_source: 'saturnws_otp', auth_providers: ['password'], locale: 'en', account_status: 'active', terms_version: '2026-06', terms_accepted_at: past(10), metadata: {}, created_at: past(10), updated_at: past(10) },
+    { id: 'profile-stale-delete', firebase_uid: 'uid-stale-delete', normalized_email: 'stale-delete@example.test', display_name: 'Stale Delete User', email_verified: true, email_verified_at: past(10), verification_source: 'saturnws_otp', auth_providers: ['password'], locale: 'en', account_status: 'active', terms_version: '2026-06', terms_accepted_at: past(10), metadata: {}, created_at: past(10), updated_at: past(10) },
+  ],
   account_subscriptions: [
     { id: 'sub-active', firebase_user_id: 'uid-active', user_email: 'active@example.test', plan: 'monthly', tier: 'public', status: 'active', hwid: null, starts_at: past(2), expires_at: future(28), feature_payload: {}, metadata: {}, created_at: past(2), updated_at: past(1) },
     { id: 'sub-expired', firebase_user_id: 'uid-expired', user_email: 'expired@example.test', plan: 'monthly', tier: 'public', status: 'expired', hwid: null, starts_at: past(40), expires_at: past(10), feature_payload: {}, metadata: {}, created_at: past(40), updated_at: past(10) },
@@ -138,6 +148,7 @@ const env = {
   APP_ENV: 'test',
   APP_SESSION_TTL_DAYS: '30',
   EMAIL_SECURITY_ENABLED: 'true',
+  EMAIL_VERIFICATION_TEST_TRANSPORT: 'response',
   AUTH_EMAIL_ENQUEUE_URL: 'https://policy-email.test/v1/internal/email/auth/enqueue',
   AUTH_EMAIL_ENQUEUE_TOKEN: securityEmailToken,
 }
@@ -175,6 +186,65 @@ const noSubscription = await link('token-none', 'a'.repeat(32))
 assert.equal(noSubscription.complete.entitlement_state, 'no_subscription')
 assert.equal(noSubscription.session.entitlement_state, 'no_subscription')
 assert.equal(noSubscription.session.subscription, null)
+
+const pendingBeforeSubscription = await call('/account/subscription', { id_token: 'token-pending-email' }, 'token-pending-email')
+assert.equal(pendingBeforeSubscription.status, 403)
+assert.equal(pendingBeforeSubscription.body.error, 'EMAIL_VERIFICATION_REQUIRED')
+assert.equal(db.account_profiles.some((row) => row.firebase_uid === 'uid-pending-email'), false, 'unverified email/password auth must not auto-provision a profile')
+
+const pendingBeforeIdentity = await call('/account/identity', { id_token: 'token-pending-email' }, 'token-pending-email')
+assert.equal(pendingBeforeIdentity.status, 403)
+assert.equal(pendingBeforeIdentity.body.error, 'EMAIL_VERIFICATION_REQUIRED')
+assert.equal(db.account_profiles.some((row) => row.firebase_uid === 'uid-pending-email'), false, 'unverified email/password auth must not auto-provision through account identity')
+
+const pendingBeforeProvision = await call('/account/provision', {
+  id_token: 'token-pending-email',
+  locale: 'en',
+  terms_accepted: true,
+  terms_version: '2026-06',
+}, 'token-pending-email')
+assert.equal(pendingBeforeProvision.status, 403)
+assert.equal(pendingBeforeProvision.body.error, 'EMAIL_VERIFICATION_REQUIRED')
+assert.equal(db.account_profiles.some((row) => row.firebase_uid === 'uid-pending-email'), false, 'unverified email/password auth must not manually provision before OTP')
+
+const pendingDevice = await start('7'.repeat(32))
+const pendingDeviceComplete = await call('/device/complete', { id_token: 'token-pending-email', device_code: pendingDevice.device_code })
+assert.equal(pendingDeviceComplete.status, 403)
+assert.equal(pendingDeviceComplete.body.error, 'email_verification_required')
+assert.equal(db.app_sessions.some((row) => row.user_id === 'uid-pending-email'), false, 'unverified email/password auth must not issue a desktop session')
+
+const verificationRequest = await call('/email-verification/request', {
+  id_token: 'token-pending-email',
+  email: 'pending@example.test',
+  display_name: 'Pending Saturn Name',
+  locale: 'en',
+  terms_accepted: true,
+  terms_version: '2026-06',
+}, 'token-pending-email')
+assert.equal(verificationRequest.status, 200)
+assert.equal(verificationRequest.body.status, 'sent')
+assert.equal(String(verificationRequest.body.test_code || '').length, 6)
+const verificationComplete = await call('/email-verification/verify', {
+  id_token: 'token-pending-email',
+  email: 'pending@example.test',
+  code: verificationRequest.body.test_code,
+}, 'token-pending-email')
+assert.equal(verificationComplete.status, 200)
+assert.equal(verificationComplete.body.status, 'verified')
+const pendingProfile = db.account_profiles.find((row) => row.firebase_uid === 'uid-pending-email')
+assert.equal(pendingProfile?.email_verified, true)
+assert.equal(pendingProfile?.display_name, 'Pending Saturn Name')
+assert.equal(pendingProfile?.verification_source, 'saturnws_otp')
+const pendingAfterSubscription = await call('/account/subscription', { id_token: 'token-pending-email' }, 'token-pending-email')
+assert.equal(pendingAfterSubscription.status, 200)
+assert.equal(pendingAfterSubscription.body.user.profile.email_verified, true)
+assert.equal(pendingAfterSubscription.body.user.profile.display_name, 'Pending Saturn Name')
+const pendingAfterIdentity = await call('/account/identity', { id_token: 'token-pending-email' }, 'token-pending-email')
+assert.equal(pendingAfterIdentity.status, 200)
+assert.equal(pendingAfterIdentity.body.user.profile.email_verified, true)
+assert.equal(pendingAfterIdentity.body.user.profile.display_name, 'Pending Saturn Name')
+const pendingLinkedAfterOtp = await link('token-pending-email', '8'.repeat(32))
+assert.equal(pendingLinkedAfterOtp.session.entitlement_state, 'no_subscription')
 
 const wrongCode = await call('/device/complete', { id_token: 'token-none', device_code: 'missing-device-code' })
 assert.equal(wrongCode.status, 404)

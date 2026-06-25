@@ -40,7 +40,7 @@ export function currentInternalLocation() {
   return `${window.location.pathname}${window.location.search}${window.location.hash}`
 }
 
-export function createAuthRoute(page: 'signin' | 'signup', intent: AuthIntent = {}): AppRoute {
+export function createAuthRoute(page: 'signin' | 'signup' | 'verify', intent: AuthIntent = {}): AppRoute {
   const params = new URLSearchParams()
   const returnTo = safeReturnTo(intent.returnTo)
   if (returnTo) params.set('returnTo', returnTo)

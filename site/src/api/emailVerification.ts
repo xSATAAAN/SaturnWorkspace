@@ -34,10 +34,23 @@ export type EmailVerificationStatusResult = {
   error?: string
 }
 
-export async function requestEmailVerificationCode(idToken: string, email: string): Promise<EmailVerificationRequestResult> {
+export type EmailVerificationRequestInput = {
+  displayName?: string
+  locale?: 'ar' | 'en'
+  termsAccepted?: boolean
+  termsVersion?: string
+  termsAcceptedAt?: string
+}
+
+export async function requestEmailVerificationCode(idToken: string, email: string, input: EmailVerificationRequestInput = {}): Promise<EmailVerificationRequestResult> {
   return postJson<EmailVerificationRequestResult>(`${authApiBase()}/email-verification/request`, {
     id_token: idToken,
     email,
+    display_name: input.displayName,
+    locale: input.locale,
+    terms_accepted: input.termsAccepted,
+    terms_version: input.termsVersion,
+    terms_accepted_at: input.termsAcceptedAt,
   }, { headers: { Authorization: `Bearer ${idToken}` } })
 }
 

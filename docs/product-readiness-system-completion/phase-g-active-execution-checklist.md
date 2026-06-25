@@ -1,6 +1,6 @@
 # Phase G Active Execution Checklist
 
-Updated: 2026-06-24
+Updated: 2026-06-25
 
 Current state: `PHASE_G_PRE_ACCEPTANCE_COMPLETION_ACTIVE`
 
@@ -10,10 +10,36 @@ Completion states used here:
 
 - `NOT_STARTED`
 - `IN_PROGRESS`
-- `BLOCKED`
+- `BLOCKED_BY_TRUE_DEPENDENCY`
 - `COMPLETE_WITH_EVIDENCE`
 
 Do not mark an item complete because code was written, a build passed, or a page shell returned HTTP 200. Completed entries must include files changed, tests, deployment evidence, live verification evidence, and remaining limitation.
+
+## 0. Capability and Environment Discovery
+
+Status: `COMPLETE_WITH_EVIDENCE`
+
+Requirement:
+
+- Inspect the actual Codex environment before code edits.
+- Record available and unavailable proof capabilities.
+- Use the strongest appropriate tool for each proof without exposing secrets.
+
+Evidence:
+
+- Files changed: `docs/product-readiness-system-completion/phase-g-active-execution-checklist.md`.
+- Tests/discovery:
+  - Local filesystem and unrestricted terminal access are available.
+  - Git is available and the canonical repository is on `main`; local HEAD and `origin/main` both resolve to `dcaab0a55b5259551039ab962bc595e459f0bde6`; working tree was clean at session start.
+  - Node `v24.15.0`, npm `10.9.4`, Python 3.11, Wrangler, Chrome, Brave, and PostgreSQL 17 tools under `C:\Program Files\PostgreSQL\17\bin` are available.
+  - `gh`, `psql`, `pg_dump`, and `pg_restore` are not on PATH; PostgreSQL tools must be invoked by absolute path when needed.
+  - Windows Sandbox feature `Containers-DisposableClientVM` is disabled, so installer/Desktop GUI proof must remain manual acceptance unless another isolated environment is provided.
+  - Local Playwright package was not installed in the root or `site` workspace at discovery time; browser proof can use the available Playwright MCP or install/use project tooling only when needed.
+  - Tool discovery exposed Node REPL, Playwright browser control, Cloudflare API, Supabase connector, GitHub connector, and multi-agent tools.
+  - Regular Chrome exists locally, but no existing authenticated Chrome session was accessed during this discovery.
+- Deployment evidence: not applicable.
+- Live verification evidence: not applicable.
+- Remaining limitation: authenticated browser journeys still require a safe authenticated session; Desktop installer proof requires an isolated environment or remains Phase G manual acceptance.
 
 ## 1. Session Continuity and No-Forgetting Protocol
 
@@ -92,6 +118,46 @@ Evidence:
 - Deployment evidence: Policy Worker `cec58841-cbc9-44e4-853f-054425d29ecc`, Auth Worker `53764ba0-207e-42e7-84f8-4e59741d0a06`, and Admin Worker `85b71833-73d3-445a-a498-d8c1f3b4e9ef` were deployed on 2026-06-24.
 - Live verification evidence: `https://api.saturnws.com/health` and `https://auth.saturnws.com/health` returned 200 after deployment. Post-deploy secret inventory confirmed `EMAIL_ADMIN_ALERT_RECIPIENTS` exists on Policy and `ADMIN_EMAIL_ENQUEUE_TOKEN` exists on Policy/Admin.
 - Remaining limitation: `ADMIN_ROLE_ASSIGNMENTS` is not configured. The current admin Firebase UID has not been resolved from a live trusted identity in this session, and it must not be guessed, printed, or derived from stale backups. UID-based super-admin assignment remains an operational blocker for closing this item.
+
+## 4a. Email/Password Registration OTP Boundary
+
+Status: `IN_PROGRESS`
+
+Requirement:
+
+- New email/password registration must not create an active Saturn profile, protected portal state, or Desktop session before Saturn OTP verification.
+- The browser must not store or transmit the plaintext password anywhere except to the trusted Firebase provider call.
+- Pending registration may carry only non-sensitive metadata needed to finalize the Saturn account after OTP: display name, locale, terms version, and terms acceptance state.
+- Legacy email/password accounts without Saturn OTP must be gated on the next protected validation and resume through the same Firebase UID after OTP.
+- Google verified identity may finalize directly only through the trusted-provider path.
+- Submitted display name must converge into `account_profiles` and render from the centralized profile source.
+
+Evidence:
+
+- Files changed: `workers/auth/src/index.ts`, `workers/auth/scripts/check-phase-c-device-linking.mjs`, `site/src/api/emailVerification.ts`, `site/src/new-ui/adapters/contracts.ts`, `site/src/new-ui/adapters/errorContract.ts`, `site/src/new-ui/adapters/productionAdapters.ts`, `site/src/new-ui/adapters/productionFeatureFlags.ts`, `site/src/new-ui/app/navigationIntent.ts`, `site/src/new-ui/pages/production/ProductionPages.tsx`, `site/scripts/check-phase-b-production-rollout.mjs`, `docs/product-readiness-system-completion/assurance-baseline.md`, `docs/product-readiness-system-completion/system-and-workflow-map.md`, `docs/product-readiness-system-completion/workflow-assurance-matrix.md`.
+- Root cause found:
+  - `productionAdapters.auth.signUpWithEmail` created a Firebase password user and immediately called `/account/provision`.
+  - Auth Worker `/account/subscription`, `/account/identity`, and device authorization paths auto-provisioned profiles for unverified password identities.
+  - Frontend email verification was controlled by a build-time flag that defaulted off when unset.
+- Local remediation:
+  - Email/password signup is provider-only until OTP.
+  - OTP request stores only hashed code and non-sensitive registration metadata.
+  - OTP verification finalizes the same Firebase UID profile with `verification_source = saturnws_otp`.
+  - Protected account endpoints, explicit `/account/provision`, and Desktop device authorization return `EMAIL_VERIFICATION_REQUIRED` / `email_verification_required` for unverified password identities.
+  - Portal routes gate unverified email/password users to the verification page before rendering protected portal content.
+  - Email verification feature flag is enabled by default and fails closed through the Auth Worker if delivery is unavailable.
+  - Production UI no longer stores or displays OTP test codes; test transport remains confined to the Auth Worker behavior test.
+- Tests:
+  - `workers/auth npm run check`: passed.
+  - `workers/auth npm run test:phase-c`: passed, including no profile, no `/account/subscription`, no `/account/identity`, no explicit `/account/provision`, and no Desktop session before OTP; verified profile, account identity/subscription, and Desktop session after OTP.
+  - `site npm run test:phase-b`: passed.
+  - `site npm run test:phase-c`: passed.
+  - `site npm run test:phase-f`: passed.
+  - `site npm run build`: passed; known chunk-size warning remains.
+  - `rg "test_code|localEmailVerificationCode|LOCAL_EMAIL_VERIFICATION_TEST_CODE_KEY" site/dist site/src/new-ui site/src/api`: no `site/dist` or `site/src/new-ui` matches; only the erased API response type remains in source.
+- Deployment evidence: pending for this remediation batch.
+- Live verification evidence: pending for this remediation batch.
+- Remaining limitation: disposable QA inbox/manual OTP acceptance remains Phase G; do not claim inbox delivery or manual acceptance from automated tests.
 
 ## 5. Pricing Page: Remove the Current Copy Model and Rebuild It
 

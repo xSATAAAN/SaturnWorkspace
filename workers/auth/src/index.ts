@@ -16,7 +16,6 @@ import {
   getSubscriptionRowsForUser,
   insertEmailVerificationAudit,
   listAppSessionsForUser,
-  markAccountProfileEmailVerified,
   updateAccountProfileStatus,
   getAccountDeletionRequest,
   createAccountDeletionRequest,
@@ -291,6 +290,62 @@ function normalizeTermsVersion(value: unknown, env: Env): string | null {
   return String(value || env.ACCOUNT_TERMS_VERSION || "").trim() || null
 }
 
+function isTrustedGoogleIdentity(firebaseUser: {
+  emailVerified?: boolean
+  authProvider?: string | null
+  authProviders?: string[]
+}): boolean {
+  return Boolean(
+    firebaseUser.emailVerified &&
+      (firebaseUser.authProviders?.includes("google") || firebaseUser.authProvider === "google"),
+  )
+}
+
+function cleanDisplayName(value: unknown): string | null {
+  return String(value || "").replace(/\s+/g, " ").trim().slice(0, 120) || null
+}
+
+function pendingRegistrationMetadata(
+  body: Record<string, any> | null,
+  user: { displayName?: string | null },
+  env: Env,
+): Record<string, unknown> {
+  const hasTermsAccepted = Boolean(body && ("terms_accepted" in body || "termsAccepted" in body))
+  const hasTermsVersion = Boolean(body && ("terms_version" in body || "termsVersion" in body))
+  const hasTermsAcceptedAt = Boolean(body && ("terms_accepted_at" in body || "termsAcceptedAt" in body))
+  const displayName = cleanDisplayName(body?.display_name ?? body?.displayName ?? user.displayName)
+  const locale = normalizeLocale(body?.locale, env)
+  const termsAccepted = Boolean(body?.terms_accepted || body?.termsAccepted)
+  const termsVersion = normalizeTermsVersion(body?.terms_version || body?.termsVersion, env)
+  const termsAcceptedAt = termsAccepted
+    ? String(body?.terms_accepted_at || body?.termsAcceptedAt || "").trim() || new Date().toISOString()
+    : null
+  const metadata: Record<string, unknown> = { locale }
+  if (displayName) metadata.display_name = displayName
+  if (hasTermsAccepted) metadata.terms_accepted = termsAccepted
+  if (hasTermsVersion) metadata.terms_version = termsVersion
+  if (hasTermsAcceptedAt || termsAccepted) metadata.terms_accepted_at = termsAcceptedAt
+  return metadata
+}
+
+function registrationMetadataFromRow(row: Record<string, any>, env: Env): {
+  displayName: string | null
+  locale: "ar" | "en"
+  termsAccepted: boolean
+  termsVersion: string | null
+  termsAcceptedAt: string | null
+} {
+  const metadata = typeof row?.metadata === "object" && row.metadata ? row.metadata : {}
+  const registration = typeof metadata.registration === "object" && metadata.registration ? metadata.registration as Record<string, unknown> : {}
+  return {
+    displayName: cleanDisplayName(registration.display_name),
+    locale: normalizeLocale(registration.locale, env),
+    termsAccepted: Boolean(registration.terms_accepted),
+    termsVersion: normalizeTermsVersion(registration.terms_version, env),
+    termsAcceptedAt: String(registration.terms_accepted_at || "").trim() || null,
+  }
+}
+
 function profileProjection(profile: AccountProfileRow | null, firebaseUser: Awaited<ReturnType<typeof verifyFirebaseUser>>) {
   return {
     user_id: profile?.id || null,
@@ -320,22 +375,28 @@ async function provisionProfile(
     termsVersion?: string | null
     termsAcceptedAt?: string | null
     metadata?: Record<string, unknown>
+    emailVerified?: boolean
+    verificationSource?: "firebase_google" | "saturnws_otp" | "admin" | "legacy_unknown" | string | null
   } = {},
 ): Promise<AccountProfileRow> {
   const existing = await getAccountProfileByFirebaseUid(env, firebaseUser.userId).catch(() => null)
   const acceptedTerms = Boolean(input.termsAccepted || existing?.terms_accepted_at)
   const termsVersion = normalizeTermsVersion(input.termsVersion || existing?.terms_version, env)
   const termsAcceptedAt = acceptedTerms ? String(input.termsAcceptedAt || existing?.terms_accepted_at || new Date().toISOString()) : null
-  const verifiedByFirebaseGoogle = Boolean(
-    firebaseUser.emailVerified && (firebaseUser.authProviders.includes("google") || firebaseUser.authProvider === "google"),
-  )
+  const verifiedByFirebaseGoogle = isTrustedGoogleIdentity(firebaseUser)
+  const verifiedByInput = Boolean(input.emailVerified && input.verificationSource)
+  const verificationSource = verifiedByFirebaseGoogle
+    ? "firebase_google"
+    : verifiedByInput
+      ? input.verificationSource
+      : existing?.verification_source || null
   return upsertAccountProfile(env, {
     firebase_uid: firebaseUser.userId,
     normalized_email: firebaseUser.email,
     display_name: input.displayName || firebaseUser.displayName || existing?.display_name || null,
-    email_verified: Boolean(verifiedByFirebaseGoogle || existing?.email_verified),
-    email_verified_at: verifiedByFirebaseGoogle ? existing?.email_verified_at || new Date().toISOString() : existing?.email_verified_at || null,
-    verification_source: verifiedByFirebaseGoogle ? "firebase_google" : existing?.verification_source || null,
+    email_verified: Boolean(verifiedByFirebaseGoogle || verifiedByInput || existing?.email_verified),
+    email_verified_at: (verifiedByFirebaseGoogle || verifiedByInput) ? existing?.email_verified_at || new Date().toISOString() : existing?.email_verified_at || null,
+    verification_source: verificationSource,
     auth_providers: firebaseUser.authProviders.length ? firebaseUser.authProviders : firebaseUser.authProvider ? [firebaseUser.authProvider] : [],
     locale: normalizeLocale(input.locale || existing?.locale, env),
     account_status: existing?.account_status || "active",
@@ -560,6 +621,7 @@ async function handleEmailVerificationRequest(request: Request, env: Env): Promi
   const expiresAt = new Date(now + emailVerificationTtlMs(env)).toISOString()
   const code = randomOtpCode()
   const codeHash = await hashEmailCode(env, user.email, code)
+  const registration = pendingRegistrationMetadata(body, user, env)
   const existing = await getLatestEmailVerification(env, {
     email: user.email,
     firebaseUserId: user.userId,
@@ -568,6 +630,8 @@ async function handleEmailVerificationRequest(request: Request, env: Env): Promi
   })
 
   if (existing) {
+    const existingMetadata = typeof existing.metadata === "object" && existing.metadata ? existing.metadata : {}
+    const existingRegistration = typeof existingMetadata.registration === "object" && existingMetadata.registration ? existingMetadata.registration as Record<string, unknown> : {}
     const lastSent = Date.parse(String(existing.last_sent_at || existing.created_at || ""))
     if (Number.isFinite(lastSent) && now - lastSent < 45_000) {
       await auditEmailVerification(env, { verificationId: existing.id, firebaseUserId: user.userId, email: user.email, action: "request", result: "rate_limited", request })
@@ -586,7 +650,11 @@ async function handleEmailVerificationRequest(request: Request, env: Env): Promi
       last_sent_at: new Date(now).toISOString(),
       status: "pending",
       firebase_user_id: user.userId,
-      metadata: { transport: emailVerificationTestMode(env) ? "test" : "provider_pending" },
+      metadata: {
+        ...existingMetadata,
+        transport: emailVerificationTestMode(env) ? "test" : "provider_pending",
+        registration: { ...existingRegistration, ...registration },
+      },
     })
     try {
       const delivery = await deliverEmailVerificationCode(env, {
@@ -624,7 +692,7 @@ async function handleEmailVerificationRequest(request: Request, env: Env): Promi
     expires_at: expiresAt,
     requester_ip: ip,
     user_agent: request.headers.get("User-Agent") || "",
-    metadata: { transport: emailVerificationTestMode(env) ? "test" : "provider_pending" },
+    metadata: { transport: emailVerificationTestMode(env) ? "test" : "provider_pending", registration },
   })
   try {
     const delivery = await deliverEmailVerificationCode(env, {
@@ -689,9 +757,28 @@ async function handleEmailVerificationVerify(request: Request, env: Env): Promis
   }
   const verifiedAt = new Date().toISOString()
   await updateEmailVerification(env, row.id, { status: "verified", verified_at: verifiedAt, consumed_at: verifiedAt })
-  await markAccountProfileEmailVerified(env, user.userId, user.email, "saturnws_otp").catch(() => undefined)
+  const registration = registrationMetadataFromRow(row, env)
+  const verifiedProfileUser = {
+    userId: user.userId || "",
+    email: user.email,
+    emailVerified: false,
+    displayName: registration.displayName || user.displayName || null,
+    photoUrl: null,
+    authProvider: "password",
+    authProviders: ["password"],
+  }
+  const profile = await provisionProfile(env, verifiedProfileUser, {
+    displayName: registration.displayName || user.displayName || null,
+    locale: registration.locale,
+    termsAccepted: registration.termsAccepted,
+    termsVersion: registration.termsVersion,
+    termsAcceptedAt: registration.termsAcceptedAt,
+    emailVerified: true,
+    verificationSource: "saturnws_otp",
+    metadata: { email_verification_id: row.id },
+  })
   await auditEmailVerification(env, { verificationId: row.id, firebaseUserId: user.userId, email: user.email, action: "verify", result: "verified", request })
-  return json({ success: true, status: "verified", verified_at: verifiedAt })
+  return json({ success: true, status: "verified", verified_at: verifiedAt, profile: profileProjection(profile, verifiedProfileUser) })
 }
 
 async function handleEmailVerificationStatus(request: Request, env: Env): Promise<Response> {
@@ -741,7 +828,15 @@ async function authenticateFirebasePassword(
   email: string,
   password: string,
   mode: "login" | "signup",
-): Promise<{ userId: string; email: string }> {
+): Promise<{
+  userId: string
+  email: string
+  emailVerified?: boolean
+  displayName?: string | null
+  photoUrl?: string | null
+  authProvider?: string | null
+  authProviders?: string[]
+}> {
   const apiKey = String(env.FIREBASE_WEB_API_KEY || "").trim()
   if (!apiKey) throw new Error("firebase_not_configured")
 
@@ -767,7 +862,15 @@ async function authenticateFirebasePassword(
   if (!userId || !normalizedEmail) {
     throw new Error("firebase_password_auth_failed")
   }
-  return { userId, email: normalizedEmail }
+  return {
+    userId,
+    email: normalizedEmail,
+    emailVerified: Boolean(payload?.emailVerified),
+    displayName: cleanDisplayName(payload?.displayName),
+    photoUrl: String(payload?.photoUrl || "").trim() || null,
+    authProvider: "password",
+    authProviders: ["password"],
+  }
 }
 
 async function authorizePendingDeviceLogin(
@@ -785,6 +888,11 @@ async function authorizePendingDeviceLogin(
 ): Promise<{ success: true; subscription: SubscriptionRow | null; subscriptionResolution: SubscriptionResolution; runtime: Record<string, unknown> } | { success: false; error: string; status: number }> {
   if (String(pending?.status || "").trim().toLowerCase() !== "pending") {
     return { success: false, error: "device_code_already_used", status: 409 }
+  }
+
+  const existingProfile = await getAccountProfileByFirebaseUid(env, firebaseUser.userId).catch(() => null)
+  if (!existingProfile?.email_verified && !isTrustedGoogleIdentity(firebaseUser)) {
+    return { success: false, error: "email_verification_required", status: 403 }
   }
 
   const profile = await provisionProfile(env, {
@@ -1253,6 +1361,9 @@ async function handleAccountProvision(request: Request, env: Env): Promise<Respo
   const firebaseUser = await verifyFirebaseUser(idToken, env)
   const termsAccepted = Boolean(body?.terms_accepted || body?.termsAccepted)
   const existing = await getAccountProfileByFirebaseUid(env, firebaseUser.userId).catch(() => null)
+  if (!existing?.email_verified && !isTrustedGoogleIdentity(firebaseUser)) {
+    return errorJson(request, "EMAIL_VERIFICATION_REQUIRED", 403, false)
+  }
   if (!existing && !termsAccepted) {
     return errorJson(request, "PROFILE_TERMS_REQUIRED", 400, false, { terms: "required" })
   }
@@ -1276,7 +1387,13 @@ async function handleAccountSubscription(request: Request, env: Env): Promise<Re
   const idToken = String(body?.id_token || "").trim()
   if (!idToken) return json({ success: false, error: "missing_id_token" }, 400)
   const firebaseUser = await verifyFirebaseUser(idToken, env)
-  const profile = await provisionProfile(env, firebaseUser).catch(() => null)
+  let profile = await getAccountProfileByFirebaseUid(env, firebaseUser.userId).catch(() => null)
+  if (!profile?.email_verified && isTrustedGoogleIdentity(firebaseUser)) {
+    profile = await provisionProfile(env, firebaseUser).catch(() => profile)
+  }
+  if (!profile?.email_verified && !isTrustedGoogleIdentity(firebaseUser)) {
+    return errorJson(request, "EMAIL_VERIFICATION_REQUIRED", 403, true)
+  }
   const rows = await getSubscriptionRowsForUser(env, firebaseUser.userId, firebaseUser.email)
   const resolution = resolveRowsForUser(rows, firebaseUser.userId, firebaseUser.email)
   const projection = resolution.projection as Record<string, any>
@@ -1308,7 +1425,7 @@ async function handleAccountSubscription(request: Request, env: Env): Promise<Re
     user: {
       id: firebaseUser.userId,
       email: firebaseUser.email,
-      display_name: firebaseUser.displayName || null,
+      display_name: profile?.display_name || firebaseUser.displayName || null,
       avatar_url: firebaseUser.photoUrl || null,
       auth_provider: firebaseUser.authProvider || null,
       profile: profile ? profileProjection(profile, firebaseUser) : null,
@@ -1327,13 +1444,19 @@ async function handleAccountIdentity(request: Request, env: Env): Promise<Respon
   const idToken = String(body?.id_token || "").trim()
   if (!idToken) return json({ success: false, error: "missing_id_token" }, 400)
   const firebaseUser = await verifyFirebaseUser(idToken, env)
-  const profile = await provisionProfile(env, firebaseUser).catch(() => null)
+  let profile = await getAccountProfileByFirebaseUid(env, firebaseUser.userId).catch(() => null)
+  if (!profile?.email_verified && isTrustedGoogleIdentity(firebaseUser)) {
+    profile = await provisionProfile(env, firebaseUser).catch(() => profile)
+  }
+  if (!profile?.email_verified && !isTrustedGoogleIdentity(firebaseUser)) {
+    return errorJson(request, "EMAIL_VERIFICATION_REQUIRED", 403, true)
+  }
   return json({
     success: true,
     user: {
       id: firebaseUser.userId,
       email: firebaseUser.email,
-      display_name: firebaseUser.displayName || null,
+      display_name: profile?.display_name || firebaseUser.displayName || null,
       avatar_url: firebaseUser.photoUrl || null,
       auth_provider: firebaseUser.authProvider || null,
       profile: profile ? profileProjection(profile, firebaseUser) : null,

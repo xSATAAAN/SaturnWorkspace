@@ -66,7 +66,6 @@ import {
 type ResourceStatus = 'idle' | 'bootstrapping' | 'loading_initial' | 'refreshing' | 'success' | 'empty' | 'partial' | 'error_recoverable' | 'error_terminal'
 type AsyncResource<T> = { status: ResourceStatus; loading: boolean; refreshing: boolean; data: T | null; error: string | null; reload: () => void }
 const PENDING_EMAIL_VERIFICATION_KEY = 'saturnws.production.pendingEmailVerification.v1'
-const LOCAL_EMAIL_VERIFICATION_TEST_CODE_KEY = 'saturnws.production.localEmailVerificationCode.v1'
 const ACTIVATION_STORAGE_KEY = 'saturnws.activation.payload.v1'
 const AUTH_BASE = 'https://auth.saturnws.com'
 const EMAIL_SUPPORT_ENABLED = true
@@ -426,6 +425,7 @@ function authErrorMessage(error: unknown, t: (key: MessageKey) => string) {
   if (key.includes('verification_rate_limited') || key.includes('email_resend_limited')) return t('tooManyAttempts')
   if (key.includes('profile_provisioning_failed') || key.includes('profile_terms_required')) return 'تعذر تجهيز الحساب. راجع البيانات وحاول مرة أخرى.'
   if (key.includes('invalid-credential') || key.includes('user-not-found') || key.includes('wrong-password') || key.includes('invalid_credentials')) return t('invalidCredentials')
+  if (key.includes('email_verification_required')) return t('verificationBody')
   if (key.includes('network') || key.includes('failed to fetch') || key.includes('auth/network-request-failed')) return t('authUnavailable')
   return t('failed')
 }
@@ -676,10 +676,15 @@ function EmailPasswordProductionPage({ page, routeState, navigate }: { page: str
           termsVersion: '2026-06',
         })
         if (isProductionFeatureEnabled('emailVerification')) {
-          const verification = await auth.requestEmailVerification(email)
+          const verification = await auth.requestEmailVerification(email, {
+            displayName: fullName,
+            locale,
+            termsAccepted: acceptedTerms,
+            termsVersion: '2026-06',
+            termsAcceptedAt: new Date().toISOString(),
+          })
           if (!verification.success) throw new Error(verification.error || 'email_verification_failed')
           window.sessionStorage.setItem(PENDING_EMAIL_VERIFICATION_KEY, email.trim())
-          if (verification.testCode) window.sessionStorage.setItem(LOCAL_EMAIL_VERIFICATION_TEST_CODE_KEY, verification.testCode)
           navigate({ surface: 'auth', page: 'verify', state: routeState })
           return
         }
@@ -719,10 +724,7 @@ function EmailVerificationProductionPage({ routeState, navigate }: { routeState?
   const [email, setEmail] = useState(() => window.sessionStorage.getItem(PENDING_EMAIL_VERIFICATION_KEY) || '')
   const [code, setCode] = useState('')
   const [error, setError] = useState('')
-  const [notice, setNotice] = useState(() => {
-    const testCode = window.sessionStorage.getItem(LOCAL_EMAIL_VERIFICATION_TEST_CODE_KEY)
-    return testCode ? `${t('demoOnly')}: ${testCode}` : ''
-  })
+  const [notice, setNotice] = useState('')
   const [loading, setLoading] = useState(false)
   const verify = async () => {
     if (!email.trim()) {
@@ -735,7 +737,6 @@ function EmailVerificationProductionPage({ routeState, navigate }: { routeState?
       const result = await auth.verifyEmailCode(email, code)
       if (!result.success) throw new Error(result.error || 'EMAIL_CODE_INVALID')
       window.sessionStorage.removeItem(PENDING_EMAIL_VERIFICATION_KEY)
-      window.sessionStorage.removeItem(LOCAL_EMAIL_VERIFICATION_TEST_CODE_KEY)
       navigate(destinationAfterAuth(routeState))
     } catch (err) {
       setError(authErrorMessage(err, t))
@@ -754,12 +755,7 @@ function EmailVerificationProductionPage({ routeState, navigate }: { routeState?
     try {
       const result = await auth.requestEmailVerification(email)
       if (!result.success) throw new Error(result.error || 'EMAIL_RESEND_LIMITED')
-      if (result.testCode) {
-        window.sessionStorage.setItem(LOCAL_EMAIL_VERIFICATION_TEST_CODE_KEY, result.testCode)
-        setNotice(`${t('demoOnly')}: ${result.testCode}`)
-      } else {
-        setNotice(t('success'))
-      }
+      setNotice(t('success'))
     } catch (err) {
       setError(authErrorMessage(err, t))
     } finally {
@@ -770,7 +766,7 @@ function EmailVerificationProductionPage({ routeState, navigate }: { routeState?
 }
 
 export function PortalProductionPages({ page, navigate }: { page: string; navigate: Navigate }) {
-  const { t } = useExperience()
+  const { t, locale } = useExperience()
   const authState = useAuthState()
   const groups = useMemo<NavigationGroup[]>(() => [{ items: [
     { id: 'overview', label: t('overview'), icon: LayoutDashboard },
@@ -786,6 +782,9 @@ export function PortalProductionPages({ page, navigate }: { page: string; naviga
   const title = groups[0].items.find((item) => item.id === page)?.label || t('overview')
   if (!authState.ready) return <WorkspaceShell surface="portal" page={page} title={title} groups={groups} navigate={navigate}><PortalRouteSkeleton page={page} /></WorkspaceShell>
   if (!authState.user) return <FullPageState icon={KeyRound} title={t('signIn')} body={t('signInBody')} primaryLabel={t('signIn')} onPrimary={() => navigate(createAuthRoute('signin', { returnTo: currentInternalLocation() }))} secondaryLabel={t('signUp')} onSecondary={() => navigate(createAuthRoute('signup', { returnTo: currentInternalLocation() }))} />
+  if (isProductionFeatureEnabled('emailVerification') && authState.emailVerificationState && !['verified', 'not_required'].includes(authState.emailVerificationState)) {
+    return <FullPageState icon={Mail} title={t('verificationTitle')} body={copyByLocale(locale, 'Enter the code sent to your email to continue.', 'أدخل رمز التحقق المرسل إلى بريدك للمتابعة.')} primaryLabel={t('continue')} onPrimary={() => { window.sessionStorage.setItem(PENDING_EMAIL_VERIFICATION_KEY, authState.user?.email || ''); navigate(createAuthRoute('verify', { returnTo: currentInternalLocation() })) }} />
+  }
   return <WorkspaceShell surface="portal" page={page} title={title} groups={groups} navigate={navigate}>{page === 'subscription' ? <PortalSubscription /> : page === 'downloads' ? <PortalDownloads /> : page === 'support' ? <PortalSupport /> : page === 'security' || page === 'settings' ? <PortalSettings /> : page === 'payments' ? <PortalPayments /> : page === 'devices' ? <PortalDevices /> : page === 'notifications' ? <PortalNotifications navigate={navigate} /> : <PortalOverview navigate={navigate} />}</WorkspaceShell>
 }
 

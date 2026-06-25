@@ -15,12 +15,18 @@ export type ProductionFeatureFlagConfig = {
 }
 
 const envFlag = (name: string) => String((import.meta.env as Record<string, string | undefined>)[name] || '').trim() === '1'
+const envEnabledByDefault = (name: string) => {
+  const raw = String((import.meta.env as Record<string, string | undefined>)[name] ?? '').trim()
+  return raw === '' ? true : raw !== '0' && raw.toLowerCase() !== 'false'
+}
+
+const emailVerificationEnabled = envEnabledByDefault('VITE_ENABLE_EMAIL_VERIFICATION')
 
 export const productionFeatureFlags = {
   emailVerification: {
-    enabled: envFlag('VITE_ENABLE_EMAIL_VERIFICATION'),
-    state: envFlag('VITE_ENABLE_EMAIL_VERIFICATION') ? 'api-connected' : 'external-service-required',
-    reason: envFlag('VITE_ENABLE_EMAIL_VERIFICATION') ? undefined : 'email_provider_not_configured',
+    enabled: emailVerificationEnabled,
+    state: emailVerificationEnabled ? 'api-connected' : 'external-service-required',
+    reason: emailVerificationEnabled ? undefined : 'email_provider_not_configured',
   },
   payments: {
     enabled: envFlag('VITE_ENABLE_PAYMENTS'),

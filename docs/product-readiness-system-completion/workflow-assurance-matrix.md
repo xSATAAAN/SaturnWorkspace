@@ -1,0 +1,35 @@
+# Workflow Assurance Matrix
+
+Updated: 2026-06-25
+
+Current state: `PHASE_G_PRE_ACCEPTANCE_COMPLETION_ACTIVE`
+
+Status meanings:
+
+- `VERIFIED_AUTOMATED`: local automated proof exists for the current source.
+- `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE`: deployed behavior exists but Phase G manual acceptance remains.
+- `DEPLOYED_PENDING_SAFE_EVENT_VERIFICATION`: flags/routes are live; a safe production event fixture remains.
+- `OPERATIONAL_CONFIGURATION_REQUIRED`: code exists but a secret/configuration must be set.
+- `WAITING_EXTERNAL`: external provider/account decision is required.
+- `PENDING_DEPLOYMENT`: local source is fixed but not yet deployed.
+- `PENDING_MANUAL_ACCEPTANCE`: manual proof is intentionally deferred to Phase G.
+
+| Workflow | User/Admin outcome | Source of truth | Current status | Automated evidence | Remaining proof |
+| --- | --- | --- | --- | --- | --- |
+| Email/password registration before OTP | Provider identity may exist, but no active Saturn profile/protected portal/desktop session exists before OTP. | Auth Worker + Supabase `account_email_verifications` / `account_profiles` | `PENDING_DEPLOYMENT` | `workers/auth npm run check`, `workers/auth npm run test:phase-c`, `site npm run test:phase-b`, `site npm run test:phase-c`, `site npm run test:phase-f`, and `site npm run build` pass after remediation. Phase C Auth Worker test covers `/account/subscription`, `/account/identity`, `/account/provision`, and Desktop authorization before OTP. | Deploy Auth Worker/site, verify live route behavior with disposable QA, then manual inbox acceptance in Phase G. |
+| OTP verification finalize | Correct OTP creates or updates one profile for the same Firebase UID and preserves submitted display name. | Auth Worker + Supabase `account_profiles` | `PENDING_DEPLOYMENT` | Phase C Auth Worker test verifies no profile before OTP; verified profile, display name, verification source, account identity/subscription, and desktop linking after OTP. Site `dist` scan confirms no OTP test-code display/storage token in the production bundle. | Production-safe QA verification without printing OTP. |
+| Google trusted registration | Verified Google identity can provision profile directly and converge with customer portal. | Firebase + Auth Worker + Supabase `account_profiles` | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Existing Auth/Site Phase C checks cover shared account bootstrap; no code changed in this batch except password OTP gate. | Manual Google QA route acceptance. |
+| Customer portal gate | Unverified email/password user is routed to email verification instead of protected portal content. | Site auth state from Auth Worker profile projection | `PENDING_DEPLOYMENT` | Site TypeScript/build pass; protected portal route gate added. | Rendered/live browser proof with disposable QA. |
+| Desktop device linking | Account connection can succeed without paid subscription only after verified account; entitlement remains separate. | Auth Worker app sessions + subscription resolver | `VERIFIED_AUTOMATED` / `PENDING_DEPLOYMENT` for new OTP gate | Phase C Auth Worker behavior checks cover no subscription, active, expired, lifetime, grace, replay, wrong device, refresh, revoke, and unverified password gate. | Installed-app manual acceptance remains Phase G. |
+| Subscription projection | No subscription means null current subscription and no default plan. | Supabase `account_subscriptions` resolver | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Feature matrix and Phase E/F tests. | Manual customer/admin projection acceptance. |
+| Public pricing and plans | Approved weekly/monthly/annual prices render; checkout remains honest until provider exists. | Admin public catalog + content layer | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Site build/copy checks and live public visual evidence from 2026-06-24. | Manual visual acceptance. |
+| Support tickets and replies | Customer/admin support lifecycle with ownership, internal notes, status, priority, and email operations. | Policy Worker D1/R2 | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Policy/Admin tests from prior Phase G entries. | Safe production fixture and manual acceptance. |
+| Notifications | User-facing system/admin messages only, not routine activity logs. | Policy Worker notification state | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Source and route coverage in Phase D/G tests. | Manual customer portal acceptance. |
+| Admin route access | UID-based admin permissions, no email identity ownership. | Admin Worker secret `ADMIN_ROLE_ASSIGNMENTS` | `OPERATIONAL_CONFIGURATION_REQUIRED` | Source supports role assignments; current secret not configured in prior evidence. | Resolve trusted admin UID without exposing it, configure secret, then authenticated route sweep. |
+| Admin manual grant | Preview, user picker, reason, idempotency, lock, and audit without real payment fabrication. | Admin Worker + Supabase subscriptions | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Phase F Admin tests pass. | Fixture-only/manual acceptance; no real customer grant without approval. |
+| Account deletion request/cancel | Non-destructive request/cancel/cooling-off, session revocation, no irreversible purge. | Auth Worker + Supabase `account_deletion_requests` | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Auth Phase C and migration evidence. | Disposable QA manual acceptance. |
+| Email auth delivery | OTP queued with hashed code and sensitive payload purged. | Auth Worker + Policy Worker email queue | `DEPLOYED_PENDING_SAFE_EVENT_VERIFICATION` | Policy email template and Auth queue tests. | Disposable QA inbox delivery; do not expose OTP. |
+| Security emails | Session/device/account lifecycle emails for committed events only. | Auth/Admin/Policy Workers | `DEPLOYED_PENDING_SAFE_EVENT_VERIFICATION` | Phase G security producer tests pass in prior evidence. | Safe event fixture delivery. |
+| Admin alerts | Operational alerts for final failures/degradation/tamper with dedupe/cooldown. | Policy Worker | `DEPLOYED_PENDING_SAFE_EVENT_VERIFICATION` | Phase G admin-alert tests pass in prior evidence. | Safe event-delivery verification. |
+| Payments | No real checkout until provider/mapping/webhooks are approved. | Future provider + Admin catalog | `WAITING_EXTERNAL` | Disabled-state/source checks. | Provider decision and integration. |
+| Desktop installer | QA artifact exists; no OTA/publication in this batch. | Desktop build pipeline | `PENDING_MANUAL_ACCEPTANCE` | Previous QA build evidence recorded. | Isolated install/repair/uninstall manual acceptance. |

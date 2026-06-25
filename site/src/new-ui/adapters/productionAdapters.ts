@@ -184,7 +184,7 @@ async function loadAccountBootstrap(forceRefresh = false): Promise<AccountBootst
       const bootstrapped: AccountBootstrap = {
         uid,
         account,
-        user: { ...userFromFirebase(user), profile, emailVerified: Boolean(profile?.email_verified) },
+        user: { ...userFromFirebase(user), displayName: profile?.display_name || user.displayName || null, profile, emailVerified: Boolean(profile?.email_verified) },
         fetchedAt: Date.now(),
       }
       accountBootstrapCache = bootstrapped
@@ -360,12 +360,8 @@ export const productionAdapters: AppAdapters = {
       try {
         const result = await createUserWithEmailAndPassword(firebaseAuth, input.email.trim(), input.password)
         if (input.displayName.trim()) await updateProfile(result.user, { displayName: input.displayName.trim() })
-        return provisionCurrentFirebaseUser({
-          displayName: input.displayName,
-          locale: input.locale,
-          termsAccepted: input.termsAccepted,
-          termsVersion: input.termsVersion || '2026-06',
-        })
+        clearAccountBootstrap()
+        return userFromFirebase(result.user)
       } catch (error) {
         throw mapFirebaseAuthError(error)
       }
@@ -390,11 +386,11 @@ export const productionAdapters: AppAdapters = {
     async sendPasswordReset(email) {
       await sendPasswordResetEmail(firebaseAuth, email.trim())
     },
-    async requestEmailVerification(email) {
+    async requestEmailVerification(email, input = {}) {
       const token = await productionAdapters.auth.getIdToken(false)
       if (!token) return { success: false, error: 'not_authenticated' }
-      const result = await requestEmailVerificationCode(token, email.trim())
-      return { success: result.success, status: result.status, expiresAt: result.expires_at, error: result.error, testCode: result.test_code }
+      const result = await requestEmailVerificationCode(token, email.trim(), input)
+      return { success: result.success, status: result.status, expiresAt: result.expires_at, error: result.error }
     },
     async verifyEmailCode(email, code) {
       const token = await productionAdapters.auth.getIdToken(false)

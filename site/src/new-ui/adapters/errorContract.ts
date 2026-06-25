@@ -5,6 +5,7 @@ export type AppErrorCode =
   | 'AUTH_TOO_MANY_ATTEMPTS'
   | 'AUTH_INVALID_CREDENTIALS'
   | 'AUTH_SESSION_EXPIRED'
+  | 'EMAIL_VERIFICATION_REQUIRED'
   | 'PROFILE_PROVISIONING_FAILED'
   | 'VERIFICATION_CODE_INVALID'
   | 'VERIFICATION_CODE_EXPIRED'
@@ -27,6 +28,7 @@ const rawToCode: Record<string, AppErrorCode> = {
   auth_too_many_attempts: 'AUTH_TOO_MANY_ATTEMPTS',
   profile_provisioning_failed: 'PROFILE_PROVISIONING_FAILED',
   profile_terms_required: 'PROFILE_PROVISIONING_FAILED',
+  email_verification_required: 'EMAIL_VERIFICATION_REQUIRED',
   verification_code_invalid: 'VERIFICATION_CODE_INVALID',
   verification_code_expired: 'VERIFICATION_CODE_EXPIRED',
   verification_rate_limited: 'VERIFICATION_RATE_LIMITED',
@@ -79,6 +81,8 @@ export function userSafeErrorMessage(raw: unknown, status?: number): string {
       return 'AUTH_INVALID_CREDENTIALS'
     case 'AUTH_SESSION_EXPIRED':
       return 'AUTH_SESSION_EXPIRED'
+    case 'EMAIL_VERIFICATION_REQUIRED':
+      return 'EMAIL_VERIFICATION_REQUIRED'
     case 'SUBSCRIPTION_INACTIVE':
       return 'SUBSCRIPTION_INACTIVE'
     case 'DOWNLOAD_NOT_ENTITLED':

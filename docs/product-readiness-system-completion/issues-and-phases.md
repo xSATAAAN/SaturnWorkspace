@@ -1,6 +1,6 @@
 # Current Issues and Phase Ownership
 
-Updated: 2026-06-24
+Updated: 2026-06-25
 
 ## Phase Closure
 
@@ -31,6 +31,7 @@ Updated: 2026-06-24
 | PR-013 | Public plan catalog CORS for production pricing | Production verified | Source CORS allowlist includes Saturn public origins, Admin Worker is deployed, and live plan catalog CORS returns the Saturn public origin. | Phase G |
 | PR-014 | Public pricing copy and card layout | Production verified | Approved weekly/monthly/annual pricing, promotional trial language, localized differentiators, and responsive pricing visual fixture are implemented; GitHub Pages deployed commit `3e090fb198429cf26d5f3866f9adc41c1651dfdf`, and live bundle `assets/index-CWMQLj65.js` contains the approved prices with no provider-name public copy or mojibake markers. | Phase G |
 | PR-015 | Public Contact mobile overflow | Resolved with live evidence | Live public screenshot pass found `/contact?lang=en` mobile had `21px` horizontal overflow caused by the page-specific contact grid overriding the generic mobile grid and email links lacking defensive wrapping. `site/src/new-ui/foundation/public.css` now forces the contact-page grid to one column on mobile and wraps contact email links; recaptured live evidence shows zero horizontal overflow. | Phase G |
+| PR-016 | Email/password signup bypassed Saturn OTP boundary | Source remediated pending deployment | Root cause: frontend email signup provisioned profile immediately, Auth Worker account/bootstrap/device paths auto-provisioned unverified password identities, and the frontend email verification flag defaulted off when unset. Current source now requires OTP before profile/protected portal/Desktop session for password identities, blocks explicit provision before OTP, finalizes profile on OTP, defaults the frontend gate on, and does not ship OTP test-code display/storage logic in the production bundle. Local Auth/Site checks pass; deployment and disposable QA inbox acceptance remain pending. | Phase G |
 
 ## Resolved Systemic Defects
 
@@ -45,6 +46,7 @@ Updated: 2026-06-24
 | Invite one-per-user/device race | Atomic D1 claims and conditional consumption prevent concurrent reuse. |
 | Account deletion schema pending state | Supabase schema is applied and status path now projects real none/pending/cancelled states instead of a prepared-disabled projection. |
 | Arabic plan catalog mojibake | Stored Supabase values repaired; API transport uses UTF-8 and repository guard prevents reintroduction. |
+| Email/password pre-OTP profile/session access | Current source blocks unverified password identities from account subscription/identity, explicit provision, and Desktop device authorization, and moves profile creation to the Saturn OTP verification step. Deployment verification is pending. |
 
 ## Phase G Boundary
 

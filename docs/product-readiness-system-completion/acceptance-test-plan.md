@@ -17,6 +17,8 @@ This is the only manual acceptance gate. It has not started. Phase B, Phase C, P
 ## 1. Public and Authentication
 
 - Verify direct routes, refresh, sign-in, sign-out, return paths, verified/unverified states, Arabic/English, RTL/LTR, and loading/error behavior.
+- Verify new email/password signup does not enter the account portal or create an active Saturn profile before OTP; after OTP, the same Firebase UID profile contains the submitted display name.
+- Verify legacy email/password account without Saturn OTP is gated to verification on next protected access and resumes the same account after OTP.
 - Confirm account switching clears user-scoped cache.
 - Confirm a user without a subscription can authenticate and link but receives no paid entitlement.
 - Test OTP email delivery on a QA account and confirm OTP values do not appear in Admin logs, queue JSON, or UI responses.

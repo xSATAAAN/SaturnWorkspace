@@ -1,14 +1,15 @@
 # Feature Completeness Matrix
 
-Updated: 2026-06-24
+Updated: 2026-06-25
 
 Status meanings: `VERIFIED_AUTOMATED`, `PRODUCTION_DEPLOYED`, `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE`, `DEPLOYED_PENDING_SAFE_EVENT_VERIFICATION`, `OPERATIONAL_CONFIGURATION_REQUIRED`, `WAITING_EXTERNAL`, `PREPARED_DISABLED`, `PREPARED_DISABLED_WITH_PRODUCER`, `PARTIALLY_IMPLEMENTED`, `PENDING_DEPLOYMENT_VERIFICATION`, `NOT_IMPLEMENTED`, `DEFERRED_TO_PHASE_G_MANUAL_ACCEPTANCE`, `QA_ARTIFACT_BUILT_PENDING_MANUAL_ACCEPTANCE`.
 
 | Domain | Feature | Status | Evidence / limitation |
 | --- | --- | --- | --- |
-| Auth | Shared bootstrap and verified Firebase UID identity | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Auth Worker contracts and portal routes are deployed; manual route/session acceptance is Phase G. |
-| Auth | OTP request/queue/hash/purge contract | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Auth and Policy email flags are enabled; OTP is hashed in Supabase and sensitive payload is queued server-side. Provider delivery acceptance still needs QA recipient. |
-| Auth | OTP no-secret exposure | `VERIFIED_AUTOMATED` | Tests and source checks assert no OTP in normal API response/log/admin queue projection. |
+| Auth | Shared bootstrap and verified Firebase UID identity | `PENDING_DEPLOYMENT_VERIFICATION` | Current source now gates unverified email/password users before protected portal rendering and uses profile source for display name. Local Site/Auth checks pass; deployment verification is pending for this remediation batch. |
+| Auth | OTP request/queue/hash/purge contract | `PENDING_DEPLOYMENT_VERIFICATION` | Current source makes email/password signup provider-only until OTP, stores only hashed OTP plus non-sensitive registration metadata, and finalizes the same Firebase UID profile on OTP. Auth/Site checks pass; provider inbox acceptance still needs QA recipient. |
+| Auth | Email/password pre-OTP protected-access block | `PENDING_DEPLOYMENT_VERIFICATION` | Auth Worker tests prove no profile, no account subscription/identity access, no explicit provision, and no Desktop session before OTP; verified profile/session after OTP. Deployment and disposable QA verification remain pending. |
+| Auth | OTP no-secret exposure | `VERIFIED_AUTOMATED` | Tests and source checks assert no OTP in normal API response/log/admin queue projection. Site production bundle scan confirms no OTP test-code display/storage token remains in `dist`. |
 | Subscription truth | No-subscription projection | `VERIFIED_AUTOMATED` | No default plan or fake expiry; UID ownership only. |
 | Subscription truth | Current/history separation | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Canonical resolver and Admin projections are implemented. |
 | Plan catalog | Visible plans without provider checkout | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Weekly/monthly/annual plans remain visible while checkout is disabled until provider mappings exist. Public pricing copy/cards are deployed; live bundle, public catalog CORS, and public rendered screenshot verification passed for the public-route scope. |
