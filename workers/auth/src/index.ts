@@ -460,7 +460,7 @@ async function deliverEmailVerificationCode(
   const url = String(env.AUTH_EMAIL_ENQUEUE_URL || "").trim()
   const token = String(env.AUTH_EMAIL_ENQUEUE_TOKEN || "").trim()
   if (!url || !token) throw new Error("verification_delivery_not_configured")
-  const response = await fetch(url, {
+  const deliveryRequest = new Request(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json; charset=utf-8",
@@ -482,6 +482,14 @@ async function deliverEmailVerificationCode(
       },
     }),
   })
+  let response: Response
+  try {
+    const parsedUrl = new URL(url)
+    const policyService = parsedUrl.hostname === "api.saturnws.com" ? env.POLICY_SERVICE : undefined
+    response = policyService ? await policyService.fetch(deliveryRequest) : await fetch(deliveryRequest)
+  } catch {
+    throw new Error("verification_delivery_temporary_failure")
+  }
   if (!response.ok) {
     let payload: Record<string, unknown> | null = null
     try {

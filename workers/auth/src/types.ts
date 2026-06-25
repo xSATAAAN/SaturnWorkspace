@@ -17,6 +17,7 @@ export interface Env {
   EMAIL_SECURITY_ENABLED?: string
   AUTH_EMAIL_ENQUEUE_URL?: string
   AUTH_EMAIL_ENQUEUE_TOKEN?: string
+  POLICY_SERVICE?: { fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> }
   ACCOUNT_TERMS_VERSION?: string
   PROFILE_DEFAULT_LOCALE?: string
   APP_SESSION_TTL_DAYS?: string

@@ -10,6 +10,10 @@ routes = [
   { pattern = "admin-api.saturnws.com/auth/*", zone_name = "saturnws.com" }
 ]
 
+services = [
+  { binding = "POLICY_SERVICE", service = "saturnws-policy" }
+]
+
 [observability]
 enabled = true
 
