@@ -155,7 +155,7 @@ Evidence:
   - `site npm run test:phase-f`: passed.
   - `site npm run build`: passed; known chunk-size warning remains.
   - `rg "test_code|localEmailVerificationCode|LOCAL_EMAIL_VERIFICATION_TEST_CODE_KEY" site/dist site/src/new-ui site/src/api`: no `site/dist` or `site/src/new-ui` matches; only the erased API response type remains in source.
-- Deployment evidence: Auth Worker deployed from this remediation source as version `f068253f-4a8b-492f-babc-5f2adfdf6cba`; GitHub Pages workflow run `28165825916` deployed commit `55052a5633606828483ea011006d606be7f8602f`.
+- Deployment evidence: Auth Worker deployed from this remediation source as version `a7caa6d5-e7f1-41ef-9974-c474a8a75f7f`; GitHub Pages workflow run `28165825916` deployed commit `55052a5633606828483ea011006d606be7f8602f`.
 - Live verification evidence:
   - `https://auth.saturnws.com/health` returned success for `auth-worker`.
   - `https://saturnws.com/account/signin/`, `/account/signup/`, and `/account/verify/` returned 200.
