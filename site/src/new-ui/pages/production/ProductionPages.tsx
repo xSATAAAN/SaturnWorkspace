@@ -496,18 +496,19 @@ function ErrorBlock({ error, onRetry }: { error: string; onRetry?: () => void })
   return <Alert title={t('failed')} tone="danger" action={onRetry ? <Button size="sm" onClick={onRetry}>{t('retry')}</Button> : undefined}>{userFacingErrorMessage(error, locale)}</Alert>
 }
 
-function authErrorMessage(error: unknown, t: (key: MessageKey) => string) {
+function authErrorMessage(error: unknown, t: (key: MessageKey) => string, locale: 'ar' | 'en') {
   const raw = error instanceof Error ? error.message : String(error || '')
   const key = raw.toLowerCase()
-  if (key.includes('auth_email_already_used') || key.includes('email-already-in-use')) return 'هذا البريد مستخدم بالفعل.'
-  if (key.includes('auth_weak_password') || key.includes('weak-password')) return 'كلمة المرور ضعيفة.'
-  if (key.includes('auth_invalid_email') || key.includes('invalid-email')) return 'البريد الإلكتروني غير صحيح.'
-  if (key.includes('auth_too_many_attempts') || key.includes('too-many-requests')) return 'تمت محاولات كثيرة. حاول لاحقًا.'
-  if (key.includes('verification_delivery_disabled') || key.includes('verification_delivery_not_configured') || key.includes('verification_delivery_failed')) return 'التحقق بالبريد غير متاح حاليًا. حاول لاحقًا.'
+  if (key.includes('auth_email_already_used') || key.includes('email-already-in-use')) return copyByLocale(locale, 'This email is already used.', 'هذا البريد مستخدم بالفعل.')
+  if (key.includes('auth_weak_password') || key.includes('weak-password')) return copyByLocale(locale, 'The password is too weak.', 'كلمة المرور ضعيفة.')
+  if (key.includes('auth_invalid_email') || key.includes('invalid-email')) return copyByLocale(locale, 'Enter a valid email address.', 'البريد الإلكتروني غير صحيح.')
+  if (key.includes('auth_too_many_attempts') || key.includes('too-many-requests')) return copyByLocale(locale, 'Too many attempts. Try again later.', 'تمت محاولات كثيرة. حاول لاحقًا.')
+  if (key.includes('verification_delivery_temporary_failure')) return copyByLocale(locale, 'The code could not be sent right now. Try again.', 'تعذر إرسال الرمز الآن. حاول مرة أخرى.')
+  if (key.includes('verification_delivery_disabled') || key.includes('verification_delivery_not_configured') || key.includes('verification_delivery_configuration_error') || key.includes('verification_delivery_failed')) return copyByLocale(locale, 'Email verification is unavailable right now. Try again later.', 'التحقق بالبريد غير متاح حاليًا. حاول لاحقًا.')
   if (key.includes('verification_code_invalid') || key.includes('email_code_invalid')) return t('codeInvalid')
   if (key.includes('verification_code_expired') || key.includes('email_code_expired')) return t('codeExpired')
   if (key.includes('verification_rate_limited') || key.includes('email_resend_limited')) return t('tooManyAttempts')
-  if (key.includes('profile_provisioning_failed') || key.includes('profile_terms_required')) return 'تعذر تجهيز الحساب. راجع البيانات وحاول مرة أخرى.'
+  if (key.includes('profile_provisioning_failed') || key.includes('profile_terms_required')) return copyByLocale(locale, 'The account could not be prepared. Review the details and try again.', 'تعذر تجهيز الحساب. راجع البيانات وحاول مرة أخرى.')
   if (key.includes('invalid-credential') || key.includes('user-not-found') || key.includes('wrong-password') || key.includes('invalid_credentials')) return t('invalidCredentials')
   if (key.includes('email_verification_required')) return t('verificationBody')
   if (key.includes('network') || key.includes('failed to fetch') || key.includes('auth/network-request-failed')) return t('authUnavailable')
@@ -796,7 +797,7 @@ function EmailPasswordProductionPage({ page, routeState, navigate }: { page: str
       if (await finishActivationIfNeeded()) return
       navigate(destinationAfterAuth(routeState))
     } catch (err) {
-      setError(activationPayload ? deviceActivationErrorMessage(err, locale) : authErrorMessage(err, t))
+      setError(activationPayload ? deviceActivationErrorMessage(err, locale) : authErrorMessage(err, t, locale))
     } finally {
       setLoading(false)
     }
@@ -812,12 +813,12 @@ function EmailPasswordProductionPage({ page, routeState, navigate }: { page: str
       await auth.sendPasswordReset(email)
       setNotice(locale === 'ar' ? 'أرسلنا رابط استعادة كلمة المرور إلى بريدك إذا كان الحساب مسجلًا.' : 'A password reset link was sent if this email is registered.')
     } catch (err) {
-      setError(authErrorMessage(err, t))
+      setError(authErrorMessage(err, t, locale))
     } finally {
       setLoading(false)
     }
   }
-  return <ProductionAuthShell navigate={navigate}><div className={`auth-card auth-card--${signup ? 'signup' : 'signin'}`}><div className="auth-form"><header>{signup ? <span>{copyByLocale(locale, 'Create your workspace access', 'ابدأ إعداد مساحة عملك')}</span> : null}<h1>{signup ? t('signUpTitle') : t('signInTitle')}</h1><p>{activationPayload ? copyByLocale(locale, 'Sign in to link this desktop app session to your account.', 'سجّل الدخول لربط جلسة أداة سطح المكتب بحسابك.') : signup ? copyByLocale(locale, 'Create one account for subscriptions, downloads, support, and your desktop sign-in.', 'أنشئ حسابًا واحدًا للاشتراك والتنزيلات والدعم وتسجيل الدخول إلى الأداة.') : t('signInBody')}</p></header>{activationPayload ? <Alert title={copyByLocale(locale, 'Desktop linking', 'ربط أداة سطح المكتب')} tone="info">{copyByLocale(locale, 'After sign-in, Saturn Workspace will be linked automatically.', 'بعد تسجيل الدخول سيتم ربط Saturn Workspace تلقائيًا.')}</Alert> : null}<form className="stack" onSubmit={submit} noValidate>{signup ? <FormField label={locale === 'ar' ? 'الاسم الكامل' : 'Full name'} htmlFor="auth-full-name" required><Input id="auth-full-name" type="text" autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} required /></FormField> : null}<FormField label={t('email')} htmlFor="auth-email" required><Input id="auth-email" type="email" autoComplete="email" placeholder={locale === 'ar' ? 'name@example.com' : 'name@example.com'} value={email} onChange={(event) => setEmail(event.target.value)} required /></FormField><FormField label={t('password')} htmlFor="auth-password" required><PasswordInput id="auth-password" autoComplete={signup ? 'new-password' : 'current-password'} value={password} onChange={(event) => setPassword(event.target.value)} required /></FormField>{signup ? <><FormField label={t('confirmPassword')} htmlFor="auth-confirm-password" required error={confirmPassword && !passwordsMatch ? (locale === 'ar' ? 'كلمتا المرور غير متطابقتين.' : 'Passwords do not match.') : undefined}><PasswordInput id="auth-confirm-password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required /></FormField><div className="password-requirements" aria-live="polite"><strong>{locale === 'ar' ? 'متطلبات كلمة المرور' : 'Password requirements'}</strong><span className={passwordLongEnough ? 'is-valid' : ''}><Check size={14} />{locale === 'ar' ? '6 أحرف على الأقل' : 'At least 6 characters'}</span><span className={passwordsMatch ? 'is-valid' : ''}><Check size={14} />{locale === 'ar' ? 'تطابق كلمتي المرور' : 'Both passwords match'}</span></div><Checkbox checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} required label={<span>{locale === 'ar' ? 'أوافق على ' : 'I agree to the '}<a href="/terms">{t('terms')}</a>{locale === 'ar' ? ' و' : ' and the '}<a href="/privacy">{t('privacy')}</a></span>} /></> : <div className="auth-form__options"><Button type="button" variant="text" onClick={reset}>{t('forgotPassword')}</Button></div>}{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}<Button type="submit" variant="primary" size="lg" fullWidth loading={loading}>{signup ? t('signUp') : t('signIn')}</Button></form><div className="auth-divider"><span>{t('orContinue')}</span></div><Button type="button" fullWidth size="lg" leadingIcon={<GoogleIcon />} onClick={async () => { setLoading(true); setError(''); try { if (signup && !acceptedTerms) { setError(locale === 'ar' ? 'يجب الموافقة على شروط الخدمة وسياسة الخصوصية.' : 'You must agree to the Terms of Service and Privacy Policy.'); return } await auth.signInWithGoogle(signup ? { locale, termsAccepted: acceptedTerms, termsVersion: '2026-06' } : undefined); if (await finishActivationIfNeeded()) return; navigate(destinationAfterAuth(routeState)) } catch (err) { setError(activationPayload ? deviceActivationErrorMessage(err, locale) : authErrorMessage(err, t)) } finally { setLoading(false) } }}>{t('continueGoogle')}</Button><p className="auth-switch">{signup ? t('haveAccount') : t('noAccount')} <button type="button" onClick={() => navigate({ surface: 'auth', page: signup ? 'signin' : 'signup', state: routeState })}>{signup ? t('signIn') : t('signUp')}</button></p></div></div></ProductionAuthShell>
+  return <ProductionAuthShell navigate={navigate}><div className={`auth-card auth-card--${signup ? 'signup' : 'signin'}`}><div className="auth-form"><header>{signup ? <span>{copyByLocale(locale, 'Create your workspace access', 'ابدأ إعداد مساحة عملك')}</span> : null}<h1>{signup ? t('signUpTitle') : t('signInTitle')}</h1><p>{activationPayload ? copyByLocale(locale, 'Sign in to link this desktop app session to your account.', 'سجّل الدخول لربط جلسة أداة سطح المكتب بحسابك.') : signup ? copyByLocale(locale, 'Create one account for subscriptions, downloads, support, and your desktop sign-in.', 'أنشئ حسابًا واحدًا للاشتراك والتنزيلات والدعم وتسجيل الدخول إلى الأداة.') : t('signInBody')}</p></header>{activationPayload ? <Alert title={copyByLocale(locale, 'Desktop linking', 'ربط أداة سطح المكتب')} tone="info">{copyByLocale(locale, 'After sign-in, Saturn Workspace will be linked automatically.', 'بعد تسجيل الدخول سيتم ربط Saturn Workspace تلقائيًا.')}</Alert> : null}<form className="stack" onSubmit={submit} noValidate>{signup ? <FormField label={locale === 'ar' ? 'الاسم الكامل' : 'Full name'} htmlFor="auth-full-name" required><Input id="auth-full-name" type="text" autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} required /></FormField> : null}<FormField label={t('email')} htmlFor="auth-email" required><Input id="auth-email" type="email" autoComplete="email" placeholder={locale === 'ar' ? 'name@example.com' : 'name@example.com'} value={email} onChange={(event) => setEmail(event.target.value)} required /></FormField><FormField label={t('password')} htmlFor="auth-password" required><PasswordInput id="auth-password" autoComplete={signup ? 'new-password' : 'current-password'} value={password} onChange={(event) => setPassword(event.target.value)} required /></FormField>{signup ? <><FormField label={t('confirmPassword')} htmlFor="auth-confirm-password" required error={confirmPassword && !passwordsMatch ? (locale === 'ar' ? 'كلمتا المرور غير متطابقتين.' : 'Passwords do not match.') : undefined}><PasswordInput id="auth-confirm-password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required /></FormField><div className="password-requirements" aria-live="polite"><strong>{locale === 'ar' ? 'متطلبات كلمة المرور' : 'Password requirements'}</strong><span className={passwordLongEnough ? 'is-valid' : ''}><Check size={14} />{locale === 'ar' ? '6 أحرف على الأقل' : 'At least 6 characters'}</span><span className={passwordsMatch ? 'is-valid' : ''}><Check size={14} />{locale === 'ar' ? 'تطابق كلمتي المرور' : 'Both passwords match'}</span></div><Checkbox checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} required label={<span>{locale === 'ar' ? 'أوافق على ' : 'I agree to the '}<a href="/terms">{t('terms')}</a>{locale === 'ar' ? ' و' : ' and the '}<a href="/privacy">{t('privacy')}</a></span>} /></> : <div className="auth-form__options"><Button type="button" variant="text" onClick={reset}>{t('forgotPassword')}</Button></div>}{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}<Button type="submit" variant="primary" size="lg" fullWidth loading={loading}>{signup ? t('signUp') : t('signIn')}</Button></form><div className="auth-divider"><span>{t('orContinue')}</span></div><Button type="button" fullWidth size="lg" leadingIcon={<GoogleIcon />} onClick={async () => { setLoading(true); setError(''); try { if (signup && !acceptedTerms) { setError(locale === 'ar' ? 'يجب الموافقة على شروط الخدمة وسياسة الخصوصية.' : 'You must agree to the Terms of Service and Privacy Policy.'); return } await auth.signInWithGoogle(signup ? { locale, termsAccepted: acceptedTerms, termsVersion: '2026-06' } : undefined); if (await finishActivationIfNeeded()) return; navigate(destinationAfterAuth(routeState)) } catch (err) { setError(activationPayload ? deviceActivationErrorMessage(err, locale) : authErrorMessage(err, t, locale)) } finally { setLoading(false) } }}>{t('continueGoogle')}</Button><p className="auth-switch">{signup ? t('haveAccount') : t('noAccount')} <button type="button" onClick={() => navigate({ surface: 'auth', page: signup ? 'signin' : 'signup', state: routeState })}>{signup ? t('signIn') : t('signUp')}</button></p></div></div></ProductionAuthShell>
 }
 
 function EmailVerificationProductionPage({ routeState, navigate }: { routeState?: string; navigate: Navigate }) {
@@ -842,7 +843,7 @@ function EmailVerificationProductionPage({ routeState, navigate }: { routeState?
       clearPendingEmailVerification()
       navigate(destinationAfterAuth(routeState))
     } catch (err) {
-      setError(authErrorMessage(err, t))
+      setError(authErrorMessage(err, t, locale))
     } finally {
       setLoading(false)
     }
@@ -866,7 +867,7 @@ function EmailVerificationProductionPage({ routeState, navigate }: { routeState?
       if (!result.success) throw new Error(result.error || 'EMAIL_RESEND_LIMITED')
       setNotice(t('success'))
     } catch (err) {
-      setError(authErrorMessage(err, t))
+      setError(authErrorMessage(err, t, locale))
     } finally {
       setLoading(false)
     }
@@ -892,7 +893,7 @@ function EmailVerificationProductionPage({ routeState, navigate }: { routeState?
       await auth.signOut()
       navigate({ surface: 'auth', page: 'signup', state: routeState })
     } catch (err) {
-      setError(authErrorMessage(err, t))
+      setError(authErrorMessage(err, t, locale))
     } finally {
       setLoading(false)
     }

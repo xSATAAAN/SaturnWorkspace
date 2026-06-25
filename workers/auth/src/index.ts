@@ -482,8 +482,37 @@ async function deliverEmailVerificationCode(
       },
     }),
   })
-  if (!response.ok) throw new Error(`verification_delivery_failed_${response.status}`)
+  if (!response.ok) {
+    let payload: Record<string, unknown> | null = null
+    try {
+      const parsed = await response.json()
+      payload = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null
+    } catch {
+      payload = null
+    }
+    const upstreamError = String(payload?.error || "").trim().toLowerCase()
+    if (response.status === 401 || upstreamError === "unauthorized") throw new Error("verification_delivery_configuration_error")
+    if (upstreamError === "email_auth_disabled") throw new Error("verification_delivery_disabled")
+    if (
+      upstreamError === "email_sensitive_payload_key_missing"
+      || upstreamError === "email_sensitive_payload_key_invalid"
+      || upstreamError === "email_sensitive_payload_schema_missing"
+    ) {
+      throw new Error("verification_delivery_configuration_error")
+    }
+    if (response.status >= 500) throw new Error("verification_delivery_temporary_failure")
+    throw new Error("verification_delivery_failed")
+  }
   return { transport: "email_operations" }
+}
+
+function emailVerificationDeliveryFailure(error: unknown): { code: string; status: number } {
+  const message = String(error instanceof Error ? error.message : error || "").trim().toLowerCase()
+  if (message === "verification_delivery_not_configured") return { code: "VERIFICATION_DELIVERY_NOT_CONFIGURED", status: 503 }
+  if (message === "verification_delivery_disabled") return { code: "VERIFICATION_DELIVERY_DISABLED", status: 503 }
+  if (message === "verification_delivery_configuration_error") return { code: "VERIFICATION_DELIVERY_CONFIGURATION_ERROR", status: 503 }
+  if (message === "verification_delivery_temporary_failure") return { code: "VERIFICATION_DELIVERY_TEMPORARY_FAILURE", status: 503 }
+  return { code: "VERIFICATION_DELIVERY_FAILED", status: 502 }
 }
 
 function cleanOperationalText(value: unknown, max = 160): string {
@@ -672,7 +701,8 @@ async function handleEmailVerificationRequest(request: Request, env: Env): Promi
     } catch (error) {
       await updateEmailVerification(env, updated.id, { status: "delivery_failed", metadata: { ...(updated.metadata || {}), delivery_error: String(error instanceof Error ? error.message : error || "delivery_failed") } }).catch(() => undefined)
       await auditEmailVerification(env, { verificationId: updated.id, firebaseUserId: user.userId, email: user.email, action: "request", result: "delivery_failed", request })
-      return errorJson(request, String(error instanceof Error && error.message === "verification_delivery_not_configured" ? "VERIFICATION_DELIVERY_NOT_CONFIGURED" : "VERIFICATION_DELIVERY_FAILED"), 502, true)
+      const failure = emailVerificationDeliveryFailure(error)
+      return errorJson(request, failure.code, failure.status, true)
     }
     await auditEmailVerification(env, { verificationId: updated.id, firebaseUserId: user.userId, email: user.email, action: "request", result: "sent", request })
     return json({
@@ -709,7 +739,8 @@ async function handleEmailVerificationRequest(request: Request, env: Env): Promi
   } catch (error) {
     await updateEmailVerification(env, created.id, { status: "delivery_failed", metadata: { ...(created.metadata || {}), delivery_error: String(error instanceof Error ? error.message : error || "delivery_failed") } }).catch(() => undefined)
     await auditEmailVerification(env, { verificationId: created.id, firebaseUserId: user.userId, email: user.email, action: "request", result: "delivery_failed", request })
-    return errorJson(request, String(error instanceof Error && error.message === "verification_delivery_not_configured" ? "VERIFICATION_DELIVERY_NOT_CONFIGURED" : "VERIFICATION_DELIVERY_FAILED"), 502, true)
+    const failure = emailVerificationDeliveryFailure(error)
+    return errorJson(request, failure.code, failure.status, true)
   }
   await auditEmailVerification(env, { verificationId: created.id, firebaseUserId: user.userId, email: user.email, action: "request", result: "sent", request })
   return json({

@@ -12,6 +12,8 @@ export type AppErrorCode =
   | 'VERIFICATION_RATE_LIMITED'
   | 'VERIFICATION_DELIVERY_DISABLED'
   | 'VERIFICATION_DELIVERY_NOT_CONFIGURED'
+  | 'VERIFICATION_DELIVERY_CONFIGURATION_ERROR'
+  | 'VERIFICATION_DELIVERY_TEMPORARY_FAILURE'
   | 'VERIFICATION_DELIVERY_FAILED'
   | 'SUBSCRIPTION_INACTIVE'
   | 'DOWNLOAD_NOT_ENTITLED'
@@ -34,6 +36,8 @@ const rawToCode: Record<string, AppErrorCode> = {
   verification_rate_limited: 'VERIFICATION_RATE_LIMITED',
   verification_delivery_disabled: 'VERIFICATION_DELIVERY_DISABLED',
   verification_delivery_not_configured: 'VERIFICATION_DELIVERY_NOT_CONFIGURED',
+  verification_delivery_configuration_error: 'VERIFICATION_DELIVERY_CONFIGURATION_ERROR',
+  verification_delivery_temporary_failure: 'VERIFICATION_DELIVERY_TEMPORARY_FAILURE',
   verification_delivery_failed: 'VERIFICATION_DELIVERY_FAILED',
   invalid_credentials: 'AUTH_INVALID_CREDENTIALS',
   auth_invalid_credentials: 'AUTH_INVALID_CREDENTIALS',
@@ -75,6 +79,8 @@ export function userSafeErrorMessage(raw: unknown, status?: number): string {
     case 'VERIFICATION_RATE_LIMITED':
     case 'VERIFICATION_DELIVERY_DISABLED':
     case 'VERIFICATION_DELIVERY_NOT_CONFIGURED':
+    case 'VERIFICATION_DELIVERY_CONFIGURATION_ERROR':
+    case 'VERIFICATION_DELIVERY_TEMPORARY_FAILURE':
     case 'VERIFICATION_DELIVERY_FAILED':
       return code
     case 'AUTH_INVALID_CREDENTIALS':
