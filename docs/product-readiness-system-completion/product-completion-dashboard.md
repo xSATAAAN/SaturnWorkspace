@@ -16,7 +16,7 @@ Updated: 2026-06-25
 ## Production Evidence
 
 - Canonical repository: `D:\SaturnWS\github-deploy\SaturnWorkspace`.
-- Canonical `main` is the current source of truth. The latest code-bearing public site change in this continuation is commit `3e090fb198429cf26d5f3866f9adc41c1651dfdf`; GitHub Pages workflow run `28120228875` deployed that site source successfully. Later commits in this batch may update only living documentation and captured evidence.
+- Canonical `main` is the current source of truth. The latest code-bearing public site/Auth remediation in this continuation is commit `9da6025189eccfff76509bac6f61d18942489f07`; GitHub Pages workflow run `28174200979` deployed that site source successfully. Later commits in this batch may update only living documentation and captured evidence.
 - Supabase project: `Saturn Workspace` / ref `iqvwoivlamglyblftwez`.
 - Applied Supabase migrations:
   - `20260623214309 phase_g_recovery_deletion`
@@ -31,7 +31,7 @@ Updated: 2026-06-25
 - Worker flags in source:
   - Auth: `EMAIL_AUTH_ENABLED=true`.
   - Policy: `EMAIL_OUTBOUND_ENABLED=true`, `EMAIL_INBOUND_ENABLED=true`, `EMAIL_SUPPORT_ENABLED=true`, `EMAIL_AUTH_ENABLED=true`, `EMAIL_SCHEDULER_ENABLED=true`.
-  - Security email producers exist in the current worktree for selected committed session, device, and account-lifecycle events. `EMAIL_SECURITY_ENABLED=true` is deployed on Auth `53764ba0-207e-42e7-84f8-4e59741d0a06`, Admin `85b71833-73d3-445a-a498-d8c1f3b4e9ef`, and Policy `cec58841-cbc9-44e4-853f-054425d29ecc`; production-safe event delivery verification remains pending.
+  - Security email producers exist in the current worktree for selected committed session, device, and account-lifecycle events. `EMAIL_SECURITY_ENABLED=true` is deployed on Auth, Admin, and Policy; production-safe event delivery verification remains pending.
   - Admin alert producers exist in the current worktree for final email queue failure, webhook verification failure, cleanup failure, storage configuration failure, schema mismatch, readiness degradation, and high-severity tamper signals. `EMAIL_ADMIN_ALERTS_ENABLED=true` is deployed on Policy `cec58841-cbc9-44e4-853f-054425d29ecc`, `EMAIL_ADMIN_ALERT_RECIPIENTS` is configured as a Policy Worker secret, and safe alert-delivery verification remains pending.
   - Billing and release email categories remain disabled.
 - Secret inventory:
@@ -45,7 +45,7 @@ Updated: 2026-06-25
   - Auth `check` and `test:phase-c`: passed.
   - Admin `check:syntax` and `test:phase-g`: passed.
   - Desktop Python compile, frontend build, and QA Setup build: passed.
-  - Site Phase B.1, Phase C, and Phase F checks: passed.
+  - Site Phase B.1, Phase B, Phase C, and Phase F checks: passed.
   - Local visual QA generated pricing-card fixture screenshots. Live public-route visual evidence now covers Arabic/English desktop, tablet, and mobile layouts for `/`, `/pricing`, `/downloads`, `/contact`, and `/account/signin`.
 
 ## State and Source-of-Truth Decisions
@@ -71,23 +71,26 @@ Updated: 2026-06-25
 - Billing and release email templates remain disabled because no real committed payment/release event source is active.
 - Security email producers were added in source for new desktop device link, session revoke, device revoke, revoke-all, deletion request/cancel, account suspend, and account reactivate. Local producer tests pass, category flags are deployed, and no production lifecycle mutation was executed for verification.
 - Admin alert producer coverage is implemented in source for the required operational families with deterministic idempotency/cooldown. The approved recipient is configured as a Worker secret, category flags are deployed, and no false production incident was generated.
-- Public pricing copy and card presentation were updated to the approved current prices and promotional trial language. Backend catalog remains price/status truth, while user-facing plan differentiators are localized in the content layer. Live bundle `assets/index-CWMQLj65.js` contains the approved weekly/monthly/annual price values and no provider-name public copy or mojibake markers.
-- Email/password registration OTP boundary defect was found and fixed and deployed: signup no longer provisions a Saturn profile before OTP, Auth account endpoints, explicit provision, and Desktop device linking now fail closed for unverified password identities, OTP verification finalizes the same Firebase UID profile with `verification_source = saturnws_otp`, the frontend verification gate defaults on, and the production site bundle no longer contains OTP test-code display/storage logic. Auth Worker version `a7caa6d5-e7f1-41ef-9974-c474a8a75f7f` and GitHub Pages run `28165825916` are live. Local Auth Worker/Site checks and safe live contract checks pass. Disposable QA inbox acceptance remains pending.
-- Live public rendered evidence for commit `3e090fb198429cf26d5f3866f9adc41c1651dfdf` found and fixed a Contact mobile overflow defect. Recaptured screenshots under `docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public` show 30/30 public route/locale/viewport captures returning 200 with correct RTL/LTR direction and zero horizontal overflow.
+- Public pricing copy and card presentation were rebuilt again after live evidence showed the previous section still had redundant IA. The current hierarchy states the shared full-tool truth once, places the seven-day trial only in monthly/annual cards, removes the large checkout-unavailable banner and repeated strip content, and reduces dead card space. Live bundle `assets/index-rasVfIJe.js` contains the approved weekly/monthly/annual price values and no old pricing strip/banner tokens.
+- Email/password registration OTP boundary defect was found and fixed and deployed: signup no longer provisions a Saturn profile before OTP, Auth account endpoints, explicit provision, and Desktop device linking now fail closed for unverified password identities, OTP verification finalizes the same Firebase UID profile with `verification_source = saturnws_otp`, the frontend verification gate defaults on, and the production site bundle no longer contains OTP test-code display/storage logic. A later live failure in the Auth-to-Policy email-delivery handoff was fixed by routing Auth delivery through the `POLICY_SERVICE` service binding instead of the public Policy URL. Auth Worker version `0186ad21-4c7b-4399-8c92-20a876fd5bee` and GitHub Pages run `28174200979` are live. Local Auth Worker/Site checks and safe live contract checks pass. Disposable QA inbox acceptance remains pending.
+- Email verification page state was corrected as a pending-registration workflow: the destination email is shown once as non-editable information, `/account/verify` without context no longer renders a generic editable email form, and Change email calls the server cancellation endpoint, supersedes the old OTP, preserves non-sensitive signup fields, and returns to signup.
+- Earlier live public rendered evidence for commit `3e090fb198429cf26d5f3866f9adc41c1651dfdf` found and fixed a Contact mobile overflow defect. Recaptured screenshots under `docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public` show 30/30 public route/locale/viewport captures returning 200 with correct RTL/LTR direction and zero horizontal overflow.
 - Public plan catalog CORS source was repaired to allow Saturn public origins as well as Admin origins. Post-deploy verification confirmed `https://admin-api.saturnws.com/api/plans/catalog` returns 200 with `Access-Control-Allow-Origin: https://saturnws.com` for the public origin.
-- Legacy root static website artifacts were removed from source. GitHub Pages continues to publish `site/dist`, and the cutover guard blocks known legacy public bundle tokens from returning. Live HTML references `assets/index-CWMQLj65.js` and `assets/index-C_PYWi_F.css` from workflow run `28120228875`.
+- Legacy root static website artifacts were removed from source. GitHub Pages continues to publish `site/dist`, and the cutover guard blocks known legacy public bundle tokens from returning. Live HTML references `assets/index-rasVfIJe.js` and `assets/index-Bk4Fv71E.css` from workflow run `28174200979`.
 
 ## Operational Configuration Required
 
 | Item | State | Required action |
 | --- | --- | --- |
 | `ADMIN_ROLE_ASSIGNMENTS` | `OPERATIONAL_CONFIGURATION_REQUIRED` | Configure UID-based role JSON as an Admin Worker secret before multi-role acceptance. Do not use email identity. The current UID was not guessed or printed. |
-| Email/password OTP remediation credentialed QA | `PENDING_MANUAL_ACCEPTANCE` | Auth Worker and site are deployed. Live health, route, bundle, CORS, and stable unauthenticated error contracts pass. Credentialed disposable QA registration/OTP proof remains deferred to Phase G without exposing password, OTP, UID, token, or cookies. |
+| Email/password OTP remediation credentialed QA | `PENDING_MANUAL_ACCEPTANCE` | Auth Worker and site are deployed. Live health, route, bundle, CORS, stable unauthenticated error contracts, pending-registration UI, and server enqueue path pass. Credentialed disposable QA inbox proof remains deferred to Phase G without exposing password, OTP, UID, token, or cookies. |
 | Real payment provider | `WAITING_EXTERNAL` | Approve provider, plan mappings, webhook contract, and rollout before checkout or billing emails are enabled. |
 | QA email delivery acceptance | `PENDING_MANUAL_ACCEPTANCE` | Use a dedicated QA recipient in Phase G to confirm provider delivery without exposing OTP values. |
 | QA Desktop Setup artifact | `QA_ARTIFACT_BUILT_PENDING_MANUAL_ACCEPTANCE` | Local artifact: `D:\SaturnWS\build-output\phase-g-qa-installed-channel-20260624-131944\setup\SaturnWorkspace-Setup-1.0.7-beta-phase-g-qa.exe`; SHA256 `527C21D6A87720DB31E0EC4A8F59EA6FF2299C928C1B83447E2AC1E6AAA45DDD`. Not published. |
 | Desktop reproducibility inventory | `RECORDED_PENDING_MANUAL_ACCEPTANCE` | Source manifest and artifact record are under `docs/product-readiness-system-completion/desktop-reproducibility`; no Desktop rebuild was performed in this continuation. |
 | Public plan CORS live verification | `PRODUCTION_VERIFIED_AUTOMATED` | Admin Worker was redeployed and `https://admin-api.saturnws.com/api/plans/catalog` returns `Access-Control-Allow-Origin: https://saturnws.com` for the public origin. |
+| Public pricing Pages deployment | `PRODUCTION_VERIFIED_AUTOMATED` | GitHub Pages run `28174200979` deployed commit `9da6025189eccfff76509bac6f61d18942489f07`. Live bundle `assets/index-rasVfIJe.js` contains the approved weekly/monthly/annual prices and omits the old redundant pricing IA. |
+| Email verification pending-registration state | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Auth Worker `0186ad21-4c7b-4399-8c92-20a876fd5bee` and Pages run `28174200979` are deployed. Browser evidence under `D:\SaturnWS\build-output\phase-g-live-render` records direct-route safe handling, one destination email occurrence, no editable email field, and Change email return to signup. |
 
 ## Explicit Non-Actions
 

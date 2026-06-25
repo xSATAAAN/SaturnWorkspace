@@ -115,7 +115,7 @@ Evidence:
 
 - Files changed: `workers/policy/wrangler.jsonc`, `workers/auth/wrangler.toml`, `workers/admin/wrangler.toml`.
 - Tests: `wrangler secret list` confirmed `EMAIL_ADMIN_ALERT_RECIPIENTS` exists on the Policy Worker and `ADMIN_EMAIL_ENQUEUE_TOKEN` exists on both Policy and Admin Workers. `workers/auth npm run test:phase-c`, `workers/policy npm run test:phase-g`, and `workers/admin npm run check:syntax && npm run test:phase-f` pass after the configuration changes.
-- Deployment evidence: Policy Worker `cec58841-cbc9-44e4-853f-054425d29ecc`, Auth Worker `53764ba0-207e-42e7-84f8-4e59741d0a06`, and Admin Worker `85b71833-73d3-445a-a498-d8c1f3b4e9ef` were deployed on 2026-06-24.
+- Deployment evidence: Policy Worker `cec58841-cbc9-44e4-853f-054425d29ecc`, Auth Worker `0186ad21-4c7b-4399-8c92-20a876fd5bee`, and Admin Worker `85b71833-73d3-445a-a498-d8c1f3b4e9ef` are the current deployed versions relevant to this checklist.
 - Live verification evidence: `https://api.saturnws.com/health` and `https://auth.saturnws.com/health` returned 200 after deployment. Post-deploy secret inventory confirmed `EMAIL_ADMIN_ALERT_RECIPIENTS` exists on Policy and `ADMIN_EMAIL_ENQUEUE_TOKEN` exists on Policy/Admin.
 - Remaining limitation: `ADMIN_ROLE_ASSIGNMENTS` is not configured. The current admin Firebase UID has not been resolved from a live trusted identity in this session, and it must not be guessed, printed, or derived from stale backups. UID-based super-admin assignment remains an operational blocker for closing this item.
 
@@ -134,11 +134,13 @@ Requirement:
 
 Evidence:
 
-- Files changed: `workers/auth/src/index.ts`, `workers/auth/scripts/check-phase-c-device-linking.mjs`, `site/src/api/emailVerification.ts`, `site/src/new-ui/adapters/contracts.ts`, `site/src/new-ui/adapters/errorContract.ts`, `site/src/new-ui/adapters/productionAdapters.ts`, `site/src/new-ui/adapters/productionFeatureFlags.ts`, `site/src/new-ui/app/navigationIntent.ts`, `site/src/new-ui/pages/production/ProductionPages.tsx`, `site/scripts/check-phase-b-production-rollout.mjs`, `docs/product-readiness-system-completion/assurance-baseline.md`, `docs/product-readiness-system-completion/system-and-workflow-map.md`, `docs/product-readiness-system-completion/workflow-assurance-matrix.md`.
+- Files changed: `workers/auth/src/index.ts`, `workers/auth/src/types.ts`, `workers/auth/wrangler.toml`, `workers/auth/scripts/check-phase-c-device-linking.mjs`, `site/src/api/emailVerification.ts`, `site/src/new-ui/adapters/contracts.ts`, `site/src/new-ui/adapters/errorContract.ts`, `site/src/new-ui/adapters/productionAdapters.ts`, `site/src/new-ui/adapters/productionFeatureFlags.ts`, `site/src/new-ui/app/navigationIntent.ts`, `site/src/new-ui/pages/production/ProductionPages.tsx`, `site/src/new-ui/foundation/auth.css`, `site/scripts/check-phase-b-production-rollout.mjs`, `docs/product-readiness-system-completion/assurance-baseline.md`, `docs/product-readiness-system-completion/system-and-workflow-map.md`, `docs/product-readiness-system-completion/workflow-assurance-matrix.md`.
 - Root cause found:
   - `productionAdapters.auth.signUpWithEmail` created a Firebase password user and immediately called `/account/provision`.
   - Auth Worker `/account/subscription`, `/account/identity`, and device authorization paths auto-provisioned profiles for unverified password identities.
   - Frontend email verification was controlled by a build-time flag that defaulted off when unset.
+  - The verification page still allowed a generic editable email route after signup because pending verification context was only treated as a loose email string instead of a registration-bound state object.
+  - Live OTP delivery failed at the Auth-to-Policy enqueue handoff before D1 `email_jobs` insert. Direct Policy enqueue with the rotated shared token succeeded, which isolated the failure to Auth's public upstream handoff rather than Resend, scheduler, or D1 schema.
 - Local remediation:
   - Email/password signup is provider-only until OTP.
   - OTP request stores only hashed code and non-sensitive registration metadata.
@@ -147,27 +149,33 @@ Evidence:
   - Portal routes gate unverified email/password users to the verification page before rendering protected portal content.
   - Email verification feature flag is enabled by default and fails closed through the Auth Worker if delivery is unavailable.
   - Production UI no longer stores or displays OTP test codes; test transport remains confined to the Auth Worker behavior test.
+  - Pending registration context is structured and non-sensitive. The verification page shows the destination email once as non-editable information, renders OTP inputs only, and direct `/account/verify` without context fails safely to signup/sign-in recovery.
+  - Change email now calls `/email-verification/cancel`, marks the pending verification as superseded server-side, preserves valid non-sensitive signup fields, and returns to the editable signup step.
+  - Auth Worker delivers verification email through the `POLICY_SERVICE` service binding when targeting Policy, avoiding the public HTTP handoff for the internal queue operation.
 - Tests:
   - `workers/auth npm run check`: passed.
-  - `workers/auth npm run test:phase-c`: passed, including no profile, no `/account/subscription`, no `/account/identity`, no explicit `/account/provision`, and no Desktop session before OTP; verified profile, account identity/subscription, and Desktop session after OTP.
+  - `workers/auth npm run test:phase-c`: passed, including no profile, no `/account/subscription`, no `/account/identity`, no explicit `/account/provision`, no Desktop session before OTP, server-side Change email supersede, old OTP invalid after supersede, verified profile, account identity/subscription, and Desktop session after OTP.
   - `site npm run test:phase-b`: passed.
   - `site npm run test:phase-c`: passed.
   - `site npm run test:phase-f`: passed.
   - `site npm run build`: passed; known chunk-size warning remains.
   - `rg "test_code|localEmailVerificationCode|LOCAL_EMAIL_VERIFICATION_TEST_CODE_KEY" site/dist site/src/new-ui site/src/api`: no `site/dist` or `site/src/new-ui` matches; only the erased API response type remains in source.
-- Deployment evidence: Auth Worker deployed from this remediation source as version `a7caa6d5-e7f1-41ef-9974-c474a8a75f7f`; GitHub Pages workflow run `28165825916` deployed commit `55052a5633606828483ea011006d606be7f8602f`.
+- Deployment evidence: Auth Worker deployed from this remediation source as version `0186ad21-4c7b-4399-8c92-20a876fd5bee`; GitHub Pages workflow run `28174200979` deployed commit `9da6025189eccfff76509bac6f61d18942489f07`.
 - Live verification evidence:
   - `https://auth.saturnws.com/health` returned success for `auth-worker`.
   - `https://saturnws.com/account/signin/`, `/account/signup/`, and `/account/verify/` returned 200.
-  - Live HTML references `assets/index-BW2vsttT.js`.
+  - Live HTML references `assets/index-rasVfIJe.js`.
   - Live bundle scan found no `test_code` and no `localEmailVerificationCode` token.
   - Auth CORS preflight from `https://saturnws.com` to `/account/provision` returned 204 with the approved origin.
   - Unauthenticated `/account/provision`, `/account/subscription`, and `/email-verification/request` returned stable 4xx JSON contracts rather than 500.
-- Remaining limitation: disposable QA inbox/manual OTP acceptance and credentialed live happy-path verification remain Phase G; do not claim inbox delivery or manual acceptance from automated tests or unauthenticated contract checks.
+  - Live signup journey reached `/account/verify`; `/email-verification/request` returned `200` with `status:"sent"` after the service-binding deployment.
+  - Pending-registration verification rendered one redacted destination email occurrence, six OTP inputs, Continue, Resend, and Change email with no editable email input. Direct `/account/verify` without context rendered no email/OTP form.
+  - Change email posted to `/email-verification/cancel` and returned to signup with valid non-sensitive fields preserved.
+- Remaining limitation: disposable QA inbox/manual OTP acceptance, all browser edge cases for existing-provider collision/case-only/back/multiple-tabs/expired context, and credentialed live happy-path completion remain Phase G; do not claim inbox delivery or manual acceptance from automated tests or safe live checks.
 
 ## 5. Pricing Page: Remove the Current Copy Model and Rebuild It
 
-Status: `IN_PROGRESS`
+Status: `COMPLETE_WITH_EVIDENCE`
 
 Requirement:
 
@@ -184,10 +192,10 @@ Requirement:
 Evidence:
 
 - Files changed: `site/src/new-ui/pages/production/ProductionPages.tsx`, `site/src/new-ui/pages/public/PublicPages.tsx`, `site/src/new-ui/components/ui/ProductCards.tsx`, `site/src/new-ui/content/publicCopy.ts`, `site/src/new-ui/i18n/messages.ts`, `site/src/new-ui/foundation/components.css`, `site/src/new-ui/foundation/public.css`, `site/scripts/check-copy-quality.mjs`.
-- Tests: `site node scripts/check-copy-quality.mjs`, `site npm run test:phase-f`, `site npx tsc -p src/new-ui/tsconfig.json --noEmit`, and `site npm run build` pass. Build warning: main JS chunk exceeds 500 kB.
-- Deployment evidence: GitHub Pages workflow run `28120228875` completed successfully for commit `3e090fb198429cf26d5f3866f9adc41c1651dfdf`. Live HTML now references `assets/index-CWMQLj65.js` and `assets/index-C_PYWi_F.css`. Admin Worker catalog CORS was deployed in `85b71833-73d3-445a-a498-d8c1f3b4e9ef`.
-- Live verification evidence: live bundle `assets/index-CWMQLj65.js` returns 200 through browser/Node/curl checks, contains the approved weekly/monthly/annual pricing values, contains the popular Arabic badge text, does not contain the old current-weekly `$15/week` phrasing, does not contain public provider names, and has no mojibake markers. `/pricing`, `/downloads`, `/contact`, and `/account/signin` returned 200 and load the same live bundle. Public rendered screenshots were recaptured after deployment under `docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public`.
-- Remaining limitation: full product-wide copy route inventory beyond the public route screenshot set is still required before this can be `COMPLETE_WITH_EVIDENCE`.
+- Tests: `site npm run test:phase-b`, `site node scripts/check-copy-quality.mjs`, `site npm run test:phase-f`, `site npx tsc -p src/new-ui/tsconfig.json --noEmit`, and `site npm run build` pass. Build warning: main JS chunk exceeds 500 kB.
+- Deployment evidence: GitHub Pages workflow run `28174200979` completed successfully for commit `9da6025189eccfff76509bac6f61d18942489f07`. Live HTML now references `assets/index-rasVfIJe.js` and `assets/index-Bk4Fv71E.css`. Admin Worker catalog CORS was deployed in `85b71833-73d3-445a-a498-d8c1f3b4e9ef`.
+- Live verification evidence: live bundle `assets/index-rasVfIJe.js` returns 200 and contains the approved weekly/monthly/annual pricing values. Rendered screenshots under `D:\SaturnWS\build-output\phase-g-live-render` cover Arabic/English desktop, tablet, and mobile pricing. The captured summary records three cards, one shared full-tool statement, monthly/annual trial labels, no weekly trial label, no shared trial strip, no old shared-benefit strip, no large checkout banner, 265px card heights, no console errors, no failed requests, no Service Worker registration, and no Cache Storage entries.
+- Remaining limitation: none for the pricing page IA itself. Full product-wide copy route inventory remains item 6 and does not reopen item 5.
 
 ## 6. Product-Wide Content Reconstruction
 
@@ -205,8 +213,8 @@ Evidence:
 
 - Files changed: `workers/admin/src/index.js`, `workers/admin/src/security/payments.js`, `workers/admin/src/routes/downloads.test.mjs`, `workers/admin/src/adminCors.test.mjs`, `workers/admin/package.json`, `site/src/new-ui/adapters/productionAdapters.ts`, `site/src/new-ui/pages/production/ProductionPages.tsx`, `site/scripts/check-phase-f-admin.mjs`.
 - Tests: `workers/admin npm run check:syntax`, `workers/admin npm run test:phase-f`, `site npm run test:phase-f`, `site npx tsc -p src/new-ui/tsconfig.json --noEmit`, and `site npm run build` pass. Admin CORS tests cover approved admin preflight, unknown-origin rejection, public catalog origin, and customer-download rejection from admin origin.
-- Deployment evidence: Admin Worker `85b71833-73d3-445a-a498-d8c1f3b4e9ef` and GitHub Pages workflow run `28120228875` are deployed.
-- Live verification evidence: safe Admin/Public CORS checks passed, and live public routes load `assets/index-CWMQLj65.js`. Public rendered route evidence covers `/`, `/pricing`, `/downloads`, `/contact`, and `/account/signin` in Arabic/English desktop, tablet, and mobile. The first live pass found Contact mobile overflow; the shared contact CSS was fixed and recaptured evidence shows 30/30 route/locale/viewport captures with 200 responses, correct RTL/LTR direction, no console errors, no real resource failures, and zero horizontal overflow.
+- Deployment evidence: Admin Worker `85b71833-73d3-445a-a498-d8c1f3b4e9ef` and GitHub Pages workflow run `28174200979` are deployed.
+- Live verification evidence: safe Admin/Public CORS checks passed, and live public routes load `assets/index-rasVfIJe.js`. Public rendered route evidence covers `/`, `/pricing`, `/downloads`, `/contact`, and `/account/signin` in Arabic/English desktop, tablet, and mobile. The first live pass found Contact mobile overflow; the shared contact CSS was fixed and recaptured evidence shows 30/30 route/locale/viewport captures with 200 responses, correct RTL/LTR direction, no console errors, no real resource failures, and zero horizontal overflow. Current 2026-06-25 pricing/verification evidence is recorded under `D:\SaturnWS\build-output\phase-g-live-render`.
 - Remaining limitation: product-wide rendered route inventory across authenticated customer/Admin surfaces and authenticated live Admin route verification remain required.
 
 ## 7. Fix Admin Releases `forbidden_origin` as a Shared Contract Defect
@@ -243,7 +251,7 @@ Evidence:
 
 - Files changed: `workers/policy/wrangler.jsonc`, `workers/policy/package.json`, `workers/policy/scripts/check-phase-g-admin-alerts.mjs`.
 - Tests: `workers/policy npm run test:phase-g` passes and now includes admin alert checks for tamper-signature deduplication, email final-failure alerting, final-failure loop prevention, configured recipient path, provider message storage, and required producer source coverage.
-- Deployment evidence: Auth Worker `53764ba0-207e-42e7-84f8-4e59741d0a06`, Admin Worker `85b71833-73d3-445a-a498-d8c1f3b4e9ef`, and Policy Worker `cec58841-cbc9-44e4-853f-054425d29ecc` were deployed with `EMAIL_SECURITY_ENABLED=true` visible in deploy bindings.
+- Deployment evidence: Auth Worker `0186ad21-4c7b-4399-8c92-20a876fd5bee`, Admin Worker `85b71833-73d3-445a-a498-d8c1f3b4e9ef`, and Policy Worker `cec58841-cbc9-44e4-853f-054425d29ecc` were deployed with `EMAIL_SECURITY_ENABLED=true` visible in deploy bindings.
 - Live verification evidence: `https://auth.saturnws.com/health` and `https://api.saturnws.com/health` returned 200 after deployment. No real account lifecycle mutation was executed for this verification.
 - Remaining limitation: live alert delivery should be verified with a safe fixture only; no alert storm or routine-success alert was generated.
 
@@ -322,10 +330,10 @@ Requirement:
 
 Evidence:
 
-- Files changed: pricing layout/copy files listed in item 5.
-- Tests: local pricing/source copy checks and `site npm run build` pass.
-- Deployment evidence: GitHub Pages workflow run `28120228875` deployed commit `3e090fb198429cf26d5f3866f9adc41c1651dfdf`.
-- Live verification evidence: local pricing fixture screenshots exist under `docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-pricing-fixture`. Live public screenshots exist under `docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public` and cover Arabic/English desktop, tablet, and mobile for `/`, `/pricing`, `/downloads`, `/contact`, and `/account/signin`. Summary: 30 screenshots, 30 HTTP 200 responses, correct RTL/LTR direction, no console errors, no real resource request failures, and zero horizontal overflow after the Contact mobile grid fix.
+- Files changed: pricing layout/copy files listed in item 5 and verification-page files listed in item 4a.
+- Tests: local pricing/source copy checks, `workers/auth npm run test:phase-c`, `site npm run test:phase-b`, and `site npm run build` pass.
+- Deployment evidence: GitHub Pages workflow run `28174200979` deployed commit `9da6025189eccfff76509bac6f61d18942489f07`; Auth Worker version `0186ad21-4c7b-4399-8c92-20a876fd5bee` is deployed.
+- Live verification evidence: local pricing fixture screenshots exist under `docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-pricing-fixture`. Older public screenshots exist under `docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public`. Current 2026-06-25 live pricing and verification-page screenshots/summaries are recorded under `D:\SaturnWS\build-output\phase-g-live-render`; sensitive email values in summaries are redacted.
 - Remaining limitation: authenticated representative page evidence for Account overview, Subscription, Support, Admin Overview, Admin Users, Admin Releases, and Admin Communications is not complete.
 
 ## 13. Preserve Completed Safe Boundaries
@@ -363,11 +371,11 @@ Requirement:
 
 Evidence:
 
-- Files changed: `workers/auth/scripts/check-phase-c-device-linking.mjs`, `workers/policy/scripts/check-phase-g-admin-alerts.mjs`, `workers/admin/src/adminCors.test.mjs`, `site/scripts/check-copy-quality.mjs`, `site/scripts/check-phase-f-admin.mjs`.
-- Tests: `workers/auth npm run test:phase-c`, `workers/policy npm run test:phase-g`, `workers/admin npm run check:syntax && npm run test:phase-f`, `site node scripts/check-copy-quality.mjs`, `site npm run test:phase-f`, `site npx tsc -p src/new-ui/tsconfig.json --noEmit`, `site npm run build`, and `git diff --check` pass.
+- Files changed: `workers/auth/scripts/check-phase-c-device-linking.mjs`, `workers/policy/scripts/check-phase-g-admin-alerts.mjs`, `workers/admin/src/adminCors.test.mjs`, `site/scripts/check-copy-quality.mjs`, `site/scripts/check-phase-b-production-rollout.mjs`, `site/scripts/check-phase-f-admin.mjs`.
+- Tests: `workers/auth npm run check`, `workers/auth npm run test:phase-c`, `workers/policy npm run check`, `workers/policy npm run test:phase-g`, `workers/admin npm run check:syntax && npm run test:phase-f`, `site npm run test:phase-b`, `site node scripts/check-copy-quality.mjs`, `site npm run test:phase-f`, `site npx tsc -p src/new-ui/tsconfig.json --noEmit`, `site npm run build`, and `git diff --check` pass.
 - Deployment evidence: tests ran before Worker deployment and GitHub Pages deployment.
-- Live verification evidence: live bundle and CORS checks provide additional deployed evidence for the relevant test families.
-- Remaining limitation: authenticated Admin route sweep, current super-admin role-assignment proof, full product-wide no-op inventory validation, and authenticated rendered page evidence remain unfinished. Public route rendered evidence is recorded separately in item 12.
+- Live verification evidence: live bundle, CORS checks, pricing browser evidence, direct verify browser evidence, and pending-registration Change email browser evidence provide additional deployed evidence for the relevant test families.
+- Remaining limitation: authenticated Admin route sweep, current super-admin role-assignment proof, full product-wide no-op inventory validation, and authenticated rendered page evidence remain unfinished. Public route and verification-route rendered evidence is recorded separately in item 12.
 
 ## 15. Deployment and Live Verification
 
@@ -382,10 +390,10 @@ Requirement:
 
 Evidence:
 
-- Files changed: `workers/policy/wrangler.jsonc`, `workers/auth/wrangler.toml`, `workers/admin/wrangler.toml`, Admin CORS/source files, pricing site files, and living documentation.
+- Files changed: `workers/policy/wrangler.jsonc`, `workers/auth/wrangler.toml`, `workers/auth/src/types.ts`, `workers/admin/wrangler.toml`, Admin CORS/source files, pricing/site verification files, and living documentation.
 - Tests: local Worker/Site checks listed in item 14 pass.
-- Deployment evidence: Policy/Auth/Admin Workers deployed on 2026-06-24. GitHub Pages workflow run `28120228875` completed successfully for commit `3e090fb198429cf26d5f3866f9adc41c1651dfdf`.
-- Live verification evidence: policy/auth health checks returned 200; Admin Releases approved-origin preflight returned 204; unknown origins remain rejected; public catalog returned 200 from the public origin; live public routes load `assets/index-CWMQLj65.js` and `assets/index-C_PYWi_F.css`; live public rendered screenshots captured for Arabic/English desktop/tablet/mobile show zero horizontal overflow.
+- Deployment evidence: Policy/Admin Workers deployed on 2026-06-24; Auth Worker version `0186ad21-4c7b-4399-8c92-20a876fd5bee` deployed on 2026-06-25. GitHub Pages workflow run `28174200979` completed successfully for commit `9da6025189eccfff76509bac6f61d18942489f07`.
+- Live verification evidence: policy/auth health checks returned 200; Admin Releases approved-origin preflight returned 204; unknown origins remain rejected; public catalog returned 200 from the public origin; live public routes load `assets/index-rasVfIJe.js` and `assets/index-Bk4Fv71E.css`; live pricing/verification screenshots captured in `D:\SaturnWS\build-output\phase-g-live-render` show the current pricing hierarchy and pending-registration verification state.
 - Remaining limitation: authenticated Admin routes, rendered visual evidence, safe event-delivery verification, and manual acceptance remain pending.
 
 ## 16. Living Documentation
@@ -403,7 +411,7 @@ Evidence:
 
 - Files changed: this checklist, product dashboard, issue tracker, feature/content/email matrices, operational inventory, acceptance plan, Phase G summary, and the redacted email rollout report.
 - Tests: documentation changes are covered by `git diff --check` plus the source/build checks in item 14.
-- Deployment evidence: site-source updates were deployed through `3e090fb198429cf26d5f3866f9adc41c1651dfdf`; live-public-visual-evidence documentation and screenshots are committed in the current branch after that site-source deploy.
+- Deployment evidence: site-source updates were deployed through `9da6025189eccfff76509bac6f61d18942489f07`; live-public-visual-evidence documentation and screenshots from 2026-06-24 remain committed, while 2026-06-25 verification/pricing evidence is recorded under build output to avoid committing screenshots that include synthetic registration context.
 - Live verification evidence: deployment, live bundle, and CORS evidence is recorded in the relevant entries.
 - Remaining limitation: current-super-admin `ADMIN_ROLE_ASSIGNMENTS`, authenticated Admin route sweep, authenticated rendered evidence, and feature/control inventory are not yet closed.
 

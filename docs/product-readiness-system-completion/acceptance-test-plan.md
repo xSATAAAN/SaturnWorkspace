@@ -18,6 +18,7 @@ This is the only manual acceptance gate. It has not started. Phase B, Phase C, P
 
 - Verify direct routes, refresh, sign-in, sign-out, return paths, verified/unverified states, Arabic/English, RTL/LTR, and loading/error behavior.
 - Verify new email/password signup does not enter the account portal or create an active Saturn profile before OTP; after OTP, the same Firebase UID profile contains the submitted display name.
+- Verify the email verification page belongs to the pending registration: the destination email appears once, is not editable, OTP inputs render, direct `/account/verify` without context does not create a generic verification form, and Change email supersedes the old request before returning to signup.
 - Verify legacy email/password account without Saturn OTP is gated to verification on next protected access and resumes the same account after OTP.
 - Confirm account switching clears user-scoped cache.
 - Confirm a user without a subscription can authenticate and link but receives no paid entitlement.
@@ -33,7 +34,7 @@ This is the only manual acceptance gate. It has not started. Phase B, Phase C, P
 - Test no subscription, active, trial, grace, expired, suspended, lifetime, history-only, and integrity-conflict fixtures.
 - Confirm Customer and Admin projections agree and no plan is inferred from email or row order.
 - Verify protected downloads allow only entitled QA users.
-- Verify public pricing displays the approved weekly, monthly, and annual discount/trial presentation in Arabic and English, while checkout remains honestly disabled until the provider is configured.
+- Verify public pricing displays the approved weekly, monthly, and annual discount/trial presentation in Arabic and English, while checkout remains honestly disabled until the provider is configured. Monthly and Annual must show the seven-day trial in-card; Weekly must not. The shared full-tool statement must appear once, and the old shared strip/large unavailable banner must not return.
 - Verify live public plan catalog CORS from `https://saturnws.com` after Admin Worker deployment.
 - Public rendered-route evidence for `/`, `/pricing`, `/downloads`, `/contact`, and `/account/signin` is recorded for Arabic/English desktop, tablet, and mobile under `docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public`; manual acceptance still needs human review of the screenshots and authenticated account/Admin surfaces.
 

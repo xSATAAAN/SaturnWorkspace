@@ -65,11 +65,13 @@ Consolidated manual acceptance has not started. This report preserves the implem
 - Repository mojibake guard scans runtime source, Workers, `AGENTS.md`, and generated `site/dist`.
 - Desktop source/package product scan is clean, excluding the intentional detector in `vault.py` and third-party library metadata.
 - Email content guard renders Arabic/English HTML and plain text and blocks mojibake, missing charset, missing RTL/LTR wrappers, empty CTA URLs, unsafe interpolation, disabled test sends, and implementation wording.
-- Public pricing content uses approved weekly/monthly/annual discounted prices, current promotional trial language, and localized plan differentiators instead of raw backend feature text.
-- Public pricing visual evidence was captured for Arabic/English desktop, tablet, and mobile layouts using a static local catalog fixture. This is implementation evidence only, not manual acceptance.
+- Public pricing content uses approved weekly/monthly/annual discounted prices, current promotional trial language, and localized plan differentiators instead of raw backend feature text. The current live IA removes the old repeated shared strip, large checkout-unavailable banner, and filler card copy; the shared full-tool statement appears once and monthly/annual trial terms are in-card.
+- Public pricing visual evidence was captured for Arabic/English desktop, tablet, and mobile layouts using browser evidence. This is implementation evidence only, not manual acceptance.
 - Live public rendered evidence was captured from `https://saturnws.com` for `/`, `/pricing`, `/downloads`, `/contact`, and `/account/signin` in Arabic/English desktop, tablet, and mobile layouts. The first live pass found Contact mobile horizontal overflow; the shared contact CSS was fixed and the recaptured summary records 30/30 route/locale/viewport combinations returning 200, correct RTL/LTR direction, no console errors, no real resource failures, and zero horizontal overflow.
 - Legacy root static website artifacts were removed from source: root `index.html`, old root legal/contact HTML pages, and root generated `assets/index-*` bundles. The active publish path remains `site/dist`.
-- `site/scripts/check-frontend-cutover.mjs` blocks legacy public bundle tokens including outdated pricing, old contact handles, provider-specific public copy, and old beta-access wording. GitHub Pages workflow run `28120228875` deployed commit `3e090fb198429cf26d5f3866f9adc41c1651dfdf`; live HTML references `/assets/index-CWMQLj65.js` and `/assets/index-C_PYWi_F.css`.
+- `site/scripts/check-frontend-cutover.mjs` blocks legacy public bundle tokens including outdated pricing, old contact handles, provider-specific public copy, and old beta-access wording. GitHub Pages workflow run `28174200979` deployed commit `9da6025189eccfff76509bac6f61d18942489f07`; live HTML references `/assets/index-rasVfIJe.js` and `/assets/index-Bk4Fv71E.css`.
+- Email verification page state was corrected after live rendered evidence contradicted prior reports. Pending-registration verification now displays the destination email once as non-editable account-flow information, direct `/account/verify` without context no longer shows a generic editable email form, and Change email performs a server-side supersede transition before returning to signup.
+- OTP delivery failure was isolated to the Auth-to-Policy enqueue handoff before D1 `email_jobs` insert. Direct Policy enqueue with the shared token succeeded, so the production fix routes Auth delivery through the `POLICY_SERVICE` binding. Auth Worker version `0186ad21-4c7b-4399-8c92-20a876fd5bee` is deployed.
 
 ## Support Attachments
 
@@ -114,6 +116,7 @@ Install/uninstall smoke was not executed because it would modify the real local 
 - `npm audit --audit-level=high` in `site`, `workers/auth`, `workers/admin`, and `workers/policy`
 - `npm run test:phase-g` in `workers/policy`
 - `npm run check` and `npm run test:phase-c` in `workers/auth`
+- `npm run test:phase-b` in `site`
 - `npm run check:syntax` and `npm run test:phase-g` in `workers/admin`
 - `npm run test:phase-c` and `npm run test:phase-f` in `site`
 - `npm run test:phase-b1` in `site`
@@ -134,7 +137,7 @@ Known warnings:
 
 ## Production Deployments
 
-- Auth Worker version deployed during this batch: `53764ba0-207e-42e7-84f8-4e59741d0a06`.
+- Auth Worker version deployed during this batch: `0186ad21-4c7b-4399-8c92-20a876fd5bee`.
 - Policy Worker version deployed during this batch: `cec58841-cbc9-44e4-853f-054425d29ecc`.
 - Admin Worker version deployed during this batch: `85b71833-73d3-445a-a498-d8c1f3b4e9ef`.
 - Live health checks:
@@ -162,7 +165,8 @@ Known warnings:
 | Payment provider | `WAITING_EXTERNAL` | Approve and configure real provider, mappings, webhooks, rollback, and billing email activation. |
 | Manual Desktop install/uninstall acceptance | `PENDING_MANUAL_ACCEPTANCE` | Test install, launch, shortcuts, Add/Remove Programs, repair/upgrade, uninstall, logs, and data retention in Phase G manual acceptance. |
 | Public plan CORS deployment verification | `PRODUCTION_VERIFIED_AUTOMATED` | Admin Worker was redeployed and the live plan catalog allows `https://saturnws.com` as an origin. |
-| Public pricing Pages deployment | `PRODUCTION_VERIFIED_AUTOMATED` | GitHub Pages deployed the current commit. Live bundle `assets/index-CWMQLj65.js` contains the approved weekly/monthly/annual prices, omits public provider-name copy, and has no mojibake markers. |
+| Public pricing Pages deployment | `PRODUCTION_VERIFIED_AUTOMATED` | GitHub Pages deployed the current commit. Live bundle `assets/index-rasVfIJe.js` contains the approved weekly/monthly/annual prices, omits the old redundant pricing IA, omits public provider-name copy, and has no mojibake markers. |
+| Email verification pending-registration state | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Auth Worker `0186ad21-4c7b-4399-8c92-20a876fd5bee` and Pages run `28174200979` are deployed. Browser evidence under `D:\SaturnWS\build-output\phase-g-live-render` records direct-route safe handling, one destination email occurrence, no editable email field, and Change email return to signup. |
 | Admin alert rollout verification | `DEPLOYED_PENDING_SAFE_EVENT_VERIFICATION` | Required admin alert producers exist, the recipient secret is configured, and Policy flag is deployed. Safe alert-delivery verification is pending. |
 
 Current state: `PHASE_G_PRE_ACCEPTANCE_COMPLETION_ACTIVE`.

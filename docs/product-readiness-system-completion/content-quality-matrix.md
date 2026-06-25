@@ -1,6 +1,6 @@
 # Content Quality Matrix
 
-Updated: 2026-06-24
+Updated: 2026-06-25
 
 Scope: public website, customer portal, admin UI, operational email, and rendered runtime copy. This matrix records the current quality rules; historical mojibake examples were removed from the living document so that current documentation does not preserve corrupted text.
 
@@ -13,7 +13,8 @@ Scope: public website, customer portal, admin UI, operational email, and rendere
 | Frontend cutover guard | `ACTIVE` | `site/scripts/check-frontend-cutover.mjs` verifies SPA fallbacks and blocks development-preview tokens plus legacy public bundle tokens such as outdated prices, old contact handles, provider-specific public copy, and old beta-access wording. |
 | Email content guard | `VERIFIED_AUTOMATED` | `workers/policy/scripts/check-phase-g-email-content.mjs` renders Arabic/English HTML and plain text for catalog events. |
 | Public pricing visual fixture | `VERIFIED_LOCAL_FIXTURE` | Arabic/English pricing cards were rendered at desktop, tablet, and mobile sizes with a local static catalog fixture. No horizontal overflow was found after the responsive header fix. |
-| Public pricing reconstruction | `PRODUCTION_VERIFIED_AUTOMATED` | Pricing source now presents weekly, monthly, and annual plans as full-tool subscriptions differentiated by period, approved price/discount, and trial terms. Checkout remains honestly disabled until payment provider integration exists. Live bundle `assets/index-CWMQLj65.js` contains the approved values and no provider-name public copy or mojibake markers. |
+| Public pricing reconstruction | `PRODUCTION_VERIFIED_AUTOMATED` | Pricing source now presents weekly, monthly, and annual plans as full-tool subscriptions differentiated by period, approved price/discount, and monthly/annual trial terms. Checkout remains honestly disabled until payment provider integration exists. Live bundle `assets/index-rasVfIJe.js` contains the current values, omits the old pricing strip/banner implementation, and has no provider-name public copy or mojibake markers. |
+| Email verification state model | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Pending-registration verification now displays the destination email once as non-editable account-flow information, renders only OTP inputs, and offers resend/change-email actions. Direct `/account/verify` without context no longer renders a generic editable email form. Change-email cancellation supersedes the old request server-side. |
 | Live public rendered route evidence | `RECORDED_PUBLIC_ONLY` | Live screenshots under `docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public` cover `/`, `/pricing`, `/downloads`, `/contact`, and `/account/signin` in Arabic/English at desktop, tablet, and mobile sizes. The first pass found Contact mobile overflow; the current captured summary records 30/30 route/locale/viewport combinations with 200 responses, correct RTL/LTR direction, no console errors, no real resource failures, and zero horizontal overflow. |
 | Admin raw error prevention | `PENDING_DEPLOYMENT_VERIFICATION` | Admin Release/source CORS contract was repaired to avoid exposing raw `forbidden_origin` in normal UI paths; authenticated live route sweep remains required before acceptance. |
 | Security/admin alert email copy | `VERIFIED_AUTOMATED` | Phase G email content tests render Arabic/English templates and now run alongside security producer/admin alert lifecycle checks. Billing and release templates remain prepared but disabled. |
@@ -75,7 +76,8 @@ Scope: public website, customer portal, admin UI, operational email, and rendere
 | Full manual semantic review | `DEFERRED_TO_PHASE_G_MANUAL_ACCEPTANCE` | Manual acceptance has not started. |
 | Legal copy approval | `WAITING_EXTERNAL` | Requires legal/product approval separate from implementation. |
 | Payment copy after provider mapping | `WAITING_EXTERNAL` | Requires real payment provider and approved checkout flow. |
-| Pricing fixture screenshots | `RECORDED` | `docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-pricing-fixture` contains Arabic/English desktop, tablet, and mobile evidence. |
-| Live pricing bundle after current reconstruction | `RECORDED` | GitHub Pages workflow run `28120228875` deployed commit `3e090fb198429cf26d5f3866f9adc41c1651dfdf`; live HTML loads `assets/index-CWMQLj65.js`. |
+| Pricing fixture screenshots | `RECORDED` | `D:\SaturnWS\build-output\phase-g-live-render` contains the 2026-06-25 Arabic/English desktop, tablet, and mobile live pricing evidence for the current pricing IA. |
+| Live pricing bundle after current reconstruction | `RECORDED` | GitHub Pages workflow run `28174200979` deployed commit `9da6025189eccfff76509bac6f61d18942489f07`; live HTML loads `assets/index-rasVfIJe.js`. |
+| Email verification rendered evidence | `RECORDED` | `D:\SaturnWS\build-output\phase-g-live-render` contains direct-route and pending-registration screenshots plus a redacted summary proving no editable email input, one destination email occurrence, six OTP inputs, and working Change email return to signup. |
 | Authenticated Admin Releases after origin repair | `PENDING_DEPLOYMENT_VERIFICATION` | Requires authenticated Admin route sweep after Admin Worker deployment; an unauthenticated 401 or page shell is not sufficient evidence. |
 | Legacy root static website artifacts | `REMOVED_FROM_SOURCE` | Root `index.html`, legacy root legal/contact HTML pages, and root generated `assets/index-*` bundles were removed from Git-tracked source. The active GitHub Pages workflow publishes only `site/dist`. |

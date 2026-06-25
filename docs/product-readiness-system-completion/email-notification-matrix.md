@@ -1,6 +1,6 @@
 # Email and Notification Matrix
 
-Updated: 2026-06-24
+Updated: 2026-06-25
 
 Status: `PHASE_G_PRE_ACCEPTANCE_COMPLETION_ACTIVE`
 
@@ -10,7 +10,7 @@ This matrix records event-to-message coverage. It does not enable additional ema
 
 | Category | Flag / config | Current source state | Notes |
 | --- | --- | --- | --- |
-| Auth email | `EMAIL_AUTH_ENABLED` | Enabled in Auth and Policy source | Verification/resend queue path is active; provider delivery needs QA recipient acceptance. |
+| Auth email | `EMAIL_AUTH_ENABLED` | Enabled in Auth and Policy source | Verification/resend queue path is active through Auth -> Policy service binding; provider inbox delivery still needs QA recipient acceptance. |
 | Support email | `EMAIL_SUPPORT_ENABLED` | Enabled in Policy source | Ticket confirmation/reply/status email paths are covered by Policy Phase D/G tests. |
 | Scheduler/outbox | `EMAIL_SCHEDULER_ENABLED`, `EMAIL_OUTBOUND_ENABLED`, `EMAIL_INBOUND_ENABLED` | Enabled in Policy source | Queue, retry, webhooks, inbound support reply-by-email, and cleanup are covered by automated checks. |
 | Security email | `EMAIL_SECURITY_ENABLED` | Deployed on Auth/Admin/Policy; safe event-delivery verification pending | Producers exist for selected committed account/session events and local lifecycle tests pass. No real lifecycle mutation was executed in this continuation. |
@@ -22,8 +22,8 @@ This matrix records event-to-message coverage. It does not enable additional ema
 
 | Domain | Event | Producer | Commit boundary | Recipient | Template | Idempotency | Retry / suppression | Current state |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Auth | Email verification requested | Auth Worker -> Policy internal enqueue | After verification request row | Account email | `auth.email_verification` | Purpose/user/email scoped | D1 queue retry, sensitive payload purge | `FULLY_OPERATIONAL_ENABLED` |
-| Auth | Verification resend | Auth Worker -> Policy internal enqueue | Previous request invalidated, new request stored | Account email | `auth.verification_resend` | Purpose/user/email scoped | D1 queue retry, sensitive payload purge | `FULLY_OPERATIONAL_ENABLED` |
+| Auth | Email verification requested | Auth Worker -> Policy service-binding enqueue | After verification request row | Account email | `auth.email_verification` | Purpose/user/email scoped | D1 queue retry, sensitive payload purge | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` |
+| Auth | Verification resend | Auth Worker -> Policy service-binding enqueue | Previous request invalidated, new request stored | Account email | `auth.verification_resend` | Purpose/user/email scoped | D1 queue retry, sensitive payload purge | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` |
 | Support | Ticket created | Policy web support create | After ticket/message transaction | Account email | `support.ticket_created` | Ticket/message idempotency | D1 queue retry, suppression handling | `FULLY_OPERATIONAL_ENABLED` |
 | Support | Admin replied | Policy admin support reply | After reply commit | Ticket owner | `support.reply` | Admin reply key/thread | D1 queue retry, suppression handling | `FULLY_OPERATIONAL_ENABLED` |
 | Support | Status changed | Policy support status | After status commit | Ticket owner | `support.status_changed` | Thread/status key | D1 queue retry, suppression handling | `FULLY_OPERATIONAL_ENABLED` |

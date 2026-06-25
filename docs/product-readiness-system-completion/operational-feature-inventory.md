@@ -1,6 +1,6 @@
 # Operational Feature Inventory
 
-Updated: 2026-06-24
+Updated: 2026-06-25
 
 Status: `PHASE_G_PRE_ACCEPTANCE_COMPLETION_ACTIVE`
 
@@ -19,10 +19,10 @@ This inventory classifies visible or callable product capabilities by operationa
 | Surface | Capability group | Frontend handler / route | Backend route / worker | Storage | Permission | Required flag/config | Current production state | Automated evidence | Manual acceptance |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Public | Landing, product, FAQ, contact, legal, downloads shell | `site/src/new-ui/pages/production/ProductionPages.tsx` | Static site / Admin download catalog for downloads | Static / release metadata | Public | Firebase public config for runtime boot | `FULLY_OPERATIONAL_ENABLED` except protected downloads require entitlement | `site npm run build`, `test:phase-b1` | Phase G |
-| Public | Pricing display | `/pricing`, `PricingSection` | `GET /api/plans/catalog` on Admin Worker | Supabase `commercial_plans` | Public read | Payment provider not required for display | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE`; checkout remains disabled | Admin Phase E catalog tests, public catalog CORS smoke, live bundle scan, pricing fixture, live public screenshots | Phase G |
+| Public | Pricing display | `/pricing`, `PricingSection` | `GET /api/plans/catalog` on Admin Worker | Supabase `commercial_plans` | Public read | Payment provider not required for display | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE`; checkout remains disabled | Admin Phase E catalog tests, public catalog CORS smoke, live bundle scan, pricing fixture, live public screenshots, 2026-06-25 pricing IA evidence | Phase G |
 | Public | Checkout action | `CheckoutDialog` / `createPaymentIntent` | `POST /api/payments/create` | Supabase orders/payments | Authenticated customer | Real payment provider and mappings | `COMPLETE_EXTERNALLY_BLOCKED` | Admin order tests fail closed when provider unavailable | Phase G after provider |
-| Auth | Email/password and Google sign-in | `/account/signin`, `/account/signup` | Firebase + Auth Worker account APIs | Firebase, Supabase account profile | Customer | Firebase public config, Auth Worker secrets | `FULLY_OPERATIONAL_ENABLED` | Site Phase C, Auth Phase C | Phase G |
-| Auth | Email verification OTP | Auth production adapter | Auth Worker -> Policy internal email enqueue | Supabase OTP hash, D1 email queue | Customer | `EMAIL_AUTH_ENABLED=true`, email secrets, QA recipient for acceptance | `FULLY_OPERATIONAL_ENABLED` for queue path; provider delivery acceptance pending | Policy Phase D/G, Auth Phase C | Phase G |
+| Auth | Email/password and Google sign-in | `/account/signin`, `/account/signup` | Firebase + Auth Worker account APIs | Firebase, Supabase account profile | Customer | Firebase public config, Auth Worker secrets | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Site Phase C, Auth Phase C, Phase G pending-registration checks | Phase G |
+| Auth | Email verification OTP | Auth production adapter | Auth Worker -> Policy service-binding email enqueue | Supabase OTP hash, D1 email queue | Customer | `EMAIL_AUTH_ENABLED=true`, email secrets, QA recipient for acceptance | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE`; provider inbox acceptance pending | Policy Phase D/G, Auth Phase C, live enqueue request returned sent | Phase G |
 | Account | Account overview and subscription projection | `/account`, `/account/subscription` | `POST https://auth.saturnws.com/account/subscription` | Supabase `account_subscriptions` | UID owner | Firebase token | `FULLY_OPERATIONAL_ENABLED` | Site Phase C, Admin resolver tests | Phase G |
 | Account | Desktop sessions/devices | `/account/devices` | Auth Worker `/account/sessions`, `/account/sessions/revoke`, `/account/sessions/revoke-all` | Supabase desktop sessions/devices | UID owner | Firebase token | `FULLY_OPERATIONAL_ENABLED` | Auth Phase C | Phase G |
 | Account | Account deletion request/cancel | `/account/settings` | Auth Worker `/account/deletion/*` | Supabase `account_deletion_requests` | UID owner, recent auth where required | Applied Phase G migrations | `DESTRUCTIVE_APPROVAL_GATED`; request/cancel implemented, purge absent | Auth Phase C, migration postflight | Disposable QA only |
@@ -49,6 +49,8 @@ This inventory classifies visible or callable product capabilities by operationa
 
 - Public pricing had a production-risk CORS dependency: live `admin-api.saturnws.com` allowed only the Admin origin. Source now includes Saturn public origins in the Admin Worker CORS allowlist, and production-safe verification confirmed the public origin is allowed.
 - Public Arabic pricing previously trusted raw backend `features` text. Public pricing now uses localized plan differentiators from the content layer while keeping backend catalog as price/status truth.
+- Live pricing later showed redundant information architecture even after price/content source correction. Current pricing IA now states the shared full-tool truth once, places trial terms only inside Monthly/Annual cards, removes the large unavailable banner, and records current live evidence under `D:\SaturnWS\build-output\phase-g-live-render`.
+- Email verification later showed an incorrect generic editable email form and OTP delivery failure. Current implementation binds verification to pending registration state, supersedes old requests on Change email, and uses the Auth Worker `POLICY_SERVICE` binding for queue handoff.
 - Tablet public header overflow at 768px was caused by the secondary header CTA. A responsive header rule removes that CTA before it can create horizontal scroll.
 - Live Contact mobile overflow was found during public rendered evidence capture. The page-specific contact grid overrode the generic mobile one-column rule, and long contact email links lacked defensive wrapping. `site/src/new-ui/foundation/public.css` now fixes both conditions, and recaptured live screenshots report zero horizontal overflow.
 
