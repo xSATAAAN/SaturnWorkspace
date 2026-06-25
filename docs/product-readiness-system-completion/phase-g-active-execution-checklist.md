@@ -155,9 +155,15 @@ Evidence:
   - `site npm run test:phase-f`: passed.
   - `site npm run build`: passed; known chunk-size warning remains.
   - `rg "test_code|localEmailVerificationCode|LOCAL_EMAIL_VERIFICATION_TEST_CODE_KEY" site/dist site/src/new-ui site/src/api`: no `site/dist` or `site/src/new-ui` matches; only the erased API response type remains in source.
-- Deployment evidence: pending for this remediation batch.
-- Live verification evidence: pending for this remediation batch.
-- Remaining limitation: disposable QA inbox/manual OTP acceptance remains Phase G; do not claim inbox delivery or manual acceptance from automated tests.
+- Deployment evidence: Auth Worker deployed from this remediation source as version `f068253f-4a8b-492f-babc-5f2adfdf6cba`; GitHub Pages workflow run `28165825916` deployed commit `55052a5633606828483ea011006d606be7f8602f`.
+- Live verification evidence:
+  - `https://auth.saturnws.com/health` returned success for `auth-worker`.
+  - `https://saturnws.com/account/signin/`, `/account/signup/`, and `/account/verify/` returned 200.
+  - Live HTML references `assets/index-BW2vsttT.js`.
+  - Live bundle scan found no `test_code` and no `localEmailVerificationCode` token.
+  - Auth CORS preflight from `https://saturnws.com` to `/account/provision` returned 204 with the approved origin.
+  - Unauthenticated `/account/provision`, `/account/subscription`, and `/email-verification/request` returned stable 4xx JSON contracts rather than 500.
+- Remaining limitation: disposable QA inbox/manual OTP acceptance and credentialed live happy-path verification remain Phase G; do not claim inbox delivery or manual acceptance from automated tests or unauthenticated contract checks.
 
 ## 5. Pricing Page: Remove the Current Copy Model and Rebuild It
 
