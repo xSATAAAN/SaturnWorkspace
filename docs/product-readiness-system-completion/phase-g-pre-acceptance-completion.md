@@ -44,7 +44,7 @@ Consolidated manual acceptance has not started. This report preserves the implem
   - `security_auditor`
   - `read_only`
 - Legacy `security` and `auditor` inputs normalize to `security_auditor` for compatibility.
-- `ADMIN_ROLE_ASSIGNMENTS` was not present in the Admin Worker secret list, so operational multi-role assignment remains `OPERATIONAL_CONFIGURATION_REQUIRED`.
+- `ADMIN_ROLE_ASSIGNMENTS` is configured as a UID-based Admin Worker secret for the currently authorized administrator; operational multi-role route verification remains pending.
 - Direct API fixture tests cover supported roles, unassigned admin behavior, and non-admin behavior.
 
 ## OTP and Email Operations
@@ -138,7 +138,7 @@ Known warnings:
 ## Production Deployments
 
 - Auth Worker version deployed during this batch: `0186ad21-4c7b-4399-8c92-20a876fd5bee`.
-- Policy Worker version deployed during this batch: `cec58841-cbc9-44e4-853f-054425d29ecc`.
+- Policy Worker source version deployed during this batch: `cec58841-cbc9-44e4-853f-054425d29ecc`; current active Policy deployment is secret-change version `b79cab4e-bc04-49a0-b1d3-25545f933344`.
 - Admin Worker version deployed during this batch: `85b71833-73d3-445a-a498-d8c1f3b4e9ef`.
 - Live health checks:
   - `https://auth.saturnws.com/health`: 200.
@@ -160,7 +160,7 @@ Known warnings:
 
 | Item | State | Required later |
 | --- | --- | --- |
-| `ADMIN_ROLE_ASSIGNMENTS` | `OPERATIONAL_CONFIGURATION_REQUIRED` | Configure UID-based role JSON as an Admin Worker secret and redeploy Admin Worker before multi-role acceptance. |
+| `ADMIN_ROLE_ASSIGNMENTS` | `PENDING_DEPLOYMENT_VERIFICATION` | UID-based role JSON is configured as an Admin Worker secret for the currently authorized administrator. Run authenticated route sweep before multi-role acceptance. |
 | QA email recipient | `PENDING_MANUAL_ACCEPTANCE` | Use a dedicated QA recipient to confirm provider delivery without exposing OTP values. |
 | Payment provider | `WAITING_EXTERNAL` | Approve and configure real provider, mappings, webhooks, rollback, and billing email activation. |
 | Manual Desktop install/uninstall acceptance | `PENDING_MANUAL_ACCEPTANCE` | Test install, launch, shortcuts, Add/Remove Programs, repair/upgrade, uninstall, logs, and data retention in Phase G manual acceptance. |

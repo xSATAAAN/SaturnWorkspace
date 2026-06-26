@@ -5,6 +5,8 @@ export type AppErrorCode =
   | 'AUTH_TOO_MANY_ATTEMPTS'
   | 'AUTH_INVALID_CREDENTIALS'
   | 'AUTH_SESSION_EXPIRED'
+  | 'AUTH_PROVIDER_SERVER_CREATE_NOT_CONFIGURED'
+  | 'AUTH_PROVIDER_UNAVAILABLE'
   | 'EMAIL_VERIFICATION_REQUIRED'
   | 'PROFILE_PROVISIONING_FAILED'
   | 'VERIFICATION_CODE_INVALID'
@@ -43,6 +45,9 @@ const rawToCode: Record<string, AppErrorCode> = {
   auth_invalid_credentials: 'AUTH_INVALID_CREDENTIALS',
   not_authenticated: 'AUTH_SESSION_EXPIRED',
   unauthorized: 'AUTH_SESSION_EXPIRED',
+  auth_provider_server_create_not_configured: 'AUTH_PROVIDER_SERVER_CREATE_NOT_CONFIGURED',
+  auth_provider_unavailable: 'AUTH_PROVIDER_UNAVAILABLE',
+  registration_finalization_failed: 'AUTH_PROVIDER_UNAVAILABLE',
   email_code_invalid: 'VERIFICATION_CODE_INVALID',
   email_code_expired: 'VERIFICATION_CODE_EXPIRED',
   email_resend_limited: 'VERIFICATION_RATE_LIMITED',
@@ -87,6 +92,10 @@ export function userSafeErrorMessage(raw: unknown, status?: number): string {
       return 'AUTH_INVALID_CREDENTIALS'
     case 'AUTH_SESSION_EXPIRED':
       return 'AUTH_SESSION_EXPIRED'
+    case 'AUTH_PROVIDER_SERVER_CREATE_NOT_CONFIGURED':
+      return 'AUTH_PROVIDER_SERVER_CREATE_NOT_CONFIGURED'
+    case 'AUTH_PROVIDER_UNAVAILABLE':
+      return 'AUTH_PROVIDER_UNAVAILABLE'
     case 'EMAIL_VERIFICATION_REQUIRED':
       return 'EMAIL_VERIFICATION_REQUIRED'
     case 'SUBSCRIPTION_INACTIVE':

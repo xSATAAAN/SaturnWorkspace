@@ -115,7 +115,7 @@ Evidence:
 
 - Files changed: `workers/policy/wrangler.jsonc`, `workers/auth/wrangler.toml`, `workers/admin/wrangler.toml`.
 - Tests: `wrangler secret list` confirmed `EMAIL_ADMIN_ALERT_RECIPIENTS` exists on the Policy Worker and `ADMIN_EMAIL_ENQUEUE_TOKEN` exists on both Policy and Admin Workers. `workers/auth npm run test:phase-c`, `workers/policy npm run test:phase-g`, and `workers/admin npm run check:syntax && npm run test:phase-f` pass after the configuration changes.
-- Deployment evidence: Policy Worker `cec58841-cbc9-44e4-853f-054425d29ecc`, Auth Worker `0186ad21-4c7b-4399-8c92-20a876fd5bee`, and Admin Worker `85b71833-73d3-445a-a498-d8c1f3b4e9ef` are the current deployed versions relevant to this checklist.
+- Deployment evidence: Auth Worker active deployment `0186ad21-4c7b-4399-8c92-20a876fd5bee`, Policy Worker active deployment `b79cab4e-bc04-49a0-b1d3-25545f933344` (secret-change version after source deployment `cec58841-cbc9-44e4-853f-054425d29ecc`), and Admin Worker active deployment `85b71833-73d3-445a-a498-d8c1f3b4e9ef` are the current deployed versions relevant to this checklist.
 - Live verification evidence: `https://api.saturnws.com/health` and `https://auth.saturnws.com/health` returned 200 after deployment. Post-deploy secret inventory confirmed `EMAIL_ADMIN_ALERT_RECIPIENTS` exists on Policy and `ADMIN_EMAIL_ENQUEUE_TOKEN` exists on Policy/Admin.
 - Remaining limitation: `ADMIN_ROLE_ASSIGNMENTS` is not configured. The current admin Firebase UID has not been resolved from a live trusted identity in this session, and it must not be guessed, printed, or derived from stale backups. UID-based super-admin assignment remains an operational blocker for closing this item.
 
@@ -126,7 +126,7 @@ Status: `IN_PROGRESS`
 Requirement:
 
 - New email/password registration must not create an active Saturn profile, protected portal state, or Desktop session before Saturn OTP verification.
-- The browser must not store or transmit the plaintext password anywhere except to the trusted Firebase provider call.
+- The browser must not collect the password until after Saturn OTP verification, and the password must be sent only to the Auth Worker finalization endpoint. It must not be stored in browser storage, Supabase, D1, R2, logs, reports, audit payloads, or telemetry.
 - Pending registration may carry only non-sensitive metadata needed to finalize the Saturn account after OTP: display name, locale, terms version, and terms acceptance state.
 - Legacy email/password accounts without Saturn OTP must be gated on the next protected validation and resume through the same Firebase UID after OTP.
 - Google verified identity may finalize directly only through the trusted-provider path.
@@ -141,26 +141,32 @@ Evidence:
   - Frontend email verification was controlled by a build-time flag that defaulted off when unset.
   - The verification page still allowed a generic editable email route after signup because pending verification context was only treated as a loose email string instead of a registration-bound state object.
   - Live OTP delivery failed at the Auth-to-Policy enqueue handoff before D1 `email_jobs` insert. Direct Policy enqueue with the rotated shared token succeeded, which isolated the failure to Auth's public upstream handoff rather than Resend, scheduler, or D1 schema.
-- Local remediation:
-  - Email/password signup is provider-only until OTP.
-  - OTP request stores only hashed code and non-sensitive registration metadata.
-  - OTP verification finalizes the same Firebase UID profile with `verification_source = saturnws_otp`.
-  - Protected account endpoints, explicit `/account/provision`, and Desktop device authorization return `EMAIL_VERIFICATION_REQUIRED` / `email_verification_required` for unverified password identities.
+- Current source remediation:
+  - New email/password signup now starts a server-side pending registration through `/email-verification/start`; it does not call Firebase account creation and does not collect a password before OTP.
+  - Pending registration stores only normalized email, display name, locale, terms metadata, OTP hash/reference, expiry, attempt state, and finalization metadata. It stores no password, Firebase token, active account profile, product session, or entitlement.
+  - OTP verification returns a one-time finalization token and still does not create a Firebase password identity or `account_profiles` row.
+  - Password entry happens after OTP. `/email-verification/finalize` validates the one-time token, creates or reconciles the Firebase Email/Password identity server-side through the Auth Worker finalizer identity, creates exactly one canonical finalized `account_profiles` row, commits verification/name/terms/finalization metadata, sets the minimal finalized custom claim, records `credential_epoch`, consumes the pending registration only after finalization succeeds, and then requires fresh sign-in.
+  - If a legacy password Firebase identity exists from the previous implementation without an account profile, finalization reconciles that same UID after OTP, updates the password/verified state server-side, and creates one profile. Google-only provider collisions fail closed instead of silently linking password.
+  - Protected account endpoints, explicit `/account/provision`, Policy customer support/notification boundaries through Auth `/account/identity`, and Desktop device authorization require dual trust: valid Firebase token, server-issued finalized claim, canonical finalized profile, UID agreement, lifecycle allowance, and fresh token auth time after credential reconciliation.
+  - Raw provider-only Firebase password identities without finalized Saturn authority have no product access, are audited by opaque reference only, are disabled when stale after the configured retention window, and can be re-enabled only through legitimate Saturn OTP finalization for the same email/UID.
   - Portal routes gate unverified email/password users to the verification page before rendering protected portal content.
-  - Email verification feature flag is enabled by default and fails closed through the Auth Worker if delivery is unavailable.
   - Production UI no longer stores or displays OTP test codes; test transport remains confined to the Auth Worker behavior test.
-  - Pending registration context is structured and non-sensitive. The verification page shows the destination email once as non-editable information, renders OTP inputs only, and direct `/account/verify` without context fails safely to signup/sign-in recovery.
-  - Change email now calls `/email-verification/cancel`, marks the pending verification as superseded server-side, preserves valid non-sensitive signup fields, and returns to the editable signup step.
+  - Pending registration context is structured and non-sensitive. The verification page shows the destination email once as non-editable information, renders OTP inputs first, then renders password/confirm fields only after OTP verification. Direct `/account/verify` without context fails safely to signup/sign-in recovery.
+  - Change email calls `/email-verification/cancel` for the pending registration, marks it superseded server-side, preserves valid non-sensitive signup fields, and returns to the editable signup step.
   - Auth Worker delivers verification email through the `POLICY_SERVICE` service binding when targeting Policy, avoiding the public HTTP handoff for the internal queue operation.
 - Tests:
   - `workers/auth npm run check`: passed.
-  - `workers/auth npm run test:phase-c`: passed, including no profile, no `/account/subscription`, no `/account/identity`, no explicit `/account/provision`, no Desktop session before OTP, server-side Change email supersede, old OTP invalid after supersede, verified profile, account identity/subscription, and Desktop session after OTP.
+  - `workers/auth node scripts/check-phase-c-device-linking.mjs`: passed, including no Saturn-created Firebase identity/profile before OTP for new registration, weak-password rejection after OTP without identity creation, `FIREBASE_PROJECT_ID`/service-account project mismatch fail-closed before identity/profile creation, token-bound finalization replay, invalid replay rejection, legacy password identity reconciliation after OTP, Google-only collision fail-closed behavior, direct raw Firebase password-identity rejection/quarantine/reconciliation, stale pre-finalization token rejection, fresh finalized token acceptance, no `/account/subscription`, no `/account/identity`, no explicit `/account/provision`, and no Desktop session before finalization.
+  - `workers/auth npm run test:phase-c`: passed on 2026-06-25 after the token-bound replay and project-mismatch reconciliation change.
   - `site npm run test:phase-b`: passed.
   - `site npm run test:phase-c`: passed.
   - `site npm run test:phase-f`: passed.
   - `site npm run build`: passed; known chunk-size warning remains.
   - `rg "test_code|localEmailVerificationCode|LOCAL_EMAIL_VERIFICATION_TEST_CODE_KEY" site/dist site/src/new-ui site/src/api`: no `site/dist` or `site/src/new-ui` matches; only the erased API response type remains in source.
-- Deployment evidence: Auth Worker deployed from this remediation source as version `0186ad21-4c7b-4399-8c92-20a876fd5bee`; GitHub Pages workflow run `28174200979` deployed commit `9da6025189eccfff76509bac6f61d18942489f07`.
+- Deployment evidence:
+  - Previous deployed Auth Worker version: `0186ad21-4c7b-4399-8c92-20a876fd5bee`.
+  - Previous deployed Pages workflow run: `28174200979` from commit `9da6025189eccfff76509bac6f61d18942489f07`.
+  - This continuation's OTP-first account creation and legacy-provider reconciliation source is not yet deployed.
 - Live verification evidence:
   - `https://auth.saturnws.com/health` returned success for `auth-worker`.
   - `https://saturnws.com/account/signin/`, `/account/signup/`, and `/account/verify/` returned 200.
@@ -171,7 +177,7 @@ Evidence:
   - Live signup journey reached `/account/verify`; `/email-verification/request` returned `200` with `status:"sent"` after the service-binding deployment.
   - Pending-registration verification rendered one redacted destination email occurrence, six OTP inputs, Continue, Resend, and Change email with no editable email input. Direct `/account/verify` without context rendered no email/OTP form.
   - Change email posted to `/email-verification/cancel` and returned to signup with valid non-sensitive fields preserved.
-- Remaining limitation: disposable QA inbox/manual OTP acceptance, all browser edge cases for existing-provider collision/case-only/back/multiple-tabs/expired context, and credentialed live happy-path completion remain Phase G; do not claim inbox delivery or manual acceptance from automated tests or safe live checks.
+- Remaining limitation: live finalization requires deploying the current source and running disposable live canaries. The current runtime requires the Worker variable to match the service-account JSON `project_id` and fails closed before Firebase creation on mismatch. Runtime source no longer calls Firebase client signup; any provider-only password identity created outside Saturn has no finalized Saturn claim/profile, no product authority, and is quarantined/disabled when stale. Read-only Google preflight on 2026-06-26 confirmed the project is active, Email/Password and Google providers are enabled, authorized Saturn domains are present, no blocking functions are configured, the project subtype is `FIREBASE_AUTH`, and the authorized account has the tested IAM permissions needed for service-account/custom-role/config updates. The approved Identity Platform initialize call was rejected with `BILLING_NOT_ENABLED`; it is reclassified as `WAITING_EXTERNAL_BILLING_DEFENSE_IN_DEPTH` and is not a current Phase G blocker. The dedicated least-privilege Firebase finalizer role/service account now exists, Auth Worker `FIREBASE_SERVICE_ACCOUNT_JSON` and `FIREBASE_PROJECT_ID=saturnws-1` are configured, the temporary local key file was deleted after Cloudflare accepted the secret, and UID-based `ADMIN_ROLE_ASSIGNMENTS` is configured without printing or documenting the UID. Disposable QA inbox/manual OTP acceptance, direct-signup quarantine live proof, Google regression, browser edge cases for case-only/back/multiple-tabs/expired context, and credentialed live happy-path completion remain Phase G; do not claim inbox delivery or manual acceptance from automated tests or safe live checks.
 
 ## 5. Pricing Page: Remove the Current Copy Model and Rebuild It
 
@@ -372,7 +378,7 @@ Requirement:
 Evidence:
 
 - Files changed: `workers/auth/scripts/check-phase-c-device-linking.mjs`, `workers/policy/scripts/check-phase-g-admin-alerts.mjs`, `workers/admin/src/adminCors.test.mjs`, `site/scripts/check-copy-quality.mjs`, `site/scripts/check-phase-b-production-rollout.mjs`, `site/scripts/check-phase-f-admin.mjs`.
-- Tests: `workers/auth npm run check`, `workers/auth npm run test:phase-c`, `workers/policy npm run check`, `workers/policy npm run test:phase-g`, `workers/admin npm run check:syntax && npm run test:phase-f`, `site npm run test:phase-b`, `site node scripts/check-copy-quality.mjs`, `site npm run test:phase-f`, `site npx tsc -p src/new-ui/tsconfig.json --noEmit`, `site npm run build`, and `git diff --check` pass.
+- Tests: `workers/auth npm run check`, `workers/auth npm run test:phase-c`, `workers/policy npm run test:phase-g`, `workers/admin npm run check:syntax`, `workers/admin npm run test:phase-f`, `site node scripts/check-phase-b-production-rollout.mjs`, `site node scripts/check-round3b-production-integration.mjs` with the known missing `workers/admin/migrations/008_payment_core_model.sql` skip, `site npx tsc -p src/new-ui/tsconfig.json --noEmit`, `site npm run build`, and `git diff --check` pass.
 - Deployment evidence: tests ran before Worker deployment and GitHub Pages deployment.
 - Live verification evidence: live bundle, CORS checks, pricing browser evidence, direct verify browser evidence, and pending-registration Change email browser evidence provide additional deployed evidence for the relevant test families.
 - Remaining limitation: authenticated Admin route sweep, current super-admin role-assignment proof, full product-wide no-op inventory validation, and authenticated rendered page evidence remain unfinished. Public route and verification-route rendered evidence is recorded separately in item 12.

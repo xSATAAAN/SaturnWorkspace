@@ -1,5 +1,4 @@
 import {
-  createUserWithEmailAndPassword,
   GoogleAuthProvider,
   onAuthStateChanged,
   sendPasswordResetEmail,
@@ -67,7 +66,15 @@ import {
 import { createPaymentIntent, fetchPlanCatalog, type PlanCatalogItem } from '../../api/payments'
 import { fetchProtectedReleaseCatalog, fetchProtectedReleaseFile, type ProtectedRelease } from '../../api/downloads'
 import { archivePortalNotification, fetchPortalNotifications, markAllPortalNotificationsRead, markPortalNotificationRead } from '../../api/notifications'
-import { cancelEmailVerificationCode, requestEmailVerificationCode, verifyEmailVerificationCode } from '../../api/emailVerification'
+import {
+  cancelEmailRegistrationCode as cancelEmailRegistrationRequest,
+  cancelEmailVerificationCode,
+  finalizeEmailRegistration as finalizeEmailRegistrationRequest,
+  requestEmailVerificationCode,
+  startEmailRegistration as startEmailRegistrationRequest,
+  verifyEmailRegistrationCode,
+  verifyEmailVerificationCode,
+} from '../../api/emailVerification'
 import {
   createWebSupportTicket,
   fetchWebSupportThread,
@@ -177,8 +184,18 @@ async function loadAccountBootstrap(forceRefresh = false): Promise<AccountBootst
   if (!forceRefresh && accountBootstrapCache?.uid === uid) return accountBootstrapCache
   if (!forceRefresh && accountBootstrapInflight) return accountBootstrapInflight
   const startedAt = currentPerformanceNow()
-  accountBootstrapInflight = user.getIdToken(false)
-    .then((token) => fetchAccountSubscription(token))
+  accountBootstrapInflight = (async () => {
+    let token = await user.getIdToken(forceRefresh)
+    try {
+      return await fetchAccountSubscription(token)
+    } catch (error) {
+      const code = String(error instanceof Error ? error.message : error || '')
+      if (code !== 'ACCOUNT_TOKEN_REFRESH_REQUIRED') throw error
+      token = await user.getIdToken(true)
+      clearAccountBootstrap()
+      return fetchAccountSubscription(token)
+    }
+  })()
     .then((account) => {
       const profile = account.user?.profile || null
       const bootstrapped: AccountBootstrap = {
@@ -219,6 +236,9 @@ async function provisionCurrentFirebaseUser(input: {
     termsAcceptedAt: input.termsAccepted ? new Date().toISOString() : undefined,
   })
   if (!provisioned.success || !provisioned.profile) throw new Error(provisioned.error || 'PROFILE_PROVISIONING_FAILED')
+  if (provisioned.token_refresh_required) {
+    await user.getIdToken(true)
+  }
   clearAccountBootstrap()
   return { ...userFromFirebase(user), profile: provisioned.profile, emailVerified: Boolean(provisioned.profile.email_verified) }
 }
@@ -356,11 +376,36 @@ export const productionAdapters: AppAdapters = {
         throw mapFirebaseAuthError(error)
       }
     },
-    async signUpWithEmail(input: SignUpWithEmailInput) {
+    async startEmailRegistration(input: SignUpWithEmailInput) {
+      const result = await startEmailRegistrationRequest({
+        email: input.email.trim(),
+        displayName: input.displayName,
+        locale: input.locale,
+        termsAccepted: input.termsAccepted,
+        termsVersion: input.termsVersion,
+        termsAcceptedAt: input.termsAcceptedAt,
+      })
+      return {
+        success: result.success,
+        status: result.status,
+        registrationId: result.registration_id,
+        email: result.email,
+        expiresAt: result.expires_at,
+        error: result.error,
+      }
+    },
+    async finalizeEmailRegistration(input) {
+      const finalized = await finalizeEmailRegistrationRequest({
+        registrationId: input.registrationId,
+        email: input.email,
+        finalizationToken: input.finalizationToken,
+        password: input.password,
+      })
+      if (!finalized.success) throw new Error(finalized.error || 'registration_finalization_failed')
       try {
-        const result = await createUserWithEmailAndPassword(firebaseAuth, input.email.trim(), input.password)
-        if (input.displayName.trim()) await updateProfile(result.user, { displayName: input.displayName.trim() })
+        const result = await signInWithEmailAndPassword(firebaseAuth, input.email.trim(), input.password)
         clearAccountBootstrap()
+        await refreshAuthenticatedAccountState(true)
         return userFromFirebase(result.user)
       } catch (error) {
         throw mapFirebaseAuthError(error)
@@ -392,20 +437,37 @@ export const productionAdapters: AppAdapters = {
       const result = await requestEmailVerificationCode(token, email.trim(), input)
       return { success: result.success, status: result.status, expiresAt: result.expires_at, error: result.error }
     },
-    async verifyEmailCode(email, code) {
-      const token = await productionAdapters.auth.getIdToken(false)
-      if (!token) return { success: false, error: 'not_authenticated' }
-      const result = await verifyEmailVerificationCode(token, email.trim(), code)
+    async verifyEmailCode(input) {
+      let result
+      if (input.registrationId) {
+        result = await verifyEmailRegistrationCode({ registrationId: input.registrationId, email: input.email.trim(), code: input.code })
+      } else {
+        const token = await productionAdapters.auth.getIdToken(false)
+        if (!token) return { success: false, error: 'not_authenticated' }
+        result = await verifyEmailVerificationCode(token, input.email.trim(), input.code)
+      }
       if (result.success) {
         clearAccountBootstrap()
         await refreshAuthenticatedAccountState(true)
       }
-      return { success: result.success, status: result.status, verifiedAt: result.verified_at, error: result.error }
+      return {
+        success: result.success,
+        status: result.status,
+        verifiedAt: result.verified_at,
+        registrationId: result.registration_id,
+        finalizationToken: result.finalization_token,
+        finalizationExpiresAt: result.finalization_expires_at,
+        error: result.error,
+      }
     },
-    async cancelEmailVerification(email) {
-      const token = await productionAdapters.auth.getIdToken(false)
-      if (!token) return { success: false, error: 'not_authenticated' }
-      const result = await cancelEmailVerificationCode(token, email.trim())
+    async cancelEmailVerification(input) {
+      const result = input.registrationId
+        ? await cancelEmailRegistrationRequest({ registrationId: input.registrationId, email: input.email.trim() })
+        : await (async () => {
+          const token = await productionAdapters.auth.getIdToken(false)
+          if (!token) return { success: false, error: 'not_authenticated' }
+          return cancelEmailVerificationCode(token, input.email.trim())
+        })()
       return { success: result.success, status: result.status, error: result.error }
     },
     async signOut() {

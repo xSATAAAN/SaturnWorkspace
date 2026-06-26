@@ -132,10 +132,29 @@ export type PaymentIntentResult = {
 export type SignUpWithEmailInput = {
   displayName: string
   email: string
-  password: string
   locale: 'ar' | 'en'
   termsAccepted: boolean
   termsVersion?: string
+  termsAcceptedAt?: string
+}
+
+export type EmailRegistrationStartResult = {
+  success: boolean
+  status?: string
+  registrationId?: string
+  email?: string
+  expiresAt?: string
+  error?: string
+}
+
+export type EmailVerificationResult = {
+  success: boolean
+  status?: string
+  verifiedAt?: string
+  registrationId?: string
+  finalizationToken?: string
+  finalizationExpiresAt?: string
+  error?: string
 }
 
 export type CustomerSupportThread = {
@@ -170,13 +189,14 @@ export type SupportSenderRole = 'customer' | 'support_agent' | 'internal_note' |
 export type AuthAdapter = {
   subscribe(callback: (state: AuthState) => void): () => void
   signInWithEmail(email: string, password: string): Promise<AppUser>
-  signUpWithEmail(input: SignUpWithEmailInput): Promise<AppUser>
+  startEmailRegistration(input: SignUpWithEmailInput): Promise<EmailRegistrationStartResult>
+  finalizeEmailRegistration(input: { email: string; password: string; registrationId: string; finalizationToken: string }): Promise<AppUser>
   signInWithGoogle(input?: { locale?: 'ar' | 'en'; termsAccepted?: boolean; termsVersion?: string }): Promise<AppUser>
   provisionProfile?(input?: { displayName?: string; locale?: 'ar' | 'en'; termsAccepted?: boolean; termsVersion?: string }): Promise<AppUser>
   sendPasswordReset(email: string): Promise<void>
   requestEmailVerification(email: string, input?: { displayName?: string; locale?: 'ar' | 'en'; termsAccepted?: boolean; termsVersion?: string; termsAcceptedAt?: string }): Promise<{ success: boolean; status?: string; expiresAt?: string; error?: string }>
-  verifyEmailCode(email: string, code: string): Promise<{ success: boolean; status?: string; verifiedAt?: string; error?: string }>
-  cancelEmailVerification?(email: string): Promise<{ success: boolean; status?: string; error?: string }>
+  verifyEmailCode(input: { email: string; code: string; registrationId?: string }): Promise<EmailVerificationResult>
+  cancelEmailVerification?(input: { email: string; registrationId?: string }): Promise<{ success: boolean; status?: string; error?: string }>
   signOut(): Promise<void>
   getIdToken(forceRefresh?: boolean): Promise<string | null>
 }

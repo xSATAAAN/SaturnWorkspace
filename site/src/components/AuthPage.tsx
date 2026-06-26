@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   GoogleAuthProvider,
-  createUserWithEmailAndPassword,
   isSignInWithEmailLink,
   onAuthStateChanged,
   sendPasswordResetEmail,
@@ -156,10 +155,8 @@ export function AuthPage({ lang, initialMode }: AuthPageProps) {
   )
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
   const [legalAccepted, setLegalAccepted] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
   const [resetLoading, setResetLoading] = useState(false)
@@ -444,7 +441,6 @@ export function AuthPage({ lang, initialMode }: AuthPageProps) {
     setAuthMode(nextMode)
     setError('')
     setInfo('')
-    setConfirmPassword('')
     setLegalAccepted(false)
     setNeedsEmailForLink(false)
     writeAuthRoute(nextMode)
@@ -472,7 +468,7 @@ export function AuthPage({ lang, initialMode }: AuthPageProps) {
       setError(normalizeFirebaseError('auth/missing-email', isAr))
       return
     }
-    if (!password) {
+    if (authMode !== 'signup' && !password) {
       setError(normalizeFirebaseError('auth/missing-password', isAr))
       return
     }
@@ -481,20 +477,15 @@ export function AuthPage({ lang, initialMode }: AuthPageProps) {
         setError(t.consentRequired)
         return
       }
-      if (!confirmPassword || password !== confirmPassword) {
-        setError(t.passwordMismatch)
-        return
-      }
+      setError(isAr ? 'أكمل إنشاء الحساب من مسار التحقق الحالي.' : 'Create the account through the current verification flow.')
+      return
     }
 
     setSubmitting(true)
     setError('')
     setInfo('')
     try {
-      const result =
-        authMode === 'signup'
-          ? await createUserWithEmailAndPassword(firebaseAuth, normalizedEmail, password)
-          : await signInWithEmailAndPassword(firebaseAuth, normalizedEmail, password)
+      const result = await signInWithEmailAndPassword(firebaseAuth, normalizedEmail, password)
       setUser(result.user)
     } catch (err) {
       setError(normalizeFirebaseError(err, isAr))
@@ -842,7 +833,7 @@ export function AuthPage({ lang, initialMode }: AuthPageProps) {
 
                   {!needsEmailForLink ? (
                     <>
-                      <div className="space-y-2">
+                      {authMode === 'login' ? <div className="space-y-2">
                         <div className="flex items-center justify-between gap-3">
                           <label className="block text-sm font-semibold text-slate-200/84">{t.password}</label>
                           {authMode === 'login' ? (
@@ -863,7 +854,7 @@ export function AuthPage({ lang, initialMode }: AuthPageProps) {
                             placeholder="••••••••"
                             value={password}
                             onChange={(event) => setPassword(event.target.value)}
-                            autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'}
+                            autoComplete="current-password"
                           />
                           <button
                             type="button"
@@ -874,31 +865,7 @@ export function AuthPage({ lang, initialMode }: AuthPageProps) {
                             {showPassword ? '◐' : '◑'}
                           </button>
                         </div>
-                      </div>
-
-                      {authMode === 'signup' ? (
-                        <div className="space-y-2">
-                          <label className="block text-sm font-semibold text-slate-200/84">{t.confirmPassword}</label>
-                          <div className="relative">
-                            <input
-                              className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 pr-4 text-sm text-white outline-none transition placeholder:text-slate-400/60 focus:border-sky-400/38 focus:bg-white/[0.07]"
-                              type={showConfirmPassword ? 'text' : 'password'}
-                              placeholder="••••••••"
-                              value={confirmPassword}
-                              onChange={(event) => setConfirmPassword(event.target.value)}
-                              autoComplete="new-password"
-                            />
-                            <button
-                              type="button"
-                              className={`absolute inset-y-0 ${isAr ? 'left-3' : 'right-3'} my-auto h-8 rounded-xl border border-white/10 bg-white/[0.06] px-3 text-xs font-semibold text-slate-200/84 transition hover:border-white/16 hover:bg-white/[0.1]`}
-                              onClick={() => setShowConfirmPassword((value) => !value)}
-                              aria-label={showConfirmPassword ? t.hide : t.show}
-                            >
-                              {showConfirmPassword ? '◐' : '◑'}
-                            </button>
-                          </div>
-                        </div>
-                      ) : null}
+                      </div> : null}
 
                       {authMode === 'signup' ? (
                         <label className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm leading-7 text-slate-300/80">

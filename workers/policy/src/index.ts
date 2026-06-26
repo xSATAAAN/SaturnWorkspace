@@ -948,6 +948,7 @@ const INTERNAL_EMAIL_ENQUEUE_EVENTS = new Set([
   "account.deletion_cancelled",
   "account.suspended",
   "account.reactivated",
+  "admin.auth_orphan_quarantine",
 ])
 const AUTH_EMAIL_ENQUEUE_MAX_BYTES = 8192
 

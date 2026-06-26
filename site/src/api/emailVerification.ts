@@ -13,6 +13,8 @@ function authApiBase(): string {
 export type EmailVerificationRequestResult = {
   success: boolean
   status?: string
+  registration_id?: string
+  email?: string
   expires_at?: string
   error?: string
   test_code?: string
@@ -21,7 +23,18 @@ export type EmailVerificationRequestResult = {
 export type EmailVerificationVerifyResult = {
   success: boolean
   status?: string
+  registration_id?: string
+  email?: string
   verified_at?: string
+  finalization_token?: string
+  finalization_expires_at?: string
+  error?: string
+}
+
+export type EmailRegistrationFinalizeResult = {
+  success: boolean
+  status?: string
+  email?: string
   error?: string
 }
 
@@ -46,6 +59,17 @@ export type EmailVerificationRequestInput = {
   termsAccepted?: boolean
   termsVersion?: string
   termsAcceptedAt?: string
+}
+
+export async function startEmailRegistration(input: EmailVerificationRequestInput & { email: string }): Promise<EmailVerificationRequestResult> {
+  return postJson<EmailVerificationRequestResult>(`${authApiBase()}/email-verification/start`, {
+    email: input.email,
+    display_name: input.displayName,
+    locale: input.locale,
+    terms_accepted: input.termsAccepted,
+    terms_version: input.termsVersion,
+    terms_accepted_at: input.termsAcceptedAt,
+  })
 }
 
 export async function requestEmailVerificationCode(idToken: string, email: string, input: EmailVerificationRequestInput = {}): Promise<EmailVerificationRequestResult> {
@@ -75,9 +99,33 @@ export async function fetchEmailVerificationStatus(idToken: string, email: strin
   }, { headers: { Authorization: `Bearer ${idToken}` } })
 }
 
+export async function verifyEmailRegistrationCode(input: { registrationId: string; email: string; code: string }): Promise<EmailVerificationVerifyResult> {
+  return postJson<EmailVerificationVerifyResult>(`${authApiBase()}/email-verification/verify`, {
+    registration_id: input.registrationId,
+    email: input.email,
+    code: input.code,
+  })
+}
+
+export async function finalizeEmailRegistration(input: { registrationId: string; email: string; finalizationToken: string; password: string }): Promise<EmailRegistrationFinalizeResult> {
+  return postJson<EmailRegistrationFinalizeResult>(`${authApiBase()}/email-verification/finalize`, {
+    registration_id: input.registrationId,
+    email: input.email,
+    finalization_token: input.finalizationToken,
+    password: input.password,
+  })
+}
+
 export async function cancelEmailVerificationCode(idToken: string, email: string): Promise<EmailVerificationCancelResult> {
   return postJson<EmailVerificationCancelResult>(`${authApiBase()}/email-verification/cancel`, {
     id_token: idToken,
     email,
   }, { headers: { Authorization: `Bearer ${idToken}` } })
+}
+
+export async function cancelEmailRegistrationCode(input: { registrationId: string; email: string }): Promise<EmailVerificationCancelResult> {
+  return postJson<EmailVerificationCancelResult>(`${authApiBase()}/email-verification/cancel`, {
+    registration_id: input.registrationId,
+    email: input.email,
+  })
 }

@@ -4,6 +4,8 @@ Status: `PHASE_G_PRE_ACCEPTANCE_COMPLETION_ACTIVE`
 
 This is the only manual acceptance gate. It has not started. Phase B, Phase C, Phase D, and Phase F are closed as `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE`. Phase E is complete except for the external payment-provider integration.
 
+Operational precondition: the Auth Worker finalizer configuration (`FIREBASE_SERVICE_ACCOUNT_JSON` and matching `FIREBASE_PROJECT_ID`) is set. The live OTP-first email/password acceptance flow still requires deployment of the current custom-claim/finalized-profile boundary and disposable QA canaries. Firebase Identity Platform blocking functions are future defense-in-depth under `WAITING_EXTERNAL_BILLING_DEFENSE_IN_DEPTH`; they are not a current Phase G manual-acceptance prerequisite.
+
 ## Safety Rules
 
 - Use dedicated QA accounts and fixture records.
@@ -17,9 +19,11 @@ This is the only manual acceptance gate. It has not started. Phase B, Phase C, P
 ## 1. Public and Authentication
 
 - Verify direct routes, refresh, sign-in, sign-out, return paths, verified/unverified states, Arabic/English, RTL/LTR, and loading/error behavior.
-- Verify new email/password signup does not enter the account portal or create an active Saturn profile before OTP; after OTP, the same Firebase UID profile contains the submitted display name.
-- Verify the email verification page belongs to the pending registration: the destination email appears once, is not editable, OTP inputs render, direct `/account/verify` without context does not create a generic verification form, and Change email supersedes the old request before returning to signup.
-- Verify legacy email/password account without Saturn OTP is gated to verification on next protected access and resumes the same account after OTP.
+- Verify new email/password signup does not create a Saturn-created Firebase Email/Password identity, enter the account portal, create an active Saturn profile, or issue a Desktop session before OTP.
+- Verify that after OTP the password step appears, finalization creates or reconciles the Firebase identity, creates one finalized `account_profiles` row, sets the finalized Saturn custom claim, requires fresh sign-in, and the submitted display name persists after refresh, logout, and login.
+- Verify a raw provider-only Firebase password identity created outside Saturn has no finalized claim/profile and cannot access account, support, downloads, notifications, or Desktop linking; after legitimate Saturn OTP finalization for the same email, stale pre-finalization tokens remain rejected and a fresh token is accepted.
+- Verify the email verification page belongs to the pending registration: the destination email appears once, is not editable, OTP inputs render before the password step, direct `/account/verify` without context does not create a generic verification form, and Change email supersedes the old request before returning to signup.
+- Verify a legacy email/password identity created by the previous implementation but missing Saturn OTP is gated on next protected access and reconciles to the same UID after OTP without duplicate profile.
 - Confirm account switching clears user-scoped cache.
 - Confirm a user without a subscription can authenticate and link but receives no paid entitlement.
 - Test OTP email delivery on a QA account and confirm OTP values do not appear in Admin logs, queue JSON, or UI responses.

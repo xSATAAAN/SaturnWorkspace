@@ -7,6 +7,9 @@ Cloudflare Worker serving the desktop account-login gate:
 - `POST /device/poll` : desktop app polls for account authorization and receives an app session token.
 - `POST /session/verify` : desktop app validates its stored app session token and account subscription.
 - `POST /session/logout` : revokes the stored app session token.
+- `POST /email-verification/start` : creates a pending email/password registration and queues OTP delivery without creating a Firebase password identity.
+- `POST /email-verification/verify` : verifies the OTP and returns a one-time finalization token for pending registration.
+- `POST /email-verification/finalize` : after OTP, creates or reconciles the Firebase password identity server-side and creates the canonical account profile.
 - `GET /oauth/google-drive-config` : returns Google Drive OAuth client config after authorization.
 - `GET /health` : basic health endpoint.
 
@@ -28,8 +31,11 @@ npx wrangler secret put SUPABASE_API_URL
 npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
 npx wrangler secret put GOOGLE_DRIVE_CLIENT_CONFIG_JSON
 npx wrangler secret put FIREBASE_WEB_API_KEY
+npx wrangler secret put FIREBASE_SERVICE_ACCOUNT_JSON
 npx wrangler secret put OAUTH_CONFIG_ACCESS_TOKEN
 ```
+
+`FIREBASE_SERVICE_ACCOUNT_JSON` is required for production email/password registration finalization. It must contain a least-privilege service account with the Firebase Auth user create/get/update permissions required by the finalizer path. `FIREBASE_PROJECT_ID` must also be configured as a Worker variable, and it must match the `project_id` inside the service account JSON. Missing or mismatched project configuration fails closed before any Firebase user is created. Do not expose this secret to the browser or commit it.
 
 Optional:
 

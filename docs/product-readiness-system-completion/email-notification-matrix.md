@@ -24,9 +24,9 @@ This matrix records event-to-message coverage. It does not enable additional ema
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Auth | Email verification requested | Auth Worker -> Policy service-binding enqueue | After verification request row | Account email | `auth.email_verification` | Purpose/user/email scoped | D1 queue retry, sensitive payload purge | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` |
 | Auth | Verification resend | Auth Worker -> Policy service-binding enqueue | Previous request invalidated, new request stored | Account email | `auth.verification_resend` | Purpose/user/email scoped | D1 queue retry, sensitive payload purge | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` |
-| Support | Ticket created | Policy web support create | After ticket/message transaction | Account email | `support.ticket_created` | Ticket/message idempotency | D1 queue retry, suppression handling | `FULLY_OPERATIONAL_ENABLED` |
-| Support | Admin replied | Policy admin support reply | After reply commit | Ticket owner | `support.reply` | Admin reply key/thread | D1 queue retry, suppression handling | `FULLY_OPERATIONAL_ENABLED` |
-| Support | Status changed | Policy support status | After status commit | Ticket owner | `support.status_changed` | Thread/status key | D1 queue retry, suppression handling | `FULLY_OPERATIONAL_ENABLED` |
+| Support | Ticket created | Policy web support create | After ticket/message transaction | Account email | `support.ticket_created` | Ticket/message idempotency | D1 queue retry, suppression handling | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` |
+| Support | Admin replied | Policy admin support reply | After reply commit | Ticket owner | `support.reply` | Admin reply key/thread | D1 queue retry, suppression handling | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` |
+| Support | Status changed | Policy support status | After status commit | Ticket owner | `support.status_changed` | Thread/status key | D1 queue retry, suppression handling | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` |
 | Security | New desktop device linked | Auth Worker `issueDesktopSession` | After desktop session/device login commit | Account email | `security.new_login` | Device-login id | D1 queue retry | `READY_FOR_DEPLOYED_VERIFICATION` |
 | Security | Session revoked | Auth Worker session revoke | After revoke commit | Account email | `security.session_revoked` | UID/session/scope | D1 queue retry | `READY_FOR_DEPLOYED_VERIFICATION` |
 | Security | Device revoked | Auth Worker device revoke | After revoke commit | Account email | `security.device_revoked` | UID/session/scope | D1 queue retry | `READY_FOR_DEPLOYED_VERIFICATION` |
@@ -43,7 +43,7 @@ This matrix records event-to-message coverage. It does not enable additional ema
 | Admin alert | Readiness degradation | Policy scheduled handler | After scheduler-level failure | Configured admins | `admin.readiness_degraded` | Failure/time-bucket | D1 queue retry, cooldown via deterministic idempotency | `READY_FOR_DEPLOYED_VERIFICATION` |
 | Billing | Payment receipt/failure/renewal | None active | Not available | Customer | Prepared billing templates | Not active | Not active | `WAITING_EXTERNAL` |
 | Release | Release announcement/update | None active | Not approved | Customer/admin as approved | Prepared release templates | Not active | Not active | `PREPARED_DISABLED` |
-| Portal notification | Support reply/status | Policy support commit | After support event | Account portal notification | In-app notification rows | Thread/message/status key | Read/archive operations | `FULLY_OPERATIONAL_ENABLED` |
+| Portal notification | Support reply/status | Policy support commit | After support event | Account portal notification | In-app notification rows | Thread/message/status key | Read/archive operations | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` |
 
 ## Template Review Evidence
 

@@ -1,6 +1,6 @@
 # Saturn Workspace Product Completion Dashboard
 
-Updated: 2026-06-25
+Updated: 2026-06-26
 
 ## Current Phase Status
 
@@ -32,12 +32,12 @@ Updated: 2026-06-25
   - Auth: `EMAIL_AUTH_ENABLED=true`.
   - Policy: `EMAIL_OUTBOUND_ENABLED=true`, `EMAIL_INBOUND_ENABLED=true`, `EMAIL_SUPPORT_ENABLED=true`, `EMAIL_AUTH_ENABLED=true`, `EMAIL_SCHEDULER_ENABLED=true`.
   - Security email producers exist in the current worktree for selected committed session, device, and account-lifecycle events. `EMAIL_SECURITY_ENABLED=true` is deployed on Auth, Admin, and Policy; production-safe event delivery verification remains pending.
-  - Admin alert producers exist in the current worktree for final email queue failure, webhook verification failure, cleanup failure, storage configuration failure, schema mismatch, readiness degradation, and high-severity tamper signals. `EMAIL_ADMIN_ALERTS_ENABLED=true` is deployed on Policy `cec58841-cbc9-44e4-853f-054425d29ecc`, `EMAIL_ADMIN_ALERT_RECIPIENTS` is configured as a Policy Worker secret, and safe alert-delivery verification remains pending.
+  - Admin alert producers exist in the current worktree for final email queue failure, webhook verification failure, cleanup failure, storage configuration failure, schema mismatch, readiness degradation, and high-severity tamper signals. `EMAIL_ADMIN_ALERTS_ENABLED=true` is active on Policy deployment `b79cab4e-bc04-49a0-b1d3-25545f933344` (secret-change version after source deployment `cec58841-cbc9-44e4-853f-054425d29ecc`), `EMAIL_ADMIN_ALERT_RECIPIENTS` is configured as a Policy Worker secret, and safe alert-delivery verification remains pending.
   - Billing and release email categories remain disabled.
 - Secret inventory:
   - Policy Worker has `RESEND_SEND_API_KEY`, `RESEND_RECEIVE_API_KEY`, and `RESEND_WEBHOOK_SECRET`.
-  - Auth Worker has `AUTH_EMAIL_ENQUEUE_TOKEN` and `EMAIL_VERIFICATION_PEPPER`.
-  - Admin Worker does not currently show `ADMIN_ROLE_ASSIGNMENTS`; multi-role RBAC is therefore `OPERATIONAL_CONFIGURATION_REQUIRED`.
+  - Auth Worker has `AUTH_EMAIL_ENQUEUE_TOKEN`, `EMAIL_VERIFICATION_PEPPER`, and `FIREBASE_SERVICE_ACCOUNT_JSON`.
+  - Admin Worker has UID-based `ADMIN_ROLE_ASSIGNMENTS` configured for the currently authorized administrator; authenticated route sweep remains pending.
   - `ADMIN_EMAIL_ENQUEUE_TOKEN` is configured on Admin and Policy Workers so Admin account lifecycle security emails can use the internal enqueue path after deployment.
 - Tests run during Phase G continuation:
   - Repository mojibake scan: passed.
@@ -50,7 +50,7 @@ Updated: 2026-06-25
 
 ## State and Source-of-Truth Decisions
 
-- Firebase UID is the canonical account identity. Email is display/search data only.
+- Firebase UID is the provider identity key. Saturn account authority additionally requires a server-issued finalized account custom claim and a canonical finalized `account_profiles` row for the same UID. Email is display/search data only.
 - Supabase/Postgres `account_subscriptions` is the legal subscription source.
 - Auth Worker is the server boundary for account/subscription projection.
 - Users come from `account_profiles`; subscription rows do not represent users.
@@ -72,7 +72,7 @@ Updated: 2026-06-25
 - Security email producers were added in source for new desktop device link, session revoke, device revoke, revoke-all, deletion request/cancel, account suspend, and account reactivate. Local producer tests pass, category flags are deployed, and no production lifecycle mutation was executed for verification.
 - Admin alert producer coverage is implemented in source for the required operational families with deterministic idempotency/cooldown. The approved recipient is configured as a Worker secret, category flags are deployed, and no false production incident was generated.
 - Public pricing copy and card presentation were rebuilt again after live evidence showed the previous section still had redundant IA. The current hierarchy states the shared full-tool truth once, places the seven-day trial only in monthly/annual cards, removes the large checkout-unavailable banner and repeated strip content, and reduces dead card space. Live bundle `assets/index-rasVfIJe.js` contains the approved weekly/monthly/annual price values and no old pricing strip/banner tokens.
-- Email/password registration OTP boundary defect was found and fixed and deployed: signup no longer provisions a Saturn profile before OTP, Auth account endpoints, explicit provision, and Desktop device linking now fail closed for unverified password identities, OTP verification finalizes the same Firebase UID profile with `verification_source = saturnws_otp`, the frontend verification gate defaults on, and the production site bundle no longer contains OTP test-code display/storage logic. A later live failure in the Auth-to-Policy email-delivery handoff was fixed by routing Auth delivery through the `POLICY_SERVICE` service binding instead of the public Policy URL. Auth Worker version `0186ad21-4c7b-4399-8c92-20a876fd5bee` and GitHub Pages run `28174200979` are live. Local Auth Worker/Site checks and safe live contract checks pass. Disposable QA inbox acceptance remains pending.
+- Email/password registration OTP boundary was tightened again after the prior deployment: the approved current source does not create a Saturn-created Firebase Email/Password identity before Saturn OTP. Signup creates a server-side pending registration, OTP verification returns a one-time finalization token, password is collected only after OTP, and Auth Worker finalization creates or reconciles the Firebase identity, writes one finalized `account_profiles` row, sets the minimal finalized custom claim, records a credential epoch, enables the identity, and requires a fresh sign-in. Raw provider-only Firebase password identities without the Saturn claim/profile have no product authority, cannot access protected account/Policy/Desktop boundaries, and are quarantined/disabled when stale; legitimate OTP finalization can reconcile the same UID. Google-only collisions fail closed. Current source checks pass, including fail-closed handling for `FIREBASE_PROJECT_ID`/service-account JSON project mismatch and the direct-signup bypass canary. The least-privilege Firebase finalizer identity and Auth Worker secret/config are configured; source deployment and disposable live canaries remain pending in Phase G.
 - Email verification page state was corrected as a pending-registration workflow: the destination email is shown once as non-editable information, `/account/verify` without context no longer renders a generic editable email form, and Change email calls the server cancellation endpoint, supersedes the old OTP, preserves non-sensitive signup fields, and returns to signup.
 - Earlier live public rendered evidence for commit `3e090fb198429cf26d5f3866f9adc41c1651dfdf` found and fixed a Contact mobile overflow defect. Recaptured screenshots under `docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public` show 30/30 public route/locale/viewport captures returning 200 with correct RTL/LTR direction and zero horizontal overflow.
 - Public plan catalog CORS source was repaired to allow Saturn public origins as well as Admin origins. Post-deploy verification confirmed `https://admin-api.saturnws.com/api/plans/catalog` returns 200 with `Access-Control-Allow-Origin: https://saturnws.com` for the public origin.
@@ -82,8 +82,11 @@ Updated: 2026-06-25
 
 | Item | State | Required action |
 | --- | --- | --- |
-| `ADMIN_ROLE_ASSIGNMENTS` | `OPERATIONAL_CONFIGURATION_REQUIRED` | Configure UID-based role JSON as an Admin Worker secret before multi-role acceptance. Do not use email identity. The current UID was not guessed or printed. |
-| Email/password OTP remediation credentialed QA | `PENDING_MANUAL_ACCEPTANCE` | Auth Worker and site are deployed. Live health, route, bundle, CORS, stable unauthenticated error contracts, pending-registration UI, and server enqueue path pass. Credentialed disposable QA inbox proof remains deferred to Phase G without exposing password, OTP, UID, token, or cookies. |
+| `ADMIN_ROLE_ASSIGNMENTS` | `PENDING_DEPLOYMENT_VERIFICATION` | UID-based `super_admin` assignment is configured as an Admin Worker secret for the currently authorized administrator. The UID was resolved from Firebase and was not printed or documented. Authenticated route sweep remains pending. |
+| Email/password OTP-first finalization | `PENDING_DEPLOYMENT_VERIFICATION` | Dedicated Firebase Auth finalizer role/service account exists with only `firebaseauth.users.create`, `firebaseauth.users.get`, and `firebaseauth.users.update`; Auth Worker `FIREBASE_SERVICE_ACCOUNT_JSON` and matching `FIREBASE_PROJECT_ID=saturnws-1` are configured. Deploy current source, then run disposable QA inbox/finalization and direct-signup quarantine canaries without exposing password, OTP, UID, token, or cookies. |
+| Firebase Identity Platform blocking functions | `WAITING_EXTERNAL_BILLING_DEFENSE_IN_DEPTH` | Approved upgrade attempt on 2026-06-26 was rejected by Google with `BILLING_NOT_ENABLED`. The project remains `FIREBASE_AUTH`, no blocking trigger is configured, and authorized domains remain present. This is no longer a prerequisite for the current Phase G OTP-first remediation; it remains future defense-in-depth after Billing is available. |
+| Firebase public client signup bypass | `MITIGATED_BY_SATURN_DUAL_TRUST_PENDING_DEPLOYMENT` | Saturn source no longer calls client signup. A raw provider-only Firebase password identity may still exist outside Saturn, but it receives no server-issued finalized claim, has no canonical finalized profile, cannot access protected Saturn boundaries, and is quarantined/disabled when stale. Identity Platform selective blocking remains future defense-in-depth, not the current Phase G gate. |
+| Email/password OTP remediation credentialed QA | `PENDING_MANUAL_ACCEPTANCE` | Previous live health, route, bundle, CORS, stable unauthenticated error contracts, pending-registration UI, and server enqueue path passed for the earlier deployed model. The current OTP-first source requires the Firebase Admin configuration above before live completion can be tested. |
 | Real payment provider | `WAITING_EXTERNAL` | Approve provider, plan mappings, webhook contract, and rollout before checkout or billing emails are enabled. |
 | QA email delivery acceptance | `PENDING_MANUAL_ACCEPTANCE` | Use a dedicated QA recipient in Phase G to confirm provider delivery without exposing OTP values. |
 | QA Desktop Setup artifact | `QA_ARTIFACT_BUILT_PENDING_MANUAL_ACCEPTANCE` | Local artifact: `D:\SaturnWS\build-output\phase-g-qa-installed-channel-20260624-131944\setup\SaturnWorkspace-Setup-1.0.7-beta-phase-g-qa.exe`; SHA256 `527C21D6A87720DB31E0EC4A8F59EA6FF2299C928C1B83447E2AC1E6AAA45DDD`. Not published. |

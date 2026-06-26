@@ -613,6 +613,17 @@ export async function getLatestEmailVerification(
   return rows[0] || null
 }
 
+export async function getEmailVerificationById(
+  env: Env,
+  id: string,
+): Promise<Record<string, any> | null> {
+  const rows = await supabaseJson<Record<string, any>[]>(
+    env,
+    `/account_email_verifications?id=eq.${encodeURIComponent(String(id || "").trim())}&select=*&limit=1`,
+  )
+  return rows[0] || null
+}
+
 export async function createEmailVerification(
   env: Env,
   payload: Record<string, unknown>,

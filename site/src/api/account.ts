@@ -72,6 +72,7 @@ export type AccountProvisionResult = {
   profile?: AccountProfileProjection
   profile_state?: string
   email_verification_state?: string
+  token_refresh_required?: boolean
   error?: string
   code?: string
   request_id?: string

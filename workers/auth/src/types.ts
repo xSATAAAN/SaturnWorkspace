@@ -6,6 +6,8 @@ export interface Env {
   OAUTH_CONFIG_ACCESS_TOKEN?: string
   OAUTH_CONFIG_ALLOW_PUBLIC?: string
   FIREBASE_WEB_API_KEY?: string
+  FIREBASE_PROJECT_ID?: string
+  FIREBASE_SERVICE_ACCOUNT_JSON?: string
   FIREBASE_AUTH_HELPER_ORIGIN?: string
   DEVICE_LOGIN_URL?: string
   VERIFY_RATE_LIMIT_PER_MIN?: string
@@ -17,6 +19,9 @@ export interface Env {
   EMAIL_SECURITY_ENABLED?: string
   AUTH_EMAIL_ENQUEUE_URL?: string
   AUTH_EMAIL_ENQUEUE_TOKEN?: string
+  AUTH_ORPHAN_PASSWORD_RETENTION_HOURS?: string
+  AUTH_ORPHAN_PASSWORD_ALERT_THRESHOLD?: string
+  AUTH_ORPHAN_ADMIN_ALERT_RECIPIENT?: string
   POLICY_SERVICE?: { fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> }
   ACCOUNT_TERMS_VERSION?: string
   PROFILE_DEFAULT_LOCALE?: string

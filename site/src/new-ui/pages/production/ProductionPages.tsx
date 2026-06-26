@@ -74,11 +74,15 @@ const EMAIL_SUPPORT_ENABLED = true
 type PendingEmailVerificationContext = {
   kind: 'registration' | 'account'
   email: string
+  registrationId?: string
   displayName?: string
   locale?: 'ar' | 'en'
   termsAccepted?: boolean
   termsVersion?: string
   termsAcceptedAt?: string
+  verifiedAt?: string
+  finalizationToken?: string
+  finalizationExpiresAt?: string
   createdAt: string
 }
 
@@ -117,11 +121,15 @@ function loadPendingEmailVerification(): PendingEmailVerificationContext | null 
     return {
       kind,
       email,
+      registrationId: typeof parsed.registrationId === 'string' ? parsed.registrationId : undefined,
       displayName: typeof parsed.displayName === 'string' ? parsed.displayName : undefined,
       locale: parsed.locale === 'en' ? 'en' : 'ar',
       termsAccepted: Boolean(parsed.termsAccepted),
       termsVersion: typeof parsed.termsVersion === 'string' ? parsed.termsVersion : undefined,
       termsAcceptedAt: typeof parsed.termsAcceptedAt === 'string' ? parsed.termsAcceptedAt : undefined,
+      verifiedAt: typeof parsed.verifiedAt === 'string' ? parsed.verifiedAt : undefined,
+      finalizationToken: typeof parsed.finalizationToken === 'string' ? parsed.finalizationToken : undefined,
+      finalizationExpiresAt: typeof parsed.finalizationExpiresAt === 'string' ? parsed.finalizationExpiresAt : undefined,
       createdAt: typeof parsed.createdAt === 'string' ? parsed.createdAt : new Date().toISOString(),
     }
   } catch {
@@ -505,6 +513,7 @@ function authErrorMessage(error: unknown, t: (key: MessageKey) => string, locale
   if (key.includes('auth_too_many_attempts') || key.includes('too-many-requests')) return copyByLocale(locale, 'Too many attempts. Try again later.', 'تمت محاولات كثيرة. حاول لاحقًا.')
   if (key.includes('verification_delivery_temporary_failure')) return copyByLocale(locale, 'The code could not be sent right now. Try again.', 'تعذر إرسال الرمز الآن. حاول مرة أخرى.')
   if (key.includes('verification_delivery_disabled') || key.includes('verification_delivery_not_configured') || key.includes('verification_delivery_configuration_error') || key.includes('verification_delivery_failed')) return copyByLocale(locale, 'Email verification is unavailable right now. Try again later.', 'التحقق بالبريد غير متاح حاليًا. حاول لاحقًا.')
+  if (key.includes('auth_provider_server_create_not_configured') || key.includes('auth_provider_unavailable') || key.includes('registration_finalization_failed')) return copyByLocale(locale, 'Account creation is unavailable right now. Try again later.', 'إنشاء الحساب غير متاح حاليًا. حاول لاحقًا.')
   if (key.includes('verification_code_invalid') || key.includes('email_code_invalid')) return t('codeInvalid')
   if (key.includes('verification_code_expired') || key.includes('email_code_expired')) return t('codeExpired')
   if (key.includes('verification_rate_limited') || key.includes('email_resend_limited')) return t('tooManyAttempts')
@@ -689,7 +698,6 @@ function EmailPasswordProductionPage({ page, routeState, navigate }: { page: str
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
   const [acceptedTerms, setAcceptedTerms] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -697,8 +705,6 @@ function EmailPasswordProductionPage({ page, routeState, navigate }: { page: str
   const signup = page === 'signup'
   const activationPayload = useMemo(() => loadActivationPayload(routeState), [routeState])
   const completionStartedRef = useRef(false)
-  const passwordLongEnough = password.length >= 6
-  const passwordsMatch = Boolean(confirmPassword) && password === confirmPassword
   const finishActivationIfNeeded = useCallback(async () => {
     if (!activationPayload) return false
     if (completionStartedRef.current) return true
@@ -745,14 +751,6 @@ function EmailPasswordProductionPage({ page, routeState, navigate }: { page: str
       setError(locale === 'ar' ? 'اكتب الاسم الكامل.' : 'Full name is required.')
       return
     }
-    if (signup && !passwordLongEnough) {
-      setError(locale === 'ar' ? 'يجب أن تتكون كلمة المرور من 6 أحرف على الأقل.' : 'Password must contain at least 6 characters.')
-      return
-    }
-    if (signup && !passwordsMatch) {
-      setError(locale === 'ar' ? 'كلمتا المرور غير متطابقتين.' : 'Passwords do not match.')
-      return
-    }
     if (signup && !acceptedTerms) {
       setError(locale === 'ar' ? 'يجب الموافقة على شروط الخدمة وسياسة الخصوصية.' : 'You must agree to the Terms of Service and Privacy Policy.')
       return
@@ -761,36 +759,28 @@ function EmailPasswordProductionPage({ page, routeState, navigate }: { page: str
     try {
       if (signup) {
         const termsAcceptedAt = new Date().toISOString()
-        await auth.signUpWithEmail({
+        const registration = await auth.startEmailRegistration({
           displayName: fullName,
           email,
-          password,
           locale,
           termsAccepted: acceptedTerms,
           termsVersion: '2026-06',
+          termsAcceptedAt,
         })
-        if (isProductionFeatureEnabled('emailVerification')) {
-          const verification = await auth.requestEmailVerification(email, {
-            displayName: fullName,
-            locale,
-            termsAccepted: acceptedTerms,
-            termsVersion: '2026-06',
-            termsAcceptedAt,
-          })
-          if (!verification.success) throw new Error(verification.error || 'email_verification_failed')
-          savePendingEmailVerification({
-            kind: 'registration',
-            email,
-            displayName: fullName,
-            locale,
-            termsAccepted: acceptedTerms,
-            termsVersion: '2026-06',
-            termsAcceptedAt,
-            createdAt: new Date().toISOString(),
-          })
-          navigate({ surface: 'auth', page: 'verify', state: routeState })
-          return
-        }
+        if (!registration.success || !registration.registrationId) throw new Error(registration.error || 'email_verification_failed')
+        savePendingEmailVerification({
+          kind: 'registration',
+          email: registration.email || email,
+          registrationId: registration.registrationId,
+          displayName: fullName,
+          locale,
+          termsAccepted: acceptedTerms,
+          termsVersion: '2026-06',
+          termsAcceptedAt,
+          createdAt: new Date().toISOString(),
+        })
+        navigate({ surface: 'auth', page: 'verify', state: routeState })
+        return
       } else {
         await auth.signInWithEmail(email, password)
       }
@@ -818,7 +808,7 @@ function EmailPasswordProductionPage({ page, routeState, navigate }: { page: str
       setLoading(false)
     }
   }
-  return <ProductionAuthShell navigate={navigate}><div className={`auth-card auth-card--${signup ? 'signup' : 'signin'}`}><div className="auth-form"><header>{signup ? <span>{copyByLocale(locale, 'Create your workspace access', 'ابدأ إعداد مساحة عملك')}</span> : null}<h1>{signup ? t('signUpTitle') : t('signInTitle')}</h1><p>{activationPayload ? copyByLocale(locale, 'Sign in to link this desktop app session to your account.', 'سجّل الدخول لربط جلسة أداة سطح المكتب بحسابك.') : signup ? copyByLocale(locale, 'Create one account for subscriptions, downloads, support, and your desktop sign-in.', 'أنشئ حسابًا واحدًا للاشتراك والتنزيلات والدعم وتسجيل الدخول إلى الأداة.') : t('signInBody')}</p></header>{activationPayload ? <Alert title={copyByLocale(locale, 'Desktop linking', 'ربط أداة سطح المكتب')} tone="info">{copyByLocale(locale, 'After sign-in, Saturn Workspace will be linked automatically.', 'بعد تسجيل الدخول سيتم ربط Saturn Workspace تلقائيًا.')}</Alert> : null}<form className="stack" onSubmit={submit} noValidate>{signup ? <FormField label={locale === 'ar' ? 'الاسم الكامل' : 'Full name'} htmlFor="auth-full-name" required><Input id="auth-full-name" type="text" autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} required /></FormField> : null}<FormField label={t('email')} htmlFor="auth-email" required><Input id="auth-email" type="email" autoComplete="email" placeholder={locale === 'ar' ? 'name@example.com' : 'name@example.com'} value={email} onChange={(event) => setEmail(event.target.value)} required /></FormField><FormField label={t('password')} htmlFor="auth-password" required><PasswordInput id="auth-password" autoComplete={signup ? 'new-password' : 'current-password'} value={password} onChange={(event) => setPassword(event.target.value)} required /></FormField>{signup ? <><FormField label={t('confirmPassword')} htmlFor="auth-confirm-password" required error={confirmPassword && !passwordsMatch ? (locale === 'ar' ? 'كلمتا المرور غير متطابقتين.' : 'Passwords do not match.') : undefined}><PasswordInput id="auth-confirm-password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required /></FormField><div className="password-requirements" aria-live="polite"><strong>{locale === 'ar' ? 'متطلبات كلمة المرور' : 'Password requirements'}</strong><span className={passwordLongEnough ? 'is-valid' : ''}><Check size={14} />{locale === 'ar' ? '6 أحرف على الأقل' : 'At least 6 characters'}</span><span className={passwordsMatch ? 'is-valid' : ''}><Check size={14} />{locale === 'ar' ? 'تطابق كلمتي المرور' : 'Both passwords match'}</span></div><Checkbox checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} required label={<span>{locale === 'ar' ? 'أوافق على ' : 'I agree to the '}<a href="/terms">{t('terms')}</a>{locale === 'ar' ? ' و' : ' and the '}<a href="/privacy">{t('privacy')}</a></span>} /></> : <div className="auth-form__options"><Button type="button" variant="text" onClick={reset}>{t('forgotPassword')}</Button></div>}{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}<Button type="submit" variant="primary" size="lg" fullWidth loading={loading}>{signup ? t('signUp') : t('signIn')}</Button></form><div className="auth-divider"><span>{t('orContinue')}</span></div><Button type="button" fullWidth size="lg" leadingIcon={<GoogleIcon />} onClick={async () => { setLoading(true); setError(''); try { if (signup && !acceptedTerms) { setError(locale === 'ar' ? 'يجب الموافقة على شروط الخدمة وسياسة الخصوصية.' : 'You must agree to the Terms of Service and Privacy Policy.'); return } await auth.signInWithGoogle(signup ? { locale, termsAccepted: acceptedTerms, termsVersion: '2026-06' } : undefined); if (await finishActivationIfNeeded()) return; navigate(destinationAfterAuth(routeState)) } catch (err) { setError(activationPayload ? deviceActivationErrorMessage(err, locale) : authErrorMessage(err, t, locale)) } finally { setLoading(false) } }}>{t('continueGoogle')}</Button><p className="auth-switch">{signup ? t('haveAccount') : t('noAccount')} <button type="button" onClick={() => navigate({ surface: 'auth', page: signup ? 'signin' : 'signup', state: routeState })}>{signup ? t('signIn') : t('signUp')}</button></p></div></div></ProductionAuthShell>
+  return <ProductionAuthShell navigate={navigate}><div className={`auth-card auth-card--${signup ? 'signup' : 'signin'}`}><div className="auth-form"><header>{signup ? <span>{copyByLocale(locale, 'Create your workspace access', 'ابدأ إعداد مساحة عملك')}</span> : null}<h1>{signup ? t('signUpTitle') : t('signInTitle')}</h1><p>{activationPayload ? copyByLocale(locale, 'Sign in to link this desktop app session to your account.', 'سجّل الدخول لربط جلسة أداة سطح المكتب بحسابك.') : signup ? copyByLocale(locale, 'Create one account for subscriptions, downloads, support, and your desktop sign-in.', 'أنشئ حسابًا واحدًا للاشتراك والتنزيلات والدعم وتسجيل الدخول إلى الأداة.') : t('signInBody')}</p></header>{activationPayload ? <Alert title={copyByLocale(locale, 'Desktop linking', 'ربط أداة سطح المكتب')} tone="info">{copyByLocale(locale, 'After sign-in, Saturn Workspace will be linked automatically.', 'بعد تسجيل الدخول سيتم ربط Saturn Workspace تلقائيًا.')}</Alert> : null}<form className="stack" onSubmit={submit} noValidate>{signup ? <FormField label={locale === 'ar' ? 'الاسم الكامل' : 'Full name'} htmlFor="auth-full-name" required><Input id="auth-full-name" type="text" autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} required /></FormField> : null}<FormField label={t('email')} htmlFor="auth-email" required><Input id="auth-email" type="email" autoComplete="email" placeholder={locale === 'ar' ? 'name@example.com' : 'name@example.com'} value={email} onChange={(event) => setEmail(event.target.value)} required /></FormField>{!signup ? <FormField label={t('password')} htmlFor="auth-password" required><PasswordInput id="auth-password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></FormField> : null}{signup ? <><Checkbox checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} required label={<span>{locale === 'ar' ? 'أوافق على ' : 'I agree to the '}<a href="/terms">{t('terms')}</a>{locale === 'ar' ? ' و' : ' and the '}<a href="/privacy">{t('privacy')}</a></span>} /></> : <div className="auth-form__options"><Button type="button" variant="text" onClick={reset}>{t('forgotPassword')}</Button></div>}{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}<Button type="submit" variant="primary" size="lg" fullWidth loading={loading}>{signup ? t('signUp') : t('signIn')}</Button></form><div className="auth-divider"><span>{t('orContinue')}</span></div><Button type="button" fullWidth size="lg" leadingIcon={<GoogleIcon />} onClick={async () => { setLoading(true); setError(''); try { if (signup && !acceptedTerms) { setError(locale === 'ar' ? 'يجب الموافقة على شروط الخدمة وسياسة الخصوصية.' : 'You must agree to the Terms of Service and Privacy Policy.'); return } await auth.signInWithGoogle(signup ? { locale, termsAccepted: acceptedTerms, termsVersion: '2026-06' } : undefined); if (await finishActivationIfNeeded()) return; navigate(destinationAfterAuth(routeState)) } catch (err) { setError(activationPayload ? deviceActivationErrorMessage(err, locale) : authErrorMessage(err, t, locale)) } finally { setLoading(false) } }}>{t('continueGoogle')}</Button><p className="auth-switch">{signup ? t('haveAccount') : t('noAccount')} <button type="button" onClick={() => navigate({ surface: 'auth', page: signup ? 'signin' : 'signup', state: routeState })}>{signup ? t('signIn') : t('signUp')}</button></p></div></div></ProductionAuthShell>
 }
 
 function EmailVerificationProductionPage({ routeState, navigate }: { routeState?: string; navigate: Navigate }) {
@@ -826,10 +816,15 @@ function EmailVerificationProductionPage({ routeState, navigate }: { routeState?
   const { auth } = useAdapters()
   const [pending, setPending] = useState<PendingEmailVerificationContext | null>(() => loadPendingEmailVerification())
   const [code, setCode] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [loading, setLoading] = useState(false)
   const email = pending?.email || ''
+  const passwordLongEnough = password.length >= 6
+  const passwordsMatch = Boolean(confirmPassword) && password === confirmPassword
+  const waitingForPassword = pending?.kind === 'registration' && Boolean(pending.finalizationToken && pending.registrationId)
   const verify = async () => {
     if (!pending) {
       setError(copyByLocale(locale, 'Start registration again to request a new code.', 'ابدأ التسجيل مرة أخرى لطلب رمز جديد.'))
@@ -838,8 +833,48 @@ function EmailVerificationProductionPage({ routeState, navigate }: { routeState?
     setLoading(true)
     setError('')
     try {
-      const result = await auth.verifyEmailCode(email, code)
+      const result = await auth.verifyEmailCode({ email, code, registrationId: pending.registrationId })
       if (!result.success) throw new Error(result.error || 'EMAIL_CODE_INVALID')
+      if (pending.kind === 'registration') {
+        if (!result.finalizationToken || !result.registrationId) throw new Error('registration_finalization_failed')
+        const next = {
+          ...pending,
+          registrationId: result.registrationId,
+          verifiedAt: result.verifiedAt,
+          finalizationToken: result.finalizationToken,
+          finalizationExpiresAt: result.finalizationExpiresAt,
+        }
+        savePendingEmailVerification(next)
+        setPending(next)
+        setCode('')
+        setNotice(t('success'))
+        return
+      }
+      clearPendingEmailVerification()
+      navigate(destinationAfterAuth(routeState))
+    } catch (err) {
+      setError(authErrorMessage(err, t, locale))
+    } finally {
+      setLoading(false)
+    }
+  }
+  const finalize = async () => {
+    if (!pending?.registrationId || !pending.finalizationToken) {
+      setError(copyByLocale(locale, 'Verify your email before setting a password.', 'تحقق من البريد أولًا قبل تعيين كلمة المرور.'))
+      return
+    }
+    if (!passwordLongEnough) {
+      setError(copyByLocale(locale, 'Password must contain at least 6 characters.', 'يجب أن تتكون كلمة المرور من 6 أحرف على الأقل.'))
+      return
+    }
+    if (!passwordsMatch) {
+      setError(copyByLocale(locale, 'Passwords do not match.', 'كلمتا المرور غير متطابقتين.'))
+      return
+    }
+    setLoading(true)
+    setError('')
+    try {
+      await auth.finalizeEmailRegistration({ email, password, registrationId: pending.registrationId, finalizationToken: pending.finalizationToken })
       clearPendingEmailVerification()
       navigate(destinationAfterAuth(routeState))
     } catch (err) {
@@ -853,18 +888,30 @@ function EmailVerificationProductionPage({ routeState, navigate }: { routeState?
       setError(copyByLocale(locale, 'Start registration again to request a new code.', 'ابدأ التسجيل مرة أخرى لطلب رمز جديد.'))
       return
     }
+    if (waitingForPassword) return
     setLoading(true)
     setError('')
     setNotice('')
     try {
-      const result = await auth.requestEmailVerification(email, pending.kind === 'registration' ? {
-        displayName: pending.displayName,
-        locale: pending.locale || locale,
-        termsAccepted: pending.termsAccepted,
-        termsVersion: pending.termsVersion,
-        termsAcceptedAt: pending.termsAcceptedAt,
-      } : undefined)
-      if (!result.success) throw new Error(result.error || 'EMAIL_RESEND_LIMITED')
+      if (pending.kind === 'registration') {
+        const result = await auth.startEmailRegistration({
+          email,
+          displayName: pending.displayName || '',
+          locale: pending.locale || locale,
+          termsAccepted: Boolean(pending.termsAccepted),
+          termsVersion: pending.termsVersion,
+          termsAcceptedAt: pending.termsAcceptedAt,
+        })
+        if (!result.success) throw new Error(result.error || 'EMAIL_RESEND_LIMITED')
+        if (result.registrationId) {
+          const next = { ...pending, registrationId: result.registrationId, finalizationToken: undefined, finalizationExpiresAt: undefined, verifiedAt: undefined }
+          savePendingEmailVerification(next)
+          setPending(next)
+        }
+      } else {
+        const result = await auth.requestEmailVerification(email)
+        if (!result.success) throw new Error(result.error || 'EMAIL_RESEND_LIMITED')
+      }
       setNotice(t('success'))
     } catch (err) {
       setError(authErrorMessage(err, t, locale))
@@ -881,7 +928,7 @@ function EmailVerificationProductionPage({ routeState, navigate }: { routeState?
     setError('')
     try {
       if (!auth.cancelEmailVerification) throw new Error('verification_cancel_unavailable')
-      const cancelled = await auth.cancelEmailVerification(email)
+      const cancelled = await auth.cancelEmailVerification({ email, registrationId: pending.registrationId })
       if (!cancelled.success) throw new Error(cancelled.error || 'verification_cancel_failed')
       saveSignupPrefill({
         email,
@@ -890,7 +937,7 @@ function EmailVerificationProductionPage({ routeState, navigate }: { routeState?
       })
       clearPendingEmailVerification()
       setPending(null)
-      await auth.signOut()
+      if (pending.kind === 'account') await auth.signOut()
       navigate({ surface: 'auth', page: 'signup', state: routeState })
     } catch (err) {
       setError(authErrorMessage(err, t, locale))
@@ -901,7 +948,7 @@ function EmailVerificationProductionPage({ routeState, navigate }: { routeState?
   if (!pending) {
     return <ProductionAuthShell navigate={navigate}><div className="auth-card"><div className="auth-form auth-form--center"><span className="auth-icon"><Mail size={23} /></span><header><h1>{t('verificationTitle')}</h1><p>{copyByLocale(locale, 'Create an account or sign in to request a verification code.', 'أنشئ حسابًا أو سجّل الدخول لطلب رمز تحقق.')}</p></header>{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}<Button type="button" variant="primary" size="lg" fullWidth onClick={() => navigate({ surface: 'auth', page: 'signup', state: routeState })}>{t('signUp')}</Button><Button type="button" variant="text" onClick={() => navigate({ surface: 'auth', page: 'signin', state: routeState })}>{t('signIn')}</Button></div></div></ProductionAuthShell>
   }
-  return <ProductionAuthShell navigate={navigate}><div className="auth-card"><div className="auth-form auth-form--center"><span className="auth-icon"><Mail size={23} /></span><header><h1>{t('verificationTitle')}</h1><p>{t('verificationBody')}</p><div className="verification-destination"><span>{t('email')}</span><strong>{email}</strong></div></header><form className="stack" onSubmit={(event) => { event.preventDefault(); void verify() }}><OTPInput value={code} onChange={setCode} label={t('codeLabel')} />{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}<Button type="submit" variant="primary" size="lg" fullWidth loading={loading} disabled={code.length !== 6}>{t('continue')}</Button><div className="cluster"><Button type="button" variant="text" onClick={resend} disabled={loading}>{t('resend')}</Button><Button type="button" variant="text" onClick={() => void changeEmail()} disabled={loading}>{t('changeEmail')}</Button></div></form></div></div></ProductionAuthShell>
+  return <ProductionAuthShell navigate={navigate}><div className="auth-card"><div className="auth-form auth-form--center"><span className="auth-icon"><Mail size={23} /></span><header><h1>{t('verificationTitle')}</h1><p>{waitingForPassword ? copyByLocale(locale, 'Set a password to finish creating your account.', 'عيّن كلمة مرور لإكمال إنشاء الحساب.') : t('verificationBody')}</p><div className="verification-destination"><span>{t('email')}</span><strong>{email}</strong></div></header><form className="stack" onSubmit={(event) => { event.preventDefault(); void (waitingForPassword ? finalize() : verify()) }}>{waitingForPassword ? <><FormField label={t('password')} htmlFor="registration-password" required><PasswordInput id="registration-password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></FormField><FormField label={t('confirmPassword')} htmlFor="registration-confirm-password" required error={confirmPassword && !passwordsMatch ? copyByLocale(locale, 'Passwords do not match.', 'كلمتا المرور غير متطابقتين.') : undefined}><PasswordInput id="registration-confirm-password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required /></FormField><div className="password-requirements" aria-live="polite"><strong>{copyByLocale(locale, 'Password requirements', 'متطلبات كلمة المرور')}</strong><span className={passwordLongEnough ? 'is-valid' : ''}><Check size={14} />{copyByLocale(locale, 'At least 6 characters', '6 أحرف على الأقل')}</span><span className={passwordsMatch ? 'is-valid' : ''}><Check size={14} />{copyByLocale(locale, 'Both passwords match', 'تطابق كلمتي المرور')}</span></div></> : <OTPInput value={code} onChange={setCode} label={t('codeLabel')} />}{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}<Button type="submit" variant="primary" size="lg" fullWidth loading={loading} disabled={waitingForPassword ? !passwordLongEnough || !passwordsMatch : code.length !== 6}>{t('continue')}</Button>{!waitingForPassword ? <div className="cluster"><Button type="button" variant="text" onClick={resend} disabled={loading}>{t('resend')}</Button><Button type="button" variant="text" onClick={() => void changeEmail()} disabled={loading}>{t('changeEmail')}</Button></div> : null}</form></div></div></ProductionAuthShell>
 }
 
 export function PortalProductionPages({ page, navigate }: { page: string; navigate: Navigate }) {

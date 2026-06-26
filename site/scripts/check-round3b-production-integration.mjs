@@ -27,14 +27,17 @@ function assertNotIncludes(source, token, label) {
 
 const productionAdapters = read('site/src/new-ui/adapters/productionAdapters.ts')
 const productionPages = read('site/src/new-ui/pages/production/ProductionPages.tsx')
+const adminPhaseF = read('site/src/new-ui/pages/production/AdminPhaseF.tsx')
 const supportApi = read('site/src/api/support.ts')
 const emailVerificationApi = read('site/src/api/emailVerification.ts')
 const featureFlags = read('site/src/new-ui/adapters/productionFeatureFlags.ts')
 
 for (const route of [
+  '/email-verification/start',
   '/email-verification/request',
   '/email-verification/verify',
   '/email-verification/status',
+  '/email-verification/finalize',
 ]) {
   assertIncludes(emailVerificationApi, route, `site email verification API route ${route}`)
 }
@@ -53,12 +56,15 @@ assertIncludes(productionAdapters, 'createWebSupportTicket', 'production support
 assertIncludes(productionAdapters, 'fetchWebSupportThreads', 'production support list')
 assertIncludes(productionAdapters, 'replyWebSupportThread', 'production support reply')
 assertIncludes(productionAdapters, 'updateWebSupportStatus', 'production support status')
-assertIncludes(productionAdapters, 'requestEmailVerificationCode', 'production email verification request')
+assertIncludes(productionAdapters, 'startEmailRegistrationRequest', 'production pending registration request')
+assertIncludes(productionAdapters, 'finalizeEmailRegistrationRequest', 'production pending registration finalization')
+assertIncludes(productionAdapters, 'requestEmailVerificationCode', 'production legacy email verification request')
 assertIncludes(productionAdapters, 'verifyEmailVerificationCode', 'production email verification verify')
 assertNotIncludes(productionAdapters, 'return []', 'production adapters must not hide missing data with empty arrays')
 assertNotIncludes(productionAdapters, 'customer_web_support_requires_desktop_session_contract', 'customer support must not remain disabled')
 
-assertIncludes(productionPages, 'auth.requestEmailVerification', 'auth signup email verification UI')
+assertIncludes(productionPages, 'auth.startEmailRegistration', 'auth signup pending registration UI')
+assertIncludes(productionPages, 'auth.finalizeEmailRegistration', 'auth signup post-OTP finalization UI')
 assertIncludes(productionPages, 'auth.verifyEmailCode', 'auth email verification code UI')
 assertIncludes(productionPages, 'support.createTicket', 'portal support create UI')
 assertIncludes(productionPages, 'support.replyThread', 'portal support reply UI')
@@ -66,7 +72,7 @@ assertIncludes(productionPages, 'admin.sendSupportReply', 'admin support reply U
 assertIncludes(productionPages, 'admin.setSupportBlocked', 'admin support block UI')
 assertIncludes(productionPages, 'adapters.admin.uploadRelease', 'admin release upload UI')
 assertIncludes(productionPages, 'adapters.admin.publishRelease', 'admin release publish UI')
-assertIncludes(productionPages, 'adapters.admin.updateRemoteControls', 'admin policy update UI')
+assertIncludes(adminPhaseF, 'admin.updateGlobalPolicy', 'admin policy update UI')
 
 for (const flag of [
   'emailVerification',
@@ -104,12 +110,17 @@ if (missingBackendFiles.length === 0) {
 
   assertIncludes(authWorker, 'apiPath === "/account/identity"', 'auth worker identity endpoint')
   for (const route of [
+    '/email-verification/start',
     '/email-verification/request',
     '/email-verification/verify',
     '/email-verification/status',
+    '/email-verification/finalize',
   ]) {
     assertIncludes(authWorker, route, `auth email verification route ${route}`)
   }
+  assertIncludes(authWorker, 'handlePendingRegistrationStart', 'auth pending registration start handler')
+  assertIncludes(authWorker, 'handlePendingRegistrationFinalize', 'auth pending registration finalize handler')
+  assertIncludes(authWorker, 'requireFinalizedAccount', 'auth worker finalized-account shared gate')
   assertIncludes(authWorker, 'handleEmailVerificationRequest', 'auth email verification request handler')
   assertIncludes(authWorker, 'handleEmailVerificationVerify', 'auth email verification verify handler')
   assertIncludes(authWorker, 'hmacSha256Hex', 'auth email verification hash')
@@ -129,6 +140,10 @@ if (missingBackendFiles.length === 0) {
   ]) {
     assertIncludes(policyWorker, route, `policy web support route ${route}`)
   }
+
+  assertIncludes(policyWorker, 'requireWebSupportUser', 'policy customer web auth guard')
+  assertIncludes(policyWorker, 'https://auth.saturnws.com/account/identity', 'policy customer guard must delegate finalized-account verification to auth identity')
+  assertIncludes(policyWorker, 'AUTH_SERVICE.fetch(authRequest)', 'policy customer guard must prefer Auth Worker service binding')
 
   assertIncludes(policyWorker, 'requireWebSupportUser', 'policy web support Firebase auth guard')
   assertIncludes(policyWorker, 'thread_not_found', 'policy support tenant isolation')
