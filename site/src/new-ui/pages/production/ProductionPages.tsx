@@ -105,6 +105,31 @@ function emailRequiredMessage(locale: 'ar' | 'en') {
   return copyByLocale(locale, 'Enter your email address.', 'اكتب البريد الإلكتروني.')
 }
 
+function secondsUntilResend(createdAt?: string, cooldownSeconds = 45): number {
+  const created = Date.parse(String(createdAt || ''))
+  if (!Number.isFinite(created)) return 0
+  const elapsed = Math.floor((Date.now() - created) / 1000)
+  return Math.max(0, cooldownSeconds - elapsed)
+}
+
+function retryAfterSecondsFromError(error: unknown): number | null {
+  const direct = Number((error as { retryAfterSeconds?: unknown } | null)?.retryAfterSeconds)
+  if (Number.isFinite(direct) && direct > 0) return Math.ceil(direct)
+  const payload = (error as { payload?: unknown } | null)?.payload
+  if (payload && typeof payload === 'object' && 'retry_after_seconds' in payload) {
+    const value = Number((payload as { retry_after_seconds?: unknown }).retry_after_seconds)
+    if (Number.isFinite(value) && value > 0) return Math.ceil(value)
+  }
+  return null
+}
+
+function formatWaitTime(locale: 'ar' | 'en', seconds: number): string {
+  const safeSeconds = Math.max(1, Math.ceil(seconds))
+  if (safeSeconds < 60) return locale === 'ar' ? `${safeSeconds} ثانية` : `${safeSeconds} seconds`
+  const minutes = Math.ceil(safeSeconds / 60)
+  return locale === 'ar' ? `${minutes} دقيقة` : `${minutes} minutes`
+}
+
 function normalizeEmailInput(value: unknown): string {
   return String(value || '').trim().toLowerCase()
 }
@@ -516,7 +541,12 @@ function authErrorMessage(error: unknown, t: (key: MessageKey) => string, locale
   if (key.includes('auth_provider_server_create_not_configured') || key.includes('auth_provider_unavailable') || key.includes('registration_finalization_failed')) return copyByLocale(locale, 'Account creation is unavailable right now. Try again later.', 'إنشاء الحساب غير متاح حاليًا. حاول لاحقًا.')
   if (key.includes('verification_code_invalid') || key.includes('email_code_invalid')) return t('codeInvalid')
   if (key.includes('verification_code_expired') || key.includes('email_code_expired')) return t('codeExpired')
-  if (key.includes('verification_rate_limited') || key.includes('email_resend_limited')) return t('tooManyAttempts')
+  if (key.includes('verification_rate_limited') || key.includes('email_resend_limited')) {
+    const seconds = retryAfterSecondsFromError(error)
+    return seconds
+      ? copyByLocale(locale, `Too many attempts. Try again after ${formatWaitTime(locale, seconds)}.`, `محاولات كثيرة. حاول مرة أخرى بعد ${formatWaitTime(locale, seconds)}.`)
+      : t('tooManyAttempts')
+  }
   if (key.includes('profile_provisioning_failed') || key.includes('profile_terms_required')) return copyByLocale(locale, 'The account could not be prepared. Review the details and try again.', 'تعذر تجهيز الحساب. راجع البيانات وحاول مرة أخرى.')
   if (key.includes('invalid-credential') || key.includes('user-not-found') || key.includes('wrong-password') || key.includes('invalid_credentials')) return t('invalidCredentials')
   if (key.includes('email_verification_required')) return t('verificationBody')
@@ -821,10 +851,21 @@ function EmailVerificationProductionPage({ routeState, navigate }: { routeState?
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [loading, setLoading] = useState(false)
+  const [resendCooldown, setResendCooldown] = useState(() => secondsUntilResend(pending?.createdAt))
   const email = pending?.email || ''
   const passwordLongEnough = password.length >= 6
   const passwordsMatch = Boolean(confirmPassword) && password === confirmPassword
   const waitingForPassword = pending?.kind === 'registration' && Boolean(pending.finalizationToken && pending.registrationId)
+  useEffect(() => {
+    setResendCooldown(secondsUntilResend(pending?.createdAt))
+  }, [pending?.createdAt, pending?.email])
+  useEffect(() => {
+    if (resendCooldown <= 0) return undefined
+    const timer = window.setInterval(() => {
+      setResendCooldown((value) => Math.max(0, value - 1))
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [resendCooldown])
   const verify = async () => {
     if (!pending) {
       setError(copyByLocale(locale, 'Start registration again to request a new code.', 'ابدأ التسجيل مرة أخرى لطلب رمز جديد.'))
@@ -849,6 +890,9 @@ function EmailVerificationProductionPage({ routeState, navigate }: { routeState?
         setCode('')
         setNotice(t('success'))
         return
+      }
+      if (auth.provisionProfile) {
+        await auth.provisionProfile({ locale: pending.locale || locale })
       }
       clearPendingEmailVerification()
       navigate(destinationAfterAuth(routeState))
@@ -889,6 +933,10 @@ function EmailVerificationProductionPage({ routeState, navigate }: { routeState?
       return
     }
     if (waitingForPassword) return
+    if (resendCooldown > 0) {
+      setNotice(copyByLocale(locale, `You can request a new code after ${formatWaitTime(locale, resendCooldown)}.`, `يمكنك طلب رمز جديد بعد ${formatWaitTime(locale, resendCooldown)}.`))
+      return
+    }
     setLoading(true)
     setError('')
     setNotice('')
@@ -904,16 +952,23 @@ function EmailVerificationProductionPage({ routeState, navigate }: { routeState?
         })
         if (!result.success) throw new Error(result.error || 'EMAIL_RESEND_LIMITED')
         if (result.registrationId) {
-          const next = { ...pending, registrationId: result.registrationId, finalizationToken: undefined, finalizationExpiresAt: undefined, verifiedAt: undefined }
+          const next = { ...pending, registrationId: result.registrationId, finalizationToken: undefined, finalizationExpiresAt: undefined, verifiedAt: undefined, createdAt: new Date().toISOString() }
           savePendingEmailVerification(next)
           setPending(next)
         }
+        setResendCooldown(result.resendAfterSeconds || 45)
       } else {
         const result = await auth.requestEmailVerification(email)
         if (!result.success) throw new Error(result.error || 'EMAIL_RESEND_LIMITED')
+        const next = { ...pending, createdAt: new Date().toISOString() }
+        savePendingEmailVerification(next)
+        setPending(next)
+        setResendCooldown(result.resendAfterSeconds || 45)
       }
       setNotice(t('success'))
     } catch (err) {
+      const seconds = retryAfterSecondsFromError(err)
+      if (seconds) setResendCooldown(seconds)
       setError(authErrorMessage(err, t, locale))
     } finally {
       setLoading(false)
@@ -948,7 +1003,7 @@ function EmailVerificationProductionPage({ routeState, navigate }: { routeState?
   if (!pending) {
     return <ProductionAuthShell navigate={navigate}><div className="auth-card"><div className="auth-form auth-form--center"><span className="auth-icon"><Mail size={23} /></span><header><h1>{t('verificationTitle')}</h1><p>{copyByLocale(locale, 'Create an account or sign in to request a verification code.', 'أنشئ حسابًا أو سجّل الدخول لطلب رمز تحقق.')}</p></header>{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}<Button type="button" variant="primary" size="lg" fullWidth onClick={() => navigate({ surface: 'auth', page: 'signup', state: routeState })}>{t('signUp')}</Button><Button type="button" variant="text" onClick={() => navigate({ surface: 'auth', page: 'signin', state: routeState })}>{t('signIn')}</Button></div></div></ProductionAuthShell>
   }
-  return <ProductionAuthShell navigate={navigate}><div className="auth-card"><div className="auth-form auth-form--center"><span className="auth-icon"><Mail size={23} /></span><header><h1>{t('verificationTitle')}</h1><p>{waitingForPassword ? copyByLocale(locale, 'Set a password to finish creating your account.', 'عيّن كلمة مرور لإكمال إنشاء الحساب.') : t('verificationBody')}</p><div className="verification-destination"><span>{t('email')}</span><strong>{email}</strong></div></header><form className="stack" onSubmit={(event) => { event.preventDefault(); void (waitingForPassword ? finalize() : verify()) }}>{waitingForPassword ? <><FormField label={t('password')} htmlFor="registration-password" required><PasswordInput id="registration-password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></FormField><FormField label={t('confirmPassword')} htmlFor="registration-confirm-password" required error={confirmPassword && !passwordsMatch ? copyByLocale(locale, 'Passwords do not match.', 'كلمتا المرور غير متطابقتين.') : undefined}><PasswordInput id="registration-confirm-password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required /></FormField><div className="password-requirements" aria-live="polite"><strong>{copyByLocale(locale, 'Password requirements', 'متطلبات كلمة المرور')}</strong><span className={passwordLongEnough ? 'is-valid' : ''}><Check size={14} />{copyByLocale(locale, 'At least 6 characters', '6 أحرف على الأقل')}</span><span className={passwordsMatch ? 'is-valid' : ''}><Check size={14} />{copyByLocale(locale, 'Both passwords match', 'تطابق كلمتي المرور')}</span></div></> : <OTPInput value={code} onChange={setCode} label={t('codeLabel')} />}{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}<Button type="submit" variant="primary" size="lg" fullWidth loading={loading} disabled={waitingForPassword ? !passwordLongEnough || !passwordsMatch : code.length !== 6}>{t('continue')}</Button>{!waitingForPassword ? <div className="cluster"><Button type="button" variant="text" onClick={resend} disabled={loading}>{t('resend')}</Button><Button type="button" variant="text" onClick={() => void changeEmail()} disabled={loading}>{t('changeEmail')}</Button></div> : null}</form></div></div></ProductionAuthShell>
+  return <ProductionAuthShell navigate={navigate}><div className="auth-card"><div className="auth-form auth-form--center"><span className="auth-icon"><Mail size={23} /></span><header><h1>{t('verificationTitle')}</h1><p>{waitingForPassword ? copyByLocale(locale, 'Set a password to finish creating your account.', 'عيّن كلمة مرور لإكمال إنشاء الحساب.') : t('verificationBody')}</p><div className="verification-destination"><span>{t('email')}</span><strong>{email}</strong></div></header><form className="stack" onSubmit={(event) => { event.preventDefault(); void (waitingForPassword ? finalize() : verify()) }}>{waitingForPassword ? <><FormField label={t('password')} htmlFor="registration-password" required><PasswordInput id="registration-password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></FormField><FormField label={t('confirmPassword')} htmlFor="registration-confirm-password" required error={confirmPassword && !passwordsMatch ? copyByLocale(locale, 'Passwords do not match.', 'كلمتا المرور غير متطابقتين.') : undefined}><PasswordInput id="registration-confirm-password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required /></FormField><div className="password-requirements" aria-live="polite"><strong>{copyByLocale(locale, 'Password requirements', 'متطلبات كلمة المرور')}</strong><span className={passwordLongEnough ? 'is-valid' : ''}><Check size={14} />{copyByLocale(locale, 'At least 6 characters', '6 أحرف على الأقل')}</span><span className={passwordsMatch ? 'is-valid' : ''}><Check size={14} />{copyByLocale(locale, 'Both passwords match', 'تطابق كلمتي المرور')}</span></div></> : <OTPInput value={code} onChange={setCode} label={t('codeLabel')} />}{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}<Button type="submit" variant="primary" size="lg" fullWidth loading={loading} disabled={waitingForPassword ? !passwordLongEnough || !passwordsMatch : code.length !== 6}>{t('continue')}</Button>{!waitingForPassword ? <div className="cluster"><Button type="button" variant="text" onClick={resend} disabled={loading || resendCooldown > 0}>{resendCooldown > 0 ? copyByLocale(locale, `Resend after ${formatWaitTime(locale, resendCooldown)}`, `إعادة الإرسال بعد ${formatWaitTime(locale, resendCooldown)}`) : t('resend')}</Button><Button type="button" variant="text" onClick={() => void changeEmail()} disabled={loading}>{t('changeEmail')}</Button></div> : null}</form></div></div></ProductionAuthShell>
 }
 
 export function PortalProductionPages({ page, navigate }: { page: string; navigate: Navigate }) {

@@ -144,6 +144,8 @@ export type EmailRegistrationStartResult = {
   registrationId?: string
   email?: string
   expiresAt?: string
+  resendAfterSeconds?: number
+  retryAfterSeconds?: number
   error?: string
 }
 
@@ -154,6 +156,7 @@ export type EmailVerificationResult = {
   registrationId?: string
   finalizationToken?: string
   finalizationExpiresAt?: string
+  retryAfterSeconds?: number
   error?: string
 }
 
@@ -191,10 +194,10 @@ export type AuthAdapter = {
   signInWithEmail(email: string, password: string): Promise<AppUser>
   startEmailRegistration(input: SignUpWithEmailInput): Promise<EmailRegistrationStartResult>
   finalizeEmailRegistration(input: { email: string; password: string; registrationId: string; finalizationToken: string }): Promise<AppUser>
-  signInWithGoogle(input?: { locale?: 'ar' | 'en'; termsAccepted?: boolean; termsVersion?: string }): Promise<AppUser>
+  signInWithGoogle(input?: { locale?: 'ar' | 'en'; termsAccepted?: boolean; termsVersion?: string; provisionProfile?: boolean }): Promise<AppUser>
   provisionProfile?(input?: { displayName?: string; locale?: 'ar' | 'en'; termsAccepted?: boolean; termsVersion?: string }): Promise<AppUser>
   sendPasswordReset(email: string): Promise<void>
-  requestEmailVerification(email: string, input?: { displayName?: string; locale?: 'ar' | 'en'; termsAccepted?: boolean; termsVersion?: string; termsAcceptedAt?: string }): Promise<{ success: boolean; status?: string; expiresAt?: string; error?: string }>
+  requestEmailVerification(email: string, input?: { displayName?: string; locale?: 'ar' | 'en'; termsAccepted?: boolean; termsVersion?: string; termsAcceptedAt?: string }): Promise<{ success: boolean; status?: string; expiresAt?: string; resendAfterSeconds?: number; retryAfterSeconds?: number; error?: string }>
   verifyEmailCode(input: { email: string; code: string; registrationId?: string }): Promise<EmailVerificationResult>
   cancelEmailVerification?(input: { email: string; registrationId?: string }): Promise<{ success: boolean; status?: string; error?: string }>
   signOut(): Promise<void>

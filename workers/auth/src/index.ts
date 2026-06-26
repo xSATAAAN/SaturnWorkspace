@@ -72,6 +72,8 @@ function errorJson(
   status = 400,
   retryable = false,
   fieldErrors?: Record<string, string>,
+  extra?: Record<string, unknown>,
+  extraHeaders?: HeadersInit,
 ): Response {
   return json({
     success: false,
@@ -80,7 +82,21 @@ function errorJson(
     request_id: requestId(request),
     retryable,
     ...(fieldErrors ? { field_errors: fieldErrors } : {}),
-  }, status)
+    ...(extra || {}),
+  }, status, extraHeaders)
+}
+
+function verificationRateLimited(request: Request, retryAfterSeconds = 60): Response {
+  const seconds = Math.max(1, Math.ceil(retryAfterSeconds))
+  return errorJson(
+    request,
+    "VERIFICATION_RATE_LIMITED",
+    429,
+    true,
+    undefined,
+    { retry_after_seconds: seconds },
+    { "Retry-After": String(seconds) },
+  )
 }
 
 function normalizeApiPath(pathname: string): string {
@@ -1012,6 +1028,10 @@ function emailVerificationTtlMs(env: Env): number {
   return Math.max(5, Math.min(Number.isFinite(minutes) ? minutes : 15, 60)) * 60_000
 }
 
+function emailVerificationTtlMinutes(env: Env): number {
+  return Math.round(emailVerificationTtlMs(env) / 60_000)
+}
+
 function emailVerificationTestMode(env: Env): boolean {
   return String(env.APP_ENV || "").trim().toLowerCase() !== "production"
 }
@@ -1069,6 +1089,7 @@ async function deliverEmailVerificationCode(
         code: input.code,
         display_name: input.displayName || null,
         expires_at: input.expiresAt,
+        valid_for_minutes: emailVerificationTtlMinutes(env),
       },
     }),
   })
@@ -1242,6 +1263,7 @@ function registrationResponse(row: Record<string, any>, testCode?: string): Reco
     registration_id: row.id,
     email: row.email,
     expires_at: row.expires_at,
+    resend_after_seconds: 45,
     ...(testCode ? { test_code: testCode } : {}),
   }
 }
@@ -1269,7 +1291,7 @@ async function handlePendingRegistrationStart(request: Request, env: Env): Promi
   }
   const ip = request.headers.get("CF-Connecting-IP") || "unknown"
   if (!allowRateLimit(`registration-start:ip:${ip}`, 20, 60_000) || !allowRateLimit(`registration-start:email:${email}`, 5, 60_000)) {
-    return errorJson(request, "VERIFICATION_RATE_LIMITED", 429, true)
+    return verificationRateLimited(request, 60)
   }
 
   const now = Date.now()
@@ -1285,12 +1307,13 @@ async function handlePendingRegistrationStart(request: Request, env: Env): Promi
     const lastSent = Date.parse(String(existing.last_sent_at || existing.created_at || ""))
     if (Number.isFinite(lastSent) && now - lastSent < 45_000) {
       await auditEmailVerification(env, { verificationId: existing.id, email, action: "registration_start", result: "rate_limited", request })
-      return errorJson(request, "VERIFICATION_RATE_LIMITED", 429, true)
+      return verificationRateLimited(request, (45_000 - (now - lastSent)) / 1000)
     }
     if (Number(existing.resend_count || 0) >= Number(existing.max_resends || 5)) {
       await updateEmailVerification(env, existing.id, { status: "blocked" }).catch(() => undefined)
       await auditEmailVerification(env, { verificationId: existing.id, email, action: "registration_start", result: "blocked", request })
-      return errorJson(request, "VERIFICATION_RATE_LIMITED", 429, true)
+      const retryAt = Date.parse(String(existing.expires_at || ""))
+      return verificationRateLimited(request, Number.isFinite(retryAt) ? (retryAt - now) / 1000 : 300)
     }
     const existingMetadata = metadataObject(existing.metadata)
     const updated = await updateEmailVerification(env, existing.id, {
@@ -1384,7 +1407,8 @@ async function handlePendingRegistrationVerify(request: Request, env: Env, body:
   if (Number(row.attempts || 0) >= Number(row.max_attempts || 6)) {
     await updateEmailVerification(env, row.id, { status: "blocked" }).catch(() => undefined)
     await auditEmailVerification(env, { verificationId: row.id, email: rowEmail, action: "registration_verify", result: "blocked", request })
-    return errorJson(request, "VERIFICATION_RATE_LIMITED", 429, true)
+    const retryAt = Date.parse(String(row.expires_at || ""))
+    return verificationRateLimited(request, Number.isFinite(retryAt) ? (retryAt - Date.now()) / 1000 : 300)
   }
   const actual = await hashEmailCode(env, rowEmail, code)
   if (!timingSafeEqualHex(String(row.code_hash || ""), actual)) {
@@ -1602,7 +1626,7 @@ async function handleEmailVerificationRequest(request: Request, env: Env): Promi
   }
   const ip = request.headers.get("CF-Connecting-IP") || "unknown"
   if (!allowRateLimit(`email-verification:ip:${ip}`, 20, 60_000) || !allowRateLimit(`email-verification:email:${user.email}`, 5, 60_000)) {
-    return errorJson(request, "VERIFICATION_RATE_LIMITED", 429, true)
+    return verificationRateLimited(request, 60)
   }
 
   const now = Date.now()
@@ -1623,12 +1647,13 @@ async function handleEmailVerificationRequest(request: Request, env: Env): Promi
     const lastSent = Date.parse(String(existing.last_sent_at || existing.created_at || ""))
     if (Number.isFinite(lastSent) && now - lastSent < 45_000) {
       await auditEmailVerification(env, { verificationId: existing.id, firebaseUserId: user.userId, email: user.email, action: "request", result: "rate_limited", request })
-      return errorJson(request, "VERIFICATION_RATE_LIMITED", 429, true)
+      return verificationRateLimited(request, (45_000 - (now - lastSent)) / 1000)
     }
     if (Number(existing.resend_count || 0) >= Number(existing.max_resends || 5)) {
       await updateEmailVerification(env, existing.id, { status: "blocked" }).catch(() => undefined)
       await auditEmailVerification(env, { verificationId: existing.id, firebaseUserId: user.userId, email: user.email, action: "request", result: "blocked", request })
-      return errorJson(request, "VERIFICATION_RATE_LIMITED", 429, true)
+      const retryAt = Date.parse(String(existing.expires_at || ""))
+      return verificationRateLimited(request, Number.isFinite(retryAt) ? (retryAt - now) / 1000 : 300)
     }
     const updated = await updateEmailVerification(env, existing.id, {
       code_hash: codeHash,
@@ -1668,6 +1693,7 @@ async function handleEmailVerificationRequest(request: Request, env: Env): Promi
       success: true,
       status: "sent",
       expires_at: updated.expires_at,
+      resend_after_seconds: 45,
       ...(emailVerificationTestMode(env) && String(env.EMAIL_VERIFICATION_TEST_TRANSPORT || "").trim() === "response" ? { test_code: code } : {}),
     })
   }
@@ -1706,6 +1732,7 @@ async function handleEmailVerificationRequest(request: Request, env: Env): Promi
     success: true,
     status: "sent",
     expires_at: created.expires_at,
+    resend_after_seconds: 45,
     ...(emailVerificationTestMode(env) && String(env.EMAIL_VERIFICATION_TEST_TRANSPORT || "").trim() === "response" ? { test_code: code } : {}),
   })
 }
@@ -1738,7 +1765,8 @@ async function handleEmailVerificationVerify(request: Request, env: Env): Promis
   if (Number(row.attempts || 0) >= Number(row.max_attempts || 6)) {
     await updateEmailVerification(env, row.id, { status: "blocked" }).catch(() => undefined)
     await auditEmailVerification(env, { verificationId: row.id, firebaseUserId: user.userId, email: user.email, action: "verify", result: "blocked", request })
-    return errorJson(request, "VERIFICATION_RATE_LIMITED", 429, true)
+    const retryAt = Date.parse(String(row.expires_at || ""))
+    return verificationRateLimited(request, Number.isFinite(retryAt) ? (retryAt - Date.now()) / 1000 : 300)
   }
   const expected = String(row.code_hash || "")
   const actual = await hashEmailCode(env, user.email, code)

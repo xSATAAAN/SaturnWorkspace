@@ -391,6 +391,8 @@ export const productionAdapters: AppAdapters = {
         registrationId: result.registration_id,
         email: result.email,
         expiresAt: result.expires_at,
+        resendAfterSeconds: result.resend_after_seconds,
+        retryAfterSeconds: result.retry_after_seconds,
         error: result.error,
       }
     },
@@ -414,8 +416,8 @@ export const productionAdapters: AppAdapters = {
     async signInWithGoogle(input = {}) {
       try {
         const result = await signInWithPopup(firebaseAuth, new GoogleAuthProvider())
-        const shouldProvisionWithTerms = Boolean(input.termsAccepted)
-        if (!shouldProvisionWithTerms) return userFromFirebase(result.user)
+        const shouldProvisionProfile = input.provisionProfile !== false || Boolean(input.termsAccepted)
+        if (!shouldProvisionProfile) return userFromFirebase(result.user)
         return provisionCurrentFirebaseUser({
           locale: input.locale,
           termsAccepted: input.termsAccepted,
@@ -435,7 +437,7 @@ export const productionAdapters: AppAdapters = {
       const token = await productionAdapters.auth.getIdToken(false)
       if (!token) return { success: false, error: 'not_authenticated' }
       const result = await requestEmailVerificationCode(token, email.trim(), input)
-      return { success: result.success, status: result.status, expiresAt: result.expires_at, error: result.error }
+      return { success: result.success, status: result.status, expiresAt: result.expires_at, resendAfterSeconds: result.resend_after_seconds, retryAfterSeconds: result.retry_after_seconds, error: result.error }
     },
     async verifyEmailCode(input) {
       let result
@@ -457,6 +459,7 @@ export const productionAdapters: AppAdapters = {
         registrationId: result.registration_id,
         finalizationToken: result.finalization_token,
         finalizationExpiresAt: result.finalization_expires_at,
+        retryAfterSeconds: result.retry_after_seconds,
         error: result.error,
       }
     },
@@ -715,7 +718,7 @@ export const productionAdapters: AppAdapters = {
       return { authenticated: Boolean(state.authenticated) }
     },
     async signInWithGoogle() {
-      const user = await productionAdapters.auth.signInWithGoogle()
+      const user = await productionAdapters.auth.signInWithGoogle({ provisionProfile: false })
       const token = await productionAdapters.auth.getIdToken(false)
       setAdminBearerToken(token)
       return user

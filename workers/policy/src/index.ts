@@ -1419,6 +1419,10 @@ async function handleInternalAuthEmailEnqueue(request: Request, env: Env): Promi
       if (code.length !== 6 || !Number.isFinite(Date.parse(expiresAt))) {
         return json({ success: false, error: "verification_payload_invalid" }, 400)
       }
+      const validForMinutesRaw = Number(normalizeText(payload.valid_for_minutes))
+      const validForMinutes = Number.isFinite(validForMinutesRaw) && validForMinutesRaw > 0
+        ? Math.max(1, Math.min(Math.round(validForMinutesRaw), 60))
+        : null
       const displayName = clampText(payload.display_name, 120)
       if (purpose !== "email_verification") return json({ success: false, error: "verification_purpose_invalid" }, 400)
       await cancelSupersededAuthEmailJobs(env, { userId, recipient, purpose, currentIdempotencyKey: idempotencyKey })
@@ -1434,6 +1438,7 @@ async function handleInternalAuthEmailEnqueue(request: Request, env: Env): Promi
           verification_request_id: verificationRequestId,
           purpose,
           expires_at: expiresAt,
+          valid_for_minutes: validForMinutes,
           locale,
           code_redacted: true,
           sensitive_payload: "encrypted",
@@ -1442,10 +1447,8 @@ async function handleInternalAuthEmailEnqueue(request: Request, env: Env): Promi
           code,
           display_name: displayName || undefined,
           expires_at: expiresAt,
+          valid_for_minutes: validForMinutes || undefined,
           locale,
-          message: locale === "ar"
-            ? "استخدم رمز التحقق التالي لتأكيد بريدك الإلكتروني في Saturn Workspace."
-            : "Use the following verification code to confirm your Saturn Workspace email address.",
         },
         sensitivePayloadExpiresAt: expiresAt,
         headers: {

@@ -170,10 +170,10 @@ export const EMAIL_CATALOG: Record<string, EmailCatalogItem> = {
     sender_identity: "security",
     title_en: "Email verification code",
     title_ar: "رمز تأكيد البريد الإلكتروني",
-    description_en: "Sends a server-side SaturnWS email verification code.",
-    description_ar: "ترسل رمز تأكيد البريد من مسار المصادقة التشغيلي في SaturnWS.",
-    default_subject_en: "Your SaturnWS verification code",
-    default_subject_ar: "رمز تأكيد SaturnWS",
+    description_en: "Sends an email verification code.",
+    description_ar: "ترسل رمز تحقق إلى البريد الإلكتروني.",
+    default_subject_en: "Verification code",
+    default_subject_ar: "رمز التحقق",
     integration_status: "linked",
     user_can_disable: false,
     retry_allowed: true,
@@ -188,10 +188,10 @@ export const EMAIL_CATALOG: Record<string, EmailCatalogItem> = {
     sender_identity: "security",
     title_en: "Resent email verification code",
     title_ar: "إعادة إرسال رمز تأكيد البريد الإلكتروني",
-    description_en: "Server-side resend of a SaturnWS email verification code.",
-    description_ar: "إعادة إرسال رمز تأكيد البريد من خادم SaturnWS.",
-    default_subject_en: "Your SaturnWS verification code",
-    default_subject_ar: "رمز تأكيد SaturnWS",
+    description_en: "Resends an email verification code.",
+    description_ar: "إعادة إرسال رمز تحقق إلى البريد الإلكتروني.",
+    default_subject_en: "Verification code",
+    default_subject_ar: "رمز التحقق",
     integration_status: "linked",
     user_can_disable: false,
     retry_allowed: true,
@@ -717,7 +717,7 @@ function layout(input: { locale: EmailLocale; title: string; bodyHtml: string; f
     (isAr
       ? "هذه رسالة تشغيلية من Saturn Workspace. إذا لم تتوقع هذه الرسالة، يمكنك تجاهلها أو التواصل مع الدعم."
       : "This is an operational message from Saturn Workspace. If you did not expect it, you can ignore it or contact support.")
-  return `<!doctype html><html lang="${input.locale}" dir="${dir}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(input.title)}</title></head><body style="margin:0;background:#f6f7f9;color:#111827;font-family:Arial,Tahoma,sans-serif;text-align:${align}"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f6f7f9;padding:24px 12px"><tr><td align="center"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" dir="${dir}" style="max-width:640px;background:#ffffff;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden;text-align:${align}"><tr><td style="padding:22px 24px;border-bottom:1px solid #e5e7eb"><strong style="font-size:18px">Saturn Workspace</strong></td></tr><tr><td style="padding:24px;line-height:1.7;font-size:15px"><h1 style="margin:0 0 16px;font-size:22px;line-height:1.35">${escapeHtml(input.title)}</h1>${input.bodyHtml}</td></tr><tr><td style="padding:18px 24px;background:#f9fafb;color:#6b7280;font-size:12px;line-height:1.7">${escapeHtml(footer)}</td></tr></table></td></tr></table></body></html>`
+  return `<!doctype html><html lang="${input.locale}" dir="${dir}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(input.title)}</title></head><body style="margin:0;background:#f6f7f9;color:#111827;font-family:Arial,Tahoma,sans-serif;text-align:${align}"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f6f7f9;padding:24px 12px"><tr><td align="center"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" dir="${dir}" style="max-width:640px;background:#ffffff;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden;text-align:${align}"><tr><td style="padding:22px 24px;border-bottom:1px solid #e5e7eb"><table role="presentation" cellspacing="0" cellpadding="0" dir="${dir}"><tr><td style="vertical-align:middle"><img src="https://saturnws.com/logo-header.png" width="34" height="34" alt="" style="display:block;border:0;outline:none;text-decoration:none;border-radius:8px"></td><td style="vertical-align:middle;padding-${isAr ? "right" : "left"}:10px"><strong style="font-size:18px">Saturn Workspace</strong></td></tr></table></td></tr><tr><td style="padding:24px;line-height:1.7;font-size:15px"><h1 style="margin:0 0 16px;font-size:22px;line-height:1.35">${escapeHtml(input.title)}</h1>${input.bodyHtml}</td></tr><tr><td style="padding:18px 24px;background:#f9fafb;color:#6b7280;font-size:12px;line-height:1.7">${escapeHtml(footer)}</td></tr></table></td></tr></table></body></html>`
 }
 
 function supportBody(eventType: string, data: TemplateData, locale: EmailLocale): { title: string; bodyHtml: string; text: string } {
@@ -887,6 +887,28 @@ function adminAlertBody(eventType: string, data: TemplateData, locale: EmailLoca
   return { title, bodyHtml: paragraph(lines) + cta(destinationLabel, actionUrl), text: lines.filter(Boolean).concat(actionUrl ? [actionUrl] : []).join("\n") }
 }
 
+function authVerificationBody(data: TemplateData, locale: EmailLocale): { title: string; bodyHtml: string; text: string } {
+  const code = value(data, "code")
+  const minutesRaw = Number(value(data, "valid_for_minutes"))
+  const minutes = Number.isFinite(minutesRaw) && minutesRaw > 0 ? Math.round(minutesRaw) : 15
+  const title = locale === "ar" ? "رمز التحقق" : "Verification code"
+  const intro = locale === "ar"
+    ? "استخدم الرمز التالي للمتابعة."
+    : "Use this code to continue."
+  const validFor = locale === "ar"
+    ? `صالح لمدة ${minutes} دقيقة.`
+    : `Valid for ${minutes} minutes.`
+  const ignore = locale === "ar"
+    ? "إذا لم تطلب هذا الرمز، تجاهل الرسالة."
+    : "If you did not request this code, ignore this email."
+  const codeHtml = code
+    ? `<div style="margin:18px 0 16px;padding:18px;border:1px solid #d1d5db;border-radius:14px;background:#f9fafb;text-align:center;font-size:32px;letter-spacing:8px;font-weight:800;color:#111827;direction:ltr">${escapeHtml(code)}</div>`
+    : ""
+  const bodyHtml = paragraph([intro]) + codeHtml + paragraph([validFor, ignore])
+  const text = [intro, code ? `${locale === "ar" ? "الرمز" : "Code"}: ${code}` : "", validFor, ignore].filter(Boolean).join("\n")
+  return { title, bodyHtml, text }
+}
+
 function genericBody(eventType: string, data: TemplateData, locale: EmailLocale): { title: string; bodyHtml: string; text: string } {
   const catalog = EMAIL_CATALOG[eventType] || EMAIL_CATALOG["admin.email_test"]
   const title = locale === "ar" ? catalog.default_subject_ar : catalog.default_subject_en
@@ -925,6 +947,8 @@ export function renderTransactionalEmail(eventTypeInput: string, data: TemplateD
       ? securityBody(eventType, data, locale)
       : eventType.startsWith("admin.") && eventType !== "admin.email_test"
         ? adminAlertBody(eventType, data, locale)
+        : eventType === "auth.email_verification" || eventType === "auth.verification_resend"
+          ? authVerificationBody(data, locale)
         : genericBody(eventType, data, locale)
   const subjectOverride = value(data, "subject")
   const subject = clampHeader(subjectOverride || body.title || (locale === "ar" ? catalog.default_subject_ar : catalog.default_subject_en))
@@ -935,8 +959,17 @@ export function renderTransactionalEmail(eventTypeInput: string, data: TemplateD
     template_version: catalog.template_version,
     locale,
     subject,
-    html: layout({ locale, title: subject, bodyHtml: body.bodyHtml }),
-    text: `Saturn Workspace\n\n${body.text}`,
+    html: layout({
+      locale,
+      title: subject,
+      bodyHtml: body.bodyHtml,
+      footer: eventType === "auth.email_verification" || eventType === "auth.verification_resend"
+        ? locale === "ar"
+          ? "رسالة تحقق تلقائية."
+          : "Automated verification email."
+        : undefined,
+    }),
+    text: eventType === "auth.email_verification" || eventType === "auth.verification_resend" ? body.text : `Saturn Workspace\n\n${body.text}`,
     sender,
   }
 }

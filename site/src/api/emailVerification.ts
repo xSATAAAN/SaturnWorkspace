@@ -16,6 +16,8 @@ export type EmailVerificationRequestResult = {
   registration_id?: string
   email?: string
   expires_at?: string
+  resend_after_seconds?: number
+  retry_after_seconds?: number
   error?: string
   test_code?: string
 }
@@ -28,6 +30,7 @@ export type EmailVerificationVerifyResult = {
   verified_at?: string
   finalization_token?: string
   finalization_expires_at?: string
+  retry_after_seconds?: number
   error?: string
 }
 
