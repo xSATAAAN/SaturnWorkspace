@@ -4,7 +4,7 @@ Status: `PHASE_G_PRE_ACCEPTANCE_COMPLETION_ACTIVE`
 
 This is the only manual acceptance gate. It has not started. Phase B, Phase C, Phase D, and Phase F are closed as `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE`. Phase E is complete except for the external payment-provider integration.
 
-Operational precondition: the Auth Worker finalizer configuration (`FIREBASE_SERVICE_ACCOUNT_JSON` and matching `FIREBASE_PROJECT_ID`) is set. The live OTP-first email/password acceptance flow still requires deployment of the current custom-claim/finalized-profile boundary and disposable QA canaries. Firebase Identity Platform blocking functions are future defense-in-depth under `WAITING_EXTERNAL_BILLING_DEFENSE_IN_DEPTH`; they are not a current Phase G manual-acceptance prerequisite.
+Operational precondition: the Auth Worker finalizer configuration (`FIREBASE_SERVICE_ACCOUNT_JSON` and matching `FIREBASE_PROJECT_ID`) is set and deployed. The live OTP-first email/password acceptance flow has passed pre-OTP canaries and still requires disposable QA finalization/provider-regression canaries. Firebase Identity Platform blocking functions are future defense-in-depth under `WAITING_EXTERNAL_BILLING_DEFENSE_IN_DEPTH`; they are not a current Phase G manual-acceptance prerequisite.
 
 ## Safety Rules
 
