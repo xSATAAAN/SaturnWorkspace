@@ -43,11 +43,11 @@ export interface RenderedEmail {
 type TemplateData = Record<string, unknown>
 
 export const EMAIL_SENDER_IDENTITIES: Record<SenderIdentityKey, SenderIdentity> = {
-  general: { key: "general", from: "SaturnWS <no-reply@mail.saturnws.com>" },
+  general: { key: "general", from: "Saturn Workspace <no-reply@mail.saturnws.com>" },
   security: { key: "security", from: "SaturnWS Security <security@mail.saturnws.com>", reply_to: "security@saturnws.com" },
   billing: { key: "billing", from: "SaturnWS Billing <billing@mail.saturnws.com>", reply_to: "billing@saturnws.com" },
   support: { key: "support", from: "SaturnWS Support <support@mail.saturnws.com>", reply_to: "support@saturnws.com" },
-  account: { key: "account", from: "SaturnWS <hello@mail.saturnws.com>", reply_to: "hello@saturnws.com" },
+  account: { key: "account", from: "Saturn Workspace <hello@mail.saturnws.com>", reply_to: "hello@saturnws.com" },
 }
 
 function item(input: Omit<EmailCatalogItem, "template_version"> & { template_version?: number }): EmailCatalogItem {
@@ -167,7 +167,7 @@ export const EMAIL_CATALOG: Record<string, EmailCatalogItem> = {
     event_type: "auth.email_verification",
     template_key: "auth_email_verification",
     category: "auth",
-    sender_identity: "security",
+    sender_identity: "general",
     title_en: "Email verification code",
     title_ar: "رمز تأكيد البريد الإلكتروني",
     description_en: "Sends an email verification code.",
@@ -185,7 +185,7 @@ export const EMAIL_CATALOG: Record<string, EmailCatalogItem> = {
     event_type: "auth.verification_resend",
     template_key: "auth_email_verification",
     category: "auth",
-    sender_identity: "security",
+    sender_identity: "general",
     title_en: "Resent email verification code",
     title_ar: "إعادة إرسال رمز تأكيد البريد الإلكتروني",
     description_en: "Resends an email verification code.",

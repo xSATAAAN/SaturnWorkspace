@@ -30,10 +30,10 @@
     "EMAIL_SCHEDULER_ENABLED": "true",
     "EMAIL_ADMIN_ALERTS_ENABLED": "true",
     "EMAIL_FROM_SUPPORT": "SaturnWS Support <support@mail.saturnws.com>",
-    "EMAIL_FROM_GENERAL": "SaturnWS <no-reply@mail.saturnws.com>",
+    "EMAIL_FROM_GENERAL": "Saturn Workspace <no-reply@mail.saturnws.com>",
     "EMAIL_FROM_SECURITY": "SaturnWS Security <security@mail.saturnws.com>",
     "EMAIL_FROM_BILLING": "SaturnWS Billing <billing@mail.saturnws.com>",
-    "EMAIL_FROM_ACCOUNT": "SaturnWS <hello@mail.saturnws.com>",
+    "EMAIL_FROM_ACCOUNT": "Saturn Workspace <hello@mail.saturnws.com>",
     "EMAIL_REPLY_DOMAIN": "mail.saturnws.com",
     "APP_PUBLIC_URL": "https://saturnws.com"
   },

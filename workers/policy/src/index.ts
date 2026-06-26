@@ -1457,7 +1457,15 @@ async function handleInternalAuthEmailEnqueue(request: Request, env: Env): Promi
           "X-SaturnWS-Verification-Request": verificationRequestId,
         },
       })
-      return json({ success: true, status: jobId ? "queued" : "suppressed", job_id: jobId })
+      const immediate = jobId ? await processEmailJobImmediately(env, jobId).catch(() => ({ attempted: false, sent: false, skipped: true })) : null
+      return json({
+        success: true,
+        status: immediate?.sent ? "sent" : jobId ? "queued" : "suppressed",
+        job_id: jobId,
+        delivery: immediate
+          ? { mode: immediate.attempted ? "immediate" : "queued_fallback", sent: immediate.sent }
+          : null,
+      })
     }
 
     const templateData = {
@@ -1607,6 +1615,85 @@ function retryBackoffSeconds(attempt: number): number {
   return Math.min(3600, Math.max(60, 60 * 2 ** Math.max(0, attempt - 1)))
 }
 
+async function sendClaimedEmailJob(env: Env, job: EmailJobRow): Promise<boolean> {
+  try {
+    const headers = parseJsonObject(job.headers_json, {}) as Record<string, string>
+    const renderedJob = await materializeEmailJobForSend(env, job)
+    const result = await resendSend(env, {
+      from: job.sender,
+      to: job.recipient,
+      replyTo: job.reply_to || undefined,
+      subject: renderedJob.subject,
+      html: renderedJob.html,
+      text: renderedJob.text,
+      headers,
+      tags: [
+        { name: "email_type", value: normalizeLower(job.email_type).replace(/[^a-z0-9_-]/g, "_").slice(0, 120) || "support" },
+        { name: "job_id", value: job.id.replace(/[^a-z0-9_-]/gi, "_").slice(0, 120) },
+      ],
+    })
+    await env.DB.prepare("UPDATE email_jobs SET status = 'sent', provider_message_id = ?1, sent_at = datetime('now'), updated_at = datetime('now'), last_error = NULL WHERE id = ?2")
+      .bind(result.id, job.id)
+      .run()
+    await updatePortalNotificationEmailStatus(env, job.id, "sent")
+    await purgeSensitiveEmailPayload(env, job.id)
+    return true
+  } catch (error) {
+    const message = clampText(error instanceof Error ? error.message : String(error || "send_failed"), 900)
+    if (message === "sensitive_payload_expired") {
+      return false
+    }
+    const attempts = Number(job.attempt_count || 0) + 1
+    if (job.linked_ticket_id) {
+      await auditSupportEvent(env, {
+        threadId: job.linked_ticket_id,
+        eventType: attempts >= Number(job.max_attempts || EMAIL_MAX_ATTEMPTS) ? "email_delivery_failed" : "email_delivery_retry_scheduled",
+        actorRole: "system",
+        metadata: { email_job_id: job.id, attempt: attempts },
+      }).catch(() => null)
+    }
+    if (attempts >= Number(job.max_attempts || EMAIL_MAX_ATTEMPTS)) {
+      await env.DB.prepare("UPDATE email_jobs SET status = 'failed', last_error = ?1, updated_at = datetime('now') WHERE id = ?2")
+        .bind(message, job.id)
+        .run()
+      await updatePortalNotificationEmailStatus(env, job.id, "failed")
+      await purgeSensitiveEmailPayload(env, job.id)
+      if (job.email_type !== "admin.email_queue_final_failure") {
+        await enqueueAdminAlert(env, {
+          idempotencyKey: `email-final-failure:${job.id}`,
+          eventType: "admin.email_queue_final_failure",
+          referenceId: job.id,
+          failedEventType: job.email_type,
+          lastError: message,
+          severity: "warning",
+        }).catch(() => null)
+      }
+    } else {
+      await env.DB.prepare("UPDATE email_jobs SET status = 'queued', last_error = ?1, next_attempt_at = datetime('now', ?2), updated_at = datetime('now') WHERE id = ?3")
+        .bind(message, `+${retryBackoffSeconds(attempts)} seconds`, job.id)
+        .run()
+      await updatePortalNotificationEmailStatus(env, job.id, "retrying")
+    }
+    return false
+  }
+}
+
+async function processEmailJobImmediately(env: Env, jobId: string): Promise<{ attempted: boolean; sent: boolean; skipped: boolean }> {
+  if (!emailOutboundEnabled(env) || !jobId) return { attempted: false, sent: false, skipped: true }
+  const job = await env.DB.prepare("SELECT * FROM email_jobs WHERE id = ?1 AND status = 'queued' AND datetime(next_attempt_at) <= datetime('now') LIMIT 1")
+    .bind(jobId)
+    .first<EmailJobRow>()
+    .catch(() => null)
+  if (!job) return { attempted: false, sent: false, skipped: true }
+  const claimed = await env.DB.prepare("UPDATE email_jobs SET status = 'processing', attempt_count = attempt_count + 1, last_attempt_at = datetime('now'), updated_at = datetime('now') WHERE id = ?1 AND status = 'queued'")
+    .bind(job.id)
+    .run()
+    .catch(() => ({ meta: { changes: 0 } }))
+  if (!dbChanges(claimed)) return { attempted: false, sent: false, skipped: true }
+  const sent = await sendClaimedEmailJob(env, job)
+  return { attempted: true, sent, skipped: false }
+}
+
 async function processEmailOutbox(env: Env, limit = EMAIL_OUTBOX_BATCH_LIMIT): Promise<{ processed: number; sent: number; skipped: number }> {
   if (!emailOutboundEnabled(env)) return { processed: 0, sent: 0, skipped: 0 }
   await resetStuckEmailJobs(env)
@@ -1634,64 +1721,9 @@ async function processEmailOutbox(env: Env, limit = EMAIL_OUTBOX_BATCH_LIMIT): P
       skipped += 1
       continue
     }
-    try {
-      const headers = parseJsonObject(job.headers_json, {}) as Record<string, string>
-      const renderedJob = await materializeEmailJobForSend(env, job)
-      const result = await resendSend(env, {
-        from: job.sender,
-        to: job.recipient,
-        replyTo: job.reply_to || undefined,
-        subject: renderedJob.subject,
-        html: renderedJob.html,
-        text: renderedJob.text,
-        headers,
-        tags: [
-          { name: "email_type", value: normalizeLower(job.email_type).replace(/[^a-z0-9_-]/g, "_").slice(0, 120) || "support" },
-          { name: "job_id", value: job.id.replace(/[^a-z0-9_-]/gi, "_").slice(0, 120) },
-        ],
-      })
-      await env.DB.prepare("UPDATE email_jobs SET status = 'sent', provider_message_id = ?1, sent_at = datetime('now'), updated_at = datetime('now'), last_error = NULL WHERE id = ?2")
-        .bind(result.id, job.id)
-        .run()
-      await updatePortalNotificationEmailStatus(env, job.id, "sent")
-      await purgeSensitiveEmailPayload(env, job.id)
+    const didSend = await sendClaimedEmailJob(env, job)
+    if (didSend) {
       sent += 1
-    } catch (error) {
-      const message = clampText(error instanceof Error ? error.message : String(error || "send_failed"), 900)
-      if (message === "sensitive_payload_expired") {
-        continue
-      }
-      const attempts = Number(job.attempt_count || 0) + 1
-      if (job.linked_ticket_id) {
-        await auditSupportEvent(env, {
-          threadId: job.linked_ticket_id,
-          eventType: attempts >= Number(job.max_attempts || EMAIL_MAX_ATTEMPTS) ? "email_delivery_failed" : "email_delivery_retry_scheduled",
-          actorRole: "system",
-          metadata: { email_job_id: job.id, attempt: attempts },
-        }).catch(() => null)
-      }
-      if (attempts >= Number(job.max_attempts || EMAIL_MAX_ATTEMPTS)) {
-        await env.DB.prepare("UPDATE email_jobs SET status = 'failed', last_error = ?1, updated_at = datetime('now') WHERE id = ?2")
-          .bind(message, job.id)
-          .run()
-        await updatePortalNotificationEmailStatus(env, job.id, "failed")
-        await purgeSensitiveEmailPayload(env, job.id)
-        if (job.email_type !== "admin.email_queue_final_failure") {
-          await enqueueAdminAlert(env, {
-            idempotencyKey: `email-final-failure:${job.id}`,
-            eventType: "admin.email_queue_final_failure",
-            referenceId: job.id,
-            failedEventType: job.email_type,
-            lastError: message,
-            severity: "warning",
-          }).catch(() => null)
-        }
-      } else {
-        await env.DB.prepare("UPDATE email_jobs SET status = 'queued', last_error = ?1, next_attempt_at = datetime('now', ?2), updated_at = datetime('now') WHERE id = ?3")
-          .bind(message, `+${retryBackoffSeconds(attempts)} seconds`, job.id)
-          .run()
-        await updatePortalNotificationEmailStatus(env, job.id, "retrying")
-      }
     }
   }
   return { processed, sent, skipped }
