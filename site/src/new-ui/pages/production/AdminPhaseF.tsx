@@ -25,6 +25,7 @@ import type {
   AdminUserDetail,
   AdminUserSummary,
   ManualGrantPreview,
+  PendingSubscriptionGrant,
 } from "../../../api/admin";
 import { useAdapters } from "../../adapters/AdapterProvider";
 import { useExperience } from "../../app/ExperienceProvider";
@@ -84,6 +85,17 @@ type OperationIntent =
       action: SubscriptionAction;
     };
 
+function operationIntentKey(intent: OperationIntent | null) {
+  if (!intent) return "operation:closed";
+  if (intent.kind === "account") {
+    return `account:${intent.uid}:${intent.action}`;
+  }
+  if (intent.kind === "access") {
+    return `access:${intent.uid}:${intent.scope}:${intent.targetId || "all"}`;
+  }
+  return `subscription:${intent.subscriptionId}:${intent.action}`;
+}
+
 function useResource<T>(
   loader: () => Promise<T>,
   dependencies: DependencyList,
@@ -122,6 +134,58 @@ function useResource<T>(
 
 function copy(locale: "ar" | "en", en: string, ar: string) {
   return locale === "ar" ? ar : en;
+}
+
+function adminMutationError(locale: "ar" | "en", value: unknown) {
+  const code = value instanceof Error ? value.message : String(value || "");
+  const messages: Record<string, [string, string]> = {
+    pending_grant_already_exists: [
+      "A pending grant already exists for this email.",
+      "يوجد بالفعل منح معلّق لهذا البريد.",
+    ],
+    pending_grant_not_found: [
+      "The pending grant was not found.",
+      "لم يتم العثور على المنح المعلّق.",
+    ],
+    pending_grant_not_pending: [
+      "This grant is no longer pending.",
+      "هذا المنح لم يعد معلّقًا.",
+    ],
+    pending_grant_create_failed: [
+      "The pending grant could not be created. Try again.",
+      "تعذر إنشاء المنح المعلّق. حاول مرة أخرى.",
+    ],
+    pending_grant_cancel_failed: [
+      "The pending grant could not be cancelled. Try again.",
+      "تعذر إلغاء المنح المعلّق. حاول مرة أخرى.",
+    ],
+    preview_changed: [
+      "The account state changed. Review the grant again.",
+      "تغيّرت حالة الحساب. راجع المنح مرة أخرى.",
+    ],
+  };
+  const message = messages[code] || [
+    "The request could not be completed. Try again.",
+    "تعذر إكمال الطلب. حاول مرة أخرى.",
+  ];
+  return copy(locale, message[0], message[1]);
+}
+
+function normalizedEmail(value: unknown) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function validEmail(value: unknown) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail(value));
+}
+
+function useDebouncedValue<T>(value: T, delay = 250) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebounced(value), delay);
+    return () => window.clearTimeout(timer);
+  }, [delay, value]);
+  return debounced;
 }
 
 function date(value: unknown, locale: "ar" | "en") {
@@ -189,6 +253,15 @@ function statusLabel(value: unknown, locale: "ar" | "en") {
     waiting_external_integration: ["Waiting for provider", "بانتظار المزود"],
     default_super_admin_compatibility: ["Compatibility mode", "وضع التوافق"],
     not_configured: ["Not configured", "غير مجهز"],
+    pending_registration: ["Waiting for registration", "بانتظار التسجيل"],
+    weekly: ["Weekly", "أسبوعي"],
+    monthly: ["Monthly", "شهري"],
+    annual: ["Annual", "سنوي"],
+    lifetime: ["Lifetime", "مدى الحياة"],
+    hours: ["hours", "ساعات"],
+    days: ["days", "أيام"],
+    weeks: ["weeks", "أسابيع"],
+    months: ["months", "أشهر"],
     low: ["Low", "منخفض"],
     medium: ["Medium", "متوسط"],
     high: ["High", "مرتفع"],
@@ -979,7 +1052,7 @@ function UserDetailDrawer({
         </div>
       </Drawer>
       <AdminOperationDialog
-        key={operation ? JSON.stringify(operation) : "operation:closed"}
+        key={operationIntentKey(operation)}
         intent={operation}
         onClose={closeOperation}
         onChanged={changed}
@@ -1192,10 +1265,15 @@ export function AdminSubscriptionsPhaseF() {
   const [lifecycle, setLifecycle] = useState("");
   const [selected, setSelected] = useState<AdminSubscription | null>(null);
   const [grantOpen, setGrantOpen] = useState(false);
+  const [pendingToCancel, setPendingToCancel] = useState<PendingSubscriptionGrant | null>(null);
   const resource = useResource(
     () =>
       admin.listSubscriptions({ search, page, limit: 25, current, lifecycle }),
     [admin, search, page, current, lifecycle],
+  );
+  const pendingGrants = useResource(
+    () => admin.listPendingSubscriptionGrants("pending"),
+    [admin],
   );
   const columns: Column<AdminSubscription>[] = [
     {
@@ -1243,6 +1321,41 @@ export function AdminSubscriptionsPhaseF() {
       ),
     },
   ];
+  const pendingColumns: Column<PendingSubscriptionGrant>[] = [
+    {
+      key: "email",
+      header: copy(locale, "Email", "البريد"),
+      render: (row) => <span className="mono table-primary-value">{row.normalized_email}</span>,
+    },
+    {
+      key: "plan",
+      header: copy(locale, "Plan", "الخطة"),
+      render: (row) => statusLabel(row.plan_term, locale),
+    },
+    {
+      key: "duration",
+      header: copy(locale, "Duration", "المدة"),
+      render: (row) => row.duration_mode === "lifetime"
+        ? copy(locale, "Lifetime", "مدى الحياة")
+        : row.duration_mode === "exact"
+          ? date(row.exact_expiry, locale)
+          : `${row.duration_value || "—"} ${statusLabel(row.duration_unit, locale)}`,
+    },
+    {
+      key: "deadline",
+      header: copy(locale, "Registration deadline", "مهلة التسجيل"),
+      render: (row) => date(row.claim_deadline, locale),
+    },
+    {
+      key: "action",
+      header: copy(locale, "Action", "الإجراء"),
+      render: (row) => (
+        <Button size="sm" variant="text" onClick={() => setPendingToCancel(row)}>
+          {copy(locale, "Cancel", "إلغاء")}
+        </Button>
+      ),
+    },
+  ];
   return (
     <div className="stack">
       <PageHeader
@@ -1253,6 +1366,26 @@ export function AdminSubscriptionsPhaseF() {
           </Button>
         }
       />
+      {pendingGrants.data?.length ? (
+        <section className="admin-inline-section">
+          <SectionHeader
+            title={copy(locale, "Waiting for registration", "بانتظار التسجيل")}
+            description={copy(
+              locale,
+              "These grants activate automatically after the matching email is verified.",
+              "تُفعّل هذه المنح تلقائيًا بعد التحقق من البريد المطابق.",
+            )}
+          />
+          <DataTable
+            columns={pendingColumns}
+            rows={pendingGrants.data}
+            loading={pendingGrants.loading}
+            rowKey={(row) => row.id}
+            emptyTitle=""
+            emptyBody=""
+          />
+        </section>
+      ) : null}
       <TableToolbar
         searchLabel={copy(
           locale,
@@ -1367,9 +1500,79 @@ export function AdminSubscriptionsPhaseF() {
       <ManualGrantDrawer
         open={grantOpen}
         onClose={() => setGrantOpen(false)}
-        onChanged={resource.reload}
+        onChanged={() => {
+          resource.reload();
+          pendingGrants.reload();
+        }}
+      />
+      <PendingGrantCancelDialog
+        key={pendingToCancel?.id || "pending-grant:closed"}
+        grant={pendingToCancel}
+        onClose={() => setPendingToCancel(null)}
+        onChanged={() => {
+          setPendingToCancel(null);
+          pendingGrants.reload();
+        }}
       />
     </div>
+  );
+}
+
+function PendingGrantCancelDialog({
+  grant,
+  onClose,
+  onChanged,
+}: {
+  grant: PendingSubscriptionGrant | null;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const { locale } = useExperience();
+  const { admin } = useAdapters();
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const cancelGrant = async () => {
+    if (!grant || reason.trim().length < 3) return;
+    setBusy(true);
+    setError("");
+    try {
+      await admin.cancelPendingSubscriptionGrant(grant.id, reason.trim());
+      onChanged();
+    } catch (cause) {
+      setError(adminMutationError(locale, cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal
+      open={Boolean(grant)}
+      onClose={onClose}
+      title={copy(locale, "Cancel pending grant", "إلغاء المنح المعلّق")}
+      description={grant?.normalized_email}
+      closeLabel={copy(locale, "Close", "إغلاق")}
+      size="sm"
+      footer={
+        <>
+          <Button onClick={onClose}>{copy(locale, "Keep grant", "الإبقاء على المنح")}</Button>
+          <Button
+            variant="danger"
+            disabled={reason.trim().length < 3 || busy}
+            onClick={cancelGrant}
+          >
+            {copy(locale, "Cancel grant", "إلغاء المنح")}
+          </Button>
+        </>
+      }
+    >
+      <div className="stack stack--compact">
+        <FormField label={copy(locale, "Reason", "السبب")} required>
+          <Textarea value={reason} onChange={(event) => setReason(event.target.value)} />
+        </FormField>
+        {error ? <Alert title={copy(locale, "Could not cancel the grant", "تعذر إلغاء المنح")} tone="danger">{error}</Alert> : null}
+      </div>
+    </Modal>
   );
 }
 
@@ -1510,7 +1713,7 @@ function SubscriptionDetailDrawer({
         </div>
       </Drawer>
       <AdminOperationDialog
-        key={operation ? JSON.stringify(operation) : "operation:closed"}
+        key={operationIntentKey(operation)}
         intent={operation}
         onClose={() => setOperation(null)}
         onChanged={() => {
@@ -1556,20 +1759,28 @@ function ManualGrantDrawer({
   const [idempotencyKey, setIdempotencyKey] = useState(() =>
     crypto.randomUUID(),
   );
+  const debouncedSearch = useDebouncedValue(search);
   const users = useResource(
     () =>
-      open && search.trim().length >= 2
-        ? admin.listUsers({ search, limit: 8 })
+      open && debouncedSearch.trim().length >= 2
+        ? admin.listUsers({ search: debouncedSearch, limit: 8 })
         : Promise.resolve({ items: [], total: 0, page: 1, limit: 8 }),
-    [admin, open, search],
+    [admin, open, debouncedSearch],
   );
+  const typedEmail = validEmail(search) ? normalizedEmail(search) : "";
+  const exactUser =
+    users.data?.items.find(
+      (user) => normalizedEmail(user.email) === typedEmail,
+    ) || null;
+  const targetUser = selected || exactUser;
+  const targetEmail = selected?.email || typedEmail;
   const operation =
-    selected?.subscription_presence === "active"
+    targetUser?.subscription_presence === "active"
       ? "extend_current"
       : "start_from_now";
-  const input = selected
+  const input = targetEmail
     ? {
-        target_email: selected.email,
+        target_email: targetEmail,
         operation_type: operation as "extend_current" | "start_from_now",
         plan,
         duration_mode:
@@ -1589,7 +1800,7 @@ function ManualGrantDrawer({
       setPreview(await admin.previewManualGrant(input));
     } catch (reason) {
       setPreview(null);
-      setError(reason instanceof Error ? reason.message : "preview_failed");
+      setError(adminMutationError(locale, reason));
     } finally {
       setBusy(false);
     }
@@ -1610,7 +1821,7 @@ function ManualGrantDrawer({
       onChanged();
       onClose();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "grant_failed");
+      setError(adminMutationError(locale, reason));
     } finally {
       setBusy(false);
     }
@@ -1622,15 +1833,15 @@ function ManualGrantDrawer({
       title={copy(locale, "Grant subscription", "منح اشتراك")}
       description={copy(
         locale,
-        "Choose the user, review the result, then confirm.",
-        "اختر المستخدم وراجع النتيجة ثم أكّد.",
+        "Choose an existing user or enter the email that will register later.",
+        "اختر مستخدمًا حاليًا أو اكتب البريد الذي سيسجل لاحقًا.",
       )}
       closeLabel={copy(locale, "Close", "إغلاق")}
       footer={
         <>
           <Button
             onClick={runPreview}
-            disabled={!selected || !reasonValid || busy}
+            disabled={!input || !reasonValid || busy}
           >
             {copy(locale, "Review changes", "مراجعة التغييرات")}
           </Button>
@@ -1685,6 +1896,18 @@ function ManualGrantDrawer({
               </button>
             ))}
           </div>
+        ) : null}
+        {typedEmail && !exactUser && !users.loading ? (
+          <Alert
+            title={copy(locale, "Grant after registration", "منح بعد التسجيل")}
+            tone="info"
+          >
+            {copy(
+              locale,
+              "The subscription will start automatically after this email creates and verifies its account.",
+              "سيبدأ الاشتراك تلقائيًا بعد إنشاء الحساب بهذا البريد والتحقق منه.",
+            )}
+          </Alert>
         ) : null}
         <div className="form-grid">
           <FormField label={copy(locale, "Plan", "الخطة")}>
@@ -1781,8 +2004,12 @@ function ManualGrantDrawer({
           >
             {copy(
               locale,
-              `Result: ${preview.proposed_state.resulting_entitlement}; expiry: ${date(preview.proposed_state.expires_at, locale)}`,
-              `النتيجة: ${statusLabel(preview.proposed_state.resulting_entitlement, locale)}؛ الانتهاء: ${date(preview.proposed_state.expires_at, locale)}`,
+              preview.pending_registration
+                ? "The grant will activate after account registration and email verification."
+                : `Result: ${preview.proposed_state.resulting_entitlement}; expiry: ${date(preview.proposed_state.expires_at, locale)}`,
+              preview.pending_registration
+                ? "سيُفعّل المنح بعد إنشاء الحساب والتحقق من البريد."
+                : `النتيجة: ${statusLabel(preview.proposed_state.resulting_entitlement, locale)}؛ الانتهاء: ${date(preview.proposed_state.expires_at, locale)}`,
             )}
           </Alert>
         ) : null}

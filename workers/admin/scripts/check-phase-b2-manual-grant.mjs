@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import worker from '../src/index.js'
 
 const now = Date.now()
@@ -68,6 +69,7 @@ const rows = [
 const activity = []
 const paymentWrites = []
 const recoveryRows = []
+const pendingGrants = []
 const bucket = new Map()
 const profiles = [
   { firebase_uid: 'uid-active', normalized_email: 'active@example.com', display_name: 'Active user', account_status: 'active', updated_at: iso(-86400e3) },
@@ -95,6 +97,11 @@ globalThis.fetch = async (input, init = {}) => {
     return Response.json(rows)
   }
   if (method === 'GET' && table === 'device_login_sessions') return Response.json([])
+  if (method === 'GET' && table === 'pending_subscription_grants') {
+    const query = decodeURIComponent(url.search)
+    if (query.includes('status=eq.pending')) return Response.json(pendingGrants.filter((row) => row.status === 'pending'))
+    return Response.json(pendingGrants)
+  }
   if (method === 'PATCH' && table === 'account_subscriptions') {
     const body = JSON.parse(init.body || '{}')
     const id = /id=eq\.([^&]+)/.exec(url.search)?.[1]
@@ -145,6 +152,20 @@ globalThis.fetch = async (input, init = {}) => {
     recoveryRows.push(row)
     return Response.json([row], { status: 201 })
   }
+  if (method === 'POST' && table === 'pending_subscription_grants') {
+    const body = JSON.parse(init.body || '{}')
+    const row = { id: crypto.randomUUID(), created_at: new Date().toISOString(), updated_at: new Date().toISOString(), ...body }
+    pendingGrants.push(row)
+    return Response.json([row], { status: 201 })
+  }
+  if (method === 'PATCH' && table === 'pending_subscription_grants') {
+    const body = JSON.parse(init.body || '{}')
+    const id = decodeURIComponent(/id=eq\.([^&]+)/.exec(url.search)?.[1] || '')
+    const row = pendingGrants.find((item) => item.id === id && item.status === 'pending')
+    if (!row) return Response.json([])
+    Object.assign(row, body, { updated_at: new Date().toISOString() })
+    return Response.json([row])
+  }
   if (['orders', 'payment_events', 'invoices'].includes(table || '')) {
     paymentWrites.push({ table, method })
     return Response.json([])
@@ -172,6 +193,14 @@ async function post(path, body) {
     method: 'POST',
     headers: { Authorization: 'Bearer test-admin-token', 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+  }), env)
+  const payload = await response.json()
+  return { status: response.status, payload }
+}
+
+async function get(path) {
+  const response = await worker.fetch(new Request(`https://admin.saturnws.com${path}`, {
+    headers: { Authorization: 'Bearer test-admin-token' },
   }), env)
   const payload = await response.json()
   return { status: response.status, payload }
@@ -226,6 +255,58 @@ const newUser = await post('/api/admin/subscriptions/manual-grant/preview', {
 })
 assert.equal(newUser.status, 200)
 assert.equal(newUser.payload.preview.current_subscription, null)
+
+const pendingInput = {
+  target_email: 'waiting@example.com',
+  operation_type: 'start_from_now',
+  plan: 'monthly',
+  duration_mode: 'duration',
+  duration_value: 30,
+  duration_unit: 'days',
+  reason_code: 'admin_grant',
+  reason: 'Pre-approved subscription before registration',
+}
+const pendingPreview = await post('/api/admin/subscriptions/manual-grant/preview', pendingInput)
+assert.equal(pendingPreview.status, 200, JSON.stringify(pendingPreview.payload))
+assert.equal(pendingPreview.payload.preview.pending_registration, true)
+assert.equal(pendingPreview.payload.preview.target.firebase_user_id, null)
+assert.equal(pendingPreview.payload.preview.proposed_state.resulting_entitlement, 'pending_registration')
+const pendingExecutePayload = {
+  ...pendingInput,
+  idempotency_key: 'idem-pending-1',
+  preview_hash: pendingPreview.payload.preview.preview_hash,
+}
+const pendingExecuted = await post('/api/admin/subscriptions/manual-grant/execute', pendingExecutePayload)
+assert.equal(pendingExecuted.status, 200, JSON.stringify(pendingExecuted.payload))
+assert.equal(pendingExecuted.payload.item, null)
+assert.equal(pendingExecuted.payload.pending_grant.status, 'pending')
+assert.equal(pendingGrants.length, 1)
+assert.ok(activity.some((row) => row.action === 'pending_subscription_grant_created'))
+const pendingReplay = await post('/api/admin/subscriptions/manual-grant/execute', pendingExecutePayload)
+assert.equal(pendingReplay.status, 200)
+assert.equal(pendingReplay.payload.idempotent_replay, true)
+const duplicatePendingPreview = await post('/api/admin/subscriptions/manual-grant/preview', {
+  ...pendingInput,
+  duration_value: 14,
+})
+const duplicatePending = await post('/api/admin/subscriptions/manual-grant/execute', {
+  ...pendingInput,
+  duration_value: 14,
+  idempotency_key: 'idem-pending-duplicate',
+  preview_hash: duplicatePendingPreview.payload.preview.preview_hash,
+})
+assert.equal(duplicatePending.status, 409)
+assert.equal(duplicatePending.payload.error, 'pending_grant_already_exists')
+const pendingList = await get('/api/admin/subscriptions/pending-grants')
+assert.equal(pendingList.status, 200)
+assert.equal(pendingList.payload.items.length, 1)
+const pendingCancel = await post('/api/admin/subscriptions/pending-grants/cancel', {
+  grant_id: pendingGrants[0].id,
+  reason: 'Customer changed the requested email',
+})
+assert.equal(pendingCancel.status, 200, JSON.stringify(pendingCancel.payload))
+assert.equal(pendingCancel.payload.item.status, 'cancelled')
+assert.ok(activity.some((row) => row.action === 'pending_subscription_grant_cancelled'))
 
 const duplicate = await post('/api/admin/subscriptions/manual-grant/preview', {
   ...base,
@@ -299,4 +380,10 @@ assert.ok(Number(recoveryRows[0].remaining_seconds) > 0)
 assert.ok(recoveryRows[0].integrity_hash)
 
 assert.equal(paymentWrites.length, 0, 'manual grant must not create payment/order/invoice rows')
+const pendingMigration = readFileSync(new URL('../../auth/migrations/20260712201401_pending_subscription_grants.sql', import.meta.url), 'utf8')
+assert.match(pendingMigration, /enable row level security/i)
+assert.match(pendingMigration, /revoke all on table public\.pending_subscription_grants from public, anon, authenticated/i)
+assert.match(pendingMigration, /where status = 'pending'/i)
+assert.match(pendingMigration, /pg_advisory_xact_lock/i)
+assert.match(pendingMigration, /after insert or update of email_verified, normalized_email, account_status/i)
 console.log('Phase B.2 manual grant checks passed.')

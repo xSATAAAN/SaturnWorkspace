@@ -9,7 +9,7 @@
 .auth-form { display: flex; flex-direction: column; gap: var(--space-6); }
 .auth-form > header { text-align: center; }
 .auth-form > header > span { display: block; margin-bottom: var(--space-3); color: var(--brand-primary); font-size: var(--text-caption); font-weight: 700; }
-.auth-form > header h1 { margin: 0; font-size: 2rem; line-height: 1.2; letter-spacing: -.025em; }
+.auth-form > header h1 { margin: 0; font-size: 2rem; line-height: 1.2; letter-spacing: 0; }
 html[lang='ar'] .auth-form > header h1 { letter-spacing: 0; }
 .auth-form > header p { max-width: 360px; margin: var(--space-2) auto 0; color: var(--text-secondary); }
 .auth-form--center { align-items: center; text-align: center; }.auth-form--center > * { width: 100%; }.auth-form--center .auth-icon { width: 50px; }.auth-form--center > header strong { display: block; margin-top: var(--space-2); }

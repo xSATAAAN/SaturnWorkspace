@@ -3,9 +3,172 @@
 .admin-metric-strip .ui-card:nth-child(4n) { border-inline-end: 0; }
 .admin-metric-strip .ui-card:nth-last-child(-n+3) { border-bottom: 0; }
 
+/* Admin is an operational desktop surface: keep it dense, scannable, and stable. */
+html[data-surface='admin'] {
+  --sidebar-width: 220px;
+  --header-height: 56px;
+}
+
+html[data-surface='admin'] .workspace-sidebar {
+  padding: var(--space-3) var(--space-2);
+}
+
+html[data-surface='admin'] .workspace-sidebar > .brand {
+  min-height: 38px;
+  margin-bottom: var(--space-3);
+}
+
+html[data-surface='admin'] .workspace-sidebar__nav nav {
+  margin-bottom: var(--space-3);
+}
+
+html[data-surface='admin'] .workspace-sidebar__nav nav > span {
+  padding: 6px 10px;
+}
+
+html[data-surface='admin'] .workspace-sidebar__nav button {
+  min-height: 34px;
+  gap: 10px;
+  padding-inline: 10px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-body-sm);
+}
+
+html[data-surface='admin'] .workspace-sidebar__collapse {
+  min-height: 36px;
+  padding-inline: 10px;
+}
+
+html[data-surface='admin'] .workspace-topbar {
+  padding-inline: var(--space-5);
+}
+
+html[data-surface='admin'] .workspace-content {
+  max-width: 1520px;
+  padding: 18px 20px 28px;
+}
+
+html[data-surface='admin'] .workspace-content > .stack,
+html[data-surface='admin'] .workspace-content .stack--compact {
+  gap: var(--space-3);
+}
+
+html[data-surface='admin'] .ui-page-header {
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+html[data-surface='admin'] .ui-page-header h1 {
+  font-size: 1.45rem;
+  line-height: 1.25;
+}
+
+html[data-surface='admin'] .ui-page-header p,
+html[data-surface='admin'] .ui-section-header p {
+  margin-top: 3px;
+  font-size: var(--text-body-sm);
+}
+
+html[data-surface='admin'] .ui-card--sm { padding: 14px; }
+html[data-surface='admin'] .ui-card--md { padding: 18px; }
+html[data-surface='admin'] .ui-card--lg { padding: 22px; }
+
+html[data-surface='admin'] .ui-stat {
+  min-height: 88px;
+  gap: 6px;
+}
+
+html[data-surface='admin'] .ui-stat > strong {
+  font-size: 1.3rem;
+}
+
+html[data-surface='admin'] .ui-input {
+  min-height: 38px;
+  border-radius: var(--radius-md);
+}
+
+html[data-surface='admin'] .ui-button--md {
+  min-height: 36px;
+  padding-inline: 14px;
+}
+
+html[data-surface='admin'] .ui-table th {
+  height: 36px;
+  padding-inline: 12px;
+}
+
+html[data-surface='admin'] .ui-table td {
+  height: 44px;
+  padding-inline: 12px;
+}
+
+html[data-surface='admin'] .ui-table-toolbar {
+  gap: var(--space-2);
+  margin-bottom: 10px;
+}
+
+html[data-surface='admin'] .ui-table-toolbar .ui-search {
+  width: min(280px, 100%);
+}
+
+html[data-surface='admin'] .ui-pagination {
+  padding-top: var(--space-3);
+}
+
+html[data-surface='admin'] .ui-drawer {
+  width: min(480px, 100vw);
+}
+
+html[data-surface='admin'] .ui-modal > header,
+html[data-surface='admin'] .ui-drawer > header {
+  padding: var(--space-4) 18px;
+}
+
+html[data-surface='admin'] .ui-modal__body,
+html[data-surface='admin'] .ui-drawer__body {
+  padding: 18px;
+}
+
+html[data-surface='admin'] .ui-modal > footer,
+html[data-surface='admin'] .ui-drawer > footer {
+  padding: 12px 18px;
+}
+
+html[data-surface='admin'] .admin-metric-strip,
+html[data-surface='admin'] .service-health,
+html[data-surface='admin'] .admin-overview-grid {
+  margin-bottom: var(--space-4);
+}
+
+html[data-surface='admin'] .admin-overview-grid,
+html[data-surface='admin'] .admin-overview-lower,
+html[data-surface='admin'] .coverage-summary {
+  gap: var(--space-4);
+}
+
+.admin-inline-section {
+  display: grid;
+  gap: 10px;
+  padding-block: 2px var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.table-primary-value {
+  display: block;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @media (min-width: 1500px) {
   .admin-metric-strip { grid-template-columns: repeat(7, minmax(0, 1fr)); }
   .admin-metric-strip .ui-card { border-bottom: 0; }
   .admin-metric-strip .ui-card:nth-child(4n) { border-inline-end: 1px solid var(--border); }
   .admin-metric-strip .ui-card:last-child { border-inline-end: 0; }
+}
+
+@media (max-width: 1199px) and (min-width: 768px) {
+  html[data-surface='admin'] { --sidebar-width: 204px; }
+  html[data-surface='admin'] .workspace-content { padding-inline: var(--space-4); }
 }

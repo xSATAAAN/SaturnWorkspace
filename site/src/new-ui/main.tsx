@@ -8,6 +8,8 @@ import '@fontsource/tajawal/arabic-700.css'
 import '@fontsource/tajawal/arabic-800.css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { AdapterProvider } from './adapters/AdapterProvider'
+import { productionAdapters } from './adapters/productionAdapters'
 import { NewUiApp } from './app/NewUiApp'
 import { ExperienceProvider } from './app/ExperienceProvider'
 import './foundation/tokens.css'
@@ -25,7 +27,9 @@ import './foundation/preview.css'
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ExperienceProvider>
-      <NewUiApp />
+      <AdapterProvider adapters={productionAdapters}>
+        <NewUiApp />
+      </AdapterProvider>
     </ExperienceProvider>
   </StrictMode>,
 )

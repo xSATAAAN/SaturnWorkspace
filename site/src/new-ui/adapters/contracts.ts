@@ -25,6 +25,7 @@ import type {
   ManualGrantPreview,
   ManualGrantPreviewInput,
   ManualGrantResult,
+  PendingSubscriptionGrant,
 } from '../../api/admin'
 import type { AccountDeletionStatusResult, AccountProfileProjection, AccountSessionsResult, AccountSubscription, SubscriptionProjection } from '../../api/account'
 
@@ -288,6 +289,8 @@ export type AdminAdapter = {
   }): Promise<AdminSubscription>
   previewManualGrant(input: ManualGrantPreviewInput): Promise<ManualGrantPreview>
   executeManualGrant(input: ManualGrantExecuteInput): Promise<ManualGrantResult>
+  listPendingSubscriptionGrants(status?: PendingSubscriptionGrant['status'] | 'all'): Promise<PendingSubscriptionGrant[]>
+  cancelPendingSubscriptionGrant(grantId: string, reason: string): Promise<PendingSubscriptionGrant>
   updateSubscriptionStatus(id: string, status: AdminSubscription['status']): Promise<AdminSubscription>
   previewAccountLifecycle(firebaseUid: string, input: AdminOperationReason & { action: 'suspend' | 'reactivate' | 'mark_pending_deletion' }): Promise<AdminOperationPreview>
   executeAccountLifecycle(firebaseUid: string, input: AdminOperationReason & { action: 'suspend' | 'reactivate' | 'mark_pending_deletion'; preview_hash: string; request_id: string }): Promise<Record<string, unknown>>

@@ -13,6 +13,8 @@ import {
   createPromoCode,
   updatePromoCodeState,
   executeManualSubscriptionGrant,
+  fetchPendingSubscriptionGrants,
+  cancelPendingSubscriptionGrant as cancelPendingSubscriptionGrantRequest,
   fetchAdminDashboard,
   fetchAdminCommerceOverview,
   fetchAdminUsers,
@@ -752,6 +754,12 @@ export const productionAdapters: AppAdapters = {
     },
     async executeManualGrant(input) {
       return executeManualSubscriptionGrant(input)
+    },
+    async listPendingSubscriptionGrants(status = 'pending') {
+      return (await fetchPendingSubscriptionGrants(status)).items || []
+    },
+    async cancelPendingSubscriptionGrant(grantId, reason) {
+      return (await cancelPendingSubscriptionGrantRequest({ grant_id: grantId, reason })).item
     },
     async updateSubscriptionStatus(id, status) {
       const data = await patchSubscriptionStatus(id, status)

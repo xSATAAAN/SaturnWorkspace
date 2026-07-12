@@ -377,6 +377,14 @@ export default {
         await requireAdminContext(request, env, "subscriptions:read");
         return json(await listSubscriptions(url, env), 200, corsHeaders(request, env));
       }
+      if (url.pathname === "/api/admin/subscriptions/pending-grants" && request.method === "GET") {
+        await requireAdminContext(request, env, "subscriptions:read");
+        return json(await listPendingSubscriptionGrants(url, env), 200, corsHeaders(request, env));
+      }
+      if (url.pathname === "/api/admin/subscriptions/pending-grants/cancel" && request.method === "POST") {
+        const context = await requireAdminContext(request, env, "subscriptions:write");
+        return json(await cancelPendingSubscriptionGrant(request, env, context.email), 200, corsHeaders(request, env));
+      }
       if (url.pathname === "/api/admin/subscriptions/manual-grant/preview" && request.method === "POST") {
         const context = await requireAdminContext(request, env, "subscriptions:write");
         return json(await previewManualSubscriptionGrant(request, env, context.email), 200, corsHeaders(request, env));
@@ -559,13 +567,16 @@ export default {
         "firebase_user_not_verified",
       ]);
       const forbiddenErrors = new Set(["download_not_entitled", "forbidden_origin", "origin_not_allowed", "admin_permission_denied"]);
-      const notFoundErrors = new Set(["release_not_found", "release_artifact_missing", "order_not_found", "account_not_found", "subscription_not_found", "session_not_found", "device_not_found"]);
+      const notFoundErrors = new Set(["release_not_found", "release_artifact_missing", "order_not_found", "account_not_found", "subscription_not_found", "session_not_found", "device_not_found", "pending_grant_not_found"]);
+      const conflictErrors = new Set(["pending_grant_already_exists", "pending_grant_not_pending"]);
       const status = authErrors.has(message) || message.startsWith("admin_email_not_allowed")
         ? 401
         : forbiddenErrors.has(message)
           ? 403
           : notFoundErrors.has(message)
             ? 404
+            : conflictErrors.has(message)
+              ? 409
             : message === "rate_limited"
               ? 429
               : message === "rate_limit_unavailable"
@@ -2487,7 +2498,24 @@ async function resolveManualGrantTarget(env, input) {
     "account_profiles",
     `select=firebase_uid,normalized_email,display_name,account_status,updated_at&${profileFilter}&limit=2`,
   );
-  if (!Array.isArray(profiles) || profiles.length === 0) throw new Error("account_not_found");
+  if (!Array.isArray(profiles) || profiles.length === 0) {
+    if (!input.target_email) throw new Error("account_not_found");
+    return {
+      target: {
+        firebase_user_id: null,
+        user_email: input.target_email,
+        display_name: null,
+      },
+      current: null,
+      fallback_latest: null,
+      rows: [],
+      usable: [],
+      duplicate_groups: { firebase_uid: [], email: [] },
+      warnings: [],
+      blocked: false,
+      pending_registration: true,
+    };
+  }
   if (profiles.length > 1) throw new Error("account_identity_conflict");
   const profile = profiles[0];
   const targetUid = String(profile.firebase_uid || "").trim();
@@ -2527,6 +2555,7 @@ async function resolveManualGrantTarget(env, input) {
     duplicate_groups: duplicateGroups,
     warnings,
     blocked: resolution?.diagnostics?.integrity === "conflict",
+    pending_registration: false,
   };
 }
 
@@ -2561,10 +2590,30 @@ function computeManualGrantProposal(input, resolved) {
   };
 }
 
+function computePendingRegistrationGrantProposal(input) {
+  if (input.operation !== "start_from_now") throw new Error("pending_grant_requires_start_from_registration");
+  const exactExpiry = input.duration_mode === "exact" ? new Date(input.exact_expiry).toISOString() : null;
+  return {
+    operation: input.operation,
+    source: "pending_admin_grant",
+    plan_intent: input.plan,
+    db_plan: dbPlanForManualGrant(input.plan),
+    tier: "public",
+    starts_at: null,
+    expires_at: exactExpiry,
+    is_lifetime: input.duration_mode === "lifetime" || input.plan === "lifetime",
+    duration: input.duration_mode === "duration" ? { value: input.duration_value, unit: input.duration_unit } : null,
+    exact: input.duration_mode === "exact" ? { expires_at: exactExpiry, timezone: input.timezone } : null,
+    resulting_entitlement: "pending_registration",
+    affected_rows: [],
+    pending_registration: true,
+  };
+}
+
 async function buildManualGrantPreview(env, rawInput, adminEmail, options = {}) {
   const input = normalizeManualGrantInput(rawInput, options);
   const resolved = await resolveManualGrantTarget(env, input);
-  if (input.operation === "restore_remaining_time") {
+  if (input.operation === "restore_remaining_time" && !resolved.pending_registration) {
     if (!input.recovery_evidence_id || !isUuid(input.recovery_evidence_id)) throw new Error("recovery_evidence_required");
     const evidence = await safeSupabaseRead(
       env,
@@ -2580,7 +2629,9 @@ async function buildManualGrantPreview(env, rawInput, adminEmail, options = {}) 
   }
   const warnings = [...resolved.warnings];
   if (resolved.blocked) warnings.push("operation_blocked_until_duplicate_usable_rows_are_resolved");
-  const proposal = resolved.blocked
+  const proposal = resolved.pending_registration
+    ? computePendingRegistrationGrantProposal(input)
+    : resolved.blocked
     ? {
         operation: input.operation,
         source: MANUAL_GRANT_SOURCES[input.operation] || "admin_manual",
@@ -2622,6 +2673,7 @@ async function buildManualGrantPreview(env, rawInput, adminEmail, options = {}) 
     affected_rows: proposal.affected_rows,
     warnings,
     blocked: resolved.blocked,
+    pending_registration: resolved.pending_registration,
     admin: adminEmail || null,
   };
   const previewHash = await sha256Hex(stableStringify({
@@ -2633,6 +2685,7 @@ async function buildManualGrantPreview(env, rawInput, adminEmail, options = {}) 
     requested_operation: previewPayload.requested_operation,
     affected_rows: previewPayload.affected_rows,
     blocked: previewPayload.blocked,
+    pending_registration: previewPayload.pending_registration,
   }));
   return { input, resolved, preview: { ...previewPayload, preview_hash: previewHash } };
 }
@@ -2685,6 +2738,76 @@ function manualGrantMetadata(input, preview, adminEmail, requestId) {
   };
 }
 
+async function createPendingSubscriptionGrant(env, input, preview, adminEmail, requestId, keyHash) {
+  const existingForEmail = await safeSupabaseRead(
+    env,
+    "pending_subscription_grants",
+    `select=id,status,request_id,normalized_email&normalized_email=eq.${encodeURIComponent(input.target_email)}&status=eq.pending&limit=1`,
+  );
+  if (Array.isArray(existingForEmail) && existingForEmail.length) throw new Error("pending_grant_already_exists");
+
+  const claimDeadline = new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString();
+  let rows;
+  try {
+    rows = await supabaseRequest(env, "pending_subscription_grants", "POST", {
+      query: "select=*",
+      body: {
+        normalized_email: input.target_email,
+        status: "pending",
+        plan_term: normalizedManualPlanTerm(input.plan),
+        legacy_plan: preview.proposed_state.db_plan,
+        tier: preview.proposed_state.tier,
+        duration_mode: input.duration_mode,
+        duration_value: input.duration_mode === "duration" ? input.duration_value : null,
+        duration_unit: input.duration_mode === "duration" ? input.duration_unit : null,
+        exact_expiry: input.duration_mode === "exact" ? input.exact_expiry : null,
+        claim_deadline: claimDeadline,
+        reason_code: input.reason_code,
+        reason_note: input.reason_note,
+        created_by: adminEmail,
+        request_id: requestId,
+        idempotency_key_hash: keyHash,
+        preview_hash: preview.preview_hash,
+      },
+      prefer: "return=representation",
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message.toLowerCase() : "";
+    if (message.includes("duplicate key") || message.includes("unique constraint")) {
+      throw new Error("pending_grant_already_exists");
+    }
+    throw new Error("pending_grant_create_failed");
+  }
+  const pendingGrant = Array.isArray(rows) ? rows[0] : rows;
+  if (!pendingGrant?.id) throw new Error("pending_grant_create_failed");
+  await appendAudit(env, {
+    type: "pending_subscription_grant_created",
+    entity: "pending_subscription_grants",
+    entity_id: pendingGrant.id,
+    actor: adminEmail,
+    payload: {
+      request_id: requestId,
+      target_email: input.target_email,
+      plan: input.plan,
+      duration_mode: input.duration_mode,
+      duration_value: input.duration_mode === "duration" ? input.duration_value : null,
+      duration_unit: input.duration_mode === "duration" ? input.duration_unit : null,
+      reason_code: input.reason_code,
+      claim_deadline: claimDeadline,
+      result: "pending_registration",
+    },
+    at: new Date().toISOString(),
+  });
+  return {
+    success: true,
+    request_id: requestId,
+    item: null,
+    pending_grant: pendingGrant,
+    preview,
+    auto_authorized_requests: 0,
+  };
+}
+
 async function executeManualSubscriptionGrant(request, env, adminEmail) {
   const requestId = manualGrantRequestId();
   const body = await request.json();
@@ -2695,6 +2818,12 @@ async function executeManualSubscriptionGrant(request, env, adminEmail) {
   const { input, resolved, preview } = await buildManualGrantPreview(env, body, adminEmail, { requireReason: true, requireIdempotency: true });
   if (preview.blocked) throw new Error("multiple_usable_subscriptions");
   if (input.preview_hash && input.preview_hash !== preview.preview_hash) throw new Error("preview_changed");
+
+  if (preview.pending_registration) {
+    const result = await createPendingSubscriptionGrant(env, input, preview, adminEmail, requestId, keyHash);
+    await saveManualGrantIdempotency(env, keyHash, result);
+    return result;
+  }
 
   const targetUid = input.target_firebase_uid || resolved.target.firebase_user_id;
   if (!targetUid) throw new Error("firebase_uid_required");
@@ -2790,6 +2919,58 @@ async function executeManualSubscriptionGrant(request, env, adminEmail) {
   });
   await saveManualGrantIdempotency(env, keyHash, result);
   return result;
+}
+
+async function listPendingSubscriptionGrants(url, env) {
+  const status = String(url.searchParams.get("status") || "pending").trim().toLowerCase();
+  if (!["pending", "claimed", "cancelled", "expired", "all"].includes(status)) throw new Error("invalid_pending_grant_status");
+  const limit = safeInt(url.searchParams.get("limit"), 100, 200);
+  const filter = status === "all" ? "" : `&status=eq.${encodeURIComponent(status)}`;
+  let items;
+  try {
+    items = await safeSupabaseRead(
+      env,
+      "pending_subscription_grants",
+      `select=id,normalized_email,status,plan_term,duration_mode,duration_value,duration_unit,exact_expiry,claim_deadline,reason_code,reason_note,created_by,claimed_by_uid,resulting_subscription_id,claimed_at,cancelled_at,cancelled_by,cancellation_reason,created_at,updated_at${filter}&order=created_at.desc&limit=${limit}`,
+    );
+  } catch {
+    throw new Error("pending_grant_list_failed");
+  }
+  return { success: true, items: Array.isArray(items) ? items : [] };
+}
+
+async function cancelPendingSubscriptionGrant(request, env, adminEmail) {
+  const body = await request.json();
+  const grantId = String(body?.grant_id || body?.id || "").trim();
+  const reason = String(body?.reason || "").trim().slice(0, 500);
+  if (!isUuid(grantId)) throw new Error("pending_grant_not_found");
+  if (reason.length < 3) throw new Error("cancellation_reason_required");
+  let rows;
+  try {
+    rows = await supabaseRequest(env, "pending_subscription_grants", "PATCH", {
+      query: `id=eq.${encodeURIComponent(grantId)}&status=eq.pending&select=*`,
+      body: {
+        status: "cancelled",
+        cancelled_at: new Date().toISOString(),
+        cancelled_by: adminEmail,
+        cancellation_reason: reason,
+      },
+      prefer: "return=representation",
+    });
+  } catch {
+    throw new Error("pending_grant_cancel_failed");
+  }
+  const item = Array.isArray(rows) ? rows[0] : rows;
+  if (!item?.id) throw new Error("pending_grant_not_pending");
+  await appendAudit(env, {
+    type: "pending_subscription_grant_cancelled",
+    entity: "pending_subscription_grants",
+    entity_id: item.id,
+    actor: adminEmail,
+    payload: { reason, target_email: item.normalized_email, result: "cancelled" },
+    at: new Date().toISOString(),
+  });
+  return { success: true, item };
 }
 
 async function createSubscription(request, env, adminEmail) {

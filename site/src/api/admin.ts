@@ -157,21 +157,46 @@ export type ManualGrantPreview = {
     source: 'admin_manual' | 'admin_recovery'
     plan_intent: ManualGrantPlan
     db_plan: 'monthly' | 'yearly'
-    starts_at: string
-    expires_at: string
+    starts_at: string | null
+    expires_at: string | null
     is_lifetime: boolean
     resulting_entitlement: string
   }
   affected_rows: string[]
   warnings: string[]
   blocked: boolean
+  pending_registration?: boolean
   preview_hash: string
+}
+
+export type PendingSubscriptionGrant = {
+  id: string
+  normalized_email: string
+  status: 'pending' | 'claimed' | 'cancelled' | 'expired'
+  plan_term: ManualGrantPlan
+  duration_mode: 'duration' | 'exact' | 'lifetime'
+  duration_value?: number | null
+  duration_unit?: ManualGrantDurationUnit | null
+  exact_expiry?: string | null
+  claim_deadline: string
+  reason_code: string
+  reason_note?: string | null
+  created_by: string
+  claimed_by_uid?: string | null
+  resulting_subscription_id?: string | null
+  claimed_at?: string | null
+  cancelled_at?: string | null
+  cancelled_by?: string | null
+  cancellation_reason?: string | null
+  created_at: string
+  updated_at: string
 }
 
 export type ManualGrantResult = {
   success: boolean
   request_id: string
-  item: AdminSubscription
+  item: AdminSubscription | null
+  pending_grant?: PendingSubscriptionGrant | null
   preview: ManualGrantPreview
   auto_authorized_requests?: number
   idempotent_replay?: boolean
@@ -901,6 +926,17 @@ export async function previewManualSubscriptionGrant(payload: ManualGrantPreview
 
 export async function executeManualSubscriptionGrant(payload: ManualGrantExecuteInput) {
   return adminFetch<ManualGrantResult>('/subscriptions/manual-grant/execute', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function fetchPendingSubscriptionGrants(status: PendingSubscriptionGrant['status'] | 'all' = 'pending') {
+  return adminFetch<{ success: boolean; items: PendingSubscriptionGrant[] }>(`/subscriptions/pending-grants?status=${encodeURIComponent(status)}`)
+}
+
+export async function cancelPendingSubscriptionGrant(payload: { grant_id: string; reason: string }) {
+  return adminFetch<{ success: boolean; item: PendingSubscriptionGrant }>('/subscriptions/pending-grants/cancel', {
     method: 'POST',
     body: JSON.stringify(payload),
   })
