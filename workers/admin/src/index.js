@@ -568,6 +568,8 @@ export default {
             ? 404
             : message === "rate_limited"
               ? 429
+              : message === "rate_limit_unavailable"
+                ? 503
               : 400;
       const publicMessage = message === "forbidden_origin" ? "origin_not_allowed" : message;
       return json({ success: false, error: publicMessage }, status, corsHeaders(request, env));

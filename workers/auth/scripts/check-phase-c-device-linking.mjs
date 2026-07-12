@@ -203,7 +203,11 @@ async function mockFetch(input, init = {}) {
 
 globalThis.fetch = mockFetch
 const worker = (await import(`${pathToFileURL(bundlePath).href}?v=${Date.now()}`)).default
+const allowAllRateLimit = { async limit() { return { success: true } } }
 const env = {
+  AUTH_RATE_LIMIT_STANDARD: allowAllRateLimit,
+  AUTH_RATE_LIMIT_SENSITIVE: allowAllRateLimit,
+  AUTH_RATE_LIMIT_DEVICE: allowAllRateLimit,
   SUPABASE_API_URL: 'https://supabase.test/rest/v1',
   SUPABASE_SERVICE_ROLE_KEY: 'test-service-role',
   FIREBASE_WEB_API_KEY: 'test-firebase-key',
@@ -722,6 +726,14 @@ const securityPayloadText = JSON.stringify(securityEmailRequests)
 assert.equal(securityPayloadText.includes('stk_'), false, 'security email payload must not include app session tokens')
 assert.equal(securityPayloadText.includes('session_token'), false, 'security email payload must not include session token fields')
 assert.equal(securityPayloadText.includes('device_code'), false, 'security email payload must not include device codes')
+
+const deniedRateLimit = { async limit() { return { success: false } } }
+const deniedDeviceStart = await call('/device/start', { hwid: '7'.repeat(32) }, undefined, { ...env, AUTH_RATE_LIMIT_DEVICE: deniedRateLimit })
+assert.equal(deniedDeviceStart.status, 429, 'distributed rate limiter denial must fail closed')
+const missingDeviceLimiterEnv = { ...env }
+delete missingDeviceLimiterEnv.AUTH_RATE_LIMIT_DEVICE
+const missingLimiterDeviceStart = await call('/device/start', { hwid: '6'.repeat(32) }, undefined, missingDeviceLimiterEnv)
+assert.equal(missingLimiterDeviceStart.status, 429, 'missing distributed rate limiter binding must fail closed')
 
 const source = fs.readFileSync(path.join(ROOT, 'src/index.ts'), 'utf8')
 for (const forbidden of ['console.log(sessionToken)', 'console.error(sessionToken)', 'session_token: sessionToken, error']) {

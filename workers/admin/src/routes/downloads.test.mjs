@@ -11,7 +11,10 @@ function jsonResponse(body, status = 200) {
 }
 
 function testEnv() {
+  const allowAllRateLimit = { async limit() { return { success: true } } }
   return {
+    ADMIN_RATE_LIMIT_DOWNLOAD: allowAllRateLimit,
+    ADMIN_RATE_LIMIT_READ: allowAllRateLimit,
     FIREBASE_WEB_API_KEY: "test-web-key",
     PAYMENTS_ALLOWED_ORIGIN: "https://saturnws.com",
     SUPABASE_URL: "https://example.supabase.invalid",
@@ -82,6 +85,18 @@ test("admin origin cannot use the customer protected download catalog", async ()
     },
   })
   await assert.rejects(() => handleDownloadCatalog(adminRequest, testEnv()), /forbidden_origin/)
+})
+
+test("distributed download rate limiter rejects excess traffic", async () => {
+  const env = testEnv()
+  env.ADMIN_RATE_LIMIT_READ = { async limit() { return { success: false } } }
+  await assert.rejects(() => handleDownloadCatalog(request(), env), /rate_limited/)
+})
+
+test("missing distributed download rate limiter fails closed", async () => {
+  const env = testEnv()
+  delete env.ADMIN_RATE_LIMIT_READ
+  await assert.rejects(() => handleDownloadCatalog(request(), env), /rate_limit_unavailable/)
 })
 
 test("invalid release id is rejected before storage access", async () => {

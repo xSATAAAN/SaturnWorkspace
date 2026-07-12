@@ -1,0 +1,15 @@
+{
+  "name": "saturnws-scale-validation",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "test:quick": "node --expose-gc policy-load.mjs --profile quick",
+    "test:full": "node --expose-gc policy-load.mjs --profile full",
+    "test:production-smoke": "node production-smoke.mjs"
+  },
+  "devDependencies": {
+    "better-sqlite3": "12.11.1",
+    "esbuild": "0.28.1"
+  }
+}

@@ -1,6 +1,6 @@
 # Current Issues and Phase Ownership
 
-Updated: 2026-06-26
+Updated: 2026-07-12
 
 ## Phase Closure
 
@@ -16,6 +16,9 @@ Updated: 2026-06-26
 
 | ID | Item | Type | Current state | Owner |
 | --- | --- | --- | --- | --- |
+| PR-014 | Isolated Cloudflare/D1 capacity validation | Scale acceptance | Local 10,000-identity full profile passes with zero request failures; provider event-loop/capacity SLO remains `STAGING_REQUIRED`. Production load is prohibited. | Phase G acceptance / Operations |
+| PR-015 | Distributed Auth/Admin rate-limit rollout | Security rollout | Six Cloudflare Rate Limiting bindings are implemented, tested, and dry-run validated. Source is not deployed; current production versions still require rollout verification. | Phase G pre-acceptance |
+| PR-016 | Desktop Python supply-chain hardening | Distribution | Vulnerable cryptography build dependency was raised, pip/setuptools minima were hardened, and strict pip-audit is part of the readiness gate. New QA Setup acceptance remains pending. | Phase G pre-acceptance |
 | PR-001 | Real checkout provider and provider plan mappings | External integration | Backend catalog is authoritative; checkout fails closed until configured. | External / Phase E-G |
 | PR-002 | OTP production email delivery | Operational rollout | Auth and Policy queue path is implemented and enabled; provider delivery remains pending QA recipient acceptance. | Phase G acceptance |
 | PR-003 | Support attachments | Implemented contract | Private R2 storage, authorization, projections, admin proxy, orphan cleanup, and tests are in place. Production manual acceptance remains Phase G. | Phase G acceptance |

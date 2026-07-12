@@ -98,6 +98,8 @@ export function AdminAuthGate({ lang, children }: AdminAuthGateProps) {
       setLoading(false)
     })
     return () => stop()
+    // The auth subscription is intentionally bound once; locale changes must not revoke the admin session.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {

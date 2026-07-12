@@ -95,19 +95,22 @@ function useResource<T>(
   const reload = useCallback(() => setVersion((value) => value + 1), []);
   useEffect(() => {
     let active = true;
-    setLoading(true);
-    setError("");
-    loader()
-      .then((result) => {
-        if (active) setData(result);
-      })
-      .catch((reason) => {
-        if (active)
-          setError(reason instanceof Error ? reason.message : "request_failed");
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+    queueMicrotask(() => {
+      if (!active) return;
+      setLoading(true);
+      setError("");
+      loader()
+        .then((result) => {
+          if (active) setData(result);
+        })
+        .catch((reason) => {
+          if (active)
+            setError(reason instanceof Error ? reason.message : "request_failed");
+        })
+        .finally(() => {
+          if (active) setLoading(false);
+        });
+    });
     return () => {
       active = false;
     };
@@ -976,11 +979,13 @@ function UserDetailDrawer({
         </div>
       </Drawer>
       <AdminOperationDialog
+        key={operation ? JSON.stringify(operation) : "operation:closed"}
         intent={operation}
         onClose={closeOperation}
         onChanged={changed}
       />
       <SubscriptionRecoveryDrawer
+        key={recoveryEvidence ? `recovery:${String(recoveryEvidence.subscription_id || "unknown")}` : "recovery:closed"}
         evidence={recoveryEvidence}
         user={data || null}
         onClose={() => setRecoveryEvidence(null)}
@@ -1006,9 +1011,17 @@ function SubscriptionRecoveryDrawer({
 }) {
   const { locale } = useExperience();
   const { admin } = useAdapters();
+  const source = user?.subscription_history?.find(
+    (row) => String(row.id || "") === String(evidence?.subscription_id || ""),
+  );
+  const inferred = String(source?.plan_term || source?.plan || "monthly");
   const [plan, setPlan] = useState<
     "weekly" | "monthly" | "annual" | "lifetime"
-  >("monthly");
+  >(() =>
+    inferred === "weekly" || inferred === "annual" || inferred === "lifetime"
+      ? inferred
+      : "monthly",
+  );
   const [note, setNote] = useState("");
   const [preview, setPreview] = useState<ManualGrantPreview | null>(null);
   const [busy, setBusy] = useState(false);
@@ -1016,22 +1029,6 @@ function SubscriptionRecoveryDrawer({
   const [idempotencyKey, setIdempotencyKey] = useState(() =>
     crypto.randomUUID(),
   );
-  useEffect(() => {
-    if (!evidence) return;
-    const source = user?.subscription_history?.find(
-      (row) => String(row.id || "") === String(evidence.subscription_id || ""),
-    );
-    const inferred = String(source?.plan_term || source?.plan || "monthly");
-    setPlan(
-      inferred === "weekly" || inferred === "annual" || inferred === "lifetime"
-        ? inferred
-        : "monthly",
-    );
-    setNote("");
-    setPreview(null);
-    setError("");
-    setIdempotencyKey(crypto.randomUUID());
-  }, [evidence, user?.subscription_history]);
   const input =
     evidence && user
       ? {
@@ -1513,6 +1510,7 @@ function SubscriptionDetailDrawer({
         </div>
       </Drawer>
       <AdminOperationDialog
+        key={operation ? JSON.stringify(operation) : "operation:closed"}
         intent={operation}
         onClose={() => setOperation(null)}
         onChanged={() => {
@@ -1823,12 +1821,6 @@ function AdminOperationDialog({
   const [preview, setPreview] = useState<AdminOperationPreview | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  useEffect(() => {
-    setPreview(null);
-    setError("");
-    setNote("");
-    setNewExpiry("");
-  }, [intent]);
   const reason = { reason_code: reasonCode, reason_note: note || undefined };
   const review = async () => {
     if (!intent) return;
@@ -2196,6 +2188,7 @@ export function AdminDiagnosticsPhaseF() {
         />
       )}
       <CrashGroupStateDialog
+        key={selectedGroup?.fingerprint || "crash-group:closed"}
         group={selectedGroup}
         onClose={() => setSelectedGroup(null)}
         onChanged={() => {
@@ -2204,6 +2197,7 @@ export function AdminDiagnosticsPhaseF() {
         }}
       />
       <TamperResolveDialog
+        key={selectedTamper?.id || "tamper:closed"}
         alert={selectedTamper}
         onClose={() => setSelectedTamper(null)}
         onChanged={() => {
@@ -2227,17 +2221,11 @@ function CrashGroupStateDialog({
   const { locale } = useExperience();
   const { admin } = useAdapters();
   const [status, setStatus] =
-    useState<NonNullable<AdminCrashGroup["status"]>>("open");
-  const [assignee, setAssignee] = useState("");
-  const [note, setNote] = useState("");
+    useState<NonNullable<AdminCrashGroup["status"]>>(() => group?.status || "open");
+  const [assignee, setAssignee] = useState(() => group?.assignee || "");
+  const [note, setNote] = useState(() => group?.note || "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  useEffect(() => {
-    setStatus(group?.status || "open");
-    setAssignee(group?.assignee || "");
-    setNote(group?.note || "");
-    setError("");
-  }, [group]);
   const save = async () => {
     if (!group) return;
     setBusy(true);
@@ -2327,10 +2315,6 @@ function TamperResolveDialog({
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  useEffect(() => {
-    setReason("");
-    setError("");
-  }, [alert]);
   const resolve = async () => {
     if (!alert || reason.trim().length < 3) return;
     setBusy(true);
@@ -2507,10 +2491,17 @@ export function AdminPoliciesPhaseF() {
   useEffect(() => {
     const global = state.data?.global_policy;
     if (!global) return;
-    setKillSwitch(Boolean(global.kill_switch_enabled));
-    setMandatory(Boolean(global.mandatory_update_enabled));
-    setMinimumVersion(global.minimum_supported_version || "");
-    setUpdateMode(global.update_mode || "optional");
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      setKillSwitch(Boolean(global.kill_switch_enabled));
+      setMandatory(Boolean(global.mandatory_update_enabled));
+      setMinimumVersion(global.minimum_supported_version || "");
+      setUpdateMode(global.update_mode || "optional");
+    });
+    return () => {
+      active = false;
+    };
   }, [state.data]);
   const savePolicy = async () => {
     setBusy(true);

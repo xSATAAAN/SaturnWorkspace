@@ -22,7 +22,7 @@ export async function handleListPlans(request, env) {
 
 export async function handleCreatePayment(request, env) {
   enforceBrowserOrigin(request, env)
-  enforcePaymentRateLimit(request, "create")
+  await enforcePaymentRateLimit(request, env, "create")
   const payload = await parseCreatePaymentRequest(request)
   const firebaseUser = await verifyFirebaseCustomer(payload.id_token, env)
   const idempotencyKey = String(request.headers.get("Idempotency-Key") || payload.idempotency_key || "").trim()
@@ -52,7 +52,7 @@ export async function handleCreatePayment(request, env) {
 }
 
 export async function handleGetPaymentStatus(request, orderId, env) {
-  enforcePaymentRateLimit(request, "status")
+  await enforcePaymentRateLimit(request, env, "status")
   const normalizedOrderId = String(orderId || "").trim()
   if (!normalizedOrderId) throw new Error("missing_order_id")
   const order = await getOrder(env, normalizedOrderId).catch(() => null)

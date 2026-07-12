@@ -1,0 +1,50 @@
+{
+  "quick": {
+    "identities": 2500,
+    "healthRequests": 2500,
+    "readRequests": 2500,
+    "mutationRequests": 500,
+    "spikeRequests": 5000,
+    "localEventLoopP99Ms": 150,
+    "concurrency": {
+      "health": 50,
+      "read": 75,
+      "mutation": 25,
+      "spike": 150,
+      "fault": 25,
+      "soak": 50
+    },
+    "soakSeconds": 30,
+    "memoryGrowthMb": 128
+  },
+  "full": {
+    "identities": 10000,
+    "healthRequests": 20000,
+    "readRequests": 10000,
+    "mutationRequests": 2500,
+    "spikeRequests": 20000,
+    "localEventLoopP99Ms": 1500,
+    "concurrency": {
+      "health": 100,
+      "read": 150,
+      "mutation": 75,
+      "spike": 300,
+      "fault": 50,
+      "soak": 100
+    },
+    "soakSeconds": 300,
+    "memoryGrowthMb": 256
+  },
+  "slo": {
+    "healthP95Ms": 100,
+    "readP95Ms": 300,
+    "mutationP95Ms": 1000,
+    "spikeP95Ms": 1500,
+    "faultLatencyP95Ms": 1000,
+    "maxErrorRate": 0.001,
+    "maxEventLoopP99Ms": 100
+  },
+  "localRuntime": {
+    "idempotencyP95Ms": 1500
+  }
+}

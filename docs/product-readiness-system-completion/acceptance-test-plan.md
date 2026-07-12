@@ -89,6 +89,14 @@ Operational precondition: the Auth Worker finalizer configuration (`FIREBASE_SER
 
 - Keyboard navigation, focus trapping/restoration, labels, contrast, reduced motion, responsive desktop/tablet/mobile behavior, RTL/LTR, light/dark themes, loading/empty/error/success states.
 
+## 11. Scale, Resilience, and Supply Chain
+
+- Run the quick and full Policy profiles from `tools/scale` and retain JSON evidence. Confirm zero unexpected statuses, bounded memory growth, one durable idempotent ticket, and stable Auth-outage `503` behavior.
+- Provision isolated Cloudflare staging Workers and a Supabase development branch before provider-capacity testing. Never point the load runner at production.
+- Verify Cloudflare Rate Limiting bindings for Auth and Admin in staging, including allowed traffic, `429` exhaustion, and fail-closed behavior when a binding is unavailable.
+- Run npm audit for Site/Auth/Admin/Policy/scale tools, the tracked-file repository security gate, and Desktop strict pip-audit before producing a QA Setup.
+- Confirm all nine Supabase foreign-key indexes remain valid/ready and the performance advisor has no unindexed-foreign-key finding.
+
 ## Exit Evidence
 
 - Record tester, timestamp, QA identity, environment, route, expected/actual result, screenshots without secrets, request IDs, and any rollback performed.

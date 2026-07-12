@@ -331,16 +331,28 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
   }
 
   useEffect(() => {
-    void loadAll()
+    let active = true
+    queueMicrotask(() => {
+      if (active) void loadAll()
+    })
+    return () => {
+      active = false
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [remoteChannel])
 
   useEffect(() => {
     if (newSubscriptionDuration === 'custom' || newSubscriptionDuration === 'unlimited') return
-    setNewSubscriptionExpiry(addDaysToNow(Number(newSubscriptionDuration)))
+    let active = true
+    queueMicrotask(() => {
+      if (active) setNewSubscriptionExpiry(addDaysToNow(Number(newSubscriptionDuration)))
+    })
+    return () => {
+      active = false
+    }
   }, [newSubscriptionDuration])
 
-  const applyRemoteControlState = (controls: AdminRemoteControls) => {
+  function applyRemoteControlState(controls: AdminRemoteControls) {
     setRemoteControls(controls)
     setOtaRollout(String(controls.rollout_percent ?? 100))
     setOtaMinimumVersion(controls.minimum_supported_version || '')

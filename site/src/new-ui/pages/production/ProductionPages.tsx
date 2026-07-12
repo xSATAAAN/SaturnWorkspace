@@ -29,7 +29,7 @@ import {
   WalletCards,
 } from 'lucide-react'
 import type { AdminCommerceOverview, AdminEmailCatalogItem, AdminEmailJob, AdminEmailProviderEvent, AdminEmailRecipientFlag, AdminEmailStatus, AdminInboundEmailMessage, AdminPromoCode, AdminScheduledEmail, AdminSupportThread, ManualGrantPreview } from '../../../api/admin'
-import type { AccountSession, AccountSubscription } from '../../../api/account'
+import type { AccountDeletionStatusResult, AccountSession, AccountSubscription } from '../../../api/account'
 import { useAdapters } from '../../adapters/AdapterProvider'
 import type { AccountNotification, CustomerSupportThread, PlanInfo, ReleaseInfo, SupportSenderRole } from '../../adapters/contracts'
 import { useExperience } from '../../app/ExperienceProvider'
@@ -749,10 +749,17 @@ function EmailPasswordProductionPage({ page, routeState, navigate }: { page: str
     if (!signup) return
     const prefill = loadSignupPrefill()
     if (!prefill) return
-    setFullName(prefill.displayName || '')
-    setEmail(prefill.email || '')
-    setAcceptedTerms(Boolean(prefill.termsAccepted))
-    clearSignupPrefill()
+    let active = true
+    queueMicrotask(() => {
+      if (!active) return
+      setFullName(prefill.displayName || '')
+      setEmail(prefill.email || '')
+      setAcceptedTerms(Boolean(prefill.termsAccepted))
+      clearSignupPrefill()
+    })
+    return () => {
+      active = false
+    }
   }, [signup])
   useEffect(() => {
     if (!activationPayload || !authState.ready || !authState.user || completionStartedRef.current) return
@@ -857,7 +864,13 @@ function EmailVerificationProductionPage({ routeState, navigate }: { routeState?
   const passwordsMatch = Boolean(confirmPassword) && password === confirmPassword
   const waitingForPassword = pending?.kind === 'registration' && Boolean(pending.finalizationToken && pending.registrationId)
   useEffect(() => {
-    setResendCooldown(secondsUntilResend(pending?.createdAt))
+    let active = true
+    queueMicrotask(() => {
+      if (active) setResendCooldown(secondsUntilResend(pending?.createdAt))
+    })
+    return () => {
+      active = false
+    }
   }, [pending?.createdAt, pending?.email])
   useEffect(() => {
     if (resendCooldown <= 0) return undefined
@@ -1340,7 +1353,7 @@ function PortalSettings() {
   const { user } = useAuthState()
   const [name, setName] = useState(user?.displayName || '')
   const [message, setMessage] = useState('')
-  const [deletion, setDeletion] = useState<any>(null)
+  const [deletion, setDeletion] = useState<AccountDeletionStatusResult['deletion'] | null>(null)
   const [deletionLoading, setDeletionLoading] = useState(true)
   const [deletionBusy, setDeletionBusy] = useState(false)
   const [deletionReason, setDeletionReason] = useState('')
@@ -1360,7 +1373,13 @@ function PortalSettings() {
   }, [account])
 
   useEffect(() => {
-    void loadDeletion()
+    let active = true
+    queueMicrotask(() => {
+      if (active) void loadDeletion()
+    })
+    return () => {
+      active = false
+    }
   }, [loadDeletion])
 
   async function requestDeletion() {

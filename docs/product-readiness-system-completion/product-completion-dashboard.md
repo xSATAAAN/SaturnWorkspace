@@ -1,6 +1,6 @@
 # Saturn Workspace Product Completion Dashboard
 
-Updated: 2026-06-26
+Updated: 2026-07-12
 
 ## Current Phase Status
 
@@ -11,7 +11,17 @@ Updated: 2026-06-26
 | D - Support and notifications | `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE` | Support ownership, webhook, retry, idempotency, rate-limit, lock, and private attachment contract tests pass. |
 | E - Commercial truth | `COMPLETE_EXCEPT_WAITING_EXTERNAL_INTEGRATION` | Plan catalog and entitlement truth are live; checkout remains disabled until a real payment provider is approved and mapped. |
 | F - Admin completion | `COMPLETE_AUTOMATED_VERIFICATION_PENDING_PHASE_G_MANUAL_ACCEPTANCE` | Admin schema contracts, RBAC paths, account/subscription operations, diagnostics, and readiness checks pass. |
-| G - Pre-acceptance completion | `PHASE_G_PRE_ACCEPTANCE_COMPLETION_ACTIVE` | Phase G pre-acceptance remediation is active again because live product evidence contradicted prior reports. Consolidated manual acceptance has not started. |
+| G - Pre-acceptance completion | `PHASE_G_PRE_ACCEPTANCE_COMPLETION_ACTIVE` | Scale, resilience, supply-chain, and distributed rate-limit remediation is implemented and locally verified. Consolidated manual acceptance and isolated provider-capacity acceptance have not started. |
+
+## Scale, Resilience, and Security Validation
+
+- Local Policy full profile: `VERIFIED_AUTOMATED`. It exercised 10,000 synthetic identities, 20,000-request baseline/spike workloads, 2,500 support mutations, dependency latency/outage, a 100-request idempotency burst, and a five-minute soak of 560,340 requests. All request scenarios had zero failures; the idempotency invariant produced one durable ticket and heap growth was 3.32 MB. Evidence: `scale-evidence/policy-full-20260712-local-pass.json`, SHA256 `EC3908B537267A070A7E8A89BB42B0EB9773CC272F0F82DE54CB5FE611E2EB1E`.
+- Provider-capacity classification: `IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED`. The local runner uses a synchronous native SQLite D1 adapter, so Cloudflare/D1 event-loop and provider-capacity SLOs remain `STAGING_REQUIRED`; production was not load tested.
+- Auth dependency outage handling: `IMPLEMENTED_NOT_DEPLOYED`. Policy source now returns stable `503 identity_service_unavailable` for Auth 5xx/network failure and no longer exposes internal exception messages. Phase D/Phase G tests and Worker dry-run pass.
+- Distributed rate limiting: `IMPLEMENTED_NOT_DEPLOYED`. Auth registration/verification/device/OAuth and Admin payment/download paths now use Cloudflare Rate Limiting bindings and fail closed if a binding is unavailable. Auth/Admin tests and Wrangler dry-runs confirm all six bindings.
+- Supabase performance migration `20260712191805 scale_foreign_key_indexes`: `PRODUCTION_DEPLOYED`. Nine covering foreign-key indexes are valid and ready; the performance advisor reports zero remaining unindexed foreign keys. No application rows were modified.
+- Supply chain: repository secret gate passes for all 318 tracked files; all five npm package roots report zero known vulnerabilities. Desktop `cryptography` was raised above the affected 48.0.0 release, build tooling now requires fixed pip/setuptools versions, and the permanent strict `pip-audit` readiness step reports no known vulnerabilities.
+- Production-safe smoke: public site, Auth health, Policy health, public plan catalog with allowed Origin, missing-Origin denial, and OTA manifest all match their expected live status. This is a contract smoke, not a load test.
 
 ## Production Evidence
 
@@ -92,7 +102,7 @@ Updated: 2026-06-26
 | Email/password OTP remediation credentialed QA | `PENDING_MANUAL_ACCEPTANCE` | Previous live health, route, bundle, CORS, stable unauthenticated error contracts, pending-registration UI, and server enqueue path passed for the earlier deployed model. The current OTP-first source requires the Firebase Admin configuration above before live completion can be tested. |
 | Real payment provider | `WAITING_EXTERNAL` | Approve provider, plan mappings, webhook contract, and rollout before checkout or billing emails are enabled. |
 | QA email delivery acceptance | `PENDING_MANUAL_ACCEPTANCE` | Use a dedicated QA recipient in Phase G to confirm provider delivery without exposing OTP values. |
-| QA Desktop Setup artifact | `QA_ARTIFACT_BUILT_PENDING_MANUAL_ACCEPTANCE` | Local artifact: `D:\SaturnWS\build-output\phase-g-qa-installed-channel-20260624-131944\setup\SaturnWorkspace-Setup-1.0.7-beta-phase-g-qa.exe`; SHA256 `527C21D6A87720DB31E0EC4A8F59EA6FF2299C928C1B83447E2AC1E6AAA45DDD`. Not published. |
+| QA Desktop Setup artifact | `QA_ARTIFACT_BUILT_PENDING_MANUAL_ACCEPTANCE` | Local artifact: `D:\SaturnWS\build-output\scale-resilience-qa-20260712-223452\setup\SaturnWorkspace-Setup-1.1.0.exe`; size `41,436,838` bytes; SHA256 `320344753AA7BF3FC79D91040D57EC5948255BED3696BF0088403121A416A27D`. Source/package payload hashes match and the 12-second monitored package smoke passed; not published. |
 | Desktop reproducibility inventory | `RECORDED_PENDING_MANUAL_ACCEPTANCE` | Source manifest and artifact record are under `docs/product-readiness-system-completion/desktop-reproducibility`; no Desktop rebuild was performed in this continuation. |
 | Public plan CORS live verification | `PRODUCTION_VERIFIED_AUTOMATED` | Admin Worker was redeployed and `https://admin-api.saturnws.com/api/plans/catalog` returns `Access-Control-Allow-Origin: https://saturnws.com` for the public origin. |
 | Public pricing Pages deployment | `PRODUCTION_VERIFIED_AUTOMATED` | GitHub Pages run `28174200979` deployed commit `9da6025189eccfff76509bac6f61d18942489f07`. Live bundle `assets/index-rasVfIJe.js` contains the approved weekly/monthly/annual prices and omits the old redundant pricing IA. |

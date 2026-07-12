@@ -153,7 +153,7 @@ async function authorizeOAuthConfigRequest(request: Request, env: Env): Promise<
 
 async function handleGoogleDriveOAuthConfig(request: Request, env: Env): Promise<Response> {
   const ip = request.headers.get("CF-Connecting-IP") || "unknown"
-  if (!allowRateLimit(`oauth-config:ip:${ip}`, 20, 60_000)) {
+  if (!(await allowRateLimit(env.AUTH_RATE_LIMIT_STANDARD, `oauth-config:ip:${ip}`))) {
     return json({ success: false, error: "rate_limited" }, 429)
   }
   if (!(await authorizeOAuthConfigRequest(request, env))) {
@@ -1290,7 +1290,11 @@ async function handlePendingRegistrationStart(request: Request, env: Env): Promi
     return errorJson(request, "VERIFICATION_DELIVERY_DISABLED", 503, true)
   }
   const ip = request.headers.get("CF-Connecting-IP") || "unknown"
-  if (!allowRateLimit(`registration-start:ip:${ip}`, 20, 60_000) || !allowRateLimit(`registration-start:email:${email}`, 5, 60_000)) {
+  const [registrationIpAllowed, registrationEmailAllowed] = await Promise.all([
+    allowRateLimit(env.AUTH_RATE_LIMIT_STANDARD, `registration-start:ip:${ip}`),
+    allowRateLimit(env.AUTH_RATE_LIMIT_SENSITIVE, `registration-start:email:${email}`),
+  ])
+  if (!registrationIpAllowed || !registrationEmailAllowed) {
     return verificationRateLimited(request, 60)
   }
 
@@ -1625,7 +1629,11 @@ async function handleEmailVerificationRequest(request: Request, env: Env): Promi
     return errorJson(request, "VERIFICATION_DELIVERY_DISABLED", 503, true)
   }
   const ip = request.headers.get("CF-Connecting-IP") || "unknown"
-  if (!allowRateLimit(`email-verification:ip:${ip}`, 20, 60_000) || !allowRateLimit(`email-verification:email:${user.email}`, 5, 60_000)) {
+  const [verificationIpAllowed, verificationEmailAllowed] = await Promise.all([
+    allowRateLimit(env.AUTH_RATE_LIMIT_STANDARD, `email-verification:ip:${ip}`),
+    allowRateLimit(env.AUTH_RATE_LIMIT_SENSITIVE, `email-verification:email:${user.email}`),
+  ])
+  if (!verificationIpAllowed || !verificationEmailAllowed) {
     return verificationRateLimited(request, 60)
   }
 
@@ -2138,7 +2146,7 @@ async function resolveSessionSubscription(
 
 async function handleDeviceStart(request: Request, env: Env): Promise<Response> {
   const ip = request.headers.get("CF-Connecting-IP") || "unknown"
-  if (!allowRateLimit(`device-start:${ip}`, 12, 60_000)) {
+  if (!(await allowRateLimit(env.AUTH_RATE_LIMIT_DEVICE, `device-start:${ip}`))) {
     return json({ success: false, error: "rate_limited" }, 429)
   }
   const body = await request.json<any>().catch(() => null)

@@ -1,8 +1,8 @@
 # Feature Completeness Matrix
 
-Updated: 2026-06-26
+Updated: 2026-07-12
 
-Status meanings: `VERIFIED_AUTOMATED`, `PRODUCTION_DEPLOYED`, `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE`, `DEPLOYED_PENDING_SAFE_EVENT_VERIFICATION`, `OPERATIONAL_CONFIGURATION_REQUIRED`, `WAITING_EXTERNAL`, `WAITING_EXTERNAL_BILLING_DEFENSE_IN_DEPTH`, `MITIGATED_BY_SATURN_DUAL_TRUST_PENDING_DEPLOYMENT`, `PREPARED_DISABLED`, `PREPARED_DISABLED_WITH_PRODUCER`, `PARTIALLY_IMPLEMENTED`, `PENDING_DEPLOYMENT_VERIFICATION`, `NOT_IMPLEMENTED`, `DEFERRED_TO_PHASE_G_MANUAL_ACCEPTANCE`, `QA_ARTIFACT_BUILT_PENDING_MANUAL_ACCEPTANCE`.
+Status meanings: `VERIFIED_AUTOMATED`, `PRODUCTION_DEPLOYED`, `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE`, `DEPLOYED_PENDING_SAFE_EVENT_VERIFICATION`, `IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED`, `OPERATIONAL_CONFIGURATION_REQUIRED`, `WAITING_EXTERNAL`, `WAITING_EXTERNAL_BILLING_DEFENSE_IN_DEPTH`, `MITIGATED_BY_SATURN_DUAL_TRUST_PENDING_DEPLOYMENT`, `PREPARED_DISABLED`, `PREPARED_DISABLED_WITH_PRODUCER`, `PARTIALLY_IMPLEMENTED`, `PENDING_DEPLOYMENT_VERIFICATION`, `NOT_IMPLEMENTED`, `DEFERRED_TO_PHASE_G_MANUAL_ACCEPTANCE`, `QA_ARTIFACT_BUILT_PENDING_MANUAL_ACCEPTANCE`.
 
 | Domain | Feature | Status | Evidence / limitation |
 | --- | --- | --- | --- |
@@ -47,7 +47,12 @@ Status meanings: `VERIFIED_AUTOMATED`, `PRODUCTION_DEPLOYED`, `PRODUCTION_DEPLOY
 | Email | Admin alert: email queue final failure | `DEPLOYED_PENDING_SAFE_EVENT_VERIFICATION` | Source producer exists with deterministic idempotency and loop prevention. `EMAIL_ADMIN_ALERTS_ENABLED=true` is deployed on Policy, the recipient secret is configured, and local alert tests pass. No false production incident was generated. |
 | Email | Other admin alert families | `DEPLOYED_PENDING_SAFE_EVENT_VERIFICATION` | Source producers cover webhook verification failure, cleanup failure, storage configuration failure, schema mismatch, readiness degradation, and high-severity tamper signals. Policy flag and recipient secret are deployed; safe alert-delivery verification is pending. |
 | Encoding | Arabic UTF-8 integrity | `VERIFIED_AUTOMATED` | Supabase plan data repaired; repository and email guards pass. |
-| Desktop distribution | Phase G QA Setup | `QA_ARTIFACT_BUILT_PENDING_MANUAL_ACCEPTANCE` | Built from `D:\SaturnWS\desktop-app` without changing `APP_VERSION`; artifact `D:\SaturnWS\build-output\phase-g-qa-installed-channel-20260624-131944\setup\SaturnWorkspace-Setup-1.0.7-beta-phase-g-qa.exe`; SHA256 `527C21D6A87720DB31E0EC4A8F59EA6FF2299C928C1B83447E2AC1E6AAA45DDD`; not published. |
+| Scale | Policy local load/spike/soak/fault/idempotency | `VERIFIED_AUTOMATED` | Full local profile covered 10,000 identities and 560,340 soak requests with zero request failures. Native SQLite D1 adapter results do not prove provider capacity. |
+| Scale | Isolated Cloudflare/D1 provider capacity | `OPERATIONAL_CONFIGURATION_REQUIRED` | Requires staging Workers and an isolated database branch. Production load testing was not performed. |
+| Security | Distributed Auth/Admin rate limiting | `IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED` | Cloudflare Rate Limiting bindings replace isolate-local Maps in source; tests and dry-runs pass, but source is not deployed. |
+| Security | Repository and dependency gates | `VERIFIED_AUTOMATED` | Tracked-file secret scan and npm audits pass; Desktop strict pip-audit passes after cryptography/build-tool remediation. |
+| Database | Foreign-key covering indexes | `PRODUCTION_DEPLOYED` | Supabase migration `20260712191805` added nine valid/ready indexes; advisor has zero unindexed foreign-key findings. |
+| Desktop distribution | Phase G QA Setup | `QA_ARTIFACT_BUILT_PENDING_MANUAL_ACCEPTANCE` | Built from `D:\SaturnWS\desktop-app` with `APP_VERSION` remaining `1.1.0`; artifact `D:\SaturnWS\build-output\scale-resilience-qa-20260712-223452\setup\SaturnWorkspace-Setup-1.1.0.exe`; SHA256 `320344753AA7BF3FC79D91040D57EC5948255BED3696BF0088403121A416A27D`; source/package payload hashes match and monitored package smoke passes; not published. |
 | Phase G | Consolidated manual acceptance | `DEFERRED_TO_PHASE_G_MANUAL_ACCEPTANCE` | Manual acceptance has not started. |
 
 No row may be upgraded to full manual acceptance before Phase G consolidated acceptance evidence exists.

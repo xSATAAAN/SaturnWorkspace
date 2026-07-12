@@ -22,6 +22,8 @@ const userByToken = new Map([
 const receivedMessages = new Map()
 let failReceiveOnce = true
 let failSend = false
+let authUnavailable = false
+let authThrows = false
 
 await build({
   entryPoints: [path.join(root, 'src', 'index.ts')],
@@ -62,6 +64,8 @@ const mf = new Miniflare({
   },
   serviceBindings: {
     AUTH_SERVICE: async (request) => {
+      if (authThrows) throw new Error('private_provider_failure_detail')
+      if (authUnavailable) return Response.json({ success: false, error: 'provider_detail_must_not_leak' }, { status: 503 })
       const input = await request.json().catch(() => ({}))
       const user = userByToken.get(String(input.id_token || ''))
       return Response.json(user ? { success: true, user } : { success: false, error: 'unauthorized' }, { status: user ? 200 : 401 })
@@ -203,6 +207,17 @@ try {
   assert.equal(notifications.body.items.filter((item) => item.type === 'support_reply').length, 1)
   const otherNotifications = await post('/v1/web/notifications/list', { limit: 20 }, 'token-b')
   assert.equal(otherNotifications.body.items.length, 0)
+  authUnavailable = true
+  const unavailableNotifications = await post('/v1/web/notifications/list', { limit: 20 })
+  assert.equal(unavailableNotifications.response.status, 503)
+  assert.equal(unavailableNotifications.body.error, 'identity_service_unavailable')
+  authUnavailable = false
+  authThrows = true
+  const unreachableNotifications = await post('/v1/web/notifications/list', { limit: 20 })
+  assert.equal(unreachableNotifications.response.status, 503)
+  assert.equal(unreachableNotifications.body.error, 'identity_service_unavailable')
+  assert.equal(JSON.stringify(unreachableNotifications.body).includes('private_provider_failure_detail'), false)
+  authThrows = false
   await post('/v1/web/notifications/read', { notification_id: notifications.body.items[0].id })
   const readState = await post('/v1/web/notifications/list', { limit: 20 })
   assert.equal(readState.body.unread_count, 0)

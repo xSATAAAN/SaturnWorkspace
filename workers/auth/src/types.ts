@@ -1,4 +1,7 @@
 export interface Env {
+  AUTH_RATE_LIMIT_STANDARD?: { limit(input: { key: string }): Promise<{ success: boolean }> }
+  AUTH_RATE_LIMIT_SENSITIVE?: { limit(input: { key: string }): Promise<{ success: boolean }> }
+  AUTH_RATE_LIMIT_DEVICE?: { limit(input: { key: string }): Promise<{ success: boolean }> }
   SUPABASE_API_URL?: string
   SUPABASE_URL?: string
   SUPABASE_SERVICE_ROLE_KEY: string
@@ -10,7 +13,6 @@ export interface Env {
   FIREBASE_SERVICE_ACCOUNT_JSON?: string
   FIREBASE_AUTH_HELPER_ORIGIN?: string
   DEVICE_LOGIN_URL?: string
-  VERIFY_RATE_LIMIT_PER_MIN?: string
   EMAIL_VERIFICATION_PEPPER?: string
   EMAIL_VERIFICATION_TEST_TRANSPORT?: string
   EMAIL_VERIFICATION_CODE_TTL_MINUTES?: string

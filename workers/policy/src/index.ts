@@ -2772,7 +2772,9 @@ function mapAuthError(error: string): Decision {
   if (/^auth_5\d\d$/.test(key) || ["auth_522", "auth_523", "auth_524", "auth_520", "auth_521", "auth_403"].includes(key)) {
     return "policy_unavailable"
   }
-  if (["auth_unreachable", "policy_unavailable", "internal_error"].includes(key)) return "policy_unavailable"
+  if (["auth_unreachable", "auth_verify_unreachable", "identity_service_unavailable", "policy_unavailable", "internal_error"].includes(key)) {
+    return "policy_unavailable"
+  }
   return "deny_user"
 }
 
@@ -2812,6 +2814,9 @@ async function verifyAuthSession(request: Request, env: Env, body: PolicyRequest
     })
     const res = env.AUTH_SERVICE ? await env.AUTH_SERVICE.fetch(authRequest) : await fetch(authRequest)
     const payload = await res.json<Record<string, any>>().catch(() => null)
+    if (res.status >= 500) {
+      return { ok: false, decision: "policy_unavailable", reason: "identity_service_unavailable" }
+    }
     if (!res.ok || !payload?.success) {
       const error = normalizeText(payload?.error || `auth_${res.status}`)
       return { ok: false, decision: mapAuthError(error), reason: error }
@@ -3068,7 +3073,10 @@ async function handlePolicyCheck(request: Request, env: Env): Promise<Response> 
 
 async function requireSupportUser(request: Request, env: Env, body: PolicyRequest): Promise<{ body: PolicyRequest; auth: AuthResolved; user: UserRow; email: string; userId: string; installId: string; deviceId: string } | Response> {
   const auth = await verifyAuthSession(request, env, body)
-  if (!auth.ok) return json({ success: false, error: auth.reason || "unauthorized" }, 401)
+  if (!auth.ok) {
+    const unavailable = auth.decision === "policy_unavailable"
+    return json({ success: false, error: unavailable ? "identity_service_unavailable" : auth.reason || "unauthorized" }, unavailable ? 503 : 401)
+  }
   const user = await lookupUser(env, body, auth)
   if (!user) return json({ success: false, error: "user_not_found" }, 403)
   await rememberInstall(env, body, user)
@@ -3102,8 +3110,14 @@ async function requireWebSupportUser(
     headers: { "Content-Type": "application/json; charset=utf-8" },
     body: JSON.stringify({ id_token: idToken }),
   })
-  const response = env.AUTH_SERVICE ? await env.AUTH_SERVICE.fetch(authRequest) : await fetch(authRequest)
+  let response: Response
+  try {
+    response = env.AUTH_SERVICE ? await env.AUTH_SERVICE.fetch(authRequest) : await fetch(authRequest)
+  } catch {
+    return json({ success: false, error: "identity_service_unavailable" }, 503)
+  }
   const payload = await response.json<FirebaseWebIdentity>().catch(() => null)
+  if (response.status >= 500) return json({ success: false, error: "identity_service_unavailable" }, 503)
   if (!response.ok || !payload?.success) return json({ success: false, error: payload?.error || "unauthorized" }, 401)
 
   const userId = normalizeText(payload.user?.id)
@@ -4434,16 +4448,24 @@ export default {
       }
       return json({ success: false, error: "not_found" }, 404, cors)
     } catch (error) {
+      const requestId = clampText(request.headers.get("cf-ray"), 120) || crypto.randomUUID()
+      console.error(JSON.stringify({
+        event: "policy_request_failed",
+        request_id: requestId,
+        method: request.method,
+        path: url.pathname,
+        error_type: error instanceof Error ? error.name : "UnknownError",
+      }))
       const payload = signPayload(
         decisionResponse({
           decision: "policy_unavailable",
-          reason: error instanceof Error ? error.message : "policy_error",
+          reason: "policy_unavailable",
           ttlSeconds: 60,
           sticky: true,
         }),
         env
       )
-      return json(payload, 500, cors)
+      return json(payload, 500, { ...cors, "X-Request-ID": requestId })
     }
   },
 }

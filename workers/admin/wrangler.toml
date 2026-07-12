@@ -21,6 +21,27 @@ bucket_name = "saturnws-ota"
 binding = "POLICY_WORKER"
 service = "saturnws-policy"
 
+[[ratelimits]]
+name = "ADMIN_RATE_LIMIT_PAYMENT_CREATE"
+namespace_id = "41011"
+  [ratelimits.simple]
+  limit = 25
+  period = 60
+
+[[ratelimits]]
+name = "ADMIN_RATE_LIMIT_DOWNLOAD"
+namespace_id = "41012"
+  [ratelimits.simple]
+  limit = 20
+  period = 60
+
+[[ratelimits]]
+name = "ADMIN_RATE_LIMIT_READ"
+namespace_id = "41013"
+  [ratelimits.simple]
+  limit = 80
+  period = 60
+
 [vars]
 ADMIN_ORIGIN = "https://admin.saturnws.com"
 PUBLIC_UPDATES_BASE_URL = "https://saturnws.com/updates"

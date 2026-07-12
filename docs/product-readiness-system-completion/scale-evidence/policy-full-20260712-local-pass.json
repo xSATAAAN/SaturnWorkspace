@@ -1,0 +1,294 @@
+{
+  "schema": "saturnws.scale-validation.v1",
+  "generatedAt": "2026-07-12T19:28:02.084Z",
+  "profile": "full",
+  "configuration": {
+    "identities": 10000,
+    "healthRequests": 20000,
+    "readRequests": 10000,
+    "mutationRequests": 2500,
+    "spikeRequests": 20000,
+    "localEventLoopP99Ms": 1500,
+    "concurrency": {
+      "health": 100,
+      "read": 150,
+      "mutation": 75,
+      "spike": 300,
+      "fault": 50,
+      "soak": 100
+    },
+    "soakSeconds": 300,
+    "memoryGrowthMb": 256
+  },
+  "slo": {
+    "healthP95Ms": 100,
+    "readP95Ms": 300,
+    "mutationP95Ms": 1000,
+    "spikeP95Ms": 1500,
+    "faultLatencyP95Ms": 1000,
+    "maxErrorRate": 0.001,
+    "maxEventLoopP99Ms": 100
+  },
+  "localRuntime": {
+    "idempotencyP95Ms": 1500
+  },
+  "scenarios": [
+    {
+      "name": "health_baseline",
+      "concurrency": 100,
+      "requested": 20000,
+      "durationSeconds": null,
+      "completed": 20000,
+      "failures": 0,
+      "errorRate": 0,
+      "requestsPerSecond": 21094.79007203238,
+      "latencyMs": {
+        "p50": 3.7305999999999813,
+        "p95": 9.407700000000034,
+        "p99": 30.055599999999913,
+        "max": 69.405
+      },
+      "statuses": {
+        "200": 20000
+      },
+      "errors": {},
+      "failureSamples": [],
+      "p95BudgetMs": 100,
+      "productionP95BudgetMs": 100,
+      "passed": true,
+      "productionTargetPassed": true
+    },
+    {
+      "name": "notifications_read_2500_plus_identities",
+      "concurrency": 150,
+      "requested": 10000,
+      "durationSeconds": null,
+      "completed": 10000,
+      "failures": 0,
+      "errorRate": 0,
+      "requestsPerSecond": 2638.788603926987,
+      "latencyMs": {
+        "p50": 43.59740000000011,
+        "p95": 125.57569999999942,
+        "p99": 290.1563000000001,
+        "max": 304.1252999999997
+      },
+      "statuses": {
+        "200": 10000
+      },
+      "errors": {},
+      "failureSamples": [],
+      "p95BudgetMs": 300,
+      "productionP95BudgetMs": 300,
+      "passed": true,
+      "productionTargetPassed": true
+    },
+    {
+      "name": "support_threads_read",
+      "concurrency": 150,
+      "requested": 10000,
+      "durationSeconds": null,
+      "completed": 10000,
+      "failures": 0,
+      "errorRate": 0,
+      "requestsPerSecond": 1826.3005542822184,
+      "latencyMs": {
+        "p50": 61.70770000000084,
+        "p95": 173.48489999999947,
+        "p99": 220.47649999999976,
+        "max": 223.54350000000068
+      },
+      "statuses": {
+        "200": 10000
+      },
+      "errors": {},
+      "failureSamples": [],
+      "p95BudgetMs": 300,
+      "productionP95BudgetMs": 300,
+      "passed": true,
+      "productionTargetPassed": true
+    },
+    {
+      "name": "support_create_unique_users",
+      "concurrency": 75,
+      "requested": 2500,
+      "durationSeconds": null,
+      "completed": 2500,
+      "failures": 0,
+      "errorRate": 0,
+      "requestsPerSecond": 160.78165816735165,
+      "latencyMs": {
+        "p50": 416.5708999999988,
+        "p95": 998.1067000000003,
+        "p99": 1350.1826999999976,
+        "max": 1448.0622999999978
+      },
+      "statuses": {
+        "200": 2500
+      },
+      "errors": {},
+      "failureSamples": [],
+      "p95BudgetMs": 1000,
+      "productionP95BudgetMs": 1000,
+      "passed": true,
+      "productionTargetPassed": true
+    },
+    {
+      "name": "support_idempotency_burst",
+      "concurrency": 100,
+      "requested": 100,
+      "durationSeconds": null,
+      "completed": 100,
+      "failures": 0,
+      "errorRate": 0,
+      "requestsPerSecond": 114.4893352039363,
+      "latencyMs": {
+        "p50": 851.8676000000014,
+        "p95": 872.0866000000024,
+        "p99": 872.273000000001,
+        "max": 873.4159
+      },
+      "statuses": {
+        "200": 100
+      },
+      "errors": {},
+      "failureSamples": [],
+      "p95BudgetMs": 1500,
+      "productionP95BudgetMs": 1000,
+      "passed": true,
+      "productionTargetPassed": true
+    },
+    {
+      "name": "read_spike",
+      "concurrency": 300,
+      "requested": 20000,
+      "durationSeconds": null,
+      "completed": 20000,
+      "failures": 0,
+      "errorRate": 0,
+      "requestsPerSecond": 2286.561227993134,
+      "latencyMs": {
+        "p50": 94.64329999999609,
+        "p95": 339.6375000000007,
+        "p99": 490.2334000000046,
+        "max": 520.0302999999985
+      },
+      "statuses": {
+        "200": 20000
+      },
+      "errors": {},
+      "failureSamples": [],
+      "p95BudgetMs": 1500,
+      "productionP95BudgetMs": 1500,
+      "passed": true,
+      "productionTargetPassed": true
+    },
+    {
+      "name": "auth_dependency_latency",
+      "concurrency": 50,
+      "requested": 1000,
+      "durationSeconds": null,
+      "completed": 1000,
+      "failures": 0,
+      "errorRate": 0,
+      "requestsPerSecond": 229.27806093490912,
+      "latencyMs": {
+        "p50": 208.18570000000182,
+        "p95": 252.84049999999843,
+        "p99": 298.723699999995,
+        "max": 311.870600000002
+      },
+      "statuses": {
+        "200": 1000
+      },
+      "errors": {},
+      "failureSamples": [],
+      "p95BudgetMs": 1000,
+      "productionP95BudgetMs": 1000,
+      "passed": true,
+      "productionTargetPassed": true
+    },
+    {
+      "name": "auth_dependency_outage",
+      "concurrency": 50,
+      "requested": 1000,
+      "durationSeconds": null,
+      "completed": 1000,
+      "failures": 0,
+      "errorRate": 0,
+      "requestsPerSecond": 7206.282725531352,
+      "latencyMs": {
+        "p50": 4.894800000001851,
+        "p95": 16.60859999999957,
+        "p99": 18.044999999998254,
+        "max": 18.05789999999979
+      },
+      "statuses": {
+        "503": 1000
+      },
+      "errors": {},
+      "failureSamples": [],
+      "p95BudgetMs": 300,
+      "productionP95BudgetMs": 300,
+      "passed": true,
+      "productionTargetPassed": true
+    },
+    {
+      "name": "read_soak",
+      "concurrency": 100,
+      "requested": null,
+      "durationSeconds": 300,
+      "completed": 560340,
+      "failures": 0,
+      "errorRate": 0,
+      "requestsPerSecond": 1867.6290957516198,
+      "latencyMs": {
+        "p50": 45.80059999995865,
+        "p95": 96.90070000002743,
+        "p99": 163.79880000001867,
+        "max": 776.3383000000031
+      },
+      "statuses": {
+        "200": 560340
+      },
+      "errors": {},
+      "failureSamples": [],
+      "p95BudgetMs": 300,
+      "productionP95BudgetMs": 300,
+      "passed": true,
+      "productionTargetPassed": true
+    }
+  ],
+  "invariants": [
+    {
+      "name": "support_idempotency_exactly_once",
+      "expected": 1,
+      "actual": 1,
+      "passed": true
+    },
+    {
+      "name": "memory_growth_within_budget",
+      "expectedMaxMb": 256,
+      "actualMb": 3.32,
+      "passed": true
+    },
+    {
+      "name": "event_loop_p99_within_budget",
+      "expectedMaxMs": 1500,
+      "productionTargetMs": 100,
+      "actualMs": 1160.773631,
+      "passed": true,
+      "productionTargetPassed": false
+    }
+  ],
+  "runtime": {
+    "node": "v24.15.0",
+    "mode": "direct-worker-module-with-native-sqlite-d1-adapter",
+    "initialMemoryMb": 6.59,
+    "finalMemoryMb": 9.91,
+    "memoryGrowthMb": 3.32,
+    "eventLoopP99Ms": 1160.773631
+  },
+  "status": "PASS",
+  "productionTargetStatus": "STAGING_REQUIRED"
+}

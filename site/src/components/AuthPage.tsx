@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   GoogleAuthProvider,
   isSignInWithEmailLink,
@@ -321,7 +321,13 @@ export function AuthPage({ lang, initialMode }: AuthPageProps) {
   }, [t.slides.length])
 
   useEffect(() => {
-    setAuthMode(initialMode)
+    let active = true
+    queueMicrotask(() => {
+      if (active) setAuthMode(initialMode)
+    })
+    return () => {
+      active = false
+    }
   }, [initialMode])
 
   useEffect(() => {
@@ -340,7 +346,7 @@ export function AuthPage({ lang, initialMode }: AuthPageProps) {
     return () => window.clearTimeout(timer)
   }, [activationPayload, authReady, deviceLinked, user])
 
-  async function completeEmailLinkSignIn(emailAddress: string) {
+  const completeEmailLinkSignIn = useCallback(async (emailAddress: string) => {
     if (typeof window === 'undefined') return
     const normalizedEmail = emailAddress.trim().toLowerCase()
     if (!normalizedEmail) {
@@ -362,7 +368,7 @@ export function AuthPage({ lang, initialMode }: AuthPageProps) {
     } finally {
       setCompletingEmailLink(false)
     }
-  }
+  }, [isAr, t.magicLinkSuccess])
 
   useEffect(() => {
     if (typeof window === 'undefined' || emailLinkHandledRef.current) return
@@ -370,16 +376,22 @@ export function AuthPage({ lang, initialMode }: AuthPageProps) {
 
     emailLinkHandledRef.current = true
     const storedEmail = window.localStorage.getItem(EMAIL_LINK_STORAGE_KEY) || ''
-    if (storedEmail.trim()) {
-      void completeEmailLinkSignIn(storedEmail)
-      return
+    let active = true
+    queueMicrotask(() => {
+      if (!active) return
+      if (storedEmail.trim()) {
+        void completeEmailLinkSignIn(storedEmail)
+        return
+      }
+      setNeedsEmailForLink(true)
+      setInfo(t.magicLinkNeedsEmail)
+    })
+    return () => {
+      active = false
     }
+  }, [completeEmailLinkSignIn, t.magicLinkNeedsEmail])
 
-    setNeedsEmailForLink(true)
-    setInfo(t.magicLinkNeedsEmail)
-  }, [t.magicLinkNeedsEmail])
-
-  async function completeDeviceLink(nextUser: User) {
+  const completeDeviceLink = useCallback(async (nextUser: User) => {
     if (!activationPayload || linkingDevice || completionStartedRef.current) return
     completionStartedRef.current = true
     setLinkingDevice(true)
@@ -430,12 +442,18 @@ export function AuthPage({ lang, initialMode }: AuthPageProps) {
     } finally {
       setLinkingDevice(false)
     }
-  }
+  }, [activationPayload, isAr, linkingDevice, t.deviceSuccess, t.noSubscription])
 
   useEffect(() => {
     if (!authReady || !user || !activationPayload || deviceLinked) return
-    void completeDeviceLink(user)
-  }, [activationPayload, authReady, deviceLinked, user])
+    let active = true
+    queueMicrotask(() => {
+      if (active) void completeDeviceLink(user)
+    })
+    return () => {
+      active = false
+    }
+  }, [activationPayload, authReady, completeDeviceLink, deviceLinked, user])
 
   function switchMode(nextMode: AuthMode) {
     setAuthMode(nextMode)

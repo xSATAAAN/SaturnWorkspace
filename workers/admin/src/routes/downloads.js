@@ -69,7 +69,7 @@ async function recordAccess(env, releaseId, customer, resolution, decision, requ
 
 export async function handleDownloadCatalog(request, env) {
   enforceBrowserOrigin(request, env)
-  enforcePaymentRateLimit(request, "download_catalog")
+  await enforcePaymentRateLimit(request, env, "download_catalog")
   const { resolution } = await customerContext(request, env)
   if (!canDownload(resolution)) throw new Error("download_not_entitled")
   const rows = await supabaseJson(
@@ -85,7 +85,7 @@ export async function handleDownloadCatalog(request, env) {
 
 export async function handleDownloadFile(request, releaseId, env) {
   enforceBrowserOrigin(request, env)
-  enforcePaymentRateLimit(request, "download_file")
+  await enforcePaymentRateLimit(request, env, "download_file")
   if (!RELEASE_ID_PATTERN.test(releaseId)) throw new Error("invalid_release_id")
   const [{ customer, resolution }, release] = await Promise.all([
     customerContext(request, env),

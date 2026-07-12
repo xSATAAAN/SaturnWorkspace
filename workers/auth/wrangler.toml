@@ -14,12 +14,32 @@ services = [
   { binding = "POLICY_SERVICE", service = "saturnws-policy" }
 ]
 
+[[ratelimits]]
+name = "AUTH_RATE_LIMIT_STANDARD"
+namespace_id = "41001"
+  [ratelimits.simple]
+  limit = 20
+  period = 60
+
+[[ratelimits]]
+name = "AUTH_RATE_LIMIT_SENSITIVE"
+namespace_id = "41002"
+  [ratelimits.simple]
+  limit = 5
+  period = 60
+
+[[ratelimits]]
+name = "AUTH_RATE_LIMIT_DEVICE"
+namespace_id = "41003"
+  [ratelimits.simple]
+  limit = 12
+  period = 60
+
 [observability]
 enabled = true
 
 [vars]
 APP_ENV = "production"
-VERIFY_RATE_LIMIT_PER_MIN = "40"
 ALLOW_ORIGIN = "https://saturnws.com,https://www.saturnws.com,https://admin.saturnws.com"
 DEVICE_LOGIN_URL = "https://saturnws.com/account/signin"
 FIREBASE_AUTH_HELPER_ORIGIN = "https://saturnws-1.firebaseapp.com"

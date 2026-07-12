@@ -1,10 +1,3 @@
-const RATE_WINDOW_MS = 60_000
-const MAX_CREATE_PER_WINDOW = 25
-const MAX_STATUS_PER_WINDOW = 80
-const MAX_DOWNLOADS_PER_WINDOW = 20
-
-const rateBuckets = new Map()
-
 function getClientIp(request) {
   return (
     request.headers.get('CF-Connecting-IP') ||
@@ -12,14 +5,6 @@ function getClientIp(request) {
     request.headers.get('X-Real-IP') ||
     'unknown'
   )
-}
-
-function cleanupRateBucket(now) {
-  for (const [key, value] of rateBuckets.entries()) {
-    if (now - value.startedAt > RATE_WINDOW_MS) {
-      rateBuckets.delete(key)
-    }
-  }
 }
 
 export function enforceBrowserOrigin(request, env) {
@@ -38,23 +23,15 @@ export function enforceBrowserOrigin(request, env) {
   }
 }
 
-export function enforcePaymentRateLimit(request, type) {
-  const now = Date.now()
-  cleanupRateBucket(now)
+export async function enforcePaymentRateLimit(request, env, type) {
   const ip = getClientIp(request)
-  const bucketKey = `${type}:${ip}`
-  const max = type === 'create'
-    ? MAX_CREATE_PER_WINDOW
+  const limiter = type === 'create'
+    ? env.ADMIN_RATE_LIMIT_PAYMENT_CREATE
     : type === 'download_file'
-      ? MAX_DOWNLOADS_PER_WINDOW
-      : MAX_STATUS_PER_WINDOW
-  const current = rateBuckets.get(bucketKey)
-  if (!current || now - current.startedAt > RATE_WINDOW_MS) {
-    rateBuckets.set(bucketKey, { startedAt: now, count: 1 })
-    return
-  }
-  current.count += 1
-  if (current.count > max) {
-    throw new Error('rate_limited')
-  }
+      ? env.ADMIN_RATE_LIMIT_DOWNLOAD
+      : env.ADMIN_RATE_LIMIT_READ
+  if (!limiter || typeof limiter.limit !== 'function') throw new Error('rate_limit_unavailable')
+  const result = await limiter.limit({ key: `${type}:${ip}` }).catch(() => null)
+  if (!result) throw new Error('rate_limit_unavailable')
+  if (!result.success) throw new Error('rate_limited')
 }

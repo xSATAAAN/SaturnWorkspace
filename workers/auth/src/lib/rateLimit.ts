@@ -1,15 +1,13 @@
-type Bucket = { count: number; resetAt: number }
+export interface RateLimitBinding {
+  limit(input: { key: string }): Promise<{ success: boolean }>
+}
 
-const buckets = new Map<string, Bucket>()
-
-export function allowRateLimit(key: string, limit: number, windowMs: number): boolean {
-  const now = Date.now()
-  const current = buckets.get(key)
-  if (!current || now >= current.resetAt) {
-    buckets.set(key, { count: 1, resetAt: now + windowMs })
-    return true
+export async function allowRateLimit(binding: RateLimitBinding | undefined, key: string): Promise<boolean> {
+  if (!binding) return false
+  try {
+    const result = await binding.limit({ key })
+    return result.success === true
+  } catch {
+    return false
   }
-  if (current.count >= limit) return false
-  current.count += 1
-  return true
 }
