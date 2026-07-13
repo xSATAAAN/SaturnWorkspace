@@ -45,6 +45,7 @@ import { Accordion, Tabs } from '../../components/ui/Navigation'
 import { ConfirmDialog, Drawer, Modal } from '../../components/ui/Overlays'
 import { DownloadCard, PricingCard, SubscriptionCard } from '../../components/ui/ProductCards'
 import { publicCopy } from '../../content/publicCopy'
+import { CURRENT_TERMS_VERSION } from '../../content/legalContent'
 import { isProductionFeatureEnabled } from '../../adapters/productionFeatureFlags'
 import { PublicLayout, WorkspaceShell, type NavigationGroup } from '../../layouts/WorkspaceShell'
 import { Brand, LocaleControl, ThemeControl } from '../../layouts/SharedChrome'
@@ -95,6 +96,25 @@ type SignupPrefill = {
 type ActivationPayload = {
   ticket: string
   legacyCode?: string
+}
+
+type DeviceActivationFailurePayload = {
+  error: string
+  device_code?: string
+  current_device_name?: string | null
+  current_bound_at?: string | null
+  request_status?: string | null
+  request_id?: string | null
+}
+
+class DeviceActivationError extends Error {
+  payload: DeviceActivationFailurePayload
+
+  constructor(payload: DeviceActivationFailurePayload) {
+    super(payload.error)
+    this.name = 'DeviceActivationError'
+    this.payload = payload
+  }
 }
 
 function copyByLocale(locale: 'ar' | 'en', en: string, ar: string) {
@@ -249,8 +269,17 @@ async function completeDeviceActivation(idToken: string, activation: ActivationP
       user_code: activation.legacyCode || undefined,
     }),
   })
-  const payload = await response.json().catch(() => null) as { success?: boolean; error?: string } | null
-  if (!response.ok || !payload?.success) throw new Error(String(payload?.error || `device_link_failed_${response.status}`))
+  const payload = await response.json().catch(() => null) as ({ success?: boolean } & Partial<DeviceActivationFailurePayload>) | null
+  if (!response.ok || !payload?.success) {
+    throw new DeviceActivationError({
+      error: String(payload?.error || `device_link_failed_${response.status}`),
+      device_code: payload?.device_code,
+      current_device_name: payload?.current_device_name,
+      current_bound_at: payload?.current_bound_at,
+      request_status: payload?.request_status,
+      request_id: payload?.request_id,
+    })
+  }
   clearActivationPayload()
   return payload
 }
@@ -359,6 +388,9 @@ function deviceActivationErrorMessage(error: unknown, locale: 'ar' | 'en') {
   }
   if (key.includes('subscription')) {
     return copyByLocale(locale, 'This account does not have an active subscription for the desktop app.', 'هذا الحساب لا يملك اشتراكًا نشطًا لاستخدام أداة سطح المكتب.')
+  }
+  if (key === 'device_change_required') {
+    return copyByLocale(locale, 'This account is already linked to another desktop device.', 'هذا الحساب مرتبط بالفعل بجهاز سطح مكتب آخر.')
   }
   if (key.includes('device_code_expired') || key.includes('not_found')) {
     return copyByLocale(locale, 'This desktop linking session expired. Start sign-in again from the desktop app.', 'انتهت صلاحية جلسة ربط الأداة. ابدأ تسجيل الدخول مرة أخرى من أداة سطح المكتب.')
@@ -536,6 +568,8 @@ function authErrorMessage(error: unknown, t: (key: MessageKey) => string, locale
   if (key.includes('auth_weak_password') || key.includes('weak-password')) return copyByLocale(locale, 'The password is too weak.', 'كلمة المرور ضعيفة.')
   if (key.includes('auth_invalid_email') || key.includes('invalid-email')) return copyByLocale(locale, 'Enter a valid email address.', 'البريد الإلكتروني غير صحيح.')
   if (key.includes('auth_too_many_attempts') || key.includes('too-many-requests')) return copyByLocale(locale, 'Too many attempts. Try again later.', 'تمت محاولات كثيرة. حاول لاحقًا.')
+  if (key.includes('auth_provider_collision')) return copyByLocale(locale, 'This email already has a password account. Enter its password to sign in and link Google.', 'هذا البريد مرتبط بحساب يستخدم كلمة مرور. اكتب كلمة المرور لتسجيل الدخول وربط Google بالحساب نفسه.')
+  if (key.includes('auth_signup_required')) return copyByLocale(locale, 'No Saturn Workspace account exists for this Google address yet. Create an account first.', 'لا يوجد حساب Saturn Workspace لهذا البريد بعد. أنشئ حسابًا أولًا.')
   if (key.includes('verification_delivery_temporary_failure')) return copyByLocale(locale, 'The code could not be sent right now. Try again.', 'تعذر إرسال الرمز الآن. حاول مرة أخرى.')
   if (key.includes('verification_delivery_disabled') || key.includes('verification_delivery_not_configured') || key.includes('verification_delivery_configuration_error') || key.includes('verification_delivery_failed')) return copyByLocale(locale, 'Email verification is unavailable right now. Try again later.', 'التحقق بالبريد غير متاح حاليًا. حاول لاحقًا.')
   if (key.includes('auth_provider_server_create_not_configured') || key.includes('auth_provider_unavailable') || key.includes('registration_finalization_failed')) return copyByLocale(locale, 'Account creation is unavailable right now. Try again later.', 'إنشاء الحساب غير متاح حاليًا. حاول لاحقًا.')
@@ -547,7 +581,7 @@ function authErrorMessage(error: unknown, t: (key: MessageKey) => string, locale
       ? copyByLocale(locale, `Too many attempts. Try again after ${formatWaitTime(locale, seconds)}.`, `محاولات كثيرة. حاول مرة أخرى بعد ${formatWaitTime(locale, seconds)}.`)
       : t('tooManyAttempts')
   }
-  if (key.includes('profile_provisioning_failed') || key.includes('profile_terms_required')) return copyByLocale(locale, 'The account could not be prepared. Review the details and try again.', 'تعذر تجهيز الحساب. راجع البيانات وحاول مرة أخرى.')
+  if (key.includes('profile_provisioning_failed')) return copyByLocale(locale, 'The account could not be prepared. Review the details and try again.', 'تعذر تجهيز الحساب. راجع البيانات وحاول مرة أخرى.')
   if (key.includes('invalid-credential') || key.includes('user-not-found') || key.includes('wrong-password') || key.includes('invalid_credentials')) return t('invalidCredentials')
   if (key.includes('email_verification_required')) return t('verificationBody')
   if (key.includes('network') || key.includes('failed to fetch') || key.includes('auth/network-request-failed')) return t('authUnavailable')
@@ -723,7 +757,7 @@ function DeviceLinkedProductionPage({ navigate }: { navigate: Navigate }) {
 
 function EmailPasswordProductionPage({ page, routeState, navigate }: { page: string; routeState?: string; navigate: Navigate }) {
   const { t, locale } = useExperience()
-  const { auth } = useAdapters()
+  const { auth, account } = useAdapters()
   const authState = useAuthState()
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
@@ -732,19 +766,34 @@ function EmailPasswordProductionPage({ page, routeState, navigate }: { page: str
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [loading, setLoading] = useState(false)
+  const [deviceChange, setDeviceChange] = useState<DeviceActivationFailurePayload | null>(null)
+  const [deviceChangeReason, setDeviceChangeReason] = useState('')
+  const [deviceChangeSubmitted, setDeviceChangeSubmitted] = useState(false)
   const signup = page === 'signup'
   const activationPayload = useMemo(() => loadActivationPayload(routeState), [routeState])
   const completionStartedRef = useRef(false)
+  const captureActivationError = useCallback((err: unknown) => {
+    if (err instanceof DeviceActivationError && err.payload.error === 'device_change_required') {
+      setDeviceChange(err.payload)
+      setDeviceChangeSubmitted(err.payload.request_status === 'pending')
+    }
+    return deviceActivationErrorMessage(err, locale)
+  }, [locale])
   const finishActivationIfNeeded = useCallback(async () => {
     if (!activationPayload) return false
     if (completionStartedRef.current) return true
     completionStartedRef.current = true
     const token = await auth.getIdToken(false)
     if (!token) throw new Error('not_authenticated')
-    await completeDeviceActivation(token, activationPayload)
+    try {
+      await completeDeviceActivation(token, activationPayload)
+    } catch (err) {
+      captureActivationError(err)
+      throw err
+    }
     navigate({ surface: 'auth', page: 'linked' })
     return true
-  }, [activationPayload, auth, navigate])
+  }, [activationPayload, auth, captureActivationError, navigate])
   useEffect(() => {
     if (!signup) return
     const prefill = loadSignupPrefill()
@@ -771,7 +820,7 @@ function EmailPasswordProductionPage({ page, routeState, navigate }: { page: str
       finishActivationIfNeeded()
         .catch((err) => {
           completionStartedRef.current = false
-          if (!cancelled) setError(deviceActivationErrorMessage(err, locale))
+          if (!cancelled) setError(captureActivationError(err))
         })
         .finally(() => {
           if (!cancelled) setLoading(false)
@@ -780,7 +829,7 @@ function EmailPasswordProductionPage({ page, routeState, navigate }: { page: str
     return () => {
       cancelled = true
     }
-  }, [activationPayload, authState.ready, authState.user, finishActivationIfNeeded, locale])
+  }, [activationPayload, authState.ready, authState.user, captureActivationError, finishActivationIfNeeded])
   const submit = async (event: FormEvent) => {
     event.preventDefault()
     setError('')
@@ -801,7 +850,7 @@ function EmailPasswordProductionPage({ page, routeState, navigate }: { page: str
           email,
           locale,
           termsAccepted: acceptedTerms,
-          termsVersion: '2026-06',
+          termsVersion: CURRENT_TERMS_VERSION,
           termsAcceptedAt,
         })
         if (!registration.success || !registration.registrationId) throw new Error(registration.error || 'email_verification_failed')
@@ -812,7 +861,7 @@ function EmailPasswordProductionPage({ page, routeState, navigate }: { page: str
           displayName: fullName,
           locale,
           termsAccepted: acceptedTerms,
-          termsVersion: '2026-06',
+          termsVersion: CURRENT_TERMS_VERSION,
           termsAcceptedAt,
           createdAt: new Date().toISOString(),
         })
@@ -824,7 +873,7 @@ function EmailPasswordProductionPage({ page, routeState, navigate }: { page: str
       if (await finishActivationIfNeeded()) return
       navigate(destinationAfterAuth(routeState))
     } catch (err) {
-      setError(activationPayload ? deviceActivationErrorMessage(err, locale) : authErrorMessage(err, t, locale))
+      setError(activationPayload ? captureActivationError(err) : authErrorMessage(err, t, locale))
     } finally {
       setLoading(false)
     }
@@ -845,7 +894,29 @@ function EmailPasswordProductionPage({ page, routeState, navigate }: { page: str
       setLoading(false)
     }
   }
-  return <ProductionAuthShell navigate={navigate}><div className={`auth-card auth-card--${signup ? 'signup' : 'signin'}`}><div className="auth-form"><header>{signup ? <span>{copyByLocale(locale, 'Create your workspace access', 'ابدأ إعداد مساحة عملك')}</span> : null}<h1>{signup ? t('signUpTitle') : t('signInTitle')}</h1><p>{activationPayload ? copyByLocale(locale, 'Sign in to link this desktop app session to your account.', 'سجّل الدخول لربط جلسة أداة سطح المكتب بحسابك.') : signup ? copyByLocale(locale, 'Create one account for subscriptions, downloads, support, and your desktop sign-in.', 'أنشئ حسابًا واحدًا للاشتراك والتنزيلات والدعم وتسجيل الدخول إلى الأداة.') : t('signInBody')}</p></header>{activationPayload ? <Alert title={copyByLocale(locale, 'Desktop linking', 'ربط أداة سطح المكتب')} tone="info">{copyByLocale(locale, 'After sign-in, Saturn Workspace will be linked automatically.', 'بعد تسجيل الدخول سيتم ربط Saturn Workspace تلقائيًا.')}</Alert> : null}<form className="stack" onSubmit={submit} noValidate>{signup ? <FormField label={locale === 'ar' ? 'الاسم الكامل' : 'Full name'} htmlFor="auth-full-name" required><Input id="auth-full-name" type="text" autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} required /></FormField> : null}<FormField label={t('email')} htmlFor="auth-email" required><Input id="auth-email" type="email" autoComplete="email" placeholder={locale === 'ar' ? 'name@example.com' : 'name@example.com'} value={email} onChange={(event) => setEmail(event.target.value)} required /></FormField>{!signup ? <FormField label={t('password')} htmlFor="auth-password" required><PasswordInput id="auth-password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></FormField> : null}{signup ? <><Checkbox checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} required label={<span>{locale === 'ar' ? 'أوافق على ' : 'I agree to the '}<a href="/terms">{t('terms')}</a>{locale === 'ar' ? ' و' : ' and the '}<a href="/privacy">{t('privacy')}</a></span>} /></> : <div className="auth-form__options"><Button type="button" variant="text" onClick={reset}>{t('forgotPassword')}</Button></div>}{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}<Button type="submit" variant="primary" size="lg" fullWidth loading={loading}>{signup ? t('signUp') : t('signIn')}</Button></form><div className="auth-divider"><span>{t('orContinue')}</span></div><Button type="button" fullWidth size="lg" leadingIcon={<GoogleIcon />} onClick={async () => { setLoading(true); setError(''); try { if (signup && !acceptedTerms) { setError(locale === 'ar' ? 'يجب الموافقة على شروط الخدمة وسياسة الخصوصية.' : 'You must agree to the Terms of Service and Privacy Policy.'); return } await auth.signInWithGoogle(signup ? { locale, termsAccepted: acceptedTerms, termsVersion: '2026-06' } : undefined); if (await finishActivationIfNeeded()) return; navigate(destinationAfterAuth(routeState)) } catch (err) { setError(activationPayload ? deviceActivationErrorMessage(err, locale) : authErrorMessage(err, t, locale)) } finally { setLoading(false) } }}>{t('continueGoogle')}</Button><p className="auth-switch">{signup ? t('haveAccount') : t('noAccount')} <button type="button" onClick={() => navigate({ surface: 'auth', page: signup ? 'signin' : 'signup', state: routeState })}>{signup ? t('signIn') : t('signUp')}</button></p></div></div></ProductionAuthShell>
+  const submitDeviceChange = async (event: FormEvent) => {
+    event.preventDefault()
+    const deviceCode = String(deviceChange?.device_code || activationPayload?.ticket || '').trim()
+    if (!deviceCode) {
+      setError(deviceActivationErrorMessage(new Error('device_code_not_found'), locale))
+      return
+    }
+    setLoading(true)
+    setError('')
+    try {
+      await account.requestDeviceChange(deviceCode, deviceChangeReason.trim())
+      setDeviceChangeSubmitted(true)
+      clearActivationPayload()
+    } catch (err) {
+      setError(deviceActivationErrorMessage(err, locale))
+    } finally {
+      setLoading(false)
+    }
+  }
+  if (deviceChange && authState.user) {
+    return <ProductionAuthShell navigate={navigate}><div className="auth-card"><div className="auth-form"><header><h1>{copyByLocale(locale, 'Change desktop device', 'تغيير جهاز سطح المكتب')}</h1></header><dl className="detail-list"><div><dt>{copyByLocale(locale, 'Current device', 'الجهاز الحالي')}</dt><dd>{deviceChange.current_device_name || copyByLocale(locale, 'Desktop device', 'جهاز سطح مكتب')}</dd></div>{deviceChange.current_bound_at ? <div><dt>{copyByLocale(locale, 'Linked since', 'مرتبط منذ')}</dt><dd>{formatDisplayDate(deviceChange.current_bound_at, locale)}</dd></div> : null}</dl>{deviceChangeSubmitted ? <Alert title={copyByLocale(locale, 'Request pending', 'الطلب قيد المراجعة')} tone="info">{copyByLocale(locale, 'Keep Saturn Workspace open. The new device will continue automatically after approval.', 'اترك Saturn Workspace مفتوحًا. سيكمل الجهاز الجديد تلقائيًا بعد الموافقة.')}</Alert> : <form className="stack" onSubmit={submitDeviceChange}><FormField label={copyByLocale(locale, 'Reason (optional)', 'السبب (اختياري)')} htmlFor="device-change-reason"><Textarea id="device-change-reason" value={deviceChangeReason} maxLength={500} onChange={(event) => setDeviceChangeReason(event.target.value)} /></FormField>{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}<Button type="submit" variant="primary" size="lg" fullWidth loading={loading}>{copyByLocale(locale, 'Request device change', 'إرسال طلب تغيير الجهاز')}</Button></form>}</div></div></ProductionAuthShell>
+  }
+  return <ProductionAuthShell navigate={navigate}><div className={`auth-card auth-card--${signup ? 'signup' : 'signin'}`}><div className="auth-form"><header>{signup ? <span>{copyByLocale(locale, 'Create your workspace access', 'ابدأ إعداد مساحة عملك')}</span> : null}<h1>{signup ? t('signUpTitle') : t('signInTitle')}</h1><p>{activationPayload ? copyByLocale(locale, 'Sign in to link this desktop app session to your account.', 'سجّل الدخول لربط جلسة أداة سطح المكتب بحسابك.') : signup ? copyByLocale(locale, 'Create one account for subscriptions, downloads, support, and your desktop sign-in.', 'أنشئ حسابًا واحدًا للاشتراك والتنزيلات والدعم وتسجيل الدخول إلى الأداة.') : t('signInBody')}</p></header>{activationPayload ? <Alert title={copyByLocale(locale, 'Desktop linking', 'ربط أداة سطح المكتب')} tone="info">{copyByLocale(locale, 'After sign-in, Saturn Workspace will be linked automatically.', 'بعد تسجيل الدخول سيتم ربط Saturn Workspace تلقائيًا.')}</Alert> : null}<form className="stack" onSubmit={submit} noValidate>{signup ? <FormField label={locale === 'ar' ? 'الاسم الكامل' : 'Full name'} htmlFor="auth-full-name" required><Input id="auth-full-name" type="text" autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} required /></FormField> : null}<FormField label={t('email')} htmlFor="auth-email" required><Input id="auth-email" type="email" autoComplete="email" placeholder={locale === 'ar' ? 'name@example.com' : 'name@example.com'} value={email} onChange={(event) => setEmail(event.target.value)} required /></FormField>{!signup ? <FormField label={t('password')} htmlFor="auth-password" required><PasswordInput id="auth-password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></FormField> : null}{signup ? <><Checkbox checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} required label={<span>{locale === 'ar' ? 'أوافق على ' : 'I agree to the '}<a href="/terms">{t('terms')}</a>{locale === 'ar' ? ' و' : ' and the '}<a href="/privacy">{t('privacy')}</a></span>} /></> : <div className="auth-form__options"><Button type="button" variant="text" onClick={reset}>{t('forgotPassword')}</Button></div>}{error ? <Alert title={t('failed')} tone="danger">{error}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}<Button type="submit" variant="primary" size="lg" fullWidth loading={loading}>{signup ? t('signUp') : t('signIn')}</Button></form><div className="auth-divider"><span>{t('orContinue')}</span></div><Button type="button" fullWidth size="lg" leadingIcon={<GoogleIcon />} onClick={async () => { setLoading(true); setError(''); try { if (signup && !acceptedTerms) { setError(locale === 'ar' ? 'يجب الموافقة على شروط الخدمة وسياسة الخصوصية.' : 'You must agree to the Terms of Service and Privacy Policy.'); return } await auth.signInWithGoogle(signup ? { locale, termsAccepted: acceptedTerms, termsVersion: CURRENT_TERMS_VERSION } : undefined); if (await finishActivationIfNeeded()) return; navigate(destinationAfterAuth(routeState)) } catch (err) { const collisionEmail = String(err instanceof Error ? err.message : '').match(/^AUTH_PROVIDER_COLLISION:(.+)$/i)?.[1]; if (collisionEmail) setEmail(collisionEmail); setError(activationPayload ? deviceActivationErrorMessage(err, locale) : authErrorMessage(err, t, locale)) } finally { setLoading(false) } }}>{t('continueGoogle')}</Button><p className="auth-switch">{signup ? t('haveAccount') : t('noAccount')} <button type="button" onClick={() => navigate({ surface: 'auth', page: signup ? 'signin' : 'signup', state: routeState })}>{signup ? t('signIn') : t('signUp')}</button></p></div></div></ProductionAuthShell>
 }
 
 function EmailVerificationProductionPage({ routeState, navigate }: { routeState?: string; navigate: Navigate }) {
@@ -1115,7 +1186,7 @@ function PortalDevices() {
   const { t, locale } = useExperience()
   const adapters = useAdapters()
   const resource = useAsyncData(() => adapters.account.listSessions(), [adapters])
-  const [target, setTarget] = useState<{ scope: 'session' | 'device' | 'all'; session?: AccountSession } | null>(null)
+  const [target, setTarget] = useState<{ scope: 'session' | 'all'; session?: AccountSession } | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const runRevoke = async () => {
@@ -1124,7 +1195,7 @@ function PortalDevices() {
     setError('')
     try {
       if (target.scope === 'all') await adapters.account.revokeAllSessions()
-      else if (target.session) await adapters.account.revokeSession(target.session.id, target.scope)
+      else if (target.session) await adapters.account.revokeSession(target.session.id, 'session')
       setTarget(null)
       resource.reload()
     } catch (err) {
@@ -1134,9 +1205,10 @@ function PortalDevices() {
     }
   }
   const sessions = resource.data?.sessions || []
-  const devices = resource.data?.devices || []
+  const binding = resource.data?.device_binding || null
+  const changeRequests = resource.data?.device_change_requests || []
   const activeSessions = sessions.filter((session) => session.status === 'active')
-  return <><PageHeader title={t('devices')} />{error ? <ErrorBlock error={error} onRetry={() => setError('')} /> : null}{resource.loading ? <div className="portal-mini-grid"><CardSkeleton rows={4} /><CardSkeleton rows={4} /></div> : resource.error ? <ErrorBlock error={resource.error} onRetry={resource.reload} /> : sessions.length === 0 ? <EmptyState icon={Monitor} title={copyByLocale(locale, 'No linked desktop sessions', 'لا توجد جلسات سطح مكتب مرتبطة')} body={copyByLocale(locale, 'Link Saturn Workspace from the desktop app to see it here.', 'اربط Saturn Workspace من أداة سطح المكتب لتظهر الجلسة هنا.')} /> : <div className="stack"><Card><SectionHeader title={copyByLocale(locale, 'Linked devices', 'الأجهزة المرتبطة')} action={activeSessions.length ? <Button size="sm" variant="danger" onClick={() => setTarget({ scope: 'all' })}>{copyByLocale(locale, 'End all desktop sessions', 'إنهاء كل جلسات سطح المكتب')}</Button> : undefined} /><div className="settings-list">{devices.map((device) => { const representative = sessions.find((session) => session.device_key === device.device_key); return <div key={device.device_key} className="device-row device-row--large"><span><Monitor size={20} /></span><div><strong>{device.device_name}</strong><small>{[device.platform, device.os_version].filter(Boolean).join(' · ') || copyByLocale(locale, 'Desktop device', 'جهاز سطح مكتب')} · {copyByLocale(locale, 'Last activity', 'آخر نشاط')}: {formatDisplayDate(device.last_activity_at, locale)}</small></div><Badge tone={device.active_sessions ? 'success' : 'neutral'}>{device.active_sessions ? copyByLocale(locale, 'Connected', 'متصل') : copyByLocale(locale, 'Inactive', 'غير نشط')}</Badge>{representative && device.active_sessions ? <Button size="sm" variant="secondary" onClick={() => setTarget({ scope: 'device', session: representative })}>{copyByLocale(locale, 'Revoke device', 'إلغاء الجهاز')}</Button> : null}</div> })}</div></Card><Card><SectionHeader title={copyByLocale(locale, 'Desktop sessions', 'جلسات سطح المكتب')} /><div className="settings-list">{sessions.map((session) => <div key={session.id} className="device-row device-row--large"><span><Monitor size={20} /></span><div><strong>{session.device_name}</strong><small>{copyByLocale(locale, 'Last activity', 'آخر نشاط')}: {formatDisplayDate(session.last_activity_at, locale)}{session.app_version ? ` · ${session.app_version}` : ''}</small></div><Badge tone={session.status === 'active' ? 'success' : session.status === 'expired' ? 'warning' : 'neutral'}>{session.status === 'active' ? copyByLocale(locale, 'Connected', 'متصل') : session.status === 'expired' ? copyByLocale(locale, 'Expired', 'منتهية') : copyByLocale(locale, 'Revoked', 'ملغاة')}</Badge>{session.status === 'active' ? <Button size="sm" variant="secondary" onClick={() => setTarget({ scope: 'session', session })}>{copyByLocale(locale, 'End session', 'إنهاء الجلسة')}</Button> : null}</div>)}</div></Card></div>}<ConfirmDialog open={Boolean(target)} onClose={() => { if (!busy) setTarget(null) }} title={target?.scope === 'all' ? copyByLocale(locale, 'End all desktop sessions?', 'إنهاء كل جلسات سطح المكتب؟') : target?.scope === 'device' ? copyByLocale(locale, 'Revoke this device?', 'إلغاء هذا الجهاز؟') : copyByLocale(locale, 'End this session?', 'إنهاء هذه الجلسة؟')} body={copyByLocale(locale, 'Saturn Workspace will require sign-in again on the affected device.', 'سيطلب Saturn Workspace تسجيل الدخول من جديد على الجهاز المتأثر.')} confirmLabel={busy ? copyByLocale(locale, 'Ending…', 'جارٍ الإنهاء…') : copyByLocale(locale, 'Confirm', 'تأكيد')} cancelLabel={t('cancel')} destructive onConfirm={() => { void runRevoke() }} /></>
+  return <><PageHeader title={t('devices')} />{error ? <ErrorBlock error={error} onRetry={() => setError('')} /> : null}{resource.loading ? <SkeletonStack rows={5} /> : resource.error ? <ErrorBlock error={resource.error} onRetry={resource.reload} /> : !binding && sessions.length === 0 ? <EmptyState icon={Monitor} title={copyByLocale(locale, 'No desktop device linked', 'لا يوجد جهاز سطح مكتب مرتبط')} body={copyByLocale(locale, 'Link Saturn Workspace from the desktop app. One desktop device can be linked to each account.', 'اربط Saturn Workspace من أداة سطح المكتب. يمكن ربط جهاز سطح مكتب واحد بكل حساب.')} /> : <div className="stack"><section><SectionHeader title={copyByLocale(locale, 'Current desktop device', 'جهاز سطح المكتب الحالي')} action={activeSessions.length ? <Button size="sm" variant="danger" onClick={() => setTarget({ scope: 'all' })}>{copyByLocale(locale, 'End sessions', 'إنهاء الجلسات')}</Button> : undefined} />{binding ? <div className="device-row device-row--large"><span><Monitor size={20} /></span><div><strong>{binding.device_name || copyByLocale(locale, 'Desktop device', 'جهاز سطح مكتب')}</strong><small>{[binding.platform, binding.os_version, binding.app_version].filter(Boolean).join(' · ')}{binding.last_seen_at ? ` · ${copyByLocale(locale, 'Last activity', 'آخر نشاط')}: ${formatDisplayDate(binding.last_seen_at, locale)}` : ''}</small></div><Badge tone={activeSessions.length ? 'success' : 'neutral'}>{activeSessions.length ? copyByLocale(locale, 'Connected', 'متصل') : copyByLocale(locale, 'No active session', 'لا توجد جلسة نشطة')}</Badge></div> : null}</section>{sessions.length ? <section><SectionHeader title={copyByLocale(locale, 'Desktop sessions', 'جلسات سطح المكتب')} /><div className="settings-list">{sessions.map((session) => <div key={session.id} className="device-row device-row--large"><span><Monitor size={20} /></span><div><strong>{session.device_name}</strong><small>{copyByLocale(locale, 'Last activity', 'آخر نشاط')}: {formatDisplayDate(session.last_activity_at, locale)}{session.app_version ? ` · ${session.app_version}` : ''}</small></div><Badge tone={session.status === 'active' ? 'success' : session.status === 'expired' ? 'warning' : 'neutral'}>{session.status === 'active' ? copyByLocale(locale, 'Connected', 'متصل') : session.status === 'expired' ? copyByLocale(locale, 'Expired', 'منتهية') : copyByLocale(locale, 'Revoked', 'ملغاة')}</Badge>{session.status === 'active' ? <Button size="sm" variant="secondary" onClick={() => setTarget({ scope: 'session', session })}>{copyByLocale(locale, 'End session', 'إنهاء الجلسة')}</Button> : null}</div>)}</div></section> : null}{changeRequests.length ? <section><SectionHeader title={copyByLocale(locale, 'Device change requests', 'طلبات تغيير الجهاز')} /><div className="settings-list">{changeRequests.map((request) => <div key={request.id} className="device-row device-row--large"><span><Monitor size={20} /></span><div><strong>{request.device_name || copyByLocale(locale, 'New desktop device', 'جهاز سطح مكتب جديد')}</strong><small>{formatDisplayDate(request.requested_at, locale)}{request.resolution_note ? ` · ${request.resolution_note}` : ''}</small></div><Badge tone={request.status === 'approved' ? 'success' : request.status === 'pending' ? 'warning' : request.status === 'rejected' ? 'danger' : 'neutral'}>{request.status === 'approved' ? copyByLocale(locale, 'Approved', 'تمت الموافقة') : request.status === 'pending' ? copyByLocale(locale, 'Pending', 'قيد المراجعة') : request.status === 'rejected' ? copyByLocale(locale, 'Rejected', 'مرفوض') : copyByLocale(locale, 'Cancelled', 'ملغى')}</Badge></div>)}</div></section> : null}</div>}<ConfirmDialog open={Boolean(target)} onClose={() => { if (!busy) setTarget(null) }} title={target?.scope === 'all' ? copyByLocale(locale, 'End all desktop sessions?', 'إنهاء كل جلسات سطح المكتب؟') : copyByLocale(locale, 'End this session?', 'إنهاء هذه الجلسة؟')} body={copyByLocale(locale, 'Saturn Workspace will require sign-in again.', 'سيطلب Saturn Workspace تسجيل الدخول من جديد.')} confirmLabel={busy ? copyByLocale(locale, 'Ending…', 'جارٍ الإنهاء…') : copyByLocale(locale, 'Confirm', 'تأكيد')} cancelLabel={t('cancel')} destructive onConfirm={() => { void runRevoke() }} /></>
 }
 
 function notificationText(item: AccountNotification, locale: 'ar' | 'en') {

@@ -220,6 +220,58 @@ export type AdminAccessRequest = {
   subscription_id?: string | null
 }
 
+export type AdminDeviceChangeRequest = {
+  id: string
+  firebase_uid: string
+  current_binding_id: string | null
+  resulting_binding_id: string | null
+  requested_device_key: string
+  device_name: string | null
+  platform: string | null
+  os_version: string | null
+  app_version: string | null
+  user_reason: string | null
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled'
+  requested_at: string
+  resolved_at: string | null
+  resolved_by: string | null
+  resolution_note: string | null
+  created_at: string
+  updated_at: string
+  account?: Pick<AdminUserSummary, 'firebase_uid' | 'display_name' | 'account_status'> & { normalized_email?: string } | null
+}
+
+export type AdminDeviceBinding = {
+  id: string
+  firebase_uid: string
+  device_key: string
+  device_name: string | null
+  platform: string | null
+  os_version: string | null
+  app_version: string | null
+  status: string
+  bound_at: string
+  last_seen_at: string
+  released_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type AdminDeviceChangePreview = {
+  request: AdminDeviceChangeRequest
+  account: AdminDeviceChangeRequest['account']
+  action: 'approve' | 'reject'
+  reason: string
+  preview_hash: string
+}
+
+export type AdminDeviceResetPreview = {
+  binding: AdminDeviceBinding
+  active_session_count: number
+  reason: string
+  preview_hash: string
+}
+
 export type AdminPromoCode = {
   id: string
   code: string
@@ -615,6 +667,9 @@ export type AdminUserDetail = {
   crashes: AdminCrashLog[]
   login_requests: Array<Record<string, unknown>>
   devices: Array<Record<string, unknown>>
+  device_binding?: AdminDeviceBinding | null
+  device_binding_history?: AdminDeviceBinding[]
+  device_change_requests?: AdminDeviceChangeRequest[]
   tamper_alerts?: AdminTamperAlert[]
   audit?: AdminAuditLogItem[]
   recovery_evidence?: Array<{ id: string; subscription_id?: string | null; evidence_type: string; evidence_reference: string; remaining_seconds: number; status: string; created_at: string; expires_at?: string | null }>
@@ -623,7 +678,7 @@ export type AdminUserDetail = {
   request?: {
     user_id?: string | null
     user_email?: string | null
-    hwid?: string | null
+    device_key?: string | null
     status?: string | null
     last_event_at?: string | null
     expires_at?: string | null
@@ -807,6 +862,31 @@ export async function fetchAdminUsers(params: { search?: string; page?: number; 
   if (params.subscription) query.set('subscription', params.subscription)
   if (params.sort) query.set('sort', params.sort)
   return adminFetch<{ success: boolean; items: AdminUserSummary[]; total: number; page: number; limit: number }>(`/users?${query}`)
+}
+
+export async function fetchAdminDeviceChangeRequests(params: { status?: AdminDeviceChangeRequest['status'] | 'all'; page?: number; limit?: number } = {}) {
+  const query = new URLSearchParams({
+    status: params.status || 'pending',
+    page: String(params.page || 1),
+    limit: String(params.limit || 25),
+  })
+  return adminFetch<{ success: boolean; items: AdminDeviceChangeRequest[]; page: number; limit: number; has_more: boolean }>(`/device-change-requests?${query}`)
+}
+
+export async function previewAdminDeviceChange(requestId: string, payload: { action: 'approve' | 'reject'; reason: string }) {
+  return adminFetch<{ success: boolean; preview: AdminDeviceChangePreview }>(`/device-change-requests/${encodeURIComponent(requestId)}/preview`, { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export async function executeAdminDeviceChange(requestId: string, payload: { action: 'approve' | 'reject'; reason: string; preview_hash: string; request_id: string }) {
+  return adminFetch<{ success: boolean; result: { item: AdminDeviceChangeRequest; idempotent: boolean } }>(`/device-change-requests/${encodeURIComponent(requestId)}/execute`, { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export async function previewAdminDeviceReset(firebaseUid: string, reason: string) {
+  return adminFetch<{ success: boolean; preview: AdminDeviceResetPreview }>(`/users/${encodeURIComponent(firebaseUid)}/device/reset/preview`, { method: 'POST', body: JSON.stringify({ reason }) })
+}
+
+export async function executeAdminDeviceReset(firebaseUid: string, payload: { reason: string; preview_hash: string; request_id: string }) {
+  return adminFetch<{ success: boolean; result: { reset: boolean; idempotent: boolean } }>(`/users/${encodeURIComponent(firebaseUid)}/device/reset/execute`, { method: 'POST', body: JSON.stringify(payload) })
 }
 
 export async function previewAccountLifecycle(firebaseUid: string, payload: AdminOperationReason & { action: 'suspend' | 'reactivate' | 'mark_pending_deletion' }) {

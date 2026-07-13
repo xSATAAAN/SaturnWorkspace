@@ -5,8 +5,9 @@
 
 /* Admin is an operational desktop surface: keep it dense, scannable, and stable. */
 html[data-surface='admin'] {
-  --sidebar-width: 220px;
-  --header-height: 56px;
+  --sidebar-width: 208px;
+  --header-height: 52px;
+  font-size: 14px;
 }
 
 html[data-surface='admin'] .workspace-sidebar {
@@ -45,7 +46,7 @@ html[data-surface='admin'] .workspace-topbar {
 
 html[data-surface='admin'] .workspace-content {
   max-width: 1520px;
-  padding: 18px 20px 28px;
+  padding: 14px 16px 22px;
 }
 
 html[data-surface='admin'] .workspace-content > .stack,
@@ -55,11 +56,11 @@ html[data-surface='admin'] .workspace-content .stack--compact {
 
 html[data-surface='admin'] .ui-page-header {
   gap: var(--space-2);
-  margin-bottom: var(--space-4);
+  margin-bottom: 12px;
 }
 
 html[data-surface='admin'] .ui-page-header h1 {
-  font-size: 1.45rem;
+  font-size: 1.3rem;
   line-height: 1.25;
 }
 
@@ -69,12 +70,12 @@ html[data-surface='admin'] .ui-section-header p {
   font-size: var(--text-body-sm);
 }
 
-html[data-surface='admin'] .ui-card--sm { padding: 14px; }
-html[data-surface='admin'] .ui-card--md { padding: 18px; }
-html[data-surface='admin'] .ui-card--lg { padding: 22px; }
+html[data-surface='admin'] .ui-card--sm { padding: 12px; }
+html[data-surface='admin'] .ui-card--md { padding: 14px; }
+html[data-surface='admin'] .ui-card--lg { padding: 18px; }
 
 html[data-surface='admin'] .ui-stat {
-  min-height: 88px;
+  min-height: 76px;
   gap: 6px;
 }
 
@@ -83,23 +84,23 @@ html[data-surface='admin'] .ui-stat > strong {
 }
 
 html[data-surface='admin'] .ui-input {
-  min-height: 38px;
+  min-height: 34px;
   border-radius: var(--radius-md);
 }
 
 html[data-surface='admin'] .ui-button--md {
-  min-height: 36px;
-  padding-inline: 14px;
+  min-height: 34px;
+  padding-inline: 12px;
 }
 
 html[data-surface='admin'] .ui-table th {
-  height: 36px;
-  padding-inline: 12px;
+  height: 34px;
+  padding-inline: 10px;
 }
 
 html[data-surface='admin'] .ui-table td {
-  height: 44px;
-  padding-inline: 12px;
+  height: 40px;
+  padding-inline: 10px;
 }
 
 html[data-surface='admin'] .ui-table-toolbar {
@@ -116,22 +117,59 @@ html[data-surface='admin'] .ui-pagination {
 }
 
 html[data-surface='admin'] .ui-drawer {
-  width: min(480px, 100vw);
+  width: min(448px, 100vw);
 }
 
 html[data-surface='admin'] .ui-modal > header,
 html[data-surface='admin'] .ui-drawer > header {
-  padding: var(--space-4) 18px;
+  padding: 12px 16px;
 }
 
 html[data-surface='admin'] .ui-modal__body,
 html[data-surface='admin'] .ui-drawer__body {
-  padding: 18px;
+  padding: 14px 16px;
 }
 
 html[data-surface='admin'] .ui-modal > footer,
 html[data-surface='admin'] .ui-drawer > footer {
-  padding: 12px 18px;
+  padding: 10px 16px;
+}
+
+html[data-surface='admin'] .ui-drawer h2 {
+  font-size: 1.05rem;
+}
+
+html[data-surface='admin'] .ui-drawer header p {
+  max-width: 38ch;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+html[data-surface='admin'] .manual-grant-drawer .manual-grant-form {
+  gap: 10px;
+}
+
+html[data-surface='admin'] .manual-grant-drawer .form-grid {
+  grid-template-columns: minmax(0, 1.1fr) minmax(76px, 0.7fr) minmax(92px, 0.8fr);
+  gap: 10px;
+}
+
+html[data-surface='admin'] .manual-grant-drawer .ui-form-field {
+  gap: 4px;
+}
+
+html[data-surface='admin'] .manual-grant-drawer textarea.ui-input {
+  min-height: 64px;
+  resize: vertical;
+}
+
+html[data-surface='admin'] .manual-grant-drawer .selection-list {
+  max-height: 116px;
+  overflow: auto;
+}
+
+html[data-surface='admin'] .manual-grant-drawer .ui-alert {
+  padding: 10px 12px;
 }
 
 html[data-surface='admin'] .admin-metric-strip,

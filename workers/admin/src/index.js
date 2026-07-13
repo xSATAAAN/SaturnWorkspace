@@ -393,6 +393,28 @@ export default {
         const context = await requireAdminContext(request, env, "subscriptions:write");
         return json(await executeManualSubscriptionGrant(request, env, context.email), 200, corsHeaders(request, env));
       }
+      if (url.pathname === "/api/admin/device-change-requests" && request.method === "GET") {
+        await requireAdminContext(request, env, "users:read");
+        return json(await listAccountDeviceChangeRequests(url, env), 200, corsHeaders(request, env));
+      }
+      const deviceChangeMatch = url.pathname.match(/^\/api\/admin\/device-change-requests\/([^/]+)\/(preview|execute)$/);
+      if (deviceChangeMatch && request.method === "POST") {
+        const context = await requireAdminContext(request, env, "users:write");
+        const changeRequestId = decodeURIComponent(deviceChangeMatch[1]).trim();
+        const payload = deviceChangeMatch[2] === "preview"
+          ? await previewAccountDeviceChange(changeRequestId, request, env)
+          : await executeAccountDeviceChange(changeRequestId, request, env, context);
+        return json({ success: true, [deviceChangeMatch[2] === "preview" ? "preview" : "result"]: payload }, 200, corsHeaders(request, env));
+      }
+      const deviceResetMatch = url.pathname.match(/^\/api\/admin\/users\/([^/]+)\/device\/reset\/(preview|execute)$/);
+      if (deviceResetMatch && request.method === "POST") {
+        const context = await requireAdminContext(request, env, "sessions:revoke");
+        const firebaseUid = decodeURIComponent(deviceResetMatch[1]).trim();
+        const payload = deviceResetMatch[2] === "preview"
+          ? await previewAccountDeviceReset(firebaseUid, request, env)
+          : await executeAccountDeviceReset(firebaseUid, request, env, context);
+        return json({ success: true, [deviceResetMatch[2] === "preview" ? "preview" : "result"]: payload }, 200, corsHeaders(request, env));
+      }
       const accountLifecycleMatch = url.pathname.match(/^\/api\/admin\/users\/([^/]+)\/lifecycle\/(preview|execute)$/);
       if (accountLifecycleMatch && request.method === "POST") {
         const context = await requireAdminContext(request, env, "users:write");
@@ -567,8 +589,8 @@ export default {
         "firebase_user_not_verified",
       ]);
       const forbiddenErrors = new Set(["download_not_entitled", "forbidden_origin", "origin_not_allowed", "admin_permission_denied"]);
-      const notFoundErrors = new Set(["release_not_found", "release_artifact_missing", "order_not_found", "account_not_found", "subscription_not_found", "session_not_found", "device_not_found", "pending_grant_not_found"]);
-      const conflictErrors = new Set(["pending_grant_already_exists", "pending_grant_not_pending"]);
+      const notFoundErrors = new Set(["release_not_found", "release_artifact_missing", "order_not_found", "account_not_found", "subscription_not_found", "session_not_found", "device_not_found", "pending_grant_not_found", "device_change_request_not_found"]);
+      const conflictErrors = new Set(["pending_grant_already_exists", "pending_grant_not_pending", "device_change_request_not_pending", "device_change_request_changed", "preview_changed"]);
       const status = authErrors.has(message) || message.startsWith("admin_email_not_allowed")
         ? 401
         : forbiddenErrors.has(message)
@@ -1036,6 +1058,13 @@ function optionalVersion(value) {
   return text;
 }
 
+function optionalBuildId(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  if (!/^[0-9A-Za-z._:-]{1,120}$/.test(text)) throw new Error("invalid_build_id");
+  return text;
+}
+
 function optionalIsoDate(value) {
   const text = String(value || "").trim();
   if (!text) return "";
@@ -1400,6 +1429,7 @@ async function publishRelease(request, env, adminEmail) {
   const mandatory = Boolean(body?.mandatory) || updateMode === "force" || updateMode === "required";
   const rolloutPercent = clampRolloutPercent(body?.rollout_percent, 100);
   const minimumSupportedVersion = optionalVersion(body?.minimum_supported_version);
+  const buildId = optionalBuildId(body?.build_id || body?.app_build_id || body?.remote_config?.build_id);
   const forceUpdateDeadline = mandatory ? optionalIsoDate(body?.force_update_deadline) : "";
   const targets = normalizeReleaseTargets(body);
 
@@ -1430,6 +1460,8 @@ async function publishRelease(request, env, adminEmail) {
   ) {
     throw new Error("same_version_already_active");
   }
+  const previousRemoteConfig = safePlainObject(manifest.channels?.[channel]?.remote_config);
+  const { build_id: _oldBuildId, app_build_id: _oldAppBuildId, ...previousRemoteConfigWithoutBuildId } = previousRemoteConfig;
   const channelManifest = {
     version,
     available: true,
@@ -1445,11 +1477,12 @@ async function publishRelease(request, env, adminEmail) {
     artifacts,
     notes,
     remote_config: {
-      ...(manifest.channels?.[channel]?.remote_config || {}),
+      ...previousRemoteConfigWithoutBuildId,
       update_mode: updateMode,
     },
     published_at: new Date().toISOString(),
   };
+  if (buildId) channelManifest.build_id = buildId;
   if (targets.selected) {
     const targetRule = buildTargetedReleaseRule(channel, channelManifest, targets, adminEmail);
     const nextChannel = mergeTargetedReleaseRule(manifest.channels?.[channel] || {}, targetRule);
@@ -2496,7 +2529,7 @@ async function resolveManualGrantTarget(env, input) {
   const profiles = await safeSupabaseRead(
     env,
     "account_profiles",
-    `select=firebase_uid,normalized_email,display_name,account_status,updated_at&${profileFilter}&limit=2`,
+    `select=firebase_uid,normalized_email,display_name,locale,account_status,updated_at&${profileFilter}&limit=2`,
   );
   if (!Array.isArray(profiles) || profiles.length === 0) {
     if (!input.target_email) throw new Error("account_not_found");
@@ -2505,6 +2538,7 @@ async function resolveManualGrantTarget(env, input) {
         firebase_user_id: null,
         user_email: input.target_email,
         display_name: null,
+        locale: "ar",
       },
       current: null,
       fallback_latest: null,
@@ -2547,6 +2581,7 @@ async function resolveManualGrantTarget(env, input) {
       firebase_user_id: targetUid,
       user_email: targetEmail,
       display_name: profile.display_name || null,
+      locale: String(profile.locale || "ar").toLowerCase().startsWith("en") ? "en" : "ar",
     },
     current: resolution?.currentRow || null,
     fallback_latest: resolution?.currentRow ? null : ownedRows[0] || null,
@@ -2738,6 +2773,47 @@ function manualGrantMetadata(input, preview, adminEmail, requestId) {
   };
 }
 
+async function enqueueManualSubscriptionEmail(env, input) {
+  const url = String(env.ADMIN_EMAIL_ENQUEUE_URL || "").trim();
+  const token = String(env.ADMIN_EMAIL_ENQUEUE_TOKEN || "").trim();
+  const recipient = normalizeEmail(input.recipient);
+  if (!url || !token) return { queued: false, skipped: "subscription_email_not_configured" };
+  if (!recipient) return { queued: false, skipped: "recipient_missing" };
+  const eventType = input.pending ? "billing.subscription_grant_reserved" : "billing.subscription_granted";
+  try {
+    const request = new Request(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        event_type: eventType,
+        idempotency_key: `manual-subscription-email:${eventType}:${input.requestId}`,
+        user_id: input.firebaseUid || "",
+        recipient,
+        locale: String(input.locale || "ar").toLowerCase().startsWith("en") ? "en" : "ar",
+        payload: {
+          reason_code: input.reasonCode,
+          plan_term: input.planTerm,
+          operation: input.operation,
+          expires_at: input.expiresAt || null,
+          is_lifetime: Boolean(input.isLifetime),
+          action_url: input.pending
+            ? "https://saturnws.com/account/signup"
+            : "https://saturnws.com/account?section=subscription",
+        },
+      }),
+    });
+    const response = env.POLICY_WORKER ? await env.POLICY_WORKER.fetch(request) : await fetch(request);
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) return { queued: false, skipped: `subscription_email_enqueue_${response.status}` };
+    return { queued: Boolean(payload?.job_id), skipped: payload?.job_id ? undefined : "subscription_email_suppressed" };
+  } catch {
+    return { queued: false, skipped: "subscription_email_enqueue_failed" };
+  }
+}
+
 async function createPendingSubscriptionGrant(env, input, preview, adminEmail, requestId, keyHash) {
   const existingForEmail = await safeSupabaseRead(
     env,
@@ -2798,6 +2874,18 @@ async function createPendingSubscriptionGrant(env, input, preview, adminEmail, r
     },
     at: new Date().toISOString(),
   });
+  const notification = await enqueueManualSubscriptionEmail(env, {
+    pending: true,
+    requestId,
+    recipient: input.target_email,
+    firebaseUid: null,
+    locale: preview.target?.locale || "ar",
+    reasonCode: input.reason_code,
+    planTerm: normalizedManualPlanTerm(input.plan),
+    operation: input.operation,
+    expiresAt: preview.proposed_state?.expires_at || null,
+    isLifetime: Boolean(preview.proposed_state?.is_lifetime),
+  });
   return {
     success: true,
     request_id: requestId,
@@ -2805,6 +2893,7 @@ async function createPendingSubscriptionGrant(env, input, preview, adminEmail, r
     pending_grant: pendingGrant,
     preview,
     auto_authorized_requests: 0,
+    notification,
   };
 }
 
@@ -2916,6 +3005,18 @@ async function executeManualSubscriptionGrant(request, env, adminEmail) {
       auto_authorized_requests: autoAuthorized,
     },
     at: new Date().toISOString(),
+  });
+  result.notification = await enqueueManualSubscriptionEmail(env, {
+    pending: false,
+    requestId,
+    recipient: targetEmail,
+    firebaseUid: targetUid,
+    locale: resolved.target.locale || "ar",
+    reasonCode: input.reason_code,
+    planTerm: normalizedManualPlanTerm(input.plan),
+    operation: input.operation,
+    expiresAt: item?.period_end_at || item?.expires_at || null,
+    isLifetime: Boolean(preview.proposed_state.is_lifetime),
   });
   await saveManualGrantIdempotency(env, keyHash, result);
   return result;
@@ -3667,6 +3768,204 @@ async function getAdminReadiness(env) {
   };
 }
 
+const ACCOUNT_DEVICE_CHANGE_SELECT = [
+  "id",
+  "firebase_uid",
+  "current_binding_id",
+  "resulting_binding_id",
+  "requested_device_key",
+  "device_name",
+  "platform",
+  "os_version",
+  "app_version",
+  "user_reason",
+  "status",
+  "requested_at",
+  "resolved_at",
+  "resolved_by",
+  "resolution_note",
+  "created_at",
+  "updated_at",
+].join(",");
+
+const ACCOUNT_DEVICE_BINDING_SELECT = [
+  "id",
+  "firebase_uid",
+  "device_key",
+  "device_name",
+  "platform",
+  "os_version",
+  "app_version",
+  "status",
+  "bound_at",
+  "last_seen_at",
+  "released_at",
+  "created_at",
+  "updated_at",
+].join(",");
+
+function accountDeviceChangeInput(body) {
+  const action = String(body?.action || "").trim().toLowerCase();
+  const reason = String(body?.reason || body?.resolution_note || "").trim().slice(0, 1000);
+  if (!["approve", "reject"].includes(action)) throw new Error("invalid_device_change_action");
+  if (reason.length < 3) throw new Error("reason_required");
+  return { action, reason };
+}
+
+async function accountProfilesByUid(env, firebaseUids) {
+  const ids = [...new Set(firebaseUids.map((value) => String(value || "").trim()).filter(Boolean))].slice(0, 100);
+  if (!ids.length) return new Map();
+  const rows = await safeSupabaseRead(
+    env,
+    "account_profiles",
+    `select=firebase_uid,normalized_email,display_name,account_status&firebase_uid=in.(${ids.map((id) => encodeURIComponent(id)).join(",")})&limit=${ids.length}`,
+  );
+  return new Map((Array.isArray(rows) ? rows : []).map((row) => [row.firebase_uid, row]));
+}
+
+async function listAccountDeviceChangeRequests(url, env) {
+  const status = String(url.searchParams.get("status") || "pending").trim().toLowerCase();
+  if (!["pending", "approved", "rejected", "cancelled", "all"].includes(status)) throw new Error("invalid_device_change_status");
+  const page = safeInt(url.searchParams.get("page"), 1, 5000);
+  const limit = safeInt(url.searchParams.get("limit"), 25, 100);
+  const offset = (page - 1) * limit;
+  const rows = await supabaseRequest(env, "account_device_change_requests", "GET", {
+    query: `select=${ACCOUNT_DEVICE_CHANGE_SELECT}${status === "all" ? "" : `&status=eq.${encodeURIComponent(status)}`}&order=requested_at.asc&limit=${limit}&offset=${offset}`,
+  });
+  const items = Array.isArray(rows) ? rows : [];
+  const profiles = await accountProfilesByUid(env, items.map((item) => item.firebase_uid));
+  return {
+    success: true,
+    items: items.map((item) => ({ ...item, account: profiles.get(item.firebase_uid) || null })),
+    page,
+    limit,
+    has_more: items.length === limit,
+  };
+}
+
+async function readAccountDeviceChangeInternal(changeRequestId, env) {
+  if (!isUuid(changeRequestId)) throw new Error("device_change_request_not_found");
+  const rows = await supabaseRequest(env, "account_device_change_requests", "GET", {
+    query: `select=${ACCOUNT_DEVICE_CHANGE_SELECT},resolution_request_id&id=eq.${encodeURIComponent(changeRequestId)}&limit=1`,
+  });
+  const item = Array.isArray(rows) ? rows[0] : null;
+  if (!item) throw new Error("device_change_request_not_found");
+  return item;
+}
+
+async function buildAccountDeviceChangePreview(changeRequestId, body, env, existing = null) {
+  const input = accountDeviceChangeInput(body);
+  const item = existing || await readAccountDeviceChangeInternal(changeRequestId, env);
+  if (item.status !== "pending") throw new Error("device_change_request_not_pending");
+  const profiles = await accountProfilesByUid(env, [item.firebase_uid]);
+  const previewHash = await sha256Hex(stableStringify({
+    request_id: item.id,
+    request_updated_at: item.updated_at,
+    current_binding_id: item.current_binding_id,
+    requested_device_key: item.requested_device_key,
+    action: input.action,
+    reason: input.reason,
+  }));
+  return {
+    request: Object.fromEntries(Object.entries(item).filter(([key]) => key !== "resolution_request_id")),
+    account: profiles.get(item.firebase_uid) || null,
+    action: input.action,
+    reason: input.reason,
+    preview_hash: previewHash,
+  };
+}
+
+async function previewAccountDeviceChange(changeRequestId, request, env) {
+  return buildAccountDeviceChangePreview(changeRequestId, await request.json(), env);
+}
+
+async function executeAccountDeviceChange(changeRequestId, request, env, context) {
+  const body = await request.json();
+  const requestId = String(body?.request_id || body?.idempotency_key || "").trim();
+  const expectedPreviewHash = String(body?.preview_hash || "").trim();
+  if (requestId.length < 8 || requestId.length > 200) throw new Error("invalid_request_id");
+  const existing = await readAccountDeviceChangeInternal(changeRequestId, env);
+  if (existing.status !== "pending" && existing.resolution_request_id === requestId) {
+    return { item: Object.fromEntries(Object.entries(existing).filter(([key]) => key !== "resolution_request_id")), idempotent: true };
+  }
+  const preview = await buildAccountDeviceChangePreview(changeRequestId, body, env, existing);
+  if (!expectedPreviewHash || expectedPreviewHash !== preview.preview_hash) throw new Error("preview_changed");
+  const rows = await supabaseRequest(env, "rpc/resolve_account_device_change", "POST", {
+    body: {
+      p_request_id: changeRequestId,
+      p_action: preview.action,
+      p_actor: context.email,
+      p_resolution_note: preview.reason,
+      p_expected_updated_at: preview.request.updated_at,
+      p_resolution_request_id: requestId,
+    },
+  });
+  const item = Array.isArray(rows) ? rows[0] : null;
+  if (!item?.id) throw new Error("device_change_resolution_failed");
+  await appendAudit(env, {
+    type: `account_device_change_${preview.action === "approve" ? "approved" : "rejected"}`,
+    entity: "account_device_change_request",
+    entity_id: changeRequestId,
+    actor: context.email,
+    payload: { firebase_uid: preview.request.firebase_uid, reason: preview.reason, request_id: requestId },
+    at: new Date().toISOString(),
+  });
+  return { item: Object.fromEntries(Object.entries(item).filter(([key]) => !["requested_hwid_hash", "resolution_request_id"].includes(key))), idempotent: false };
+}
+
+async function buildAccountDeviceResetPreview(firebaseUid, body, env) {
+  const uid = String(firebaseUid || "").trim();
+  const reason = String(body?.reason || "").trim().slice(0, 1000);
+  if (!uid) throw new Error("account_not_found");
+  if (reason.length < 3) throw new Error("reason_required");
+  const rows = await supabaseRequest(env, "account_device_bindings", "GET", {
+    query: `select=${ACCOUNT_DEVICE_BINDING_SELECT}&firebase_uid=eq.${encodeURIComponent(uid)}&status=eq.active&limit=1`,
+  });
+  const binding = Array.isArray(rows) ? rows[0] : null;
+  if (!binding) throw new Error("device_not_found");
+  const sessions = await safeSupabaseRead(env, "app_sessions", `select=id&user_id=eq.${encodeURIComponent(uid)}&revoked_at=is.null&limit=200`);
+  return {
+    binding,
+    active_session_count: Array.isArray(sessions) ? sessions.length : 0,
+    reason,
+    preview_hash: await sha256Hex(stableStringify({ firebase_uid: uid, binding_id: binding.id, binding_updated_at: binding.updated_at, reason })),
+  };
+}
+
+async function previewAccountDeviceReset(firebaseUid, request, env) {
+  return buildAccountDeviceResetPreview(firebaseUid, await request.json(), env);
+}
+
+async function executeAccountDeviceReset(firebaseUid, request, env, context) {
+  const body = await request.json();
+  const requestId = String(body?.request_id || body?.idempotency_key || "").trim();
+  if (requestId.length < 8 || requestId.length > 200) throw new Error("invalid_request_id");
+  const expectedPreviewHash = String(body?.preview_hash || "").trim();
+  let preview;
+  try {
+    preview = await buildAccountDeviceResetPreview(firebaseUid, body, env);
+  } catch (error) {
+    if (String(error instanceof Error ? error.message : error) !== "device_not_found") throw error;
+    const events = await safeSupabaseRead(env, "account_device_events", `select=id,details&firebase_uid=eq.${encodeURIComponent(firebaseUid)}&event_type=eq.device_binding_reset&order=created_at.desc&limit=20`);
+    if ((Array.isArray(events) ? events : []).some((event) => event?.details?.request_id === requestId)) return { reset: true, idempotent: true };
+    throw error;
+  }
+  if (!expectedPreviewHash || expectedPreviewHash !== preview.preview_hash) throw new Error("preview_changed");
+  const reset = await supabaseRequest(env, "rpc/reset_account_device", "POST", {
+    body: { p_firebase_uid: firebaseUid, p_actor: context.email, p_reason: preview.reason, p_request_id: requestId },
+  });
+  if (reset !== true) throw new Error("device_reset_failed");
+  await appendAudit(env, {
+    type: "account_device_binding_reset",
+    entity: "account_device_binding",
+    entity_id: preview.binding.id,
+    actor: context.email,
+    payload: { firebase_uid: firebaseUid, reason: preview.reason, request_id: requestId, active_session_count: preview.active_session_count },
+    at: new Date().toISOString(),
+  });
+  return { reset: true, idempotent: false };
+}
+
 async function getUserDetail(userKey, env) {
   if (!userKey) throw new Error("missing_user");
   const key = safeSearchTerm(userKey);
@@ -3690,13 +3989,15 @@ async function getUserDetail(userKey, env) {
   const crashFilter = subscriptionIds.length
     ? `subscription_id=in.(${subscriptionIds.map((id) => encodeURIComponent(id)).join(",")})`
     : `user_id=eq.__none__`;
-  const [sessions, crashes, loginRequests, tamperAlerts, recentAudit, recoveryEvidence] = await Promise.all([
+  const [sessions, crashes, loginRequests, tamperAlerts, recentAudit, recoveryEvidence, deviceBindings, deviceChangeRequests] = await Promise.all([
     safeSupabaseRead(env, "app_sessions", `select=id,user_id,user_email,subscription_id,hwid,expires_at,revoked_at,created_at,last_seen_at&user_id=eq.${encodeURIComponent(userId)}&order=last_seen_at.desc&limit=100`),
     safeSupabaseRead(env, "crash_logs", `select=id,happened_at,user_id,subscription_id,hwid,device_name,windows_version,error_type,message,stack_trace,app_version,tool_channel,fingerprint&${crashFilter}&order=happened_at.desc&limit=50`),
     safeSupabaseRead(env, "device_login_sessions", `select=id,hwid,status,user_id,user_email,subscription_id,expires_at,authorized_at,consumed_at,created_at&user_id=eq.${encodeURIComponent(userId)}&order=created_at.desc&limit=50`),
     safeSupabaseRead(env, "tamper_alerts", `select=id,happened_at,user_id,subscription_id,hwid,severity,reason,details,resolved,resolved_at&user_id=eq.${encodeURIComponent(userId)}&order=happened_at.desc&limit=50`),
     safeSupabaseRead(env, "admin_activity", `select=id,action,entity,entity_id,admin_email,payload,happened_at&order=happened_at.desc&limit=200`),
     safeSupabaseRead(env, "subscription_recovery_ledger", `select=id,firebase_uid,subscription_id,evidence_type,evidence_reference,remaining_seconds,status,created_at,expires_at,consumed_at&firebase_uid=eq.${encodeURIComponent(userId)}&order=created_at.desc&limit=50`),
+    safeSupabaseRead(env, "account_device_bindings", `select=${ACCOUNT_DEVICE_BINDING_SELECT}&firebase_uid=eq.${encodeURIComponent(userId)}&order=created_at.desc&limit=20`),
+    safeSupabaseRead(env, "account_device_change_requests", `select=${ACCOUNT_DEVICE_CHANGE_SELECT}&firebase_uid=eq.${encodeURIComponent(userId)}&order=created_at.desc&limit=20`),
   ]);
   const supportPayload = await proxyPolicyAdmin(
     new Request("https://admin.saturnws.com/api/admin/internal-support", { method: "GET" }),
@@ -3711,6 +4012,14 @@ async function getUserDetail(userKey, env) {
     message: sanitizeCrashString(row.message || ""),
     stack_trace: sanitizeCrashString(String(row.stack_trace || "").split(/\r?\n/).slice(0, 8).join("\n")),
   }));
+  const safeSessions = await Promise.all((Array.isArray(sessions) ? sessions : []).map(async (row) => {
+    const { hwid, ...safe } = row;
+    return { ...safe, device_key: hwid ? (await sha256Hex(`saturnws-device:${hwid}`)).slice(0, 16) : null };
+  }));
+  const safeLoginRequests = await Promise.all((Array.isArray(loginRequests) ? loginRequests : []).map(async (row) => {
+    const { hwid, ...safe } = row;
+    return { ...safe, device_key: hwid ? (await sha256Hex(`saturnws-device:${hwid}`)).slice(0, 16) : null };
+  }));
   const userAudit = (Array.isArray(recentAudit) ? recentAudit : []).filter((row) =>
     row.entity_id === userId || row.payload?.firebase_uid === userId || row.payload?.target_firebase_uid === userId,
   ).slice(0, 50);
@@ -3718,7 +4027,7 @@ async function getUserDetail(userKey, env) {
   for (const session of Array.isArray(sessions) ? sessions : []) {
     const hwid = session.hwid || "unknown";
     const current = deviceMap.get(hwid) || {
-      hwid,
+      device_key: hwid === "unknown" ? null : (await sha256Hex(`saturnws-device:${hwid}`)).slice(0, 16),
       sessions: 0,
       login_requests: 0,
       last_seen_at: "",
@@ -3735,7 +4044,7 @@ async function getUserDetail(userKey, env) {
   for (const request of Array.isArray(loginRequests) ? loginRequests : []) {
     const hwid = request.hwid || "unknown";
     const current = deviceMap.get(hwid) || {
-      hwid,
+      device_key: hwid === "unknown" ? null : (await sha256Hex(`saturnws-device:${hwid}`)).slice(0, 16),
       sessions: 0,
       login_requests: 0,
       last_seen_at: "",
@@ -3756,10 +4065,13 @@ async function getUserDetail(userKey, env) {
     subscription_projection: resolution.projection,
     subscription_integrity: resolution.diagnostics,
     subscription_history: resolution.history,
-    sessions: Array.isArray(sessions) ? sessions : [],
+    sessions: safeSessions,
     crashes: safeCrashes,
-    login_requests: Array.isArray(loginRequests) ? loginRequests : [],
+    login_requests: safeLoginRequests,
     devices: [...deviceMap.values()],
+    device_binding: (Array.isArray(deviceBindings) ? deviceBindings : []).find((binding) => binding.status === "active") || null,
+    device_binding_history: Array.isArray(deviceBindings) ? deviceBindings : [],
+    device_change_requests: Array.isArray(deviceChangeRequests) ? deviceChangeRequests : [],
     tamper_alerts: Array.isArray(tamperAlerts) ? tamperAlerts : [],
     audit: userAudit,
     recovery_evidence: Array.isArray(recoveryEvidence) ? recoveryEvidence : [],
@@ -3769,7 +4081,7 @@ async function getUserDetail(userKey, env) {
       ? {
           user_id: latestLoginRequest.user_id || userId || null,
           user_email: normalizeEmail(latestLoginRequest.user_email) || userEmail || null,
-          hwid: latestLoginRequest.hwid || null,
+          device_key: latestLoginRequest.hwid ? (await sha256Hex(`saturnws-device:${latestLoginRequest.hwid}`)).slice(0, 16) : null,
           status: latestLoginRequest.status || null,
           last_event_at: accessRequestLastEventAt(latestLoginRequest),
           expires_at: latestLoginRequest.expires_at || null,
@@ -3795,9 +4107,10 @@ async function authorizeMatchingAccessRequests(env, subscription) {
 
   let authorizedCount = 0;
   let resolvedHwid = String(subscription?.hwid || "").trim() || null;
+  const subscriptionWaitStates = new Set(["pending", "subscription_required", "subscription_expired", "subscription_inactive", "subscription_missing"]);
   for (const row of Array.isArray(rows) ? rows : []) {
     const status = String(row?.status || "").trim().toLowerCase();
-    if (["consumed", "expired"].includes(status)) continue;
+    if (!subscriptionWaitStates.has(status)) continue;
     if (isExpiredIso(row?.expires_at)) continue;
     const rowUserId = String(row?.user_id || "").trim();
     const rowUserEmail = normalizeEmail(row?.user_email);

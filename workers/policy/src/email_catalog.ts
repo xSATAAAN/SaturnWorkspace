@@ -548,11 +548,11 @@ export const EMAIL_CATALOG: Record<string, EmailCatalogItem> = {
     sender_identity: "billing",
     title_en: "Subscription expiring",
     title_ar: "قرب انتهاء الاشتراك",
-    description_en: "Scheduled reminder before subscription expiry. Requires subscription event scheduling.",
-    description_ar: "تذكير مجدول قبل انتهاء الاشتراك عند ربط جدولة الاشتراكات.",
+    description_en: "Reminder before the current subscription period ends.",
+    description_ar: "تذكير قبل انتهاء فترة الاشتراك الحالية.",
     default_subject_en: "Your SaturnWS subscription is expiring soon",
     default_subject_ar: "اشتراك SaturnWS سينتهي قريبًا",
-    integration_status: "prepared",
+    integration_status: "linked",
     user_can_disable: true,
     retry_allowed: true,
     essential: false,
@@ -566,11 +566,47 @@ export const EMAIL_CATALOG: Record<string, EmailCatalogItem> = {
     sender_identity: "billing",
     title_en: "Subscription expired",
     title_ar: "انتهاء الاشتراك",
-    description_en: "Prepared account email when a subscription becomes inactive.",
-    description_ar: "رسالة جاهزة عند انتهاء الاشتراك.",
+    description_en: "Sent when the current subscription period ends.",
+    description_ar: "تُرسل عند انتهاء فترة الاشتراك الحالية.",
     default_subject_en: "Your SaturnWS subscription has expired",
     default_subject_ar: "انتهى اشتراك SaturnWS",
-    integration_status: "prepared",
+    integration_status: "linked",
+    user_can_disable: false,
+    retry_allowed: true,
+    essential: true,
+    requires_backend_event: true,
+    admin_test_allowed: false,
+  }),
+  "billing.subscription_granted": item({
+    event_type: "billing.subscription_granted",
+    template_key: "billing_subscription_granted",
+    category: "billing",
+    sender_identity: "billing",
+    title_en: "Subscription updated",
+    title_ar: "تم تحديث الاشتراك",
+    description_en: "Confirms an approved manual subscription change.",
+    description_ar: "تأكيد تغيير اشتراك تم اعتماده يدويًا.",
+    default_subject_en: "Your SaturnWS subscription was updated",
+    default_subject_ar: "تم تحديث اشتراك SaturnWS",
+    integration_status: "linked",
+    user_can_disable: false,
+    retry_allowed: true,
+    essential: true,
+    requires_backend_event: true,
+    admin_test_allowed: false,
+  }),
+  "billing.subscription_grant_reserved": item({
+    event_type: "billing.subscription_grant_reserved",
+    template_key: "billing_subscription_grant_reserved",
+    category: "billing",
+    sender_identity: "billing",
+    title_en: "Subscription reserved",
+    title_ar: "تم حجز الاشتراك",
+    description_en: "Confirms a subscription reserved for an email before account registration.",
+    description_ar: "تأكيد حجز اشتراك للبريد قبل إنشاء الحساب.",
+    default_subject_en: "A SaturnWS subscription is reserved for you",
+    default_subject_ar: "تم حجز اشتراك SaturnWS لك",
+    integration_status: "linked",
     user_can_disable: false,
     retry_allowed: true,
     essential: true,
@@ -909,6 +945,71 @@ function authVerificationBody(data: TemplateData, locale: EmailLocale): { title:
   return { title, bodyHtml, text }
 }
 
+function billingBody(eventType: string, data: TemplateData, locale: EmailLocale): { title: string; bodyHtml: string; text: string } {
+  if (!eventType.startsWith("billing.subscription_")) return genericBody(eventType, data, locale)
+  const catalog = EMAIL_CATALOG[eventType]
+  const title = locale === "ar" ? catalog.default_subject_ar : catalog.default_subject_en
+  const reason = value(data, "reason_code", "admin_grant")
+  const planTerm = value(data, "plan_term", value(data, "plan"))
+  const expiresAt = value(data, "expires_at")
+  const isLifetime = ["true", "1", "yes"].includes(value(data, "is_lifetime").toLowerCase()) || planTerm === "lifetime"
+  const actionUrl = value(data, "action_url", value(data, "url"))
+  const daysRemaining = Math.max(0, Number(value(data, "days_remaining")) || 0)
+  const planLabels: Record<string, { ar: string; en: string }> = {
+    weekly: { ar: "أسبوعي", en: "Weekly" },
+    monthly: { ar: "شهري", en: "Monthly" },
+    annual: { ar: "سنوي", en: "Annual" },
+    yearly: { ar: "سنوي", en: "Annual" },
+    lifetime: { ar: "مدى الحياة", en: "Lifetime" },
+    custom: { ar: "مخصص", en: "Custom" },
+  }
+  const plan = planLabels[planTerm]?.[locale] || planTerm
+  let formattedExpiry = expiresAt
+  if (expiresAt && Number.isFinite(Date.parse(expiresAt))) {
+    formattedExpiry = new Intl.DateTimeFormat(locale === "ar" ? "ar-EG" : "en-US", {
+      dateStyle: "medium",
+      timeStyle: "short",
+      timeZone: "UTC",
+    }).format(new Date(expiresAt))
+  }
+  const reasonCopy: Record<string, { ar: string; en: string }> = {
+    admin_grant: { ar: "تمت إضافة الاشتراك إلى حسابك.", en: "A subscription was added to your account." },
+    compensation: { ar: "تمت إضافة مدة تعويضية إلى اشتراكك.", en: "Compensatory time was added to your subscription." },
+    trial: { ar: "تم تفعيل فترة تجريبية لحسابك.", en: "A trial period was activated for your account." },
+    technical_support: { ar: "تم تحديث اشتراكك بعد معالجة طلب الدعم.", en: "Your subscription was updated after your support request was handled." },
+    subscription_replacement: { ar: "تم استبدال اشتراكك بالاشتراك المعتمد.", en: "Your subscription was replaced with the approved subscription." },
+    subscription_recovery: { ar: "تمت استعادة المدة المستحقة لاشتراكك.", en: "The eligible time on your subscription was restored." },
+    other: { ar: "تم تحديث اشتراكك.", en: "Your subscription was updated." },
+  }
+  let lines: string[]
+  let ctaLabel: string
+  if (eventType === "billing.subscription_expiring") {
+    lines = locale === "ar"
+      ? [`سينتهي اشتراكك خلال ${daysRemaining || 1} يوم.`, plan ? `الخطة: ${plan}` : "", formattedExpiry ? `تاريخ الانتهاء: ${formattedExpiry}` : ""]
+      : [`Your subscription expires in ${daysRemaining || 1} day${daysRemaining === 1 ? "" : "s"}.`, plan ? `Plan: ${plan}` : "", formattedExpiry ? `Expiry: ${formattedExpiry}` : ""]
+    ctaLabel = locale === "ar" ? "عرض الاشتراك" : "View subscription"
+  } else if (eventType === "billing.subscription_expired") {
+    lines = locale === "ar"
+      ? ["انتهت فترة اشتراكك.", formattedExpiry ? `انتهى في: ${formattedExpiry}` : ""]
+      : ["Your subscription period has ended.", formattedExpiry ? `Ended at: ${formattedExpiry}` : ""]
+    ctaLabel = locale === "ar" ? "عرض الاشتراك" : "View subscription"
+  } else if (eventType === "billing.subscription_grant_reserved") {
+    const reasonLine = reasonCopy[reason]?.[locale] || reasonCopy.other[locale]
+    lines = locale === "ar"
+      ? ["تم حجز اشتراك لهذا البريد.", reasonLine, "أنشئ حسابًا بنفس البريد لتفعيل الاشتراك.", plan ? `الخطة: ${plan}` : ""]
+      : ["A subscription was reserved for this email.", reasonLine, "Create an account with the same email to activate it.", plan ? `Plan: ${plan}` : ""]
+    ctaLabel = locale === "ar" ? "إنشاء الحساب" : "Create account"
+  } else {
+    const reasonLine = reasonCopy[reason]?.[locale] || reasonCopy.other[locale]
+    lines = locale === "ar"
+      ? [reasonLine, plan ? `الخطة: ${plan}` : "", isLifetime ? "المدة: مدى الحياة" : formattedExpiry ? `تاريخ الانتهاء: ${formattedExpiry}` : ""]
+      : [reasonLine, plan ? `Plan: ${plan}` : "", isLifetime ? "Term: Lifetime" : formattedExpiry ? `Expiry: ${formattedExpiry}` : ""]
+    ctaLabel = locale === "ar" ? "عرض الاشتراك" : "View subscription"
+  }
+  lines = lines.filter(Boolean)
+  return { title, bodyHtml: paragraph(lines) + cta(ctaLabel, actionUrl), text: lines.concat(actionUrl ? [actionUrl] : []).join("\n") }
+}
+
 function genericBody(eventType: string, data: TemplateData, locale: EmailLocale): { title: string; bodyHtml: string; text: string } {
   const catalog = EMAIL_CATALOG[eventType] || EMAIL_CATALOG["admin.email_test"]
   const title = locale === "ar" ? catalog.default_subject_ar : catalog.default_subject_en
@@ -945,6 +1046,8 @@ export function renderTransactionalEmail(eventTypeInput: string, data: TemplateD
     ? supportBody(eventType, data, locale)
     : eventType.startsWith("security.") || eventType.startsWith("account.")
       ? securityBody(eventType, data, locale)
+      : eventType.startsWith("billing.")
+        ? billingBody(eventType, data, locale)
       : eventType.startsWith("admin.") && eventType !== "admin.email_test"
         ? adminAlertBody(eventType, data, locale)
         : eventType === "auth.email_verification" || eventType === "auth.verification_resend"

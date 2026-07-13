@@ -2,6 +2,9 @@ import type {
   AdminAuditLogItem,
   AdminCrashGroup,
   AdminCrashLog,
+  AdminDeviceChangePreview,
+  AdminDeviceChangeRequest,
+  AdminDeviceResetPreview,
   AdminPromoCode,
   AdminReleaseManifest,
   AdminRemoteControls,
@@ -27,7 +30,7 @@ import type {
   ManualGrantResult,
   PendingSubscriptionGrant,
 } from '../../api/admin'
-import type { AccountDeletionStatusResult, AccountProfileProjection, AccountSessionsResult, AccountSubscription, SubscriptionProjection } from '../../api/account'
+import type { AccountDeletionStatusResult, AccountDeviceChangeRequest, AccountProfileProjection, AccountSessionsResult, AccountSubscription, SubscriptionProjection } from '../../api/account'
 
 export type RuntimeMode = 'preview' | 'production'
 
@@ -36,6 +39,8 @@ export type AppUser = {
   email: string
   displayName?: string | null
   emailVerified?: boolean
+  authProviders?: string[]
+  trustedEmailIdentity?: boolean
   profile?: AccountProfileProjection | null
 }
 
@@ -211,6 +216,7 @@ export type AccountAdapter = {
   updateProfile(input: { displayName: string }): Promise<AppUser>
   sendPasswordReset(): Promise<void>
   listSessions(): Promise<AccountSessionsResult>
+  requestDeviceChange(deviceCode: string, reason?: string): Promise<AccountDeviceChangeRequest>
   revokeSession(sessionId: string, scope: 'session' | 'device'): Promise<void>
   revokeAllSessions(): Promise<void>
   getDeletionStatus(): Promise<AccountDeletionStatusResult>
@@ -291,6 +297,11 @@ export type AdminAdapter = {
   executeManualGrant(input: ManualGrantExecuteInput): Promise<ManualGrantResult>
   listPendingSubscriptionGrants(status?: PendingSubscriptionGrant['status'] | 'all'): Promise<PendingSubscriptionGrant[]>
   cancelPendingSubscriptionGrant(grantId: string, reason: string): Promise<PendingSubscriptionGrant>
+  listDeviceChangeRequests(status?: AdminDeviceChangeRequest['status'] | 'all'): Promise<AdminDeviceChangeRequest[]>
+  previewDeviceChange(requestId: string, input: { action: 'approve' | 'reject'; reason: string }): Promise<AdminDeviceChangePreview>
+  executeDeviceChange(requestId: string, input: { action: 'approve' | 'reject'; reason: string; preview_hash: string; request_id: string }): Promise<{ item: AdminDeviceChangeRequest; idempotent: boolean }>
+  previewDeviceReset(firebaseUid: string, reason: string): Promise<AdminDeviceResetPreview>
+  executeDeviceReset(firebaseUid: string, input: { reason: string; preview_hash: string; request_id: string }): Promise<{ reset: boolean; idempotent: boolean }>
   updateSubscriptionStatus(id: string, status: AdminSubscription['status']): Promise<AdminSubscription>
   previewAccountLifecycle(firebaseUid: string, input: AdminOperationReason & { action: 'suspend' | 'reactivate' | 'mark_pending_deletion' }): Promise<AdminOperationPreview>
   executeAccountLifecycle(firebaseUid: string, input: AdminOperationReason & { action: 'suspend' | 'reactivate' | 'mark_pending_deletion'; preview_hash: string; request_id: string }): Promise<Record<string, unknown>>

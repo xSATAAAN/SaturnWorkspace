@@ -25,7 +25,7 @@ const checks = [
   ['Manual grant does not expose Firebase UID input', !manualGrant.includes('Firebase UID')],
   ['Recovery is not a normal grant action', !manualGrant.includes('restore_remaining_time')],
   ['Recovery requires ledger evidence', recovery.includes('recovery_evidence_id') && userDetail.includes('recovery_evidence')],
-  ['User detail exposes safe session revocation', userDetail.includes('scope: "session"') && userDetail.includes('scope: "device"')],
+  ['User detail exposes safe session revocation', userDetail.includes('scope: "session"') && userDetail.includes('scope: "all"') && !userDetail.includes('row.hwid')],
   ['User detail includes support and access requests', userDetail.includes('support_threads') && userDetail.includes('login_requests')],
   ['Crash group state is operational', diagnostics.includes('updateCrashGroupState') && diagnostics.includes('CrashGroupStateDialog')],
   ['Tamper resolution requires an explicit note', diagnostics.includes('TamperResolveDialog') && diagnostics.includes('reason.trim().length < 3')],

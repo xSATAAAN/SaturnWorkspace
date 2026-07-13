@@ -1,5 +1,6 @@
 import {
   GoogleAuthProvider,
+  linkWithCredential,
   onAuthStateChanged,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
@@ -7,7 +8,7 @@ import {
   signOut,
   updateProfile,
 } from 'firebase/auth'
-import { cancelAccountDeletion, fetchAccountDeletionStatus, fetchAccountSessions, fetchAccountSubscription, provisionAccountProfile, requestAccountDeletion, revokeAccountSession, revokeAllAccountSessions } from '../../api/account'
+import { cancelAccountDeletion, fetchAccountDeletionStatus, fetchAccountSessions, fetchAccountSubscription, provisionAccountProfile, requestAccountDeletion, requestAccountDeviceChange, revokeAccountSession, revokeAllAccountSessions } from '../../api/account'
 import {
   createSubscription,
   createPromoCode,
@@ -18,6 +19,7 @@ import {
   fetchAdminDashboard,
   fetchAdminCommerceOverview,
   fetchAdminUsers,
+  fetchAdminDeviceChangeRequests,
   fetchAdminPreauthState,
   fetchAdminSession,
   fetchAuditLog,
@@ -46,6 +48,10 @@ import {
   previewAccessRevocation as previewAccessRevocationRequest,
   previewAccountLifecycle as previewAccountLifecycleRequest,
   previewSubscriptionTransition as previewSubscriptionTransitionRequest,
+  previewAdminDeviceChange,
+  executeAdminDeviceChange,
+  previewAdminDeviceReset,
+  executeAdminDeviceReset,
   resolveTamperAlert as resolveTamperAlertRequest,
   updateCrashGroupState as updateCrashGroupStateRequest,
   publishRelease,
@@ -86,20 +92,46 @@ import {
   replyWebSupportThread,
   updateWebSupportStatus,
 } from '../../api/support'
-import { firebaseAuth } from '../../lib/firebase'
+import { firebaseAuth, firebaseAuthPersistenceReady } from '../../lib/firebase'
 import { publicCopy } from '../content/publicCopy'
+import { legalPageContent } from '../content/legalContent'
 import { isProductionFeatureEnabled, productionFeatureFlags } from './productionFeatureFlags'
 import type { AccountSubscription } from '../../api/account'
 import type { AppAdapters, AppUser, AuthState, PlanInfo, ReleaseInfo, SignUpWithEmailInput, SupportSenderRole } from './contracts'
 
 function userFromFirebase(user: typeof firebaseAuth.currentUser): AppUser {
   if (!user?.email) throw new Error('auth_user_missing_email')
+  const authProviders = user.providerData
+    .map((provider) => String(provider.providerId || '').trim().toLowerCase())
+    .filter(Boolean)
+  const trustedEmailIdentity = Boolean(user.emailVerified && authProviders.includes('google.com'))
   return {
     id: user.uid,
     email: user.email,
     displayName: user.displayName,
     emailVerified: user.emailVerified,
+    authProviders,
+    trustedEmailIdentity,
   }
+}
+
+type PendingProviderLink = {
+  email: string
+  credential: NonNullable<ReturnType<typeof GoogleAuthProvider.credentialFromError>>
+}
+
+let pendingProviderLink: PendingProviderLink | null = null
+
+function providerCollisionError(error: unknown): Error | null {
+  const raw = String((error as { code?: string })?.code || '').toLowerCase()
+  if (!raw.includes('account-exists-with-different-credential')) return null
+  const credential = GoogleAuthProvider.credentialFromError(error as never)
+  const customData = (error as { customData?: { email?: string } })?.customData
+  const email = String(customData?.email || '').trim().toLowerCase()
+  if (credential && email) pendingProviderLink = { credential, email }
+  const collision = new Error(`AUTH_PROVIDER_COLLISION${email ? `:${email}` : ''}`)
+  collision.name = 'AuthProviderCollisionError'
+  return collision
 }
 
 function mapFirebaseAuthError(error: unknown): Error {
@@ -162,7 +194,7 @@ async function refreshAuthenticatedAccountState(forceRefresh = true): Promise<vo
       user: account.user,
       status: 'authenticated',
       profileState: profile?.account_status === 'suspended' ? 'disabled' : profile ? 'ready' : 'missing',
-      emailVerificationState: profile?.email_verified ? 'verified' : 'unverified',
+      emailVerificationState: profile?.email_verified || baseUser.trustedEmailIdentity ? 'verified' : 'unverified',
       sessionState: 'valid',
       error: null,
     })
@@ -172,7 +204,7 @@ async function refreshAuthenticatedAccountState(forceRefresh = true): Promise<vo
       user: baseUser,
       status: 'authenticated',
       profileState: 'failed_recoverable',
-      emailVerificationState: 'unverified',
+      emailVerificationState: baseUser.trustedEmailIdentity ? 'verified' : 'unverified',
       sessionState: 'refresh_required',
       error: String(error instanceof Error ? error.message : error || 'PROFILE_PROVISIONING_FAILED'),
     })
@@ -372,7 +404,20 @@ export const productionAdapters: AppAdapters = {
     },
     async signInWithEmail(email, password) {
       try {
+        await firebaseAuthPersistenceReady
         const result = await signInWithEmailAndPassword(firebaseAuth, email.trim(), password)
+        const normalizedEmail = String(result.user.email || email).trim().toLowerCase()
+        if (pendingProviderLink?.email === normalizedEmail) {
+          try {
+            const linked = await linkWithCredential(result.user, pendingProviderLink.credential)
+            pendingProviderLink = null
+            clearAccountBootstrap()
+            return userFromFirebase(linked.user)
+          } catch (error) {
+            await signOut(firebaseAuth).catch(() => undefined)
+            throw error
+          }
+        }
         return userFromFirebase(result.user)
       } catch (error) {
         throw mapFirebaseAuthError(error)
@@ -407,6 +452,7 @@ export const productionAdapters: AppAdapters = {
       })
       if (!finalized.success) throw new Error(finalized.error || 'registration_finalization_failed')
       try {
+        await firebaseAuthPersistenceReady
         const result = await signInWithEmailAndPassword(firebaseAuth, input.email.trim(), input.password)
         clearAccountBootstrap()
         await refreshAuthenticatedAccountState(true)
@@ -417,15 +463,27 @@ export const productionAdapters: AppAdapters = {
     },
     async signInWithGoogle(input = {}) {
       try {
+        await firebaseAuthPersistenceReady
         const result = await signInWithPopup(firebaseAuth, new GoogleAuthProvider())
         const shouldProvisionProfile = input.provisionProfile !== false || Boolean(input.termsAccepted)
         if (!shouldProvisionProfile) return userFromFirebase(result.user)
-        return provisionCurrentFirebaseUser({
-          locale: input.locale,
-          termsAccepted: input.termsAccepted,
-          termsVersion: input.termsVersion || '2026-06',
-        })
+        try {
+          return await provisionCurrentFirebaseUser({
+            locale: input.locale,
+            termsAccepted: input.termsAccepted,
+            termsVersion: input.termsVersion || '2026-06',
+          })
+        } catch (error) {
+          const code = String(error instanceof Error ? error.message : error || '').toLowerCase()
+          if (code.includes('profile_terms_required')) {
+            await signOut(firebaseAuth).catch(() => undefined)
+            throw new Error('AUTH_SIGNUP_REQUIRED')
+          }
+          throw error
+        }
       } catch (error) {
+        const collision = providerCollisionError(error)
+        if (collision) throw collision
         throw mapFirebaseAuthError(error)
       }
     },
@@ -479,6 +537,7 @@ export const productionAdapters: AppAdapters = {
       publishAuthState({ ...currentAuthState, status: 'signing_out' })
       setAdminBearerToken(null)
       clearAccountBootstrap()
+      pendingProviderLink = null
       await signOut(firebaseAuth)
     },
     async getIdToken(forceRefresh = false) {
@@ -508,6 +567,11 @@ export const productionAdapters: AppAdapters = {
       const token = await productionAdapters.auth.getIdToken(false)
       if (!token) throw new Error('not_authenticated')
       return fetchAccountSessions(token)
+    },
+    async requestDeviceChange(deviceCode, reason) {
+      const token = await productionAdapters.auth.getIdToken(true)
+      if (!token) throw new Error('not_authenticated')
+      return requestAccountDeviceChange(token, deviceCode, reason)
     },
     async revokeSession(sessionId, scope) {
       const token = await productionAdapters.auth.getIdToken(true)
@@ -761,6 +825,21 @@ export const productionAdapters: AppAdapters = {
     async cancelPendingSubscriptionGrant(grantId, reason) {
       return (await cancelPendingSubscriptionGrantRequest({ grant_id: grantId, reason })).item
     },
+    async listDeviceChangeRequests(status = 'pending') {
+      return (await fetchAdminDeviceChangeRequests({ status })).items || []
+    },
+    async previewDeviceChange(requestId, input) {
+      return (await previewAdminDeviceChange(requestId, input)).preview
+    },
+    async executeDeviceChange(requestId, input) {
+      return (await executeAdminDeviceChange(requestId, input)).result
+    },
+    async previewDeviceReset(firebaseUid, reason) {
+      return (await previewAdminDeviceReset(firebaseUid, reason)).preview
+    },
+    async executeDeviceReset(firebaseUid, input) {
+      return (await executeAdminDeviceReset(firebaseUid, input)).result
+    },
     async updateSubscriptionStatus(id, status) {
       const data = await patchSubscriptionStatus(id, status)
       return data.item
@@ -925,10 +1004,7 @@ export const productionAdapters: AppAdapters = {
   content: {
     async getLegalPage(page, locale) {
       const copy = publicCopy[locale]
-      return {
-        title: page,
-        body: copy.legalBody,
-      }
+      return legalPageContent(page, locale, copy.legalBody)
     },
   },
 }

@@ -69,6 +69,76 @@ export async function getActiveSubscriptionForUser(env: Env, userId: string, ema
   return resolution.currentRow
 }
 
+export type AccountDeviceAuthorization = {
+  decision: "authorized" | "device_change_required" | string
+  binding_id: string | null
+  device_key: string | null
+  current_device_name: string | null
+  current_bound_at: string | null
+  pending_request_id: string | null
+  pending_request_status: string | null
+}
+
+export async function authorizeAccountDevice(
+  env: Env,
+  input: { firebaseUid: string; hwidHash: string; deviceName?: string | null; platform?: string | null; osVersion?: string | null; appVersion?: string | null },
+): Promise<AccountDeviceAuthorization> {
+  const rows = await supabaseJson<AccountDeviceAuthorization[]>(env, "/rpc/authorize_account_device", {
+    method: "POST",
+    body: JSON.stringify({
+      p_firebase_uid: input.firebaseUid,
+      p_hwid_hash: input.hwidHash,
+      p_device_name: input.deviceName || null,
+      p_platform: input.platform || null,
+      p_os_version: input.osVersion || null,
+      p_app_version: input.appVersion || null,
+    }),
+  })
+  if (!rows[0]) throw new Error("device_policy_empty")
+  return rows[0]
+}
+
+export async function requestAccountDeviceChange(
+  env: Env,
+  input: { firebaseUid: string; hwidHash: string; deviceName?: string | null; platform?: string | null; osVersion?: string | null; appVersion?: string | null; userReason?: string | null },
+): Promise<Record<string, unknown>> {
+  const rows = await supabaseJson<Record<string, unknown>[]>(env, "/rpc/request_account_device_change", {
+    method: "POST",
+    body: JSON.stringify({
+      p_firebase_uid: input.firebaseUid,
+      p_hwid_hash: input.hwidHash,
+      p_device_name: input.deviceName || null,
+      p_platform: input.platform || null,
+      p_os_version: input.osVersion || null,
+      p_app_version: input.appVersion || null,
+      p_user_reason: input.userReason || null,
+    }),
+  })
+  if (!rows[0]) throw new Error("device_change_request_empty")
+  return rows[0]
+}
+
+export async function getAccountDeviceState(
+  env: Env,
+  firebaseUid: string,
+): Promise<{ binding: Record<string, unknown> | null; requests: Record<string, unknown>[]; events: Record<string, unknown>[] }> {
+  const uid = encodeURIComponent(firebaseUid)
+  const [bindings, requests, events] = await Promise.all([
+    supabaseJson<Record<string, unknown>[]>(env, `/account_device_bindings?select=id,device_key,device_name,platform,os_version,app_version,status,bound_at,last_seen_at,released_at,created_at,updated_at&firebase_uid=eq.${uid}&status=eq.active&limit=1`),
+    supabaseJson<Record<string, unknown>[]>(env, `/account_device_change_requests?select=id,current_binding_id,resulting_binding_id,requested_device_key,device_name,platform,os_version,app_version,user_reason,status,requested_at,resolved_at,resolved_by,resolution_note,created_at,updated_at&firebase_uid=eq.${uid}&order=created_at.desc&limit=20`),
+    supabaseJson<Record<string, unknown>[]>(env, `/account_device_events?select=id,event_type,actor_type,actor_id,binding_id,change_request_id,details,created_at&firebase_uid=eq.${uid}&order=created_at.desc&limit=50`),
+  ])
+  return { binding: bindings[0] || null, requests, events }
+}
+
+export async function isAccountDeviceBindingCurrent(env: Env, firebaseUid: string, hwidHash: string): Promise<boolean> {
+  const rows = await supabaseJson<Array<{ id: string }>>(
+    env,
+    `/account_device_bindings?select=id&firebase_uid=eq.${encodeURIComponent(firebaseUid)}&hwid_hash=eq.${encodeURIComponent(hwidHash)}&status=eq.active&limit=1`,
+  )
+  return Boolean(rows[0]?.id)
+}
+
 export async function getLatestSubscriptionForUser(env: Env, userId: string, email: string): Promise<SubscriptionRow | null> {
   const rows = await getSubscriptionRowsForUser(env, userId, email)
   const resolution = resolveSubscriptionTruth<SubscriptionRow>(rows, { firebaseUid: userId, email })
@@ -83,6 +153,84 @@ export async function getSubscriptionRowsForUser(env: Env, userId: string, email
     `/account_subscriptions?or=(${filters.join(",")})&select=*&order=created_at.desc&limit=100`,
   )
   return Array.isArray(rows) ? rows : []
+}
+
+export interface SubscriptionEmailCandidate {
+  subscription_id: string
+  firebase_uid: string
+  recipient: string
+  locale: "ar" | "en"
+  plan_term: string
+  lifecycle_state: string
+  renewal_state: string
+  cancel_at_period_end: boolean
+  expires_at: string
+}
+
+export async function listSubscriptionEmailCandidates(
+  env: Env,
+  input: { from: string; to: string; offset: number; limit: number },
+): Promise<{ items: SubscriptionEmailCandidate[]; hasMore: boolean; nextOffset: number }> {
+  const limit = Math.max(1, Math.min(Math.trunc(input.limit || 200), 250))
+  const offset = Math.max(0, Math.min(Math.trunc(input.offset || 0), 5000))
+  const from = encodeURIComponent(input.from)
+  const to = encodeURIComponent(input.to)
+  const select = [
+    "id",
+    "firebase_user_id",
+    "status",
+    "lifecycle_state",
+    "plan_term",
+    "renewal_state",
+    "cancel_at_period_end",
+    "period_end_at",
+    "expires_at",
+  ].join(",")
+  const dueWindow = [
+    `and(period_end_at.not.is.null,period_end_at.gte.${from},period_end_at.lte.${to})`,
+    `and(period_end_at.is.null,expires_at.gte.${from},expires_at.lte.${to})`,
+  ].join(",")
+  const rows = await supabaseJson<SubscriptionRow[]>(
+    env,
+    `/account_subscriptions?select=${select}&is_current=eq.true&integrity_state=eq.ok&plan_term=neq.lifetime&or=(${dueWindow})&order=period_end_at.asc.nullslast,expires_at.asc,id.asc&offset=${offset}&limit=${limit}`,
+  )
+  const subscriptions = Array.isArray(rows) ? rows : []
+  const firebaseUids = [...new Set(subscriptions.map((row) => String(row.firebase_user_id || "").trim()).filter(Boolean))]
+  const profiles = new Map<string, Pick<AccountProfileRow, "firebase_uid" | "normalized_email" | "locale" | "account_status">>()
+  for (let index = 0; index < firebaseUids.length; index += 100) {
+    const batch = firebaseUids.slice(index, index + 100)
+    const filter = batch.map((uid) => encodeURIComponent(uid)).join(",")
+    const profileRows = await supabaseJson<Array<Pick<AccountProfileRow, "firebase_uid" | "normalized_email" | "locale" | "account_status">>>(
+      env,
+      `/account_profiles?select=firebase_uid,normalized_email,locale,account_status&firebase_uid=in.(${filter})&limit=${batch.length}`,
+    )
+    for (const profile of profileRows || []) profiles.set(profile.firebase_uid, profile)
+  }
+
+  const fromMs = Date.parse(input.from)
+  const toMs = Date.parse(input.to)
+  const allowedStates = new Set(["active", "trialing", "past_due", "cancel_at_period_end", "expired"])
+  const items = subscriptions.flatMap((subscription): SubscriptionEmailCandidate[] => {
+    const firebaseUid = String(subscription.firebase_user_id || "").trim()
+    const profile = profiles.get(firebaseUid)
+    const expiresAt = String(subscription.period_end_at || subscription.expires_at || "").trim()
+    const expiresMs = Date.parse(expiresAt)
+    const state = String(subscription.lifecycle_state || subscription.status || "").trim().toLowerCase()
+    if (!profile || profile.account_status !== "active" || !profile.normalized_email || !allowedStates.has(state)) return []
+    if (!Number.isFinite(expiresMs) || expiresMs < fromMs || expiresMs > toMs) return []
+    return [{
+      subscription_id: subscription.id,
+      firebase_uid: firebaseUid,
+      recipient: normalizeEmail(profile.normalized_email),
+      locale: String(profile.locale || "ar").toLowerCase().startsWith("en") ? "en" : "ar",
+      plan_term: String(subscription.plan_term || subscription.plan || "").trim().toLowerCase(),
+      lifecycle_state: state,
+      renewal_state: String(subscription.renewal_state || "").trim().toLowerCase(),
+      cancel_at_period_end: Boolean(subscription.cancel_at_period_end),
+      expires_at: new Date(expiresMs).toISOString(),
+    }]
+  })
+  return { items, hasMore: subscriptions.length === limit, nextOffset: offset + subscriptions.length }
 }
 
 export async function getAccountProfileByFirebaseUid(env: Env, firebaseUid: string): Promise<AccountProfileRow | null> {

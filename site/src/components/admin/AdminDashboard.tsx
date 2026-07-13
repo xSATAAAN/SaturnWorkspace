@@ -1102,7 +1102,7 @@ export function AdminDashboard({ lang }: AdminDashboardProps) {
                     {selectedUserLoading ? <div className="text-sm text-white/60">{isAr ? 'جار التحميل...' : 'Loading...'}</div> : null}
                     <div className="space-y-2 text-sm text-white/75">
                       <div>{isAr ? 'البريد:' : 'Email:'} {selectedUser.item?.user_email || selectedUser.request?.user_email || '--'}</div>
-                      <div>HWID: {selectedUser.item?.hwid || selectedUser.request?.hwid || '--'}</div>
+                      <div>{isAr ? 'الجهاز:' : 'Device:'} {selectedUser.request?.device_key || '--'}</div>
                       <div>{isAr ? 'آخر دخول:' : 'Last login:'} {formatEgyptDateTime(selectedUser.item?.last_seen_at || selectedUser.request?.last_event_at)}</div>
                       <div>{isAr ? 'حالة الطلب:' : 'Request status:'} {selectedUser.request?.status || '--'}</div>
                       <div>{isAr ? 'آخر خطأ:' : 'Last crash:'} {formatEgyptDateTime(selectedUser.last_crash?.happened_at)}</div>

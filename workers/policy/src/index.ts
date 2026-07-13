@@ -41,6 +41,7 @@ interface Env {
   EMAIL_SUPPORT_ENABLED?: string
   EMAIL_AUTH_ENABLED?: string
   EMAIL_BILLING_ENABLED?: string
+  EMAIL_SUBSCRIPTION_ENABLED?: string
   EMAIL_RELEASE_ENABLED?: string
   EMAIL_SECURITY_ENABLED?: string
   EMAIL_SCHEDULER_ENABLED?: string
@@ -938,6 +939,7 @@ function envFlag(value: unknown, fallback = false): boolean {
 }
 
 const AUTH_EMAIL_VERIFICATION_EVENTS = new Set(["auth.email_verification", "auth.verification_resend"])
+const MANUAL_SUBSCRIPTION_EMAIL_EVENTS = new Set(["billing.subscription_granted", "billing.subscription_grant_reserved"])
 const INTERNAL_EMAIL_ENQUEUE_EVENTS = new Set([
   ...AUTH_EMAIL_VERIFICATION_EVENTS,
   "security.new_login",
@@ -948,6 +950,7 @@ const INTERNAL_EMAIL_ENQUEUE_EVENTS = new Set([
   "account.deletion_cancelled",
   "account.suspended",
   "account.reactivated",
+  ...MANUAL_SUBSCRIPTION_EMAIL_EVENTS,
   "admin.auth_orphan_quarantine",
 ])
 const AUTH_EMAIL_ENQUEUE_MAX_BYTES = 8192
@@ -994,6 +997,9 @@ function emailFeatureEnabled(env: Env, eventType: string): boolean {
   if (!event) return false
   if (event.category === "support") return envFlag(env.EMAIL_SUPPORT_ENABLED, true)
   if (event.category === "auth") return envFlag(env.EMAIL_AUTH_ENABLED, false)
+  if (event.category === "billing" && eventType.startsWith("billing.subscription_")) {
+    return envFlag(env.EMAIL_SUBSCRIPTION_ENABLED, false)
+  }
   if (event.category === "billing") return envFlag(env.EMAIL_BILLING_ENABLED, false)
   if (event.category === "release") return envFlag(env.EMAIL_RELEASE_ENABLED, false)
   if (event.category === "security" || event.category === "policy") return envFlag(env.EMAIL_SECURITY_ENABLED, false)
@@ -1336,7 +1342,9 @@ async function requireInternalEmailToken(request: Request, env: Env, eventType: 
   const supplied = bearerToken(request)
   const candidateTokens = [
     normalizeText(env.AUTH_EMAIL_ENQUEUE_TOKEN),
-    eventType.startsWith("account.") || eventType.startsWith("admin.") ? normalizeText(env.ADMIN_EMAIL_ENQUEUE_TOKEN) : "",
+    eventType.startsWith("account.") || eventType.startsWith("admin.") || MANUAL_SUBSCRIPTION_EMAIL_EVENTS.has(eventType)
+      ? normalizeText(env.ADMIN_EMAIL_ENQUEUE_TOKEN)
+      : "",
   ].filter(Boolean)
   if (!supplied || candidateTokens.length === 0) return json({ success: false, error: "unauthorized" }, 401)
   for (const configured of candidateTokens) {
@@ -1729,6 +1737,128 @@ async function processEmailOutbox(env: Env, limit = EMAIL_OUTBOX_BATCH_LIMIT): P
   return { processed, sent, skipped }
 }
 
+interface SubscriptionEmailCandidate {
+  subscription_id: string
+  firebase_uid: string
+  recipient: string
+  locale: "ar" | "en"
+  plan_term: string
+  lifecycle_state: string
+  renewal_state: string
+  cancel_at_period_end: boolean
+  expires_at: string
+}
+
+async function fetchSubscriptionEmailCandidatePage(
+  env: Env,
+  offset: number,
+): Promise<{ items: SubscriptionEmailCandidate[]; hasMore: boolean; nextOffset: number }> {
+  const token = normalizeText(env.AUTH_EMAIL_ENQUEUE_TOKEN)
+  if (!token) throw new Error("subscription_email_source_token_missing")
+  const request = new Request(`https://auth.saturnws.com/internal/subscription-email-candidates?offset=${offset}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "User-Agent": "SaturnWS-Policy-Subscription-Email/1",
+    },
+  })
+  const response = env.AUTH_SERVICE ? await env.AUTH_SERVICE.fetch(request) : await fetch(request)
+  const payload = await response.json<Record<string, unknown>>().catch(() => null)
+  if (!response.ok || !payload?.success) throw new Error(`subscription_email_source_${response.status}`)
+  const rawItems = Array.isArray(payload.items) ? payload.items : []
+  const items = rawItems.flatMap((raw): SubscriptionEmailCandidate[] => {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return []
+    const item = raw as Record<string, unknown>
+    const subscriptionId = clampText(item.subscription_id, 80)
+    const firebaseUid = clampText(item.firebase_uid, 160)
+    const recipient = normalizeEmailAddress(item.recipient)
+    const expiresAt = normalizeText(item.expires_at)
+    if (!subscriptionId || !firebaseUid || !recipient || !Number.isFinite(Date.parse(expiresAt))) return []
+    return [{
+      subscription_id: subscriptionId,
+      firebase_uid: firebaseUid,
+      recipient,
+      locale: normalizeLower(item.locale).startsWith("en") ? "en" : "ar",
+      plan_term: clampText(item.plan_term, 40),
+      lifecycle_state: clampText(item.lifecycle_state, 40),
+      renewal_state: clampText(item.renewal_state, 40),
+      cancel_at_period_end: Boolean(item.cancel_at_period_end),
+      expires_at: new Date(expiresAt).toISOString(),
+    }]
+  })
+  const nextOffset = Number(payload.nextOffset)
+  return {
+    items,
+    hasMore: Boolean(payload.hasMore),
+    nextOffset: Number.isFinite(nextOffset) && nextOffset > offset ? Math.trunc(nextOffset) : offset + rawItems.length,
+  }
+}
+
+function subscriptionReminderState(expiresAt: string, now: number): { eventType: string; bucket: string; daysRemaining: number } | null {
+  const remaining = Date.parse(expiresAt) - now
+  const day = 24 * 60 * 60 * 1000
+  if (!Number.isFinite(remaining)) return null
+  if (remaining <= 0) return { eventType: "billing.subscription_expired", bucket: "expired", daysRemaining: 0 }
+  if (remaining <= day) return { eventType: "billing.subscription_expiring", bucket: "1d", daysRemaining: 1 }
+  if (remaining <= 3 * day) return { eventType: "billing.subscription_expiring", bucket: "3d", daysRemaining: Math.ceil(remaining / day) }
+  if (remaining <= 7 * day) return { eventType: "billing.subscription_expiring", bucket: "7d", daysRemaining: Math.ceil(remaining / day) }
+  return null
+}
+
+async function syncSubscriptionLifecycleEmails(
+  env: Env,
+): Promise<{ scanned: number; attempted: number; suppressed: number; truncated: boolean; skipped: boolean }> {
+  if (!envFlag(env.EMAIL_SUBSCRIPTION_ENABLED, false)) {
+    return { scanned: 0, attempted: 0, suppressed: 0, truncated: false, skipped: true }
+  }
+  let offset = 0
+  let scanned = 0
+  let attempted = 0
+  let suppressed = 0
+  let truncated = false
+  const now = Date.now()
+  for (let page = 0; page < 25; page += 1) {
+    const batch = await fetchSubscriptionEmailCandidatePage(env, offset)
+    scanned += batch.items.length
+    for (const candidate of batch.items) {
+      const reminder = subscriptionReminderState(candidate.expires_at, now)
+      if (!reminder) continue
+      const templateData = {
+        locale: candidate.locale,
+        plan_term: candidate.plan_term,
+        expires_at: candidate.expires_at,
+        days_remaining: reminder.daysRemaining,
+        renewal_state: candidate.renewal_state,
+        cancel_at_period_end: candidate.cancel_at_period_end,
+        action_url: `${appPublicUrl(env)}/account?section=subscription`,
+      }
+      const rendered = renderTransactionalEmail(reminder.eventType, templateData, candidate.locale)
+      const idempotencyKey = `subscription-lifecycle:${candidate.subscription_id}:${Date.parse(candidate.expires_at)}:${reminder.bucket}`
+      const jobId = await enqueueEmailJob(env, {
+        idempotencyKey,
+        emailType: reminder.eventType,
+        recipient: candidate.recipient,
+        subject: rendered.subject,
+        html: rendered.html,
+        text: rendered.text,
+        linkedUserId: candidate.firebase_uid,
+        templateData,
+        headers: {
+          "Message-ID": emailMessageId("subscription-lifecycle", idempotencyKey),
+          "Auto-Submitted": "auto-generated",
+        },
+      })
+      if (jobId) attempted += 1
+      else suppressed += 1
+    }
+    if (!batch.hasMore) return { scanned, attempted, suppressed, truncated, skipped: false }
+    if (batch.nextOffset <= offset) throw new Error("subscription_email_source_cursor_invalid")
+    offset = batch.nextOffset
+    if (page === 24) truncated = true
+  }
+  return { scanned, attempted, suppressed, truncated, skipped: false }
+}
+
 async function processScheduledEmailNotifications(env: Env, limit = 10): Promise<{ processed: number; queued: number; failed: number }> {
   if (!emailSchedulerEnabled(env)) return { processed: 0, queued: 0, failed: 0 }
   const rows = await env.DB.prepare(
@@ -1847,8 +1977,9 @@ async function cleanupSupportAttachmentOrphans(env: Env): Promise<{ attachmentsD
   return { attachmentsDeleted: deleted }
 }
 
-async function runEmailCron(env: Env): Promise<{ skipped: boolean; reason?: string; scheduled: { processed: number; queued: number; failed: number }; outbox: { processed: number; sent: number; skipped: number }; cleanup: { sensitivePurged: number; eventsDeleted: number; inboundDeleted: number; notificationsDeleted: number; attachmentsDeleted: number } }> {
+async function runEmailCron(env: Env): Promise<{ skipped: boolean; reason?: string; subscriptions: { scanned: number; attempted: number; suppressed: number; truncated: boolean; skipped: boolean; failed: number }; scheduled: { processed: number; queued: number; failed: number }; outbox: { processed: number; sent: number; skipped: number }; cleanup: { sensitivePurged: number; eventsDeleted: number; inboundDeleted: number; notificationsDeleted: number; attachmentsDeleted: number } }> {
   const empty = {
+    subscriptions: { scanned: 0, attempted: 0, suppressed: 0, truncated: false, skipped: true, failed: 0 },
     scheduled: { processed: 0, queued: 0, failed: 0 },
     outbox: { processed: 0, sent: 0, skipped: 0 },
     cleanup: { sensitivePurged: 0, eventsDeleted: 0, inboundDeleted: 0, notificationsDeleted: 0, attachmentsDeleted: 0 },
@@ -1856,6 +1987,38 @@ async function runEmailCron(env: Env): Promise<{ skipped: boolean; reason?: stri
   const lock = await acquireEmailCronLock(env)
   if (!lock.acquired) return { skipped: true, reason: "cron_lock_held", ...empty }
   try {
+    let subscriptions = empty.subscriptions
+    try {
+      const synced = await syncSubscriptionLifecycleEmails(env)
+      subscriptions = { ...synced, failed: 0 }
+      if (synced.truncated) {
+        await enqueueAdminAlert(env, {
+          idempotencyKey: `subscription-email-source-truncated:${adminAlertBucket()}`,
+          eventType: "admin.readiness_degraded",
+          referenceId: "subscription_email_source",
+          failedEventType: "billing.subscription_lifecycle",
+          lastError: "subscription_email_candidate_limit_reached",
+          severity: "warning",
+          summary: "Subscription email candidates exceeded the bounded scheduler batch.",
+          actionUrl: "https://admin.saturnws.com/communications",
+          destinationLabel: "Open email operations",
+        }).catch(() => null)
+      }
+    } catch (error) {
+      const message = clampText(error instanceof Error ? error.message : String(error || "subscription_email_source_failed"), 500)
+      subscriptions = { ...empty.subscriptions, skipped: false, failed: 1 }
+      await enqueueAdminAlert(env, {
+        idempotencyKey: `subscription-email-source-failed:${adminAlertBucket()}:${message.slice(0, 80)}`,
+        eventType: "admin.readiness_degraded",
+        referenceId: "subscription_email_source",
+        failedEventType: "billing.subscription_lifecycle",
+        lastError: message,
+        severity: "critical",
+        summary: "Subscription lifecycle email scheduling could not read the canonical subscription source.",
+        actionUrl: "https://admin.saturnws.com/communications",
+        destinationLabel: "Open email operations",
+      }).catch(() => null)
+    }
     const scheduled = await processScheduledEmailNotifications(env)
     const outbox = await processEmailOutbox(env)
     let cleanup = empty.cleanup
@@ -1878,7 +2041,7 @@ async function runEmailCron(env: Env): Promise<{ skipped: boolean; reason?: stri
       }).catch(() => null)
       throw error
     }
-    return { skipped: false, scheduled, outbox, cleanup }
+    return { skipped: false, subscriptions, scheduled, outbox, cleanup }
   } finally {
     await releaseEmailCronLock(env, lock)
   }
@@ -2504,6 +2667,7 @@ async function handleAdminEmailStatus(env: Env): Promise<Response> {
         support: envFlag(env.EMAIL_SUPPORT_ENABLED, true),
         auth: envFlag(env.EMAIL_AUTH_ENABLED, false),
         billing: envFlag(env.EMAIL_BILLING_ENABLED, false),
+        subscription: envFlag(env.EMAIL_SUBSCRIPTION_ENABLED, false),
         release: envFlag(env.EMAIL_RELEASE_ENABLED, false),
         security: envFlag(env.EMAIL_SECURITY_ENABLED, false),
       },

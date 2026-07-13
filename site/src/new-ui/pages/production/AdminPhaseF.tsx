@@ -17,6 +17,9 @@ import type {
   AdminAuditLogItem,
   AdminCrashGroup,
   AdminCrashLog,
+  AdminDeviceChangePreview,
+  AdminDeviceChangeRequest,
+  AdminDeviceResetPreview,
   AdminInviteCode,
   AdminOperationPreview,
   AdminOperationReason,
@@ -416,6 +419,8 @@ export function AdminUsersPhaseF() {
   const [accountStatus, setAccountStatus] = useState("");
   const [subscription, setSubscription] = useState("");
   const [selected, setSelected] = useState<AdminUserSummary | null>(null);
+  const [selectedDeviceChange, setSelectedDeviceChange] =
+    useState<AdminDeviceChangeRequest | null>(null);
   const resource = useResource(
     () =>
       admin.listUsers({
@@ -427,6 +432,10 @@ export function AdminUsersPhaseF() {
         sort: "activity_desc",
       }),
     [admin, search, page, accountStatus, subscription],
+  );
+  const deviceChanges = useResource(
+    () => admin.listDeviceChangeRequests("pending"),
+    [admin],
   );
   const columns: Column<AdminUserSummary>[] = [
     {
@@ -468,9 +477,64 @@ export function AdminUsersPhaseF() {
       render: (row) => date(row.last_activity_at, locale),
     },
   ];
+  const deviceChangeColumns: Column<AdminDeviceChangeRequest>[] = [
+    {
+      key: "account",
+      header: copy(locale, "Account", "الحساب"),
+      render: (row) => (
+        <div>
+          <strong>{row.account?.display_name || row.account?.normalized_email || row.firebase_uid}</strong>
+          <small className="block secondary">{row.account?.normalized_email || row.firebase_uid}</small>
+        </div>
+      ),
+    },
+    {
+      key: "device",
+      header: copy(locale, "Requested device", "الجهاز المطلوب"),
+      render: (row) => (
+        <div>
+          <strong>{row.device_name || copy(locale, "Desktop device", "جهاز سطح مكتب")}</strong>
+          <small className="block secondary">{[row.platform, row.os_version].filter(Boolean).join(" · ")}</small>
+        </div>
+      ),
+    },
+    {
+      key: "requested",
+      header: copy(locale, "Requested", "تاريخ الطلب"),
+      render: (row) => date(row.requested_at, locale),
+    },
+    {
+      key: "action",
+      header: copy(locale, "Action", "الإجراء"),
+      render: (row) => (
+        <Button size="sm" onClick={() => setSelectedDeviceChange(row)}>
+          {copy(locale, "Review", "مراجعة")}
+        </Button>
+      ),
+    },
+  ];
   return (
     <div className="stack">
       <PageHeader title={copy(locale, "Users", "المستخدمون")} />
+      <section>
+        <SectionHeader
+          title={copy(locale, "Device change requests", "طلبات تغيير الجهاز")}
+        />
+        {deviceChanges.error ? (
+          <Alert title={copy(locale, "Could not load device requests", "تعذر تحميل طلبات الأجهزة")} tone="danger">
+            {deviceChanges.error}
+          </Alert>
+        ) : (
+          <DataTable
+            columns={deviceChangeColumns}
+            rows={deviceChanges.data || []}
+            loading={deviceChanges.loading}
+            rowKey={(row) => row.id}
+            emptyTitle={copy(locale, "No pending device changes", "لا توجد طلبات تغيير معلقة")}
+            emptyBody=""
+          />
+        )}
+      </section>
       <TableToolbar
         searchLabel={copy(
           locale,
@@ -574,6 +638,16 @@ export function AdminUsersPhaseF() {
         onClose={() => setSelected(null)}
         onChanged={resource.reload}
       />
+      <DeviceChangeDialog
+        key={selectedDeviceChange?.id || "device-change:closed"}
+        request={selectedDeviceChange}
+        onClose={() => setSelectedDeviceChange(null)}
+        onChanged={() => {
+          setSelectedDeviceChange(null);
+          deviceChanges.reload();
+          resource.reload();
+        }}
+      />
     </div>
   );
 }
@@ -600,6 +674,7 @@ function UserDetailDrawer({
   const [recoveryEvidence, setRecoveryEvidence] = useState<
     NonNullable<AdminUserDetail["recovery_evidence"]>[number] | null
   >(null);
+  const [deviceResetOpen, setDeviceResetOpen] = useState(false);
   const data = detail.data;
   const profile = data?.profile || user;
   const closeOperation = () => setOperation(null);
@@ -701,76 +776,54 @@ function UserDetailDrawer({
                 <SectionHeader
                   title={copy(
                     locale,
-                    "Sessions and devices",
-                    "الجلسات والأجهزة",
+                    "Desktop device",
+                    "جهاز سطح المكتب",
                   )}
                   action={
-                    <Button
-                      size="sm"
-                      variant="danger"
-                      onClick={() =>
-                        setOperation({
-                          kind: "access",
-                          uid: data.profile.firebase_uid,
-                          scope: "all",
-                        })
-                      }
-                    >
-                      {copy(locale, "Revoke all", "إلغاء الكل")}
-                    </Button>
+                    <div className="cluster">
+                      {data.device_binding ? (
+                        <Button size="sm" variant="danger" onClick={() => setDeviceResetOpen(true)}>
+                          {copy(locale, "Reset device", "إعادة ضبط الجهاز")}
+                        </Button>
+                      ) : null}
+                      <Button
+                        size="sm"
+                        onClick={() =>
+                          setOperation({
+                            kind: "access",
+                            uid: data.profile.firebase_uid,
+                            scope: "all",
+                          })
+                        }
+                      >
+                        {copy(locale, "End sessions", "إنهاء الجلسات")}
+                      </Button>
+                    </div>
                   }
                 />
-                <DataTable
-                  columns={[
-                    {
-                      key: "device",
-                      header: copy(locale, "Device", "الجهاز"),
-                      render: (row: Record<string, unknown>) =>
-                        String(row.hwid || "—"),
-                    },
-                    {
-                      key: "activity",
-                      header: copy(locale, "Last activity", "آخر نشاط"),
-                      render: (row) => date(row.last_seen_at, locale),
-                    },
-                    {
-                      key: "sessions",
-                      header: copy(locale, "Sessions", "الجلسات"),
-                      render: (row) => String(row.sessions || 0),
-                    },
-                    {
-                      key: "action",
-                      header: copy(locale, "Action", "الإجراء"),
-                      render: (row) => (
-                        <Button
-                          size="sm"
-                          onClick={() =>
-                            setOperation({
-                              kind: "access",
-                              uid: data.profile.firebase_uid,
-                              scope: "device",
-                              targetId: String(row.hwid || ""),
-                            })
-                          }
-                        >
-                          {copy(locale, "Revoke", "إلغاء")}
-                        </Button>
-                      ),
-                    },
-                  ]}
-                  rows={data.devices || []}
-                  rowKey={(row) => String(row.hwid)}
-                  emptyTitle={copy(
-                    locale,
-                    "No linked devices",
-                    "لا توجد أجهزة مرتبطة",
-                  )}
-                  emptyBody={copy(
-                    locale,
-                    "Linked devices will appear here.",
-                    "ستظهر الأجهزة المرتبطة هنا.",
-                  )}
-                />
+                {data.device_binding ? (
+                  <dl className="detail-list">
+                    <div><dt>{copy(locale, "Device", "الجهاز")}</dt><dd>{data.device_binding.device_name || data.device_binding.device_key}</dd></div>
+                    <div><dt>{copy(locale, "Platform", "النظام")}</dt><dd>{[data.device_binding.platform, data.device_binding.os_version].filter(Boolean).join(" · ") || "—"}</dd></div>
+                    <div><dt>{copy(locale, "Linked", "تاريخ الربط")}</dt><dd>{date(data.device_binding.bound_at, locale)}</dd></div>
+                    <div><dt>{copy(locale, "Last activity", "آخر نشاط")}</dt><dd>{date(data.device_binding.last_seen_at, locale)}</dd></div>
+                  </dl>
+                ) : (
+                  <EmptyState title={copy(locale, "No linked desktop device", "لا يوجد جهاز سطح مكتب مرتبط")} body="" />
+                )}
+                {data.device_change_requests?.length ? (
+                  <DataTable
+                    columns={[
+                      { key: "device", header: copy(locale, "Requested device", "الجهاز المطلوب"), render: (row) => row.device_name || row.requested_device_key },
+                      { key: "status", header: copy(locale, "Status", "الحالة"), render: (row) => <Badge tone={tone(row.status)}>{statusLabel(row.status, locale)}</Badge> },
+                      { key: "requested", header: copy(locale, "Requested", "تاريخ الطلب"), render: (row) => date(row.requested_at, locale) },
+                    ]}
+                    rows={data.device_change_requests}
+                    rowKey={(row) => row.id}
+                    emptyTitle=""
+                    emptyBody=""
+                  />
+                ) : null}
               </section>
               <section>
                 <SectionHeader title={copy(locale, "Sessions", "الجلسات")} />
@@ -780,7 +833,7 @@ function UserDetailDrawer({
                       key: "device",
                       header: copy(locale, "Device", "الجهاز"),
                       render: (row: Record<string, unknown>) =>
-                        String(row.hwid || "—"),
+                        String(row.device_key || "—"),
                     },
                     {
                       key: "created",
@@ -846,7 +899,7 @@ function UserDetailDrawer({
                       key: "device",
                       header: copy(locale, "Device", "الجهاز"),
                       render: (row: Record<string, unknown>) =>
-                        String(row.hwid || "—"),
+                        String(row.device_key || "—"),
                     },
                     {
                       key: "status",
@@ -1067,7 +1120,162 @@ function UserDetailDrawer({
           changed();
         }}
       />
+      <DeviceResetDialog
+        key={deviceResetOpen ? `device-reset:${data?.profile.firebase_uid || "unknown"}` : "device-reset:closed"}
+        open={deviceResetOpen}
+        user={data || null}
+        onClose={() => setDeviceResetOpen(false)}
+        onChanged={() => {
+          setDeviceResetOpen(false);
+          changed();
+        }}
+      />
     </>
+  );
+}
+
+function DeviceChangeDialog({
+  request,
+  onClose,
+  onChanged,
+}: {
+  request: AdminDeviceChangeRequest | null;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const { locale } = useExperience();
+  const { admin } = useAdapters();
+  const [action, setAction] = useState<"approve" | "reject">("approve");
+  const [reason, setReason] = useState("");
+  const [preview, setPreview] = useState<AdminDeviceChangePreview | null>(null);
+  const [requestId] = useState(() => crypto.randomUUID());
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const review = async () => {
+    if (!request || reason.trim().length < 3) return;
+    setBusy(true);
+    setError("");
+    try {
+      setPreview(await admin.previewDeviceChange(request.id, { action, reason: reason.trim() }));
+    } catch (failure) {
+      setPreview(null);
+      setError(failure instanceof Error ? failure.message : "device_change_preview_failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const execute = async () => {
+    if (!request || !preview) return;
+    setBusy(true);
+    setError("");
+    try {
+      await admin.executeDeviceChange(request.id, {
+        action,
+        reason: reason.trim(),
+        preview_hash: preview.preview_hash,
+        request_id: requestId,
+      });
+      onChanged();
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "device_change_failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal
+      open={Boolean(request)}
+      onClose={onClose}
+      title={copy(locale, "Review device change", "مراجعة تغيير الجهاز")}
+      closeLabel={copy(locale, "Close", "إغلاق")}
+      footer={
+        <>
+          <Button onClick={review} disabled={busy || reason.trim().length < 3}>{copy(locale, "Review changes", "مراجعة التغييرات")}</Button>
+          <Button variant={action === "approve" ? "primary" : "danger"} onClick={execute} disabled={!preview || busy}>{action === "approve" ? copy(locale, "Approve", "موافقة") : copy(locale, "Reject", "رفض")}</Button>
+        </>
+      }
+    >
+      <div className="stack">
+        <dl className="detail-list">
+          <div><dt>{copy(locale, "Account", "الحساب")}</dt><dd>{request?.account?.normalized_email || request?.firebase_uid || "—"}</dd></div>
+          <div><dt>{copy(locale, "Requested device", "الجهاز المطلوب")}</dt><dd>{request?.device_name || request?.requested_device_key || "—"}</dd></div>
+          <div><dt>{copy(locale, "User reason", "سبب المستخدم")}</dt><dd>{request?.user_reason || "—"}</dd></div>
+        </dl>
+        <FormField label={copy(locale, "Decision", "القرار")}>
+          <Select value={action} onChange={(event) => { setAction(event.target.value as "approve" | "reject"); setPreview(null); }}>
+            <option value="approve">{copy(locale, "Approve", "موافقة")}</option>
+            <option value="reject">{copy(locale, "Reject", "رفض")}</option>
+          </Select>
+        </FormField>
+        <FormField label={copy(locale, "Reason", "السبب")} required>
+          <Textarea value={reason} maxLength={1000} onChange={(event) => { setReason(event.target.value); setPreview(null); }} />
+        </FormField>
+        {preview ? <Alert title={copy(locale, "Decision preview", "معاينة القرار")} tone={action === "approve" ? "warning" : "danger"}>{action === "approve" ? copy(locale, "The current device sessions will be revoked and the requested device will become the only linked device.", "ستُلغى جلسات الجهاز الحالي وسيصبح الجهاز المطلوب هو الجهاز الوحيد المرتبط.") : copy(locale, "The requested desktop device will remain blocked.", "سيظل جهاز سطح المكتب المطلوب محظورًا.")}</Alert> : null}
+        {error ? <Alert title={copy(locale, "Could not complete the request", "تعذر إكمال الطلب")} tone="danger">{error}</Alert> : null}
+      </div>
+    </Modal>
+  );
+}
+
+function DeviceResetDialog({
+  open,
+  user,
+  onClose,
+  onChanged,
+}: {
+  open: boolean;
+  user: AdminUserDetail | null;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const { locale } = useExperience();
+  const { admin } = useAdapters();
+  const [reason, setReason] = useState("");
+  const [preview, setPreview] = useState<AdminDeviceResetPreview | null>(null);
+  const [requestId] = useState(() => crypto.randomUUID());
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const review = async () => {
+    if (!user || reason.trim().length < 3) return;
+    setBusy(true);
+    setError("");
+    try {
+      setPreview(await admin.previewDeviceReset(user.profile.firebase_uid, reason.trim()));
+    } catch (failure) {
+      setPreview(null);
+      setError(failure instanceof Error ? failure.message : "device_reset_preview_failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const execute = async () => {
+    if (!user || !preview) return;
+    setBusy(true);
+    setError("");
+    try {
+      await admin.executeDeviceReset(user.profile.firebase_uid, { reason: reason.trim(), preview_hash: preview.preview_hash, request_id: requestId });
+      onChanged();
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "device_reset_failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={copy(locale, "Reset linked device", "إعادة ضبط الجهاز المرتبط")}
+      closeLabel={copy(locale, "Close", "إغلاق")}
+      footer={<><Button onClick={review} disabled={busy || reason.trim().length < 3}>{copy(locale, "Review changes", "مراجعة التغييرات")}</Button><Button variant="danger" onClick={execute} disabled={!preview || busy}>{copy(locale, "Reset device", "إعادة ضبط الجهاز")}</Button></>}
+    >
+      <div className="stack">
+        <dl className="detail-list"><div><dt>{copy(locale, "Current device", "الجهاز الحالي")}</dt><dd>{user?.device_binding?.device_name || user?.device_binding?.device_key || "—"}</dd></div></dl>
+        <FormField label={copy(locale, "Reason", "السبب")} required><Textarea value={reason} maxLength={1000} onChange={(event) => { setReason(event.target.value); setPreview(null); }} /></FormField>
+        {preview ? <Alert title={copy(locale, "Reset preview", "معاينة إعادة الضبط")} tone="danger">{copy(locale, `${preview.active_session_count} active sessions will be revoked. The next desktop sign-in will bind the new device.`, `سيتم إلغاء ${preview.active_session_count} جلسة نشطة. سيربط تسجيل الدخول التالي الجهاز الجديد.`)}</Alert> : null}
+        {error ? <Alert title={copy(locale, "Could not reset the device", "تعذر إعادة ضبط الجهاز")} tone="danger">{error}</Alert> : null}
+      </div>
+    </Modal>
   );
 }
 
@@ -1830,6 +2038,7 @@ function ManualGrantDrawer({
     <Drawer
       open={open}
       onClose={onClose}
+      className="manual-grant-drawer"
       title={copy(locale, "Grant subscription", "منح اشتراك")}
       description={copy(
         locale,
@@ -1855,7 +2064,7 @@ function ManualGrantDrawer({
         </>
       }
     >
-      <div className="stack">
+      <div className="stack manual-grant-form">
         <FormField label={copy(locale, "User", "المستخدم")}>
           <Input
             value={search}

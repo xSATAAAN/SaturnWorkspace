@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app'
-import { getAuth } from 'firebase/auth'
+import { browserLocalPersistence, getAuth, setPersistence } from 'firebase/auth'
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY as string | undefined,
@@ -20,3 +20,9 @@ if (missingConfig.length > 0) {
 const app = initializeApp(firebaseConfig)
 
 export const firebaseAuth = getAuth(app)
+
+// Keep customer sessions across browser restarts. Sign-in methods await this
+// promise so a previous session-scoped choice cannot leak into a new login.
+export const firebaseAuthPersistenceReady = setPersistence(firebaseAuth, browserLocalPersistence)
+  .then(() => true)
+  .catch(() => false)

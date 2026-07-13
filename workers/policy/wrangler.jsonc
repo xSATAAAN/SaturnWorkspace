@@ -25,6 +25,7 @@
     "EMAIL_SUPPORT_ENABLED": "true",
     "EMAIL_AUTH_ENABLED": "true",
     "EMAIL_BILLING_ENABLED": "false",
+    "EMAIL_SUBSCRIPTION_ENABLED": "true",
     "EMAIL_RELEASE_ENABLED": "false",
     "EMAIL_SECURITY_ENABLED": "true",
     "EMAIL_SCHEDULER_ENABLED": "true",

@@ -70,9 +70,14 @@ const activity = []
 const paymentWrites = []
 const recoveryRows = []
 const pendingGrants = []
+const subscriptionEmails = []
 const bucket = new Map()
+const deviceLoginRows = [{ id: 'login-device-change', user_id: 'uid-active', user_email: 'active@example.com', hwid: 'replacement-hwid', status: 'device_change_required', expires_at: iso(86400e3) }]
+const deviceBindings = [{ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', firebase_uid: 'uid-active', device_key: '0123456789abcdef', device_name: 'Current PC', platform: 'Windows', os_version: 'Windows 11', app_version: '1.0.7', status: 'active', bound_at: iso(-7 * 86400e3), last_seen_at: iso(-3600e3), released_at: null, created_at: iso(-7 * 86400e3), updated_at: iso(-3600e3) }]
+const deviceChangeRequests = [{ id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', firebase_uid: 'uid-active', current_binding_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', resulting_binding_id: null, requested_hwid_hash: '1'.repeat(64), requested_device_key: '1111111111111111', device_name: 'Replacement PC', platform: 'Windows', os_version: 'Windows 11', app_version: '1.0.7', user_reason: 'New workstation', status: 'pending', requested_at: iso(-1800e3), resolved_at: null, resolved_by: null, resolution_note: null, resolution_request_id: null, created_at: iso(-1800e3), updated_at: iso(-1800e3) }]
+const deviceEvents = []
 const profiles = [
-  { firebase_uid: 'uid-active', normalized_email: 'active@example.com', display_name: 'Active user', account_status: 'active', updated_at: iso(-86400e3) },
+  { firebase_uid: 'uid-active', normalized_email: 'active@example.com', display_name: 'Active user', locale: 'en', account_status: 'active', updated_at: iso(-86400e3) },
   { firebase_uid: 'uid-expired', normalized_email: 'expired@example.com', display_name: 'Expired user', account_status: 'active', updated_at: iso(-86400e3) },
   { firebase_uid: 'uid-dupe', normalized_email: 'dupe@example.com', display_name: 'Duplicate user', account_status: 'active', updated_at: iso(-86400e3) },
   { firebase_uid: 'uid-new', normalized_email: 'new@example.com', display_name: 'New user', account_status: 'active', updated_at: iso(-86400e3) },
@@ -96,7 +101,27 @@ globalThis.fetch = async (input, init = {}) => {
     if (query.includes('new@example.com')) return Response.json([])
     return Response.json(rows)
   }
-  if (method === 'GET' && table === 'device_login_sessions') return Response.json([])
+  if (method === 'GET' && table === 'device_login_sessions') return Response.json(deviceLoginRows)
+  if (method === 'GET' && table === 'account_device_change_requests') {
+    const query = decodeURIComponent(url.search)
+    const fields = /select=([^&]+)/.exec(query)?.[1].split(',').map((field) => field.trim()).filter(Boolean) || []
+    const project = (items) => items.map((row) => Object.fromEntries(fields.map((field) => [field, row[field]])))
+    if (query.includes('id=eq.')) {
+      const id = /id=eq\.([^&]+)/.exec(query)?.[1]
+      return Response.json(project(deviceChangeRequests.filter((row) => row.id === id)))
+    }
+    if (query.includes('status=eq.')) {
+      const status = /status=eq\.([^&]+)/.exec(query)?.[1]
+      return Response.json(project(deviceChangeRequests.filter((row) => row.status === status)))
+    }
+    return Response.json(project(deviceChangeRequests))
+  }
+  if (method === 'GET' && table === 'account_device_bindings') {
+    const query = decodeURIComponent(url.search)
+    return Response.json(deviceBindings.filter((row) => !query.includes('status=eq.active') || row.status === 'active'))
+  }
+  if (method === 'GET' && table === 'account_device_events') return Response.json(deviceEvents)
+  if (method === 'GET' && table === 'app_sessions') return Response.json([{ id: 'active-device-session' }])
   if (method === 'GET' && table === 'pending_subscription_grants') {
     const query = decodeURIComponent(url.search)
     if (query.includes('status=eq.pending')) return Response.json(pendingGrants.filter((row) => row.status === 'pending'))
@@ -166,6 +191,41 @@ globalThis.fetch = async (input, init = {}) => {
     Object.assign(row, body, { updated_at: new Date().toISOString() })
     return Response.json([row])
   }
+  if (method === 'PATCH' && table === 'device_login_sessions') {
+    const body = JSON.parse(init.body || '{}')
+    for (const row of deviceLoginRows) Object.assign(row, body)
+    return Response.json([])
+  }
+  if (method === 'POST' && table === 'resolve_account_device_change') {
+    const body = JSON.parse(init.body || '{}')
+    const row = deviceChangeRequests.find((item) => item.id === body.p_request_id)
+    if (!row) return Response.json({ message: 'device_change_request_not_found' }, { status: 404 })
+    if (row.status !== 'pending' && row.resolution_request_id !== body.p_resolution_request_id) {
+      return Response.json({ message: 'device_change_request_not_pending' }, { status: 409 })
+    }
+    if (row.status === 'pending') {
+      Object.assign(row, {
+        status: body.p_action === 'approve' ? 'approved' : 'rejected',
+        resolved_at: new Date().toISOString(),
+        resolved_by: body.p_actor,
+        resolution_note: body.p_resolution_note,
+        resolution_request_id: body.p_resolution_request_id,
+        updated_at: new Date().toISOString(),
+      })
+      if (body.p_action === 'approve') {
+        deviceBindings[0].status = 'replaced'
+        deviceBindings.push({ ...deviceBindings[0], id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', device_key: row.requested_device_key, device_name: row.device_name, status: 'active', updated_at: new Date().toISOString() })
+      }
+    }
+    return Response.json([row])
+  }
+  if (method === 'POST' && table === 'reset_account_device') {
+    const body = JSON.parse(init.body || '{}')
+    const active = deviceBindings.find((row) => row.firebase_uid === body.p_firebase_uid && row.status === 'active')
+    if (active) active.status = 'revoked'
+    deviceEvents.push({ id: `device-event-${deviceEvents.length + 1}`, firebase_uid: body.p_firebase_uid, event_type: 'device_binding_reset', details: { request_id: body.p_request_id } })
+    return Response.json(Boolean(active))
+  }
   if (['orders', 'payment_events', 'invoices'].includes(table || '')) {
     paymentWrites.push({ table, method })
     return Response.json([])
@@ -177,6 +237,16 @@ const env = {
   ADMIN_API_TOKEN: 'test-admin-token',
   SUPABASE_URL: 'https://mock.supabase.local',
   SUPABASE_SERVICE_ROLE_KEY: 'test-service-role',
+  ADMIN_EMAIL_ENQUEUE_URL: 'https://api.saturnws.com/v1/internal/email/auth/enqueue',
+  ADMIN_EMAIL_ENQUEUE_TOKEN: 'test-email-token',
+  POLICY_WORKER: {
+    async fetch(request) {
+      assert.equal(request.headers.get('authorization'), 'Bearer test-email-token')
+      const body = await request.json()
+      subscriptionEmails.push(body)
+      return Response.json({ success: true, status: 'queued', job_id: `subscription-email-${subscriptionEmails.length}` })
+    },
+  },
   OTA_BUCKET: {
     async get(key) {
       const value = bucket.get(key)
@@ -280,6 +350,8 @@ const pendingExecuted = await post('/api/admin/subscriptions/manual-grant/execut
 assert.equal(pendingExecuted.status, 200, JSON.stringify(pendingExecuted.payload))
 assert.equal(pendingExecuted.payload.item, null)
 assert.equal(pendingExecuted.payload.pending_grant.status, 'pending')
+assert.equal(pendingExecuted.payload.notification.queued, true)
+assert.equal(subscriptionEmails.at(-1)?.event_type, 'billing.subscription_grant_reserved')
 assert.equal(pendingGrants.length, 1)
 assert.ok(activity.some((row) => row.action === 'pending_subscription_grant_created'))
 const pendingReplay = await post('/api/admin/subscriptions/manual-grant/execute', pendingExecutePayload)
@@ -332,12 +404,14 @@ assert.match(missingReason.payload.error, /missing_reason/)
 const executeReason = 'Manual acceptance test grant'
 const executePreview = await post('/api/admin/subscriptions/manual-grant/preview', {
   ...base,
+  reason_code: 'technical_support',
   reason: executeReason,
 })
 assert.equal(executePreview.status, 200)
 
 const executePayload = {
   ...base,
+  reason_code: 'technical_support',
   reason: executeReason,
   idempotency_key: 'idem-active-1',
   preview_hash: executePreview.payload.preview.preview_hash,
@@ -346,6 +420,9 @@ const executed = await post('/api/admin/subscriptions/manual-grant/execute', exe
 assert.equal(executed.status, 200, JSON.stringify(executed.payload))
 assert.equal(executed.payload.success, true)
 assert.equal(executed.payload.item.id, 'sub-active-1')
+assert.equal(executed.payload.notification.queued, true)
+assert.equal(subscriptionEmails.at(-1)?.event_type, 'billing.subscription_granted')
+assert.equal(subscriptionEmails.at(-1)?.payload?.reason_code, 'technical_support')
 assert.ok(activity.some((row) => row.action === 'subscription_manual_grant'))
 
 const replay = await post('/api/admin/subscriptions/manual-grant/execute', executePayload)
@@ -378,6 +455,48 @@ assert.equal(recoveryRows[0].evidence_type, 'subscription_replacement')
 assert.equal(recoveryRows[0].source_type, 'manual_grant_replace_current')
 assert.ok(Number(recoveryRows[0].remaining_seconds) > 0)
 assert.ok(recoveryRows[0].integrity_hash)
+assert.equal(deviceLoginRows[0].status, 'device_change_required', 'subscription grants must not bypass device-change approval')
+
+const deviceChangeQueue = await get('/api/admin/device-change-requests?status=pending')
+assert.equal(deviceChangeQueue.status, 200)
+assert.equal(deviceChangeQueue.payload.items.length, 1)
+assert.equal(deviceChangeQueue.payload.items[0].account.normalized_email, 'active@example.com')
+assert.equal('requested_hwid_hash' in deviceChangeQueue.payload.items[0], false)
+const deviceChangePreview = await post('/api/admin/device-change-requests/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/preview', {
+  action: 'approve',
+  reason: 'Verified workstation replacement',
+})
+assert.equal(deviceChangePreview.status, 200, JSON.stringify(deviceChangePreview.payload))
+const deviceChangeExecutePayload = {
+  action: 'approve',
+  reason: 'Verified workstation replacement',
+  preview_hash: deviceChangePreview.payload.preview.preview_hash,
+  request_id: 'device-change-operation-001',
+}
+const deviceChangeExecute = await post('/api/admin/device-change-requests/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/execute', deviceChangeExecutePayload)
+assert.equal(deviceChangeExecute.status, 200, JSON.stringify(deviceChangeExecute.payload))
+assert.equal(deviceChangeExecute.payload.result.item.status, 'approved')
+assert.equal('requested_hwid_hash' in deviceChangeExecute.payload.result.item, false)
+const deviceChangeReplay = await post('/api/admin/device-change-requests/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/execute', deviceChangeExecutePayload)
+assert.equal(deviceChangeReplay.status, 200)
+assert.equal(deviceChangeReplay.payload.result.idempotent, true)
+
+const deviceResetPreview = await post('/api/admin/users/uid-active/device/reset/preview', { reason: 'Customer verified reset' })
+assert.equal(deviceResetPreview.status, 200, JSON.stringify(deviceResetPreview.payload))
+assert.equal(deviceResetPreview.payload.preview.binding.status, 'active')
+const deviceResetPayload = {
+  reason: 'Customer verified reset',
+  preview_hash: deviceResetPreview.payload.preview.preview_hash,
+  request_id: 'device-reset-operation-001',
+}
+const deviceResetExecute = await post('/api/admin/users/uid-active/device/reset/execute', deviceResetPayload)
+assert.equal(deviceResetExecute.status, 200, JSON.stringify(deviceResetExecute.payload))
+assert.equal(deviceResetExecute.payload.result.reset, true)
+const deviceResetReplay = await post('/api/admin/users/uid-active/device/reset/execute', deviceResetPayload)
+assert.equal(deviceResetReplay.status, 200)
+assert.equal(deviceResetReplay.payload.result.idempotent, true)
+assert.ok(activity.some((row) => row.action === 'account_device_change_approved'))
+assert.ok(activity.some((row) => row.action === 'account_device_binding_reset'))
 
 assert.equal(paymentWrites.length, 0, 'manual grant must not create payment/order/invoice rows')
 const pendingMigration = readFileSync(new URL('../../auth/migrations/20260712201401_pending_subscription_grants.sql', import.meta.url), 'utf8')
@@ -386,4 +505,9 @@ assert.match(pendingMigration, /revoke all on table public\.pending_subscription
 assert.match(pendingMigration, /where status = 'pending'/i)
 assert.match(pendingMigration, /pg_advisory_xact_lock/i)
 assert.match(pendingMigration, /after insert or update of email_verified, normalized_email, account_status/i)
+const deviceMigration = readFileSync(new URL('../../auth/migrations/20260713114500_account_device_policy.sql', import.meta.url), 'utf8')
+assert.match(deviceMigration, /account_device_bindings_one_active_per_user_idx/i)
+assert.match(deviceMigration, /pg_advisory_xact_lock/i)
+assert.match(deviceMigration, /p_resolution_request_id/i)
+assert.match(deviceMigration, /status = 'authorized'/i)
 console.log('Phase B.2 manual grant checks passed.')

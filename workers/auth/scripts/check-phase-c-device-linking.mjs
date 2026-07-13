@@ -85,6 +85,9 @@ const db = {
   ],
   device_login_sessions: [],
   app_sessions: [],
+  account_device_bindings: [],
+  account_device_change_requests: [],
+  account_device_events: [],
   account_email_verifications: [],
   account_email_verification_audit: [],
   account_deletion_requests: [],
@@ -178,10 +181,112 @@ async function mockFetch(input, init = {}) {
   }
   if (url.hostname !== 'supabase.test') throw new Error(`unexpected_fetch:${url}`)
   const table = url.pathname.split('/').filter(Boolean).at(-1)
+  if (table === 'authorize_account_device' && request.method.toUpperCase() === 'POST') {
+    const body = await request.json()
+    const activeBinding = db.account_device_bindings.find((row) => row.firebase_uid === body.p_firebase_uid && row.status === 'active')
+    if (!activeBinding) {
+      const timestamp = new Date().toISOString()
+      const inserted = {
+        id: nextId('device-binding'),
+        firebase_uid: body.p_firebase_uid,
+        hwid_hash: body.p_hwid_hash,
+        device_key: body.p_hwid_hash.slice(0, 16),
+        device_name: body.p_device_name,
+        platform: body.p_platform,
+        os_version: body.p_os_version,
+        app_version: body.p_app_version,
+        status: 'active',
+        bound_at: timestamp,
+        last_seen_at: timestamp,
+        released_at: null,
+        created_at: timestamp,
+        updated_at: timestamp,
+      }
+      db.account_device_bindings.push(inserted)
+      return Response.json([{
+        decision: 'authorized',
+        binding_id: inserted.id,
+        device_key: inserted.device_key,
+        current_device_name: inserted.device_name,
+        current_bound_at: inserted.bound_at,
+        pending_request_id: null,
+        pending_request_status: null,
+      }])
+    }
+    if (activeBinding.hwid_hash === body.p_hwid_hash) {
+      activeBinding.last_seen_at = new Date().toISOString()
+      activeBinding.updated_at = activeBinding.last_seen_at
+      return Response.json([{
+        decision: 'authorized',
+        binding_id: activeBinding.id,
+        device_key: activeBinding.device_key,
+        current_device_name: activeBinding.device_name,
+        current_bound_at: activeBinding.bound_at,
+        pending_request_id: null,
+        pending_request_status: null,
+      }])
+    }
+    const pendingRequest = db.account_device_change_requests.find((row) => row.firebase_uid === body.p_firebase_uid && row.status === 'pending')
+    return Response.json([{
+      decision: 'device_change_required',
+      binding_id: activeBinding.id,
+      device_key: activeBinding.device_key,
+      current_device_name: activeBinding.device_name,
+      current_bound_at: activeBinding.bound_at,
+      pending_request_id: pendingRequest?.id || null,
+      pending_request_status: pendingRequest?.status || null,
+    }])
+  }
+  if (table === 'request_account_device_change' && request.method.toUpperCase() === 'POST') {
+    const body = await request.json()
+    const activeBinding = db.account_device_bindings.find((row) => row.firebase_uid === body.p_firebase_uid && row.status === 'active')
+    if (!activeBinding || activeBinding.hwid_hash === body.p_hwid_hash) {
+      return Response.json({ message: 'device_change_not_required' }, { status: 409 })
+    }
+    const timestamp = new Date().toISOString()
+    let pendingRequest = db.account_device_change_requests.find((row) => row.firebase_uid === body.p_firebase_uid && row.status === 'pending')
+    if (!pendingRequest) {
+      pendingRequest = {
+        id: nextId('device-change'),
+        firebase_uid: body.p_firebase_uid,
+        current_binding_id: activeBinding.id,
+        resulting_binding_id: null,
+        requested_hwid_hash: body.p_hwid_hash,
+        requested_device_key: body.p_hwid_hash.slice(0, 16),
+        status: 'pending',
+        requested_at: timestamp,
+        resolved_at: null,
+        resolved_by: null,
+        resolution_note: null,
+        created_at: timestamp,
+        updated_at: timestamp,
+      }
+      db.account_device_change_requests.push(pendingRequest)
+    }
+    Object.assign(pendingRequest, {
+      requested_hwid_hash: body.p_hwid_hash,
+      requested_device_key: body.p_hwid_hash.slice(0, 16),
+      device_name: body.p_device_name,
+      platform: body.p_platform,
+      os_version: body.p_os_version,
+      app_version: body.p_app_version,
+      user_reason: body.p_user_reason,
+      updated_at: timestamp,
+    })
+    return Response.json([clone(pendingRequest)])
+  }
   const rows = db[table]
   if (!Array.isArray(rows)) return Response.json({ message: `unknown_table:${table}` }, { status: 404 })
   const method = request.method.toUpperCase()
-  if (method === 'GET') return Response.json(clone(rows.filter((row) => matches(row, url.searchParams))))
+  if (method === 'GET') {
+    const filtered = rows.filter((row) => matches(row, url.searchParams))
+    const safeDeviceTables = new Set(['account_device_bindings', 'account_device_change_requests', 'account_device_events'])
+    const selectedFields = String(url.searchParams.get('select') || '').split(',').map((field) => field.trim()).filter(Boolean)
+    if (safeDeviceTables.has(table) && selectedFields.length) {
+      return Response.json(clone(filtered.map((row) => Object.fromEntries(selectedFields.map((field) => [field, row[field]])))))
+    }
+    return Response.json(clone(filtered))
+  }
   if (method === 'POST') {
     const body = await request.json()
     const inserted = { id: body.id || nextId(table), created_at: body.created_at || new Date().toISOString(), last_seen_at: body.last_seen_at ?? null, revoked_at: body.revoked_at ?? null, ...body }
@@ -611,7 +716,7 @@ assert.equal(replayComplete.body.error, 'device_code_already_used')
 const replayPoll = await call('/device/poll', { device_code: noSubscription.pending.device_code, hwid: 'a'.repeat(32) })
 assert.equal(replayPoll.status, 409)
 
-const wrongDevicePending = await start('b'.repeat(32))
+const wrongDevicePending = await start('e'.repeat(32))
 await call('/device/complete', { id_token: tokenActive, device_code: wrongDevicePending.device_code })
 const wrongDevice = await call('/device/poll', { device_code: wrongDevicePending.device_code, hwid: 'c'.repeat(32) })
 assert.equal(wrongDevice.status, 403)
@@ -634,9 +739,21 @@ const grace = await link(tokenGrace, '3'.repeat(32))
 assert.equal(grace.session.entitlement_state, 'grace')
 assert.equal(grace.session.subscription.policy.allow, true)
 
-const secondActiveDevice = await link(tokenActive, '2'.repeat(32))
+const secondActiveDevice = await start('2'.repeat(32), 'Replacement QA Device')
+const secondActiveComplete = await call('/device/complete', { id_token: tokenActive, device_code: secondActiveDevice.device_code })
+assert.equal(secondActiveComplete.status, 409)
+assert.equal(secondActiveComplete.body.error, 'device_change_required')
+assert.equal(secondActiveComplete.body.request_status, null)
+const deviceChangeRequest = await call('/account/device-change/request', {
+  device_code: secondActiveDevice.device_code,
+  reason: 'Replacing my workstation',
+}, tokenActive)
+assert.equal(deviceChangeRequest.status, 200)
+assert.equal(deviceChangeRequest.body.request.status, 'pending')
+assert.equal(deviceChangeRequest.body.request.device_name, 'Replacement QA Device')
 const activeRows = db.app_sessions.filter((row) => row.user_id === 'uid-active' && !row.revoked_at)
-assert.equal(activeRows.length, 2, 'linking another device must not revoke unrelated sessions')
+assert.ok(activeRows.length >= 1)
+assert.equal(activeRows.some((row) => row.hwid === '2'.repeat(32)), false, 'a second device must not receive a desktop session before approval')
 
 const verify = await call('/session/verify', { session_token: active.session.session_token, hwid: 'e'.repeat(32) })
 assert.equal(verify.status, 200)
@@ -655,7 +772,11 @@ assert.equal(refreshedVerify.status, 200)
 
 const sessions = await call('/account/sessions', {}, tokenActive)
 assert.equal(sessions.status, 200)
-assert.equal(sessions.body.devices.length, 2)
+assert.equal(sessions.body.devices.length, 1)
+assert.equal(sessions.body.device_binding.status, 'active')
+assert.equal(sessions.body.device_change_requests.length, 1)
+assert.equal(sessions.body.device_change_requests[0].status, 'pending')
+assert.equal('requested_hwid_hash' in sessions.body.device_change_requests[0], false)
 assert.ok(sessions.body.sessions.every((item) => !('session_token' in item) && !('hwid' in item)))
 const unauthorizedSessions = await call('/account/sessions', {}, 'invalid-token')
 assert.equal(unauthorizedSessions.status, 401)
@@ -667,6 +788,7 @@ assert.equal(unauthorizedRevoke.status, 404)
 const revoke = await call('/account/sessions/revoke', { session_id: ownedSession.id, scope: 'session' }, tokenActive)
 assert.equal(revoke.status, 200)
 
+await link(tokenActive, 'e'.repeat(32))
 const remainingActiveSession = db.app_sessions.find((row) => row.user_id === 'uid-active' && !row.revoked_at)
 assert.ok(remainingActiveSession)
 const revokeDevice = await call('/account/sessions/revoke', { session_id: remainingActiveSession.id, scope: 'device' }, tokenActive)
@@ -676,7 +798,7 @@ assert.equal(
   0,
 )
 
-await link(tokenActive, '5'.repeat(32))
+await link(tokenActive, 'e'.repeat(32))
 const revokeAll = await call('/account/sessions/revoke-all', {}, tokenActive)
 assert.equal(revokeAll.status, 200)
 assert.equal(db.app_sessions.filter((row) => row.user_id === 'uid-active' && !row.revoked_at).length, 0)
@@ -739,6 +861,12 @@ const source = fs.readFileSync(path.join(ROOT, 'src/index.ts'), 'utf8')
 for (const forbidden of ['console.log(sessionToken)', 'console.error(sessionToken)', 'session_token: sessionToken, error']) {
   assert.equal(source.includes(forbidden), false, `secret logging guard: ${forbidden}`)
 }
+assert.match(source, /\/internal\/subscription-email-candidates/, 'subscription lifecycle email source route must exist')
+assert.match(source, /requireSubscriptionEmailSourceToken/, 'subscription lifecycle email source must require internal authentication')
+const supabaseSource = fs.readFileSync(path.join(ROOT, 'src/lib/supabase.ts'), 'utf8')
+assert.match(supabaseSource, /is_current=eq\.true/, 'subscription email candidates must use current subscription rows')
+assert.match(supabaseSource, /integrity_state=eq\.ok/, 'subscription email candidates must fail closed on integrity conflicts')
+assert.match(supabaseSource, /account_profiles\?select=firebase_uid,normalized_email,locale,account_status/, 'subscription email recipients must come from canonical account profiles')
 
 fs.rmSync(BUILD_DIR, { recursive: true, force: true })
 console.log('Phase C Auth Worker behavior checks passed.')

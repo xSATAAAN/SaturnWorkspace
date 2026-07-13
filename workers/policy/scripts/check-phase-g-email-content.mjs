@@ -96,6 +96,10 @@ for (const required of [
   "account.deletion_cancelled",
   "account.suspended",
   "account.reactivated",
+  "billing.subscription_expiring",
+  "billing.subscription_expired",
+  "billing.subscription_granted",
+  "billing.subscription_grant_reserved",
   "admin.email_queue_final_failure",
   "admin.webhook_repeated_failure",
   "admin.email_cleanup_failure",
@@ -112,6 +116,26 @@ for (const required of [
 for (const disabled of ["billing.payment_succeeded", "billing.payment_failed"]) {
   assert.equal(byEvent.get(disabled)?.integration_status, "disabled", `payment-provider event must remain disabled: ${disabled}`)
 }
+
+const compensation = renderTransactionalEmail("billing.subscription_granted", {
+  reason_code: "compensation",
+  plan_term: "monthly",
+  expires_at: "2026-08-01T00:00:00.000Z",
+  action_url: "https://saturnws.com/account?section=subscription",
+}, "en")
+const recovery = renderTransactionalEmail("billing.subscription_granted", {
+  reason_code: "subscription_recovery",
+  plan_term: "monthly",
+  expires_at: "2026-08-01T00:00:00.000Z",
+  action_url: "https://saturnws.com/account?section=subscription",
+}, "en")
+assert.notEqual(compensation.text, recovery.text, "manual grant content must reflect the committed reason")
+const reserved = renderTransactionalEmail("billing.subscription_grant_reserved", {
+  reason_code: "trial",
+  plan_term: "monthly",
+  action_url: "https://saturnws.com/account/signup",
+}, "ar")
+assert.match(reserved.text, /إنشاء الحساب|أنشئ حسابًا/, "reserved grant must direct the recipient to create the matching account")
 
 fs.rmSync(BUILD_DIR, { recursive: true, force: true })
 console.log("Phase G email content checks passed.")

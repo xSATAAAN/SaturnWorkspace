@@ -104,10 +104,56 @@ export type AccountDevice = {
   last_activity_at: string
 }
 
+export type AccountDeviceBinding = {
+  id: string
+  device_key: string
+  device_name: string | null
+  platform: string | null
+  os_version: string | null
+  app_version: string | null
+  status: 'active' | 'replaced' | 'revoked' | string
+  bound_at: string
+  last_seen_at: string
+  released_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type AccountDeviceChangeRequest = {
+  id: string
+  current_binding_id: string | null
+  resulting_binding_id: string | null
+  requested_device_key: string
+  device_name: string | null
+  platform: string | null
+  os_version: string | null
+  app_version: string | null
+  user_reason: string | null
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled' | string
+  requested_at: string
+  resolved_at: string | null
+  resolution_note: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type AccountDeviceEvent = {
+  id: string
+  event_type: string
+  actor_type: 'system' | 'user' | 'admin' | string
+  binding_id: string | null
+  change_request_id: string | null
+  details: Record<string, unknown>
+  created_at: string
+}
+
 export type AccountSessionsResult = {
   success: boolean
   sessions: AccountSession[]
   devices: AccountDevice[]
+  device_binding: AccountDeviceBinding | null
+  device_change_requests: AccountDeviceChangeRequest[]
+  device_events: AccountDeviceEvent[]
 }
 
 export type AccountDeletionRequest = {
@@ -183,7 +229,31 @@ export async function fetchAccountSessions(idToken: string): Promise<AccountSess
   })
   const payload = (await response.json().catch(() => null)) as AccountSessionsResult & { error?: string } | null
   if (!response.ok || !payload?.success) throw new Error(payload?.error || `account_sessions_failed_${response.status}`)
-  return { success: true, sessions: payload.sessions || [], devices: payload.devices || [] }
+  return {
+    success: true,
+    sessions: payload.sessions || [],
+    devices: payload.devices || [],
+    device_binding: payload.device_binding || null,
+    device_change_requests: payload.device_change_requests || [],
+    device_events: payload.device_events || [],
+  }
+}
+
+export async function requestAccountDeviceChange(
+  idToken: string,
+  deviceCode: string,
+  reason?: string,
+): Promise<AccountDeviceChangeRequest> {
+  const response = await fetch(`${AUTH_BASE}/account/device-change/request`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+    body: JSON.stringify({ device_code: deviceCode, reason: reason || '' }),
+  })
+  const payload = (await response.json().catch(() => null)) as { success?: boolean; request?: AccountDeviceChangeRequest; error?: string } | null
+  if (!response.ok || !payload?.success || !payload.request) {
+    throw new Error(payload?.error || `device_change_request_failed_${response.status}`)
+  }
+  return payload.request
 }
 
 export async function revokeAccountSession(idToken: string, sessionId: string, scope: 'session' | 'device'): Promise<void> {
