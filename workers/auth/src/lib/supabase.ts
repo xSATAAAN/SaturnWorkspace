@@ -813,3 +813,29 @@ export async function insertEmailVerificationAudit(
     body: JSON.stringify(payload),
   })
 }
+
+export async function getLatestOrphanQuarantine(
+  env: Env,
+  orphanRef: string,
+): Promise<Record<string, any> | null> {
+  const normalizedRef = String(orphanRef || "").trim().toLowerCase()
+  if (!/^[a-f0-9]{18}$/.test(normalizedRef)) return null
+  const rows = await supabaseJson<Record<string, any>[]>(
+    env,
+    `/account_email_verification_audit?action=eq.auth_orphan_password_identity&result=eq.quarantined&metadata->>orphan_ref=eq.${encodeURIComponent(normalizedRef)}&select=id,result,created_at,metadata&order=created_at.desc&limit=1`,
+  )
+  return rows[0] || null
+}
+
+export async function getLatestOrphanQuarantineRecovery(
+  env: Env,
+  orphanRef: string,
+): Promise<Record<string, any> | null> {
+  const normalizedRef = String(orphanRef || "").trim().toLowerCase()
+  if (!/^[a-f0-9]{18}$/.test(normalizedRef)) return null
+  const rows = await supabaseJson<Record<string, any>[]>(
+    env,
+    `/account_email_verification_audit?action=eq.auth_orphan_password_identity_recovery&result=eq.recovered&metadata->>orphan_ref=eq.${encodeURIComponent(normalizedRef)}&select=id,result,created_at,metadata&order=created_at.desc&limit=1`,
+  )
+  return rows[0] || null
+}

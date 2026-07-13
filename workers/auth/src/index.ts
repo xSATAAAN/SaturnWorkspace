@@ -15,6 +15,8 @@ import {
   getDeviceLoginByCode,
   getEmailVerificationById,
   getLatestEmailVerification,
+  getLatestOrphanQuarantine,
+  getLatestOrphanQuarantineRecovery,
   getPendingDeviceLoginByUserCode,
   getSubscriptionRowsForUser,
   getAccountDeviceState,
@@ -471,36 +473,27 @@ async function processUnfinalizedPasswordIdentity(
   const hasPending = await hasActivePendingRegistration(env, firebaseUser.email)
   const ageMs = firebaseUser.createdAtMs ? Date.now() - firebaseUser.createdAtMs : null
   const stale = !hasPending && ageMs !== null && ageMs >= orphanRetentionMs(env)
-  let disabled = false
-  if (stale && !firebaseUser.disabled) {
-    try {
-      await setFirebaseUserDisabled(env, firebaseUser.userId, true)
-      disabled = true
-    } catch {
-      disabled = false
-    }
-  }
   const windowKey = new Date().toISOString().slice(0, 13)
   const windowState = orphanSignalWindows.get(windowKey) || { count: 0, alerted: false }
   windowState.count += 1
   orphanSignalWindows.set(windowKey, windowState)
   await auditEmailVerification(env, {
     action: "auth_orphan_password_identity",
-    result: disabled ? "quarantined" : hasPending ? "pending_registration" : "observed",
+    result: hasPending ? "pending_registration" : stale ? "stale_observed" : "observed",
     request,
     metadata: {
       orphan_ref: opaqueRef,
       reason,
       pending_registration: hasPending,
       stale,
-      disabled,
+      disabled: false,
       age_hours: ageMs === null ? null : Math.max(0, Math.floor(ageMs / 36_000) / 100),
     },
   })
-  if (disabled || (!windowState.alerted && windowState.count >= orphanAlertThreshold(env))) {
+  if (!windowState.alerted && windowState.count >= orphanAlertThreshold(env)) {
     windowState.alerted = true
     orphanSignalWindows.set(windowKey, windowState)
-    await enqueueOrphanAdminAlert(env, { opaqueRef, count: windowState.count, disabled, reason })
+    await enqueueOrphanAdminAlert(env, { opaqueRef, count: windowState.count, disabled: false, reason })
   }
 }
 
@@ -2017,6 +2010,92 @@ async function authenticateFirebasePassword(
   return verifyFirebaseUser(idToken, env)
 }
 
+function hasExactSubscriptionIdentity(rows: SubscriptionRow[], firebaseUserId: string, email: string): boolean {
+  const normalizedEmail = normalizeRegistrationEmail(email)
+  return rows.some((row) => (
+    String(row?.firebase_user_id || "").trim() === firebaseUserId
+    && normalizeRegistrationEmail(row?.user_email) === normalizedEmail
+  ))
+}
+
+async function recoverWorkerQuarantinedPasswordIdentity(
+  request: Request,
+  env: Env,
+  email: string,
+  password: string,
+): Promise<VerifiedFirebaseUser | null> {
+  const candidate = await lookupFirebaseAccountByEmailAfterOtp(env, email).catch(() => null)
+  if (!candidate?.disabled || !isPasswordOnlyFirebaseUser(candidate)) return null
+
+  const orphanRef = (await sha256Hex(`saturnws-orphan:${candidate.userId}`)).slice(0, 18)
+  const [quarantine, priorRecovery] = await Promise.all([
+    getLatestOrphanQuarantine(env, orphanRef).catch(() => null),
+    getLatestOrphanQuarantineRecovery(env, orphanRef).catch(() => null),
+  ])
+  if (!quarantine) return null
+  if (priorRecovery && Date.parse(String(priorRecovery.created_at || "")) >= Date.parse(String(quarantine.created_at || ""))) return null
+
+  const [profile, profileByEmail, subscriptionRows] = await Promise.all([
+    getAccountProfileByFirebaseUid(env, candidate.userId).catch(() => null),
+    getAccountProfileByEmail(env, candidate.email).catch(() => null),
+    getSubscriptionRowsForUser(env, candidate.userId, candidate.email).catch(() => []),
+  ])
+  if (profile && accountLifecycleBlock(profile)) return null
+  if (profileByEmail && String(profileByEmail.firebase_uid || "").trim() !== candidate.userId) return null
+  if (!hasExactSubscriptionIdentity(subscriptionRows, candidate.userId, candidate.email)) return null
+
+  let enabledForCredentialCheck = false
+  try {
+    await setFirebaseUserDisabled(env, candidate.userId, false)
+    enabledForCredentialCheck = true
+    let authenticated = await authenticateFirebasePassword(env, candidate.email, password)
+    const recoveredAt = new Date().toISOString()
+    const credentialEpoch = Math.floor(Date.now() / 1000)
+    await provisionProfile(env, authenticated, {
+      displayName: authenticated.displayName || profile?.display_name || null,
+      locale: profile?.locale || "ar",
+      termsVersion: profile?.terms_version || null,
+      termsAcceptedAt: profile?.terms_accepted_at || null,
+      emailVerified: true,
+      verificationSource: "legacy_unknown",
+      metadata: mergeFinalizedProfileMetadata(
+        {
+          legacy_recovery: {
+            recovered_at: recoveredAt,
+            source: "worker_quarantine_recovery",
+            quarantine_audit_id: String(quarantine.id || "") || null,
+          },
+        },
+        { finalizedAt: recoveredAt, credentialEpoch, source: "legacy_unknown" },
+      ),
+    })
+    await setFirebaseUserFinalizedClaim(env, candidate.userId, { disabled: false, revokeRefreshTokens: true })
+    authenticated = await authenticateFirebasePassword(env, candidate.email, password)
+    await auditEmailVerification(env, {
+      firebaseUserId: candidate.userId,
+      email: candidate.email,
+      action: "auth_orphan_password_identity_recovery",
+      result: "recovered",
+      request,
+      metadata: { orphan_ref: orphanRef, quarantine_audit_id: String(quarantine.id || "") || null },
+    })
+    return authenticated
+  } catch (error) {
+    if (enabledForCredentialCheck) {
+      await setFirebaseUserDisabled(env, candidate.userId, true).catch(() => undefined)
+    }
+    await auditEmailVerification(env, {
+      firebaseUserId: candidate.userId,
+      email: candidate.email,
+      action: "auth_orphan_password_identity_recovery",
+      result: "failed",
+      request,
+      metadata: { orphan_ref: orphanRef },
+    }).catch(() => undefined)
+    throw error
+  }
+}
+
 async function authorizePendingDeviceLogin(
   request: Request,
   env: Env,
@@ -2338,7 +2417,23 @@ async function handleDevicePasswordComplete(request: Request, env: Env): Promise
   try {
     firebaseUser = await authenticateFirebasePassword(env, email, password)
   } catch (error: any) {
-    return json({ success: false, error: String(error?.message || "firebase_password_auth_failed") }, 401)
+    const code = String(error?.message || "firebase_password_auth_failed")
+    if (code === "account_disabled") {
+      try {
+        const recovered = await recoverWorkerQuarantinedPasswordIdentity(request, env, email, password)
+        if (recovered) {
+          firebaseUser = recovered
+        } else {
+          return json({ success: false, error: code }, 403)
+        }
+      } catch (recoveryError: any) {
+        const recoveryCode = String(recoveryError?.message || "firebase_password_auth_failed")
+        const status = recoveryCode === "invalid_credentials" ? 401 : 503
+        return json({ success: false, error: recoveryCode }, status)
+      }
+    } else {
+      return json({ success: false, error: code }, 401)
+    }
   }
 
   const authorization = await authorizePendingDeviceLogin(request, env, pending, firebaseUser)

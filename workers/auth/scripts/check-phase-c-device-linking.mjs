@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -45,6 +46,8 @@ const tokenRegistrationRaw = rawToken('uid-registration-finalized', 'new-registr
 const tokenDirectBypass = rawToken('uid-direct-bypass', 'direct-bypass@example.test')
 const tokenDirectBypassFinalized = finalizedToken('uid-direct-bypass', 'direct-bypass@example.test')
 const tokenUnfinalizedProfile = rawToken('uid-unfinalized-profile', 'unfinalized-profile@example.test')
+const tokenQuarantinedLegacy = rawToken('uid-quarantined-legacy', 'quarantined-legacy@example.test')
+const tokenAdminDisabled = rawToken('uid-admin-disabled', 'admin-disabled@example.test')
 const users = new Map([
   [tokenNone, { localId: 'uid-none', email: 'none@example.test', emailVerified: true, customAttributes: finalizedCustomAttributes }],
   [tokenActive, { localId: 'uid-active', email: 'active@example.test', emailVerified: true, customAttributes: finalizedCustomAttributes }],
@@ -56,6 +59,8 @@ const users = new Map([
   [tokenLegacyRegistration, { localId: 'uid-legacy-registration', email: 'legacy-registration@example.test', emailVerified: false, displayName: 'Legacy Before OTP', providerUserInfo: [{ providerId: 'password' }] }],
   [tokenGoogleCollision, { localId: 'uid-google-collision', email: 'google-collision@example.test', emailVerified: true, displayName: 'Google Collision', providerUserInfo: [{ providerId: 'google.com' }] }],
   [tokenUnfinalizedProfile, { localId: 'uid-unfinalized-profile', email: 'unfinalized-profile@example.test', emailVerified: true, displayName: 'Unfinalized Profile', providerUserInfo: [{ providerId: 'password' }] }],
+  [tokenQuarantinedLegacy, { localId: 'uid-quarantined-legacy', email: 'quarantined-legacy@example.test', emailVerified: true, displayName: 'Quarantined Legacy', providerUserInfo: [{ providerId: 'password' }], disabled: true, password: 'legacy-password-123', createdAt: String(now - 10 * 86400000) }],
+  [tokenAdminDisabled, { localId: 'uid-admin-disabled', email: 'admin-disabled@example.test', emailVerified: true, displayName: 'Admin Disabled', providerUserInfo: [{ providerId: 'password' }], disabled: true, password: 'admin-disabled-password-123', createdAt: String(now - 10 * 86400000) }],
 ])
 const securityEmailToken = 'phase-c-security-email-token'
 const securityEmailRequests = []
@@ -82,6 +87,8 @@ const db = {
     { id: 'sub-expired', firebase_user_id: 'uid-expired', user_email: 'expired@example.test', plan: 'monthly', tier: 'public', status: 'expired', hwid: null, starts_at: past(40), expires_at: past(10), feature_payload: {}, metadata: {}, created_at: past(40), updated_at: past(10) },
     { id: 'sub-lifetime', firebase_user_id: 'uid-lifetime', user_email: 'lifetime@example.test', plan: 'yearly', tier: 'public', status: 'active', hwid: null, starts_at: past(2), expires_at: '9999-12-31T23:59:59.000Z', feature_payload: {}, metadata: { is_unlimited: true }, created_at: past(2), updated_at: past(1) },
     { id: 'sub-grace', firebase_user_id: 'uid-grace', user_email: 'grace@example.test', plan: 'monthly', tier: 'public', status: 'past_due', hwid: null, starts_at: past(32), expires_at: future(3), grace_ends_at: future(3), feature_payload: {}, metadata: {}, created_at: past(32), updated_at: past(1) },
+    { id: 'sub-quarantined-legacy', firebase_user_id: 'uid-quarantined-legacy', user_email: 'quarantined-legacy@example.test', plan: 'monthly', tier: 'public', status: 'active', hwid: null, starts_at: past(2), expires_at: future(28), feature_payload: {}, metadata: {}, created_at: past(2), updated_at: past(1) },
+    { id: 'sub-admin-disabled', firebase_user_id: 'uid-admin-disabled', user_email: 'admin-disabled@example.test', plan: 'monthly', tier: 'public', status: 'active', hwid: null, starts_at: past(2), expires_at: future(28), feature_payload: {}, metadata: {}, created_at: past(2), updated_at: past(1) },
   ],
   device_login_sessions: [],
   app_sessions: [],
@@ -89,7 +96,16 @@ const db = {
   account_device_change_requests: [],
   account_device_events: [],
   account_email_verifications: [],
-  account_email_verification_audit: [],
+  account_email_verification_audit: [{
+    id: 'audit-quarantined-legacy',
+    action: 'auth_orphan_password_identity',
+    result: 'quarantined',
+    metadata: {
+      orphan_ref: createHash('sha256').update('saturnws-orphan:uid-quarantined-legacy').digest('hex').slice(0, 18),
+      disabled: true,
+    },
+    created_at: past(1),
+  }],
   account_deletion_requests: [],
 }
 
@@ -102,9 +118,11 @@ function matches(row, params) {
     if (['select', 'order', 'limit', 'or'].includes(key)) continue
     const [operator, ...rest] = raw.split('.')
     const expected = rest.join('.')
-    if (operator === 'eq' && String(row[key] ?? '') !== expected) return false
-    if (operator === 'ilike' && String(row[key] ?? '').toLowerCase() !== expected.toLowerCase()) return false
-    if (operator === 'is' && expected === 'null' && row[key] != null) return false
+    const jsonTextMatch = /^([^>]+)->>(.+)$/.exec(key)
+    const actual = jsonTextMatch ? row[jsonTextMatch[1]]?.[jsonTextMatch[2]] : row[key]
+    if (operator === 'eq' && String(actual ?? '') !== expected) return false
+    if (operator === 'ilike' && String(actual ?? '').toLowerCase() !== expected.toLowerCase()) return false
+    if (operator === 'is' && expected === 'null' && actual != null) return false
     if (operator === 'in') {
       const allowed = expected.replace(/^\(|\)$/g, '').split(',').map((item) => item.trim())
       if (!allowed.includes(String(row[key] ?? ''))) return false
@@ -145,6 +163,7 @@ async function mockFetch(input, init = {}) {
       const updated = {
         ...user,
         email: String(body.email || user.email || '').trim().toLowerCase(),
+        password: body.password === undefined ? user.password : String(body.password || ''),
         displayName: body.displayName || user.displayName || null,
         emailVerified: Boolean(body.emailVerified || user.emailVerified),
         disabled: body.disableUser === undefined ? Boolean(user.disabled) : Boolean(body.disableUser),
@@ -164,12 +183,25 @@ async function mockFetch(input, init = {}) {
       const user = {
         localId,
         email,
+        password: String(body.password || ''),
         emailVerified: true,
         displayName: body.displayName || null,
         providerUserInfo: [{ providerId: 'password' }],
       }
       users.set(tokenRegistrationFinalized, { ...user, customAttributes: String(body.customAttributes || ''), disabled: Boolean(body.disableUser) })
       return Response.json({ localId, email, displayName: user.displayName })
+    }
+    if (url.pathname.endsWith('/accounts:signInWithPassword') && request.method.toUpperCase() === 'POST') {
+      const email = String(body.email || '').trim().toLowerCase()
+      const matched = [...users.values()].find((user) => String(user.email || '').trim().toLowerCase() === email)
+      if (!matched || String(matched.password || '') !== String(body.password || '')) {
+        return Response.json({ error: { message: 'INVALID_LOGIN_CREDENTIALS' } }, { status: 401 })
+      }
+      if (matched.disabled) return Response.json({ error: { message: 'USER_DISABLED' } }, { status: 403 })
+      const claims = matched.customAttributes ? JSON.parse(String(matched.customAttributes)) : {}
+      const idToken = jwtToken({ sub: matched.localId, email: matched.email, auth_time: authTime, ...claims })
+      users.set(idToken, matched)
+      return Response.json({ localId: matched.localId, email: matched.email, idToken })
     }
     return Response.json({ error: { message: 'INVALID_LOGIN_CREDENTIALS' } }, { status: 401 })
   }
@@ -595,7 +627,7 @@ const directBypassSubscription = await call('/account/subscription', { id_token:
 assert.equal(directBypassSubscription.status, 403, 'raw direct Firebase identity must not access protected subscription')
 assert.equal(directBypassSubscription.body.error, 'EMAIL_VERIFICATION_REQUIRED')
 assert.equal(db.account_profiles.some((row) => row.firebase_uid === 'uid-direct-bypass'), false, 'raw direct Firebase identity must not auto-create a Saturn profile')
-assert.equal(users.get(tokenDirectBypass)?.disabled, true, 'stale raw direct Firebase identity must be quarantined')
+assert.equal(Boolean(users.get(tokenDirectBypass)?.disabled), false, 'login validation must never disable a Firebase identity')
 const directBypassDevice = await start('9'.repeat(32))
 const directBypassComplete = await call('/device/complete', { id_token: tokenDirectBypass, device_code: directBypassDevice.device_code })
 assert.equal(directBypassComplete.status, 403)
@@ -633,6 +665,54 @@ const directBypassProfiles = db.account_profiles.filter((row) => row.normalized_
 assert.equal(directBypassProfiles.length, 1, 'direct Firebase identity reconciliation must create exactly one canonical profile')
 assert.equal(directBypassProfiles[0].firebase_uid, 'uid-direct-bypass')
 assert.equal(new Set([...users.values()].filter((user) => user.email === 'direct-bypass@example.test').map((user) => user.localId)).size, 1, 'direct Firebase identity reconciliation must keep one Firebase UID')
+
+const quarantinedWrongPasswordPending = await start('4'.repeat(32))
+const quarantinedWrongPassword = await call('/device/password-complete', {
+  device_code: quarantinedWrongPasswordPending.device_code,
+  email: 'quarantined-legacy@example.test',
+  password: 'wrong-password-123',
+})
+assert.equal(quarantinedWrongPassword.status, 401)
+assert.equal(quarantinedWrongPassword.body.error, 'invalid_credentials')
+assert.equal(users.get(tokenQuarantinedLegacy)?.disabled, true, 'failed credential proof must restore the quarantine')
+assert.equal(db.account_profiles.some((row) => row.firebase_uid === 'uid-quarantined-legacy'), false)
+
+const quarantinedRecoveryPending = await start('5'.repeat(32))
+const quarantinedRecovery = await call('/device/password-complete', {
+  device_code: quarantinedRecoveryPending.device_code,
+  email: 'quarantined-legacy@example.test',
+  password: 'legacy-password-123',
+})
+assert.equal(quarantinedRecovery.status, 200)
+assert.equal(quarantinedRecovery.body.connection_state, 'linked')
+assert.equal(users.get(tokenQuarantinedLegacy)?.disabled, false, 'correct credentials must recover only a worker-quarantined legacy identity')
+const recoveredLegacyProfile = db.account_profiles.find((row) => row.firebase_uid === 'uid-quarantined-legacy')
+assert.equal(recoveredLegacyProfile?.account_status, 'active')
+assert.equal(recoveredLegacyProfile?.email_verified, true)
+assert.equal(recoveredLegacyProfile?.verification_source, 'legacy_unknown')
+assert.equal(db.account_email_verification_audit.some((row) => row.action === 'auth_orphan_password_identity_recovery' && row.result === 'recovered'), true)
+assert.equal(db.account_email_verification_audit.find((row) => row.id === 'audit-quarantined-legacy')?.result, 'quarantined', 'audit evidence must remain immutable')
+
+users.get(tokenQuarantinedLegacy).disabled = true
+const quarantinedSecondRecoveryPending = await start('7'.repeat(32))
+const quarantinedSecondRecovery = await call('/device/password-complete', {
+  device_code: quarantinedSecondRecoveryPending.device_code,
+  email: 'quarantined-legacy@example.test',
+  password: 'legacy-password-123',
+})
+assert.equal(quarantinedSecondRecovery.status, 403)
+assert.equal(quarantinedSecondRecovery.body.error, 'account_disabled')
+assert.equal(users.get(tokenQuarantinedLegacy)?.disabled, true, 'consumed quarantine evidence must not override a later disable')
+
+const adminDisabledPending = await start('6'.repeat(32))
+const adminDisabledLogin = await call('/device/password-complete', {
+  device_code: adminDisabledPending.device_code,
+  email: 'admin-disabled@example.test',
+  password: 'admin-disabled-password-123',
+})
+assert.equal(adminDisabledLogin.status, 403)
+assert.equal(adminDisabledLogin.body.error, 'account_disabled')
+assert.equal(users.get(tokenAdminDisabled)?.disabled, true, 'an account without worker quarantine evidence must remain disabled')
 
 const pendingBeforeSubscription = await call('/account/subscription', { id_token: tokenPendingEmail }, tokenPendingEmail)
 assert.equal(pendingBeforeSubscription.status, 403)
