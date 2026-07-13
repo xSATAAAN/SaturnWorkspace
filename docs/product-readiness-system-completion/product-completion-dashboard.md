@@ -1,6 +1,6 @@
 # Saturn Workspace Product Completion Dashboard
 
-Updated: 2026-07-12
+Updated: 2026-07-13
 
 ## Current Phase Status
 
@@ -26,7 +26,7 @@ Updated: 2026-07-12
 ## Production Evidence
 
 - Canonical repository: `D:\SaturnWS\github-deploy\SaturnWorkspace`.
-- Canonical `main` is the current source of truth. The latest code-bearing public site/Auth/Policy remediation in this continuation is commit `27aeee1`, deployed to live Workers and verified in the live public bundle `assets/index-BJRDMlYx.js`. Later commits in this batch may update only living documentation and captured evidence.
+- Canonical `main` is the current source of truth. Commit `253a4ae8ebc4d33d955b9fbc68119a38bd8459f3` is deployed to the Auth Worker. It adds the authenticated Gmail read-only capability contract while keeping the feature disabled until Google restricted-scope verification. No public-site source changed in that commit, so the current live public bundle remains the previously verified site deployment.
 - Supabase project: `Saturn Workspace` / ref `iqvwoivlamglyblftwez`.
 - Applied Supabase migrations:
   - `20260623214309 phase_g_recovery_deletion`
@@ -44,6 +44,7 @@ Updated: 2026-07-12
   - Security email producers exist in the current worktree for selected committed session, device, and account-lifecycle events. `EMAIL_SECURITY_ENABLED=true` is deployed on Auth, Admin, and Policy; production-safe event delivery verification remains pending.
   - Admin alert producers exist in the current worktree for final email queue failure, webhook verification failure, cleanup failure, storage configuration failure, schema mismatch, readiness degradation, and high-severity tamper signals. `EMAIL_ADMIN_ALERTS_ENABLED=true` is active on Policy deployment `b79cab4e-bc04-49a0-b1d3-25545f933344` (secret-change version after source deployment `cec58841-cbc9-44e4-853f-054425d29ecc`), `EMAIL_ADMIN_ALERT_RECIPIENTS` is configured as a Policy Worker secret, and safe alert-delivery verification remains pending.
   - Billing and release email categories remain disabled.
+  - Auth `GMAIL_READONLY_OAUTH_ENABLED=false` is deployed. `GET /oauth/google-gmail-status` requires an authenticated app session and returns the gated `gmail.readonly` capability state without exposing OAuth credentials. Auth Worker version: `a599057b-5398-4630-a45a-bdf7a1efb497`.
 - Secret inventory:
   - Policy Worker has `RESEND_SEND_API_KEY`, `RESEND_RECEIVE_API_KEY`, and `RESEND_WEBHOOK_SECRET`.
   - Auth Worker has `AUTH_EMAIL_ENQUEUE_TOKEN`, `EMAIL_VERIFICATION_PEPPER`, and `FIREBASE_SERVICE_ACCOUNT_JSON`.
@@ -54,7 +55,8 @@ Updated: 2026-07-12
   - Policy `test:phase-g`: passed.
   - Auth `check` and `test:phase-c`: passed.
   - Admin `check:syntax` and `test:phase-g`: passed.
-  - Desktop Python compile, frontend build, and QA Setup build: passed.
+  - Desktop full Python suite: `180 passed, 26 subtests passed`; frontend production build, startup-surface matrix `5/5`, package/source parity, dependency audit, secret scan, and QA Setup build passed.
+  - Packaged Desktop UI matrix: `72/72` Arabic/English light/dark/mono page cases passed with no horizontal overflow, low-contrast finding, unlabeled control, duplicate ID, or browser runtime error. Local account/email/IP journeys and safe-control restoration passed.
   - Site Phase B.1, Phase B, Phase C, and Phase F checks: passed.
   - Local visual QA generated pricing-card fixture screenshots. Live public-route visual evidence now covers Arabic/English desktop, tablet, and mobile layouts for `/`, `/pricing`, `/downloads`, `/contact`, and `/account/signin`.
 
@@ -90,6 +92,9 @@ Updated: 2026-07-12
 - Earlier live public rendered evidence for commit `3e090fb198429cf26d5f3866f9adc41c1651dfdf` found and fixed a Contact mobile overflow defect. Recaptured screenshots under `docs/product-readiness-system-completion/visual-evidence/phase-g-20260624-live-public` show 30/30 public route/locale/viewport captures returning 200 with correct RTL/LTR direction and zero horizontal overflow.
 - Public plan catalog CORS source was repaired to allow Saturn public origins as well as Admin origins. Post-deploy verification confirmed `https://admin-api.saturnws.com/api/plans/catalog` returns 200 with `Access-Control-Allow-Origin: https://saturnws.com` for the public origin.
 - Legacy root static website artifacts were removed from source. GitHub Pages continues to publish `site/dist`, and the cutover guard blocks known legacy public bundle tokens from returning. Live HTML references `assets/index-rasVfIJe.js` and `assets/index-Bk4Fv71E.css` from workflow run `28174200979`.
+- Desktop blocked/pre-entry states now provide a read-only local data explorer and bounded export path without weakening account connection or entitlement gates. The export control recovers after native errors and the packaged startup matrix proves one continuous loading segment before the React application.
+- SaturnWS extension management now uses a native folder chooser, validates the selected unpacked extension, maintains a versioned packaged ZIP, and replaces stale copies deterministically. The removed Trust Wallet integration was not restored.
+- Desktop What's New is release-note driven and does not invent content. Gmail read-only inbox, local read/unread/archive/pin/mute state, Windows toast activation, and deep-open behavior are implemented behind the disabled Auth capability. Toast activation URIs contain opaque one-time tokens only; message IDs and email content remain in protected local activation records.
 
 ## Operational Configuration Required
 
@@ -102,8 +107,9 @@ Updated: 2026-07-12
 | Email/password OTP remediation credentialed QA | `PENDING_MANUAL_ACCEPTANCE` | Previous live health, route, bundle, CORS, stable unauthenticated error contracts, pending-registration UI, and server enqueue path passed for the earlier deployed model. The current OTP-first source requires the Firebase Admin configuration above before live completion can be tested. |
 | Real payment provider | `WAITING_EXTERNAL` | Approve provider, plan mappings, webhook contract, and rollout before checkout or billing emails are enabled. |
 | QA email delivery acceptance | `PENDING_MANUAL_ACCEPTANCE` | Use a dedicated QA recipient in Phase G to confirm provider delivery without exposing OTP values. |
-| QA Desktop Setup artifact | `QA_ARTIFACT_BUILT_PENDING_MANUAL_ACCEPTANCE` | Local artifact: `D:\SaturnWS\build-output\scale-resilience-qa-20260712-223452\setup\SaturnWorkspace-Setup-1.1.0.exe`; size `41,436,838` bytes; SHA256 `320344753AA7BF3FC79D91040D57EC5948255BED3696BF0088403121A416A27D`. Source/package payload hashes match and the 12-second monitored package smoke passed; not published. |
-| Desktop reproducibility inventory | `RECORDED_PENDING_MANUAL_ACCEPTANCE` | Source manifest and artifact record are under `docs/product-readiness-system-completion/desktop-reproducibility`; no Desktop rebuild was performed in this continuation. |
+| QA Desktop Setup artifact | `QA_ARTIFACT_BUILT_PENDING_MANUAL_ACCEPTANCE` | Local artifact: `D:\SaturnWS\build-output\phase-c-commercial-20260713-211709\setup\SaturnWorkspace-Setup-1.1.0.exe`; size `41,477,221` bytes; SHA256 `099888CBD9B2E3364E312C8E8A60015C0A616C4D2C549D9AE2EF83098E0AC1DC`. Source/package payload hashes match. Package smoke, `72/72` UI matrix, real same-version repair/install, installed runtime launch, and Launcher-to-runtime handoff passed. It was not published to OTA, GitHub Releases, or production R2. |
+| Desktop source reproducibility | `RECORDED_PENDING_MANUAL_ACCEPTANCE` | `D:\SaturnWS\desktop-app` is not a Git repository. The current source snapshot contains `249` files with aggregate SHA256 `F23A2C1A4E194895AF9396A2D95ED6ADCB8B634ADE00E839903BAC44684E958D`; package parity covers `104/104` runtime payload files. |
+| Gmail read-only Desktop integration | `WAITING_EXTERNAL` | Product code, capability endpoint, local state, safe Windows toast activation, tests, and disabled-state UI are implemented. Production activation requires Google verification for the restricted `gmail.readonly` scope and an explicit later rollout; Auth flag remains false. |
 | Public plan CORS live verification | `PRODUCTION_VERIFIED_AUTOMATED` | Admin Worker was redeployed and `https://admin-api.saturnws.com/api/plans/catalog` returns `Access-Control-Allow-Origin: https://saturnws.com` for the public origin. |
 | Public pricing Pages deployment | `PRODUCTION_VERIFIED_AUTOMATED` | GitHub Pages run `28174200979` deployed commit `9da6025189eccfff76509bac6f61d18942489f07`. Live bundle `assets/index-rasVfIJe.js` contains the approved weekly/monthly/annual prices and omits the old redundant pricing IA. |
 | Email verification pending-registration state | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Auth Worker `0186ad21-4c7b-4399-8c92-20a876fd5bee` and Pages run `28174200979` are deployed. Browser evidence under `D:\SaturnWS\build-output\phase-g-live-render` records direct-route safe handling, one destination email occurrence, no editable email field, and Change email return to signup. |

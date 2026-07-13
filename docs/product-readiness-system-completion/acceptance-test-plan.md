@@ -33,6 +33,10 @@ Operational precondition: the Auth Worker finalizer configuration (`FIREBASE_SER
 
 - Test device login success, wrong code, expired code, replay, wrong device, polling interruption, refresh, revocation, logout, unlink, multiple devices, and account switching using QA devices.
 - Confirm connection and entitlement states remain independent.
+- Confirm one-account/device policy across Desktop and Admin: pending request, approve, reject, reset, replacement request, terms state, stale/replayed request rejection, and audit, without exposing device codes or session tokens.
+- In each blocked pre-entry state, confirm local accounts, email records, and IP records are read-only, export is bounded and recoverable after an error, and no paid action becomes available.
+- Verify the native SaturnWS extension location chooser accepts only a valid unpacked extension, replaces an older managed copy, preserves the versioned ZIP contract, and never restores the removed Trust Wallet feature.
+- Verify What's New appears once for a real new release, uses release metadata only, and remains absent when no new release notes exist.
 
 ## 3. Subscription Truth and Downloads
 
@@ -66,6 +70,7 @@ Operational precondition: the Auth Worker finalizer configuration (`FIREBASE_SER
 - Confirm billing and release emails remain disabled until real committed provider/release events exist.
 - Confirm security email producers enqueue only for committed events, with deterministic idempotency and no session tokens or device codes in payloads.
 - Confirm admin alert delivery uses the configured recipient, dedupes repeated incidents, and does not recursively alert on its own final failure.
+- Keep Gmail read-only integration disabled while `GMAIL_READONLY_OAUTH_ENABLED=false`. After Google restricted-scope verification and explicit rollout approval, verify connect/disconnect, read-only message projection, refresh, read/unread/archive/pin/mute local state, Windows toast click-to-open, expired grant recovery, account switching isolation, and absence of email content/message IDs in activation URIs.
 
 ## 7. Diagnostics and Audit
 
@@ -88,6 +93,7 @@ Operational precondition: the Auth Worker finalizer configuration (`FIREBASE_SER
 ## 10. Accessibility and Visual Acceptance
 
 - Keyboard navigation, focus trapping/restoration, labels, contrast, reduced motion, responsive desktop/tablet/mobile behavior, RTL/LTR, light/dark themes, loading/empty/error/success states.
+- Desktop automated evidence covers all 12 application pages in Arabic/English across light/dark/mono (`72/72`). Manual acceptance must inspect the captured screenshots and the native loading/login/blocked surfaces at the supported Desktop window sizes; mobile behavior is not a Desktop acceptance target.
 
 ## 11. Scale, Resilience, and Supply Chain
 
@@ -96,6 +102,12 @@ Operational precondition: the Auth Worker finalizer configuration (`FIREBASE_SER
 - Verify Cloudflare Rate Limiting bindings for Auth and Admin in staging, including allowed traffic, `429` exhaustion, and fail-closed behavior when a binding is unavailable.
 - Run npm audit for Site/Auth/Admin/Policy/scale tools, the tracked-file repository security gate, and Desktop strict pip-audit before producing a QA Setup.
 - Confirm all nine Supabase foreign-key indexes remain valid/ready and the performance advisor has no unindexed-foreign-key finding.
+
+## 12. Desktop QA Artifact
+
+- Current artifact: `D:\SaturnWS\build-output\phase-c-commercial-20260713-211709\setup\SaturnWorkspace-Setup-1.1.0.exe`; size `41,477,221` bytes; SHA256 `099888CBD9B2E3364E312C8E8A60015C0A616C4D2C549D9AE2EF83098E0AC1DC`.
+- Automated evidence already proves source/package parity, one loading segment, `5/5` startup states, local account/email/IP journeys, safe control restoration, `72/72` locale/theme/page cases, same-version repair/install, installed runtime launch, and Launcher handoff.
+- Manual Phase G acceptance still owns a clean-machine install, shortcut and Add/Remove Programs inspection, repair from the visible installer UI, uninstall of this exact artifact, and confirmation that user data retention/removal matches the approved product policy. Do not perform these destructive checks on the active data-bearing workstation.
 
 ## Exit Evidence
 
