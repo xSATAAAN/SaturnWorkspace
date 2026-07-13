@@ -343,6 +343,20 @@ async function call(pathname, body, token, requestEnv = env) {
   return { status: response.status, body: await response.json() }
 }
 
+async function callGet(pathname, token, hwid, requestEnv = env) {
+  requestCounter += 1
+  const request = new Request(`https://auth.test${pathname}`, {
+    method: 'GET',
+    headers: {
+      'CF-Connecting-IP': `198.51.100.${(requestCounter % 250) + 1}`,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(hwid ? { 'X-SATURN-HWID': hwid } : {}),
+    },
+  })
+  const response = await worker.fetch(request, requestEnv)
+  return { status: response.status, body: await response.json() }
+}
+
 async function start(hwid, deviceName = 'QA Device') {
   const result = await call('/device/start', { hwid, app_version: '1.0.7-beta', device_name: deviceName, platform: 'Windows', os_version: 'Windows 11' })
   assert.equal(result.status, 200)
@@ -366,6 +380,28 @@ const noSubscription = await link(tokenNone, 'a'.repeat(32))
 assert.equal(noSubscription.complete.entitlement_state, 'no_subscription')
 assert.equal(noSubscription.session.entitlement_state, 'no_subscription')
 assert.equal(noSubscription.session.subscription, null)
+
+const gmailCapabilityUnauthorized = await callGet('/oauth/google-gmail-status')
+assert.equal(gmailCapabilityUnauthorized.status, 401)
+assert.equal(gmailCapabilityUnauthorized.body.error, 'unauthorized')
+const gmailCapabilityDisabled = await callGet(
+  '/oauth/google-gmail-status',
+  noSubscription.session.session_token,
+  'a'.repeat(32),
+)
+assert.equal(gmailCapabilityDisabled.status, 200)
+assert.equal(gmailCapabilityDisabled.body.enabled, false)
+assert.equal(gmailCapabilityDisabled.body.scope, 'gmail.readonly')
+assert.equal(gmailCapabilityDisabled.body.reason, 'google_verification_required')
+const gmailCapabilityEnabled = await callGet(
+  '/oauth/google-gmail-status',
+  noSubscription.session.session_token,
+  'a'.repeat(32),
+  { ...env, GMAIL_READONLY_OAUTH_ENABLED: 'true' },
+)
+assert.equal(gmailCapabilityEnabled.status, 200)
+assert.equal(gmailCapabilityEnabled.body.enabled, true)
+assert.equal(gmailCapabilityEnabled.body.reason, '')
 
 const registrationStart = await call('/email-verification/start', {
   email: 'new-registration@example.test',

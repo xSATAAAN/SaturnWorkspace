@@ -189,6 +189,23 @@ async function handleGoogleDriveOAuthConfig(request: Request, env: Env): Promise
   return json(oauthConfigPayload(env))
 }
 
+async function handleGmailOAuthCapability(request: Request, env: Env): Promise<Response> {
+  const ip = request.headers.get("CF-Connecting-IP") || "unknown"
+  if (!(await allowRateLimit(env.AUTH_RATE_LIMIT_STANDARD, `gmail-oauth-status:ip:${ip}`))) {
+    return json({ success: false, error: "rate_limited" }, 429)
+  }
+  if (!(await authorizeOAuthConfigRequest(request, env))) {
+    return json({ success: false, error: "unauthorized" }, 401)
+  }
+  const enabled = String(env.GMAIL_READONLY_OAUTH_ENABLED || "").trim().toLowerCase() === "true"
+  return json({
+    success: true,
+    enabled,
+    scope: "gmail.readonly",
+    reason: enabled ? "" : "google_verification_required",
+  })
+}
+
 async function handleVerify(request: Request, env: Env): Promise<Response> {
   return json({ success: false, error: "account_session_required" }, 410)
 }
@@ -2942,6 +2959,10 @@ export default {
       }
       if (request.method === "GET" && apiPath === "/oauth/google-drive-config") {
         const res = await handleGoogleDriveOAuthConfig(request, env)
+        return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
+      }
+      if (request.method === "GET" && apiPath === "/oauth/google-gmail-status") {
+        const res = await handleGmailOAuthCapability(request, env)
         return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
       }
       if (request.method === "GET" && apiPath === "/health") {
