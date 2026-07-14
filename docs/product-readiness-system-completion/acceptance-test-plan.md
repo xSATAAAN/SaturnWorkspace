@@ -81,7 +81,7 @@ Operational precondition: the Auth Worker finalizer configuration (`FIREBASE_SER
 
 - Review policy previews and two-step confirmation without applying a live kill switch or mandatory update.
 - Test invite creation on a fixture scope, shown-once behavior, invalid/expired/blocked/already-used, per-user/device restrictions, max uses, revoke, and audit.
-- Validate release upload metadata and publish preview with a fixture object only; do not publish a production release.
+- Validate that release upload uses the administrator-entered version independently of the artifact filename, accepts a valid ZIP fixture with an arbitrary name, rejects invalid binary content, and renders the publish preview without publishing a production release.
 - Confirm selecting `SaturnWorkspace-app-1.1.3-beta.zip` derives `1.1.3-beta`, the current beta card shows `1.1.2-beta`, and a mismatched, equal, older, or invalid installed ZIP release is rejected before normal publication. Do not confirm the publication action without separate approval.
 - Verify promotions are backend-owned and never activate entitlement from frontend state.
 

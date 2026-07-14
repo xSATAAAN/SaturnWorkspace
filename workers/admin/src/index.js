@@ -1,7 +1,7 @@
 import { handleCreatePayment, handleGetPaymentStatus, handleListPlans } from "./routes/payments.js";
 import { resolveSubscriptionTruth } from "../../shared/subscriptions/resolver.js";
 import { handleDownloadCatalog, handleDownloadFile } from "./routes/downloads.js";
-import { assertArtifactVersionMatchesFilename, compareReleaseVersions } from "./releaseContract.js";
+import { assertArtifactBinarySignature, compareReleaseVersions } from "./releaseContract.js";
 import {
   adminContext,
   adminRoleAssignmentsState,
@@ -1363,9 +1363,9 @@ async function uploadReleaseBinary(request, env, adminEmail) {
 
   const channel = normalizeChannel(form.get("channel"));
   const version = normalizeVersion(form.get("version"));
-  assertArtifactVersionMatchesFilename(file.name, artifactType, version);
   const key = releaseObjectKeyForArtifact(channel, version, artifactType, file.name);
   const fileBytes = await file.arrayBuffer();
+  assertArtifactBinarySignature(fileBytes, artifactType);
   const hashBuffer = await crypto.subtle.digest("SHA-256", fileBytes);
   const hashHex = [...new Uint8Array(hashBuffer)].map((b) => b.toString(16).padStart(2, "0")).join("");
 
@@ -1442,12 +1442,6 @@ async function publishRelease(request, env, adminEmail) {
   const downloadUrlBase = String(env.PUBLIC_UPDATES_BASE_URL || "https://saturnws.com/updates").replace(/\/+$/, "");
   const { portable: portableRelease, installed: installedRelease, primary: primaryRelease } = uploadedReleaseArtifacts(release);
   if (!primaryRelease) throw new Error("release_artifact_not_uploaded");
-  if (installedRelease) {
-    assertArtifactVersionMatchesFilename(installedRelease.filename, "installed", version);
-  }
-  if (portableRelease) {
-    assertArtifactVersionMatchesFilename(portableRelease.filename, "portable", version);
-  }
   const downloadUrl = portableRelease ? artifactDownloadUrl(portableRelease, downloadUrlBase) : "";
   const recordDownloadUrl = artifactDownloadUrl(primaryRelease, downloadUrlBase);
   const artifacts = manifestArtifactsForRelease(release, downloadUrlBase);

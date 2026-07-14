@@ -2,37 +2,23 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import {
-  artifactVersionFromFilename,
-  assertArtifactVersionMatchesFilename,
+  assertArtifactBinarySignature,
   compareReleaseVersions,
 } from "./releaseContract.js"
 
-test("extracts installed package version including prerelease suffix", () => {
-  assert.equal(
-    artifactVersionFromFilename("SaturnWorkspace-app-1.1.2-beta.zip", "installed"),
-    "1.1.2-beta",
-  )
+test("accepts an installed ZIP independently of its filename", () => {
+  assert.doesNotThrow(() => assertArtifactBinarySignature(Uint8Array.from([0x50, 0x4b, 0x03, 0x04]), "installed"))
 })
 
-test("rejects a manifest version that disagrees with the installed package", () => {
+test("rejects a renamed non-ZIP installed artifact", () => {
   assert.throws(
-    () => assertArtifactVersionMatchesFilename("SaturnWorkspace-app-1.1.2-beta.zip", "installed", "1.1.2"),
-    /release_version_filename_mismatch/,
+    () => assertArtifactBinarySignature(Uint8Array.from([0x4d, 0x5a, 0x00, 0x00]), "installed"),
+    /invalid_file_content/,
   )
 })
 
-test("rejects an installed package outside the build naming contract", () => {
-  assert.throws(
-    () => assertArtifactVersionMatchesFilename("update.zip", "installed", "1.1.2-beta"),
-    /release_artifact_filename_invalid/,
-  )
-})
-
-test("accepts a matching installed package", () => {
-  assert.equal(
-    assertArtifactVersionMatchesFilename("SaturnWorkspace-app-1.1.2-beta.zip", "installed", "1.1.2-beta"),
-    "1.1.2-beta",
-  )
+test("accepts a portable executable by content", () => {
+  assert.doesNotThrow(() => assertArtifactBinarySignature(Uint8Array.from([0x4d, 0x5a]), "portable"))
 })
 
 test("compares numeric versions and prerelease stages", () => {

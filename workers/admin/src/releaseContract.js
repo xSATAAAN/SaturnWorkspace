@@ -1,20 +1,14 @@
-export function artifactVersionFromFilename(filename, artifactType) {
-  const value = String(filename || "").trim()
-  const pattern = artifactType === "installed"
-    ? /^SaturnWorkspace-app-(.+)\.zip$/i
-    : /^SaturnWorkspace-(?:Setup|Portable)-(.+)\.exe$/i
-  return pattern.exec(value)?.[1]?.trim() || ""
-}
-
-export function assertArtifactVersionMatchesFilename(filename, artifactType, version) {
-  const artifactVersion = artifactVersionFromFilename(filename, artifactType)
-  if (artifactType === "installed" && !artifactVersion) {
-    throw new Error("release_artifact_filename_invalid")
+export function assertArtifactBinarySignature(value, artifactType) {
+  const bytes = value instanceof Uint8Array ? value : new Uint8Array(value || 0)
+  const isZip = bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b && (
+    (bytes[2] === 0x03 && bytes[3] === 0x04) ||
+    (bytes[2] === 0x05 && bytes[3] === 0x06) ||
+    (bytes[2] === 0x07 && bytes[3] === 0x08)
+  )
+  const isExecutable = bytes.length >= 2 && bytes[0] === 0x4d && bytes[1] === 0x5a
+  if ((artifactType === "installed" && !isZip) || (artifactType === "portable" && !isExecutable)) {
+    throw new Error("invalid_file_content")
   }
-  if (artifactVersion && artifactVersion.toLowerCase() !== String(version || "").trim().toLowerCase()) {
-    throw new Error("release_version_filename_mismatch")
-  }
-  return artifactVersion
 }
 
 export function releaseVersionKey(value) {
