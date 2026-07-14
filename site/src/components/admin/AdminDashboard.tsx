@@ -41,6 +41,7 @@ import {
   type AdminSupportThread,
   type AdminUserDetail,
 } from '../../api/admin'
+import { releaseVersionFromArtifactName } from '../../lib/releaseContract'
 
 type AdminDashboardProps = {
   lang: 'en' | 'ar'
@@ -58,11 +59,6 @@ function toDateTimeLocalValue(date: Date) {
 
 function addDaysToNow(days: number) {
   return toDateTimeLocalValue(new Date(Date.now() + days * 86_400_000))
-}
-
-function releaseVersionFromArtifactName(filename: string) {
-  const match = /^SaturnWorkspace-app-(.+)\.zip$/i.exec(String(filename || '').trim())
-  return match?.[1]?.trim() || ''
 }
 
 function isUnlimitedSubscription(expiresAt?: string | null, metadata?: Record<string, unknown> | null) {

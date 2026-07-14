@@ -1,6 +1,6 @@
 # Feature Completeness Matrix
 
-Updated: 2026-07-12
+Updated: 2026-07-14
 
 Status meanings: `VERIFIED_AUTOMATED`, `PRODUCTION_DEPLOYED`, `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE`, `DEPLOYED_PENDING_SAFE_EVENT_VERIFICATION`, `IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED`, `OPERATIONAL_CONFIGURATION_REQUIRED`, `WAITING_EXTERNAL`, `WAITING_EXTERNAL_BILLING_DEFENSE_IN_DEPTH`, `MITIGATED_BY_SATURN_DUAL_TRUST_PENDING_DEPLOYMENT`, `PREPARED_DISABLED`, `PREPARED_DISABLED_WITH_PRODUCER`, `PARTIALLY_IMPLEMENTED`, `PENDING_DEPLOYMENT_VERIFICATION`, `NOT_IMPLEMENTED`, `DEFERRED_TO_PHASE_G_MANUAL_ACCEPTANCE`, `QA_ARTIFACT_BUILT_PENDING_MANUAL_ACCEPTANCE`.
 
@@ -20,6 +20,7 @@ Status meanings: `VERIFIED_AUTOMATED`, `PRODUCTION_DEPLOYED`, `PRODUCTION_DEPLOY
 | Desktop blocked states | Read-only local data explorer and export | `VERIFIED_AUTOMATED` | Existing local accounts, emails, and IP data remain inspectable/exportable during blocked pre-entry states without granting paid entitlement or allowing mutation. Startup-state smoke passes `5/5`. |
 | Desktop extension | Native location, validation, versioned ZIP, replacement | `VERIFIED_AUTOMATED` | Native folder selection and deterministic replacement are implemented and package/source parity passes. Trust Wallet remains removed. Native chooser acceptance remains Phase G. |
 | Desktop release UX | What's New | `VERIFIED_AUTOMATED` | Modal content comes from real release metadata and is shown once per release; no placeholder notes are invented. |
+| Desktop session safety | Direct/proxy IP preflight | `VERIFIED_AUTOMATED_PENDING_REAL_PROXY_MANUAL_ACCEPTANCE` | Brave, AdsPower, and Dolphin use one fail-closed preflight. Known local IPs block launch, successful launches persist once, failures release reservations without writing, and concurrent launches cannot reserve the same IP. Real provider/profile acceptance remains Phase G. |
 | Desktop Gmail | Read-only inbox and notifications | `WAITING_EXTERNAL` | Desktop OAuth/read-only UI, local state, safe toast activation, and Auth capability contract are implemented. Auth Worker `a599057b-5398-4630-a45a-bdf7a1efb497` keeps `GMAIL_READONLY_OAUTH_ENABLED=false` until Google restricted-scope verification and explicit rollout. |
 | Support | Customer tickets, admin replies, email operations | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Phase D automated suite passes. |
 | Support | Private attachments | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | R2 private objects, ownership/admin authorization, projections, and orphan cleanup are implemented. Production fixture acceptance remains Phase G. |
@@ -40,7 +41,7 @@ Status meanings: `VERIFIED_AUTOMATED`, `PRODUCTION_DEPLOYED`, `PRODUCTION_DEPLOY
 | Diagnostics | Tamper visibility/resolution | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Explicit resolution note and audit. |
 | Policies | Structured policy controls | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Two-step confirmation; no live destructive test. |
 | Invites | List/create/revoke/usage/restrictions | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Hash storage, shown-once code, atomic claims. |
-| Releases | Admin review and publish management plane | `VERIFIED_AUTOMATED` | No real artifact or live publish test. |
+| Releases | Admin review and publish management plane | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Admin derives the version from the generated installed ZIP, frontend and Worker reject filename/version mismatch, and publication rechecks stored artifacts. Admin Worker version `79f55ed4-b8bc-47e5-8a6e-9bf58a76284a` is deployed; no real release was published. |
 | Promotions | Structured list/create/state controls | `VERIFIED_AUTOMATED` | No client-authoritative discount; checkout provider absent. |
 | Content | Operational CMS | `NOT_IMPLEMENTED` | Route omitted; static versioned content retained. |
 | Admin security | UID role assignments and backend permissions | `DEPLOYED_PENDING_SAFE_EVENT_VERIFICATION` | Code supports `super_admin`, `support`, `billing`, `release_manager`, `security_auditor`, and `read_only`; UID-based `ADMIN_ROLE_ASSIGNMENTS` is configured as an Admin Worker secret for the currently authorized administrator. Authenticated route sweep remains pending. |
@@ -57,7 +58,7 @@ Status meanings: `VERIFIED_AUTOMATED`, `PRODUCTION_DEPLOYED`, `PRODUCTION_DEPLOY
 | Security | Distributed Auth/Admin rate limiting | `IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED` | Cloudflare Rate Limiting bindings replace isolate-local Maps in source; tests and dry-runs pass, but source is not deployed. |
 | Security | Repository and dependency gates | `VERIFIED_AUTOMATED` | Tracked-file secret scan and npm audits pass; Desktop strict pip-audit passes after cryptography/build-tool remediation. |
 | Database | Foreign-key covering indexes | `PRODUCTION_DEPLOYED` | Supabase migration `20260712191805` added nine valid/ready indexes; advisor has zero unindexed foreign-key findings. |
-| Desktop distribution | Phase G QA Setup | `QA_ARTIFACT_BUILT_PENDING_MANUAL_ACCEPTANCE` | Built from `D:\SaturnWS\desktop-app` with `APP_VERSION` remaining `1.1.0`; artifact `D:\SaturnWS\build-output\phase-c-commercial-20260713-211709\setup\SaturnWorkspace-Setup-1.1.0.exe`; size `41,477,221` bytes; SHA256 `099888CBD9B2E3364E312C8E8A60015C0A616C4D2C549D9AE2EF83098E0AC1DC`. Source/package parity, monitored package smoke, `72/72` UI matrix, same-version repair/install, installed runtime, and Launcher handoff pass; not published. |
+| Desktop distribution | Phase G QA Setup and OTA package | `QA_ARTIFACT_BUILT_PENDING_MANUAL_ACCEPTANCE` | `APP_VERSION=1.1.2-beta`. Setup: `D:\SaturnWS\desktop-app\qa-builds\1.1.2-beta-20260714-ota-ip\setup\SaturnWorkspace-Setup-1.1.2-beta.exe`, size `41,483,363`, SHA256 `D0CDA3D295D93D9F75568488A84FDAC8A9EA933C2D19EEE26E0D661B9FFEB1BE`. Source/package parity `105/105`, isolated package smoke, install, Launcher handoff, and installed runtime pass. OTA ZIP is prepared but not published. |
 | Phase G | Consolidated manual acceptance | `DEFERRED_TO_PHASE_G_MANUAL_ACCEPTANCE` | Manual acceptance has not started. |
 
 No row may be upgraded to full manual acceptance before Phase G consolidated acceptance evidence exists.

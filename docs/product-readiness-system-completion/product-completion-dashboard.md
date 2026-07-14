@@ -1,6 +1,6 @@
 # Saturn Workspace Product Completion Dashboard
 
-Updated: 2026-07-13
+Updated: 2026-07-14
 
 ## Current Phase Status
 
@@ -20,8 +20,10 @@ Updated: 2026-07-13
 - Auth dependency outage handling: `IMPLEMENTED_NOT_DEPLOYED`. Policy source now returns stable `503 identity_service_unavailable` for Auth 5xx/network failure and no longer exposes internal exception messages. Phase D/Phase G tests and Worker dry-run pass.
 - Distributed rate limiting: `IMPLEMENTED_NOT_DEPLOYED`. Auth registration/verification/device/OAuth and Admin payment/download paths now use Cloudflare Rate Limiting bindings and fail closed if a binding is unavailable. Auth/Admin tests and Wrangler dry-runs confirm all six bindings.
 - Supabase performance migration `20260712191805 scale_foreign_key_indexes`: `PRODUCTION_DEPLOYED`. Nine covering foreign-key indexes are valid and ready; the performance advisor reports zero remaining unindexed foreign keys. No application rows were modified.
-- Supply chain: repository secret gate passes for all 318 tracked files; all five npm package roots report zero known vulnerabilities. Desktop `cryptography` was raised above the affected 48.0.0 release, build tooling now requires fixed pip/setuptools versions, and the permanent strict `pip-audit` readiness step reports no known vulnerabilities.
+- Supply chain: repository secret gate passes for all 337 tracked files; all five npm package roots report zero known vulnerabilities. Desktop `cryptography` was raised above the affected 48.0.0 release, build tooling now requires fixed pip/setuptools versions, and the permanent strict `pip-audit` readiness step reports no known vulnerabilities.
 - Production-safe smoke: public site, Auth health, Policy health, public plan catalog with allowed Origin, missing-Origin denial, and OTA manifest all match their expected live status. This is a contract smoke, not a load test.
+- Desktop session network preflight: `VERIFIED_AUTOMATED_PENDING_REAL_PROXY_MANUAL_ACCEPTANCE`. Brave, AdsPower, and Dolphin launch paths now resolve the direct or actual proxy exit IPv4, fail closed when it cannot be verified, reject an IP already present in the local IP database, reserve it against concurrent launch races, and persist it only after the browser/profile starts successfully.
+- OTA version contract: `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE`. The Admin Worker rejects installed update ZIP names outside `SaturnWorkspace-app-<version>.zip` and any artifact/version mismatch on upload and publication. Desktop comparison now distinguishes prereleases from final releases. The existing production manifest was not changed and no release was published during verification.
 
 ## Production Evidence
 
@@ -55,7 +57,7 @@ Updated: 2026-07-13
   - Policy `test:phase-g`: passed.
   - Auth `check` and `test:phase-c`: passed.
   - Admin `check:syntax` and `test:phase-g`: passed.
-  - Desktop full Python suite: `180 passed, 26 subtests passed`; frontend production build, startup-surface matrix `5/5`, package/source parity, dependency audit, secret scan, and QA Setup build passed.
+  - Desktop full Python suite: `193 passed, 26 subtests passed`; frontend production build, startup-surface matrix `5/5`, package/source parity, dependency audit, secret scan, and QA Setup build passed.
   - Packaged Desktop UI matrix: `72/72` Arabic/English light/dark/mono page cases passed with no horizontal overflow, low-contrast finding, unlabeled control, duplicate ID, or browser runtime error. Local account/email/IP journeys and safe-control restoration passed.
   - Site Phase B.1, Phase B, Phase C, and Phase F checks: passed.
   - Local visual QA generated pricing-card fixture screenshots. Live public-route visual evidence now covers Arabic/English desktop, tablet, and mobile layouts for `/`, `/pricing`, `/downloads`, `/contact`, and `/account/signin`.
@@ -95,6 +97,8 @@ Updated: 2026-07-13
 - Desktop blocked/pre-entry states now provide a read-only local data explorer and bounded export path without weakening account connection or entitlement gates. The export control recovers after native errors and the packaged startup matrix proves one continuous loading segment before the React application.
 - SaturnWS extension management now uses a native folder chooser, validates the selected unpacked extension, maintains a versioned packaged ZIP, and replaces stale copies deterministically. The removed Trust Wallet integration was not restored.
 - Desktop What's New is release-note driven and does not invent content. Gmail read-only inbox, local read/unread/archive/pin/mute state, Windows toast activation, and deep-open behavior are implemented behind the disabled Auth capability. Toast activation URIs contain opaque one-time tokens only; message IDs and email content remain in protected local activation records.
+- Browser launch IP ownership now has one shared Desktop contract. AdsPower and Dolphin inspect the selected profile's effective proxy configuration, Brave uses the current public IPv4, all three paths block known IPs before launch, and no clean IP is written to the database until launch succeeds. Stable Arabic/English errors reach the existing single toast path without exposing proxy credentials or resolved IP values in audit logs.
+- Optional OTA visibility now uses semantic prerelease comparison. An artifact containing `1.1.1-beta` is not considered newer than the same installed version, while the prepared `1.1.2-beta` package is newer. Admin upload/publish validates that metadata and the generated artifact filename cannot disagree.
 
 ## Operational Configuration Required
 
@@ -107,8 +111,9 @@ Updated: 2026-07-13
 | Email/password OTP remediation credentialed QA | `PENDING_MANUAL_ACCEPTANCE` | Previous live health, route, bundle, CORS, stable unauthenticated error contracts, pending-registration UI, and server enqueue path passed for the earlier deployed model. The current OTP-first source requires the Firebase Admin configuration above before live completion can be tested. |
 | Real payment provider | `WAITING_EXTERNAL` | Approve provider, plan mappings, webhook contract, and rollout before checkout or billing emails are enabled. |
 | QA email delivery acceptance | `PENDING_MANUAL_ACCEPTANCE` | Use a dedicated QA recipient in Phase G to confirm provider delivery without exposing OTP values. |
-| QA Desktop Setup artifact | `QA_ARTIFACT_BUILT_PENDING_MANUAL_ACCEPTANCE` | Local artifact: `D:\SaturnWS\build-output\phase-c-commercial-20260713-211709\setup\SaturnWorkspace-Setup-1.1.0.exe`; size `41,477,221` bytes; SHA256 `099888CBD9B2E3364E312C8E8A60015C0A616C4D2C549D9AE2EF83098E0AC1DC`. Source/package payload hashes match. Package smoke, `72/72` UI matrix, real same-version repair/install, installed runtime launch, and Launcher-to-runtime handoff passed. It was not published to OTA, GitHub Releases, or production R2. |
-| Desktop source reproducibility | `RECORDED_PENDING_MANUAL_ACCEPTANCE` | `D:\SaturnWS\desktop-app` is not a Git repository. The current source snapshot contains `249` files with aggregate SHA256 `F23A2C1A4E194895AF9396A2D95ED6ADCB8B634ADE00E839903BAC44684E958D`; package parity covers `104/104` runtime payload files. |
+| QA Desktop Setup artifact | `QA_ARTIFACT_BUILT_PENDING_MANUAL_ACCEPTANCE` | Local artifact: `D:\SaturnWS\desktop-app\qa-builds\1.1.2-beta-20260714-ota-ip\setup\SaturnWorkspace-Setup-1.1.2-beta.exe`; size `41,483,363` bytes; SHA256 `D0CDA3D295D93D9F75568488A84FDAC8A9EA933C2D19EEE26E0D661B9FFEB1BE`. Source/package payload hashes match. Isolated package smoke, silent install, installed Launcher handoff, and installed runtime survival passed. It was not published to OTA, GitHub Releases, or production R2. |
+| Desktop source reproducibility | `RECORDED_PENDING_MANUAL_ACCEPTANCE` | `D:\SaturnWS\desktop-app` is not a Git repository. Current source/package parity covers `105/105` runtime payload files with aggregate SHA256 `BE580D839947E27D13981B9A12A6CAB6852826E215C3B274EE4BFB9211BF1A9C`. |
+| Prepared Desktop OTA artifact | `PREPARED_NOT_PUBLISHED` | `D:\SaturnWS\desktop-app\qa-builds\1.1.2-beta-20260714-ota-ip\updates\SaturnWorkspace-app-1.1.2-beta.zip`; size `44,951,738` bytes; SHA256 `F6FC69A392EFC479504BA880F33D59CFC870E2B27B54B96F40F8614E7131068F`. Internal version is `1.1.2-beta`; no production manifest or R2 release was changed. |
 | Gmail read-only Desktop integration | `WAITING_EXTERNAL` | Product code, capability endpoint, local state, safe Windows toast activation, tests, and disabled-state UI are implemented. Production activation requires Google verification for the restricted `gmail.readonly` scope and an explicit later rollout; Auth flag remains false. |
 | Public plan CORS live verification | `PRODUCTION_VERIFIED_AUTOMATED` | Admin Worker was redeployed and `https://admin-api.saturnws.com/api/plans/catalog` returns `Access-Control-Allow-Origin: https://saturnws.com` for the public origin. |
 | Public pricing Pages deployment | `PRODUCTION_VERIFIED_AUTOMATED` | GitHub Pages run `28174200979` deployed commit `9da6025189eccfff76509bac6f61d18942489f07`. Live bundle `assets/index-rasVfIJe.js` contains the approved weekly/monthly/annual prices and omits the old redundant pricing IA. |
