@@ -75,6 +75,7 @@ Operational precondition: the Auth Worker finalizer configuration (`FIREBASE_SER
 ## 7. Diagnostics and Audit
 
 - Verify deterministic crash groups, affected counts, redaction, occurrence summaries, state changes, and tamper resolution notes using fixtures.
+- Confirm expected prevention/validation outcomes are not stored or counted as crashes, recoverable Drive/update/network events appear only under operational warnings, and unknown AdsPower/startup/runtime failures remain actionable.
 - Verify audit filters, actor/target/action/outcome, request references, bounded pagination, and absence of tokens, authorization headers, raw content dumps, or private file paths.
 
 ## 8. Policies, Invites, Releases, and Promotions
@@ -82,7 +83,7 @@ Operational precondition: the Auth Worker finalizer configuration (`FIREBASE_SER
 - Review policy previews and two-step confirmation without applying a live kill switch or mandatory update.
 - Test invite creation on a fixture scope, shown-once behavior, invalid/expired/blocked/already-used, per-user/device restrictions, max uses, revoke, and audit.
 - Validate that release upload uses the administrator-entered version independently of the artifact filename, accepts a valid ZIP fixture with an arbitrary name, rejects invalid binary content, and renders the publish preview without publishing a production release.
-- Confirm the current beta card shows `1.1.4` as optional and that a simulated `1.1.3` client resolves it as available without a mandatory policy. Continue to reject mismatched, equal, older, or invalid installed ZIP releases before publication. Any later publication still requires separate approval.
+- Confirm the current beta card shows `1.1.5` as optional, a simulated `1.1.4` client resolves it as available without a mandatory policy, and `1.1.5` resolves as current. Continue to reject mismatched, equal, older, or invalid installed ZIP releases before any future publication.
 - Verify promotions are backend-owned and never activate entitlement from frontend state.
 
 ## 9. Encoding, Copy, and Content
@@ -106,10 +107,11 @@ Operational precondition: the Auth Worker finalizer configuration (`FIREBASE_SER
 
 ## 12. Desktop QA Artifact
 
-- Current Setup: `D:\SaturnWS\desktop-app\qa-builds\1.1.4-20260714-brave-delete-modal\setup\SaturnWorkspace-Setup-1.1.4.exe`; size `41,491,353` bytes; SHA256 `E98D0A6A97EDB1352DA82FF333BF3D4E691203811B368F0B73CFC0B7FA892E21`.
-- Published optional beta OTA artifact: `D:\SaturnWS\desktop-app\qa-builds\1.1.4-20260714-brave-delete-modal\updates\SaturnWorkspace-app-1.1.4.zip`; size `44,949,742` bytes; SHA256 `CA88C8CA001849B7696DB89FF42295370B08AAFFBB3D876E4A1FF37F241B31FD`.
+- Current Setup: `D:\SaturnWS\desktop-app\qa-builds\1.1.5-20260714-adspower-diagnostics\setup\SaturnWorkspace-Setup-1.1.5.exe`; size `41,492,180` bytes; SHA256 `F38123D5EE58AE1272FC018A215481915F8F4D8FE4E50F04230CBAFF2681A79A`.
+- Published optional beta OTA artifact: `D:\SaturnWS\desktop-app\qa-builds\1.1.5-20260714-adspower-diagnostics\updates\SaturnWorkspace-app-1.1.5.zip`; size `44,957,459` bytes; SHA256 `5E13ABA8F8401D1EF294C7B3E4ED4C57659BB42ADF491EE1876ADDC374B879A6`.
 - Automated evidence proves `105/105` source/package parity, isolated packaged-app smoke, installed runtime launch, Launcher handoff, `72/72` Arabic/English light/dark/mono UI cases, prerelease-aware update comparison, signed-manifest loading, and full online artifact download/hash verification.
 - Verify a known current direct IP blocks Brave without creating a session; a known selected proxy exit IP blocks AdsPower and Dolphin; IP-resolution/proxy-probe failure fails closed; a successful launch writes the clean IP once after success; and two concurrent launches cannot reserve the same IP. Use dedicated QA profiles and proxies only.
+- Repeat AdsPower acceptance on the affected user's machine. Automated and local real-provider evidence already covers readiness, temporary profile create/start/active-check/stop/delete, legacy profile-number resolution, canonical ID persistence, and V2-to-V1 compatibility without changing user vault or IP data.
 - Manual Phase G acceptance still owns a clean-machine install, shortcut and Add/Remove Programs inspection, repair from the visible installer UI, uninstall of this exact artifact, and confirmation that user data retention/removal matches the approved product policy. Do not perform these destructive checks on the active data-bearing workstation.
 
 ## Exit Evidence
