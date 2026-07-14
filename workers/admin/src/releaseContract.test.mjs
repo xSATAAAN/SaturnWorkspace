@@ -4,6 +4,7 @@ import test from "node:test"
 import {
   artifactVersionFromFilename,
   assertArtifactVersionMatchesFilename,
+  compareReleaseVersions,
 } from "./releaseContract.js"
 
 test("extracts installed package version including prerelease suffix", () => {
@@ -32,4 +33,11 @@ test("accepts a matching installed package", () => {
     assertArtifactVersionMatchesFilename("SaturnWorkspace-app-1.1.2-beta.zip", "installed", "1.1.2-beta"),
     "1.1.2-beta",
   )
+})
+
+test("compares numeric versions and prerelease stages", () => {
+  assert.equal(compareReleaseVersions("1.1.3-beta", "1.1.2-beta"), 1)
+  assert.equal(compareReleaseVersions("1.1.2-beta", "1.1.2-beta"), 0)
+  assert.equal(compareReleaseVersions("1.1.2-beta", "1.1.2"), -1)
+  assert.equal(compareReleaseVersions("1.1.2-rc1", "1.1.2-beta9"), 1)
 })

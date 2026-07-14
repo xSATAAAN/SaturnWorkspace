@@ -82,7 +82,7 @@ Operational precondition: the Auth Worker finalizer configuration (`FIREBASE_SER
 - Review policy previews and two-step confirmation without applying a live kill switch or mandatory update.
 - Test invite creation on a fixture scope, shown-once behavior, invalid/expired/blocked/already-used, per-user/device restrictions, max uses, revoke, and audit.
 - Validate release upload metadata and publish preview with a fixture object only; do not publish a production release.
-- Confirm selecting `SaturnWorkspace-app-1.1.2-beta.zip` derives `1.1.2-beta`, and that entering a different version or selecting an invalid installed ZIP name is rejected before upload and again by the Worker contract. Do not confirm the publication action.
+- Confirm selecting `SaturnWorkspace-app-1.1.3-beta.zip` derives `1.1.3-beta`, the current beta card shows `1.1.2-beta`, and a mismatched, equal, older, or invalid installed ZIP release is rejected before normal publication. Do not confirm the publication action without separate approval.
 - Verify promotions are backend-owned and never activate entitlement from frontend state.
 
 ## 9. Encoding, Copy, and Content
@@ -106,8 +106,8 @@ Operational precondition: the Auth Worker finalizer configuration (`FIREBASE_SER
 
 ## 12. Desktop QA Artifact
 
-- Current artifact: `D:\SaturnWS\desktop-app\qa-builds\1.1.2-beta-20260714-ota-ip\setup\SaturnWorkspace-Setup-1.1.2-beta.exe`; size `41,483,363` bytes; SHA256 `D0CDA3D295D93D9F75568488A84FDAC8A9EA933C2D19EEE26E0D661B9FFEB1BE`.
-- Prepared but unpublished OTA artifact: `D:\SaturnWS\desktop-app\qa-builds\1.1.2-beta-20260714-ota-ip\updates\SaturnWorkspace-app-1.1.2-beta.zip`; size `44,951,738` bytes; SHA256 `F6FC69A392EFC479504BA880F33D59CFC870E2B27B54B96F40F8614E7131068F`.
+- Current artifact: `D:\SaturnWS\desktop-app\qa-builds\1.1.3-beta-20260714-ota-channel\setup\SaturnWorkspace-Setup-1.1.3-beta.exe`; size `41,486,146` bytes; SHA256 `98520095816179071ADBFE8B8C6F82ABD4F314490F656EAE19781E81BCFA643A`.
+- Prepared but unpublished OTA artifact: `D:\SaturnWS\desktop-app\qa-builds\1.1.3-beta-20260714-ota-channel\updates\SaturnWorkspace-app-1.1.3-beta.zip`; size `44,951,018` bytes; SHA256 `FC296FD21D3578F3B66E8ED6A5A1CB77D2F42B312982466DBE908D1E6BCA0DC5`.
 - Automated evidence proves `105/105` source/package parity, isolated package smoke, installed runtime launch, Launcher handoff, prerelease-aware update comparison, and the full Python suite (`193 passed, 26 subtests`).
 - Verify a known current direct IP blocks Brave without creating a session; a known selected proxy exit IP blocks AdsPower and Dolphin; IP-resolution/proxy-probe failure fails closed; a successful launch writes the clean IP once after success; and two concurrent launches cannot reserve the same IP. Use dedicated QA profiles and proxies only.
 - Manual Phase G acceptance still owns a clean-machine install, shortcut and Add/Remove Programs inspection, repair from the visible installer UI, uninstall of this exact artifact, and confirmation that user data retention/removal matches the approved product policy. Do not perform these destructive checks on the active data-bearing workstation.

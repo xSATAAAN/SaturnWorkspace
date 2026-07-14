@@ -1,7 +1,7 @@
 import { handleCreatePayment, handleGetPaymentStatus, handleListPlans } from "./routes/payments.js";
 import { resolveSubscriptionTruth } from "../../shared/subscriptions/resolver.js";
 import { handleDownloadCatalog, handleDownloadFile } from "./routes/downloads.js";
-import { assertArtifactVersionMatchesFilename } from "./releaseContract.js";
+import { assertArtifactVersionMatchesFilename, compareReleaseVersions } from "./releaseContract.js";
 import {
   adminContext,
   adminRoleAssignmentsState,
@@ -591,7 +591,7 @@ export default {
       ]);
       const forbiddenErrors = new Set(["download_not_entitled", "forbidden_origin", "origin_not_allowed", "admin_permission_denied"]);
       const notFoundErrors = new Set(["release_not_found", "release_artifact_missing", "order_not_found", "account_not_found", "subscription_not_found", "session_not_found", "device_not_found", "pending_grant_not_found", "device_change_request_not_found"]);
-      const conflictErrors = new Set(["pending_grant_already_exists", "pending_grant_not_pending", "device_change_request_not_pending", "device_change_request_changed", "preview_changed"]);
+      const conflictErrors = new Set(["pending_grant_already_exists", "pending_grant_not_pending", "device_change_request_not_pending", "device_change_request_changed", "preview_changed", "same_version_already_active", "release_version_not_newer"]);
       const status = authErrors.has(message) || message.startsWith("admin_email_not_allowed")
         ? 401
         : forbiddenErrors.has(message)
@@ -1463,10 +1463,11 @@ async function publishRelease(request, env, adminEmail) {
     !targets.selected &&
     currentChannel &&
     typeof currentChannel === "object" &&
-    String(currentChannel.version || "").trim() === version &&
     hasActiveArtifact
   ) {
-    throw new Error("same_version_already_active");
+    const versionComparison = compareReleaseVersions(version, currentChannel.version);
+    if (versionComparison === 0) throw new Error("same_version_already_active");
+    if (versionComparison < 0) throw new Error("release_version_not_newer");
   }
   const previousRemoteConfig = safePlainObject(manifest.channels?.[channel]?.remote_config);
   const { build_id: _oldBuildId, app_build_id: _oldAppBuildId, ...previousRemoteConfigWithoutBuildId } = previousRemoteConfig;
@@ -1726,6 +1727,10 @@ async function getRemoteControls(url, env) {
     success: true,
     channel,
     controls: mergeChannelControls(channelManifest, {}),
+    channel_manifest: {
+      ...channelManifest,
+      channel,
+    },
     manifest,
   };
 }

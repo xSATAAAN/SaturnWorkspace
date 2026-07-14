@@ -969,12 +969,17 @@ export async function updateAdminDisabledVersion(payload: { version: string; rea
 
 export type AdminReleaseManifest = {
   version: string
+  channel?: string
   available: boolean
   mandatory: boolean
   download_url: string
   download_sha256?: string
   filename: string
   notes: string
+  artifacts?: {
+    installed?: { url?: string; sha256?: string; filename?: string; size_bytes?: number; package_type?: string }
+    portable?: { url?: string; sha256?: string; filename?: string; size_bytes?: number; package_type?: string }
+  }
   channels?: Record<string, Partial<AdminReleaseManifest>>
   manifest_signature?: string
   history_reset_at?: string
@@ -1066,7 +1071,7 @@ export async function resetOtaBaseline(payload: { channel: string; version?: str
 }
 
 export async function fetchRemoteControls(channel = 'beta') {
-  return adminFetch<{ success: boolean; channel: string; controls: AdminRemoteControls; manifest: AdminReleaseManifest }>(
+  return adminFetch<{ success: boolean; channel: string; controls: AdminRemoteControls; channel_manifest: AdminReleaseManifest; manifest: AdminReleaseManifest }>(
     `/remote-config?channel=${encodeURIComponent(channel)}`,
   )
 }

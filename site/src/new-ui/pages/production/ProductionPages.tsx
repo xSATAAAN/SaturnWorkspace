@@ -47,7 +47,7 @@ import { DownloadCard, PricingCard, SubscriptionCard } from '../../components/ui
 import { publicCopy } from '../../content/publicCopy'
 import { CURRENT_TERMS_VERSION } from '../../content/legalContent'
 import { isProductionFeatureEnabled } from '../../adapters/productionFeatureFlags'
-import { releaseVersionFromArtifactName } from '../../../lib/releaseContract'
+import { compareReleaseVersions, releaseVersionFromArtifactName } from '../../../lib/releaseContract'
 import { PublicLayout, WorkspaceShell, type NavigationGroup } from '../../layouts/WorkspaceShell'
 import { Brand, LocaleControl, ThemeControl } from '../../layouts/SharedChrome'
 import appIcon from '../../assets/saturnws-app-icon.png'
@@ -1612,10 +1612,11 @@ void [AdminOverviewSkeleton, AdminSubscriptionsSkeleton, GrantSubscriptionDrawer
 function AdminReleases() {
   const { t, locale } = useExperience()
   const adapters = useAdapters()
-  const releases = useAsyncData(() => adapters.admin.listReleases(), [adapters])
+  const [channel, setChannel] = useState<'stable' | 'beta'>('beta')
+  const releases = useAsyncData(() => adapters.admin.listReleases(channel), [adapters, channel])
   const latestRelease = releases.data?.[0] || null
+  const latestChecksum = latestRelease?.artifacts?.installed?.sha256 || latestRelease?.download_sha256 || ''
   const [version, setVersion] = useState('')
-  const [channel, setChannel] = useState('beta')
   const [notes, setNotes] = useState('')
   const [mandatory, setMandatory] = useState(false)
   const [updateMode, setUpdateMode] = useState<'optional' | 'force' | 'required' | 'silent'>('optional')
@@ -1626,6 +1627,7 @@ function AdminReleases() {
   const [busy, setBusy] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [acknowledged, setAcknowledged] = useState(false)
+  const [fileInputKey, setFileInputKey] = useState(0)
   const submit = async (event: FormEvent) => {
     event.preventDefault()
     setError('')
@@ -1653,6 +1655,14 @@ function AdminReleases() {
         return
       }
     }
+    if (latestRelease?.available && latestRelease.version && compareReleaseVersions(version, latestRelease.version) <= 0) {
+      setError(copyByLocale(
+        locale,
+        `Enter a version newer than the current ${channel} release (${latestRelease.version}).`,
+        `أدخل إصدارًا أحدث من الإصدار الحالي لقناة ${channel} (${latestRelease.version}).`,
+      ))
+      return
+    }
     setPreviewOpen(true)
   }
   const confirmPublish = async () => {
@@ -1662,17 +1672,28 @@ function AdminReleases() {
     try {
       if (file) await adapters.admin.uploadRelease({ file, version, channel, artifactType })
       await adapters.admin.publishRelease({ version, channel, notes, mandatory, updateMode })
-      setNotice(t('success'))
+      setNotice(copyByLocale(
+        locale,
+        `Published ${version} to ${channel}. Clients on older versions will receive it.`,
+        `تم نشر ${version} على قناة ${channel}. سيظهر للنسخ الأقدم منه.`,
+      ))
       setPreviewOpen(false)
       setAcknowledged(false)
+      setVersion('')
+      setNotes('')
+      setFile(null)
+      setFileInputKey((value) => value + 1)
       releases.reload()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'release_publish_failed')
+      const message = err instanceof Error ? err.message : 'release_publish_failed'
+      setError(message === 'same_version_already_active' || message === 'release_version_not_newer'
+        ? copyByLocale(locale, 'The release version must be newer than the active channel version.', 'يجب أن يكون إصدار التحديث أحدث من الإصدار المنشور على القناة.')
+        : message)
     } finally {
       setBusy(false)
     }
   }
-  return <><PageHeader title={t('releases')} description={t('managedUpdates')} />{releases.error ? <ErrorBlock error={releases.error} onRetry={releases.reload} /> : <Card><dl className="detail-list"><div><dt>{t('version')}</dt><dd>{latestRelease?.version || t('unavailable')}</dd></div><div><dt>{t('mandatory')}</dt><dd>{latestRelease?.mandatory ? t('enabled') : t('disabled')}</dd></div><div><dt>SHA256</dt><dd>{latestRelease?.download_sha256 || '—'}</dd></div></dl></Card>}<Card><SectionHeader title={t('publishRelease')} description={t('managedUpdates')} /><form className="settings-form" onSubmit={submit}><div className="form-grid"><FormField label={t('version')} htmlFor="release-version" required><Input id="release-version" value={version} onChange={(event) => setVersion(event.target.value)} required /></FormField><FormField label={t('channel')} htmlFor="release-channel" required><Select id="release-channel" value={channel} onChange={(event) => setChannel(event.target.value)}><option value="beta">{t('beta')}</option><option value="stable">{t('stable')}</option></Select></FormField></div><div className="form-grid"><FormField label={t('type')} htmlFor="release-artifact"><Select id="release-artifact" value={artifactType} onChange={(event) => setArtifactType(event.target.value as 'portable' | 'installed')}><option value="installed">{copyByLocale(locale, 'Installed update', 'تحديث النسخة المثبتة')}</option><option value="portable">{copyByLocale(locale, 'Portable application', 'نسخة محمولة')}</option></Select></FormField><FormField label={t('availability')} htmlFor="release-mode"><Select id="release-mode" value={updateMode} onChange={(event) => setUpdateMode(event.target.value as 'optional' | 'force' | 'required' | 'silent')}><option value="optional">{copyByLocale(locale, 'Optional', 'اختياري')}</option><option value="required">{copyByLocale(locale, 'Required', 'مطلوب')}</option><option value="force">{copyByLocale(locale, 'Mandatory', 'إجباري')}</option><option value="silent">{copyByLocale(locale, 'Background', 'في الخلفية')}</option></Select></FormField></div><FormField label={t('uploadArtifact')} htmlFor="release-file"><Input id="release-file" type="file" onChange={(event) => { const selected = event.target.files?.[0] || null; setFile(selected); setError(''); if (selected) { const artifactVersion = releaseVersionFromArtifactName(selected.name, artifactType); if (artifactVersion) setVersion(artifactVersion) } }} /></FormField><FormField label={t('releaseNotes')} htmlFor="release-notes"><Textarea id="release-notes" value={notes} onChange={(event) => setNotes(event.target.value)} /></FormField><label className="ui-checkbox"><input type="checkbox" checked={mandatory} onChange={(event) => setMandatory(event.target.checked)} />{t('mandatory')}</label><Button type="submit" variant="primary" loading={busy}>{copyByLocale(locale, 'Review release', 'مراجعة الإصدار')}</Button>{error ? <Alert title={t('failed')} tone="danger">{userFacingErrorMessage(error, locale)}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}</form></Card><Modal open={previewOpen} onClose={() => setPreviewOpen(false)} title={copyByLocale(locale, 'Confirm release publication', 'تأكيد نشر الإصدار')} description={copyByLocale(locale, 'Review the artifact and targeting before publishing.', 'راجع الملف والاستهداف قبل النشر.')} closeLabel={t('close')} footer={<><Button onClick={() => setPreviewOpen(false)}>{copyByLocale(locale, 'Back', 'رجوع')}</Button><Button variant="danger" loading={busy} disabled={!acknowledged} onClick={confirmPublish}>{copyByLocale(locale, 'Publish release', 'نشر الإصدار')}</Button></>}><div className="stack"><dl className="detail-list"><div><dt>{t('version')}</dt><dd>{version}</dd></div><div><dt>{t('channel')}</dt><dd>{channel}</dd></div><div><dt>{t('type')}</dt><dd>{artifactType}</dd></div><div><dt>{t('uploadArtifact')}</dt><dd>{file ? `${file.name} · ${file.size} bytes` : copyByLocale(locale, 'No new artifact', 'لا يوجد ملف جديد')}</dd></div><div><dt>{t('mandatory')}</dt><dd>{mandatory ? t('enabled') : t('disabled')}</dd></div></dl><label className="ui-check"><input type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} /><span>{copyByLocale(locale, 'I reviewed the release scope and artifact.', 'راجعت نطاق الإصدار والملف.')}</span></label></div></Modal></>
+  return <><PageHeader title={t('releases')} description={t('managedUpdates')} />{releases.error ? <ErrorBlock error={releases.error} onRetry={releases.reload} /> : <Card><dl className="detail-list"><div><dt>{t('channel')}</dt><dd>{channel}</dd></div><div><dt>{t('version')}</dt><dd>{latestRelease?.version || t('unavailable')}</dd></div><div><dt>{t('mandatory')}</dt><dd>{latestRelease?.mandatory ? t('enabled') : t('disabled')}</dd></div><div><dt>SHA256</dt><dd>{latestChecksum || '—'}</dd></div></dl></Card>}<Card><SectionHeader title={t('publishRelease')} description={t('managedUpdates')} /><form className="settings-form" onSubmit={submit}><div className="form-grid"><FormField label={t('version')} htmlFor="release-version" required><Input id="release-version" value={version} onChange={(event) => setVersion(event.target.value)} required /></FormField><FormField label={t('channel')} htmlFor="release-channel" required><Select id="release-channel" value={channel} onChange={(event) => { setChannel(event.target.value as 'stable' | 'beta'); setVersion(''); setFile(null); setError(''); setNotice(''); setFileInputKey((value) => value + 1) }}><option value="beta">{t('beta')}</option><option value="stable">{t('stable')}</option></Select></FormField></div><div className="form-grid"><FormField label={t('type')} htmlFor="release-artifact"><Select id="release-artifact" value={artifactType} onChange={(event) => { setArtifactType(event.target.value as 'portable' | 'installed'); setVersion(''); setFile(null); setError(''); setFileInputKey((value) => value + 1) }}><option value="installed">{copyByLocale(locale, 'Installed update', 'تحديث النسخة المثبتة')}</option><option value="portable">{copyByLocale(locale, 'Portable application', 'نسخة محمولة')}</option></Select></FormField><FormField label={t('availability')} htmlFor="release-mode"><Select id="release-mode" value={updateMode} onChange={(event) => setUpdateMode(event.target.value as 'optional' | 'force' | 'required' | 'silent')}><option value="optional">{copyByLocale(locale, 'Optional', 'اختياري')}</option><option value="required">{copyByLocale(locale, 'Required', 'مطلوب')}</option><option value="force">{copyByLocale(locale, 'Mandatory', 'إجباري')}</option><option value="silent">{copyByLocale(locale, 'Background', 'في الخلفية')}</option></Select></FormField></div><FormField label={t('uploadArtifact')} htmlFor="release-file"><Input key={fileInputKey} id="release-file" type="file" onChange={(event) => { const selected = event.target.files?.[0] || null; setFile(selected); setError(''); if (selected) { const artifactVersion = releaseVersionFromArtifactName(selected.name, artifactType); if (artifactVersion) setVersion(artifactVersion) } }} /></FormField><FormField label={t('releaseNotes')} htmlFor="release-notes"><Textarea id="release-notes" value={notes} onChange={(event) => setNotes(event.target.value)} /></FormField><label className="ui-checkbox"><input type="checkbox" checked={mandatory} onChange={(event) => setMandatory(event.target.checked)} />{t('mandatory')}</label><Button type="submit" variant="primary" loading={busy}>{copyByLocale(locale, 'Review release', 'مراجعة الإصدار')}</Button>{error ? <Alert title={t('failed')} tone="danger">{userFacingErrorMessage(error, locale)}</Alert> : null}{notice ? <Alert title={t('success')} tone="success">{notice}</Alert> : null}</form></Card><Modal open={previewOpen} onClose={() => setPreviewOpen(false)} title={copyByLocale(locale, 'Confirm release publication', 'تأكيد نشر الإصدار')} description={copyByLocale(locale, 'Review the artifact and targeting before publishing.', 'راجع الملف والاستهداف قبل النشر.')} closeLabel={t('close')} footer={<><Button onClick={() => setPreviewOpen(false)}>{copyByLocale(locale, 'Back', 'رجوع')}</Button><Button variant="danger" loading={busy} disabled={!acknowledged} onClick={confirmPublish}>{copyByLocale(locale, 'Publish release', 'نشر الإصدار')}</Button></>}><div className="stack"><dl className="detail-list"><div><dt>{t('version')}</dt><dd>{version}</dd></div><div><dt>{t('channel')}</dt><dd>{channel}</dd></div><div><dt>{t('type')}</dt><dd>{artifactType}</dd></div><div><dt>{t('uploadArtifact')}</dt><dd>{file ? `${file.name} · ${file.size} bytes` : copyByLocale(locale, 'No new artifact', 'لا يوجد ملف جديد')}</dd></div><div><dt>{t('mandatory')}</dt><dd>{mandatory ? t('enabled') : t('disabled')}</dd></div></dl><label className="ui-check"><input type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} /><span>{copyByLocale(locale, 'I reviewed the release scope and artifact.', 'راجعت نطاق الإصدار والملف.')}</span></label></div></Modal></>
 }
 
 function AdminSupportV2() {

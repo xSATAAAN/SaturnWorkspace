@@ -313,7 +313,7 @@ export type AdminAdapter = {
   listPromoCodes(): Promise<AdminPromoCode[]>
   createPromoCode(input: { code: string; discount_type: 'percent' | 'fixed'; discount_value: number; is_private_tier_trigger: boolean; max_uses?: number; expires_at?: string }): Promise<AdminPromoCode>
   updatePromoCodeState(id: string, active: boolean, reason: string): Promise<AdminPromoCode>
-  listReleases(): Promise<AdminReleaseManifest[]>
+  listReleases(channel?: 'stable' | 'beta'): Promise<AdminReleaseManifest[]>
   uploadRelease(input: { file: File; version: string; channel: string; artifactType?: 'portable' | 'installed' }): Promise<unknown>
   publishRelease(input: {
     version: string

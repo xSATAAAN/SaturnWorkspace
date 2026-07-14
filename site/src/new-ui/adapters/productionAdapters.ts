@@ -876,9 +876,9 @@ export const productionAdapters: AppAdapters = {
     async updatePromoCodeState(id, active, reason) {
       return (await updatePromoCodeState(id, active, reason)).item
     },
-    async listReleases() {
-      const data = await fetchRemoteControls('beta')
-      return data.manifest ? [data.manifest as AdminReleaseManifest] : []
+    async listReleases(channel = 'beta') {
+      const data = await fetchRemoteControls(channel)
+      return data.channel_manifest ? [data.channel_manifest as AdminReleaseManifest] : []
     },
     async uploadRelease(input) {
       return uploadReleaseBinary({ file: input.file, version: input.version, channel: input.channel, artifact_type: input.artifactType })
