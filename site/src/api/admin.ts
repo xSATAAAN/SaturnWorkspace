@@ -316,6 +316,7 @@ export type AdminCrashLog = {
   app_version?: string | null
   tool_channel?: string | null
   fingerprint?: string | null
+  classification?: 'error' | 'warning'
   raw_payload?: {
     auth?: {
       source?: string | null
@@ -1083,11 +1084,12 @@ export async function updateRemoteControls(payload: AdminRemoteControls & { chan
   })
 }
 
-export async function fetchCrashLogs(params: { search?: string; page?: number; limit?: number } = {}) {
+export async function fetchCrashLogs(params: { search?: string; page?: number; limit?: number; classification?: 'error' | 'warning' | 'all' } = {}) {
   const query = new URLSearchParams()
   query.set('limit', String(params.limit ?? 100))
   if (params.page) query.set('page', String(params.page))
   if (params.search) query.set('search', params.search)
+  if (params.classification) query.set('classification', params.classification)
   return adminFetch<{ success: boolean; items: AdminCrashLog[]; page?: number; limit?: number }>(`/crash-logs?${query}`)
 }
 

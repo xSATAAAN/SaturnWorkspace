@@ -951,8 +951,8 @@ export const productionAdapters: AppAdapters = {
         message: input.message,
       })
     },
-    async listCrashLogs() {
-      const data = await fetchCrashLogs({ limit: 100 })
+    async listCrashLogs(classification = 'error') {
+      const data = await fetchCrashLogs({ limit: 100, classification })
       return data.items || []
     },
     async listCrashGroups() {

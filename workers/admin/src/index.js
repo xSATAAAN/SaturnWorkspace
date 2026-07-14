@@ -2,6 +2,7 @@ import { handleCreatePayment, handleGetPaymentStatus, handleListPlans } from "./
 import { resolveSubscriptionTruth } from "../../shared/subscriptions/resolver.js";
 import { handleDownloadCatalog, handleDownloadFile } from "./routes/downloads.js";
 import { assertArtifactBinarySignature, compareReleaseVersions } from "./releaseContract.js";
+import { classifyDiagnostic, isActionableCrash } from "./diagnosticClassification.js";
 import {
   adminContext,
   adminRoleAssignmentsState,
@@ -2188,7 +2189,11 @@ async function getAdminDashboard(env) {
   const resolutions = [...subscriptionResolutionsByUid(subscriptions).values()];
   const activeUsers = resolutions.filter((item) => ["entitled", "grace_period"].includes(item.projection.entitlement)).length;
   const activeSessions = (Array.isArray(sessions) ? sessions : []).filter((session) => !session.revoked_at && Date.parse(session.expires_at) > Date.now()).length;
-  const unresolvedCrashes = new Set((Array.isArray(crashes) ? crashes : []).map((row) => row.fingerprint || `${row.error_type}:${row.message || ""}`)).size;
+  const unresolvedCrashes = new Set(
+    (Array.isArray(crashes) ? crashes : [])
+      .filter(isActionableCrash)
+      .map((row) => row.fingerprint || `${row.error_type}:${row.message || ""}`),
+  ).size;
   const degraded = resources.map((result, index) => result.status === "rejected" ? ["profiles", "subscriptions", "sessions", "crashes", "tamper", "activity"][index] : null).filter(Boolean);
   return {
     success: true,
@@ -3398,6 +3403,8 @@ async function listCrashLogs(url, env) {
   const limit = safeInt(url.searchParams.get("limit"), 50);
   const page = safeInt(url.searchParams.get("page"), 1, 5000);
   const offset = (page - 1) * limit;
+  const requestedClassification = String(url.searchParams.get("classification") || "error").trim().toLowerCase();
+  const classification = ["error", "warning", "all"].includes(requestedClassification) ? requestedClassification : "error";
   const search = safeSearchTerm(url.searchParams.get("search"));
   const filters = [];
   if (search) {
@@ -3407,14 +3414,22 @@ async function listCrashLogs(url, env) {
   const data = await safeSupabaseRead(
     env,
     "crash_logs",
-    `select=id,happened_at,user_id,subscription_id,hwid,device_name,windows_version,cpu,gpu,ram_gb,error_type,message,stack_trace,app_version,tool_channel,fingerprint&order=happened_at.desc&limit=${limit}&offset=${offset}${filters.length ? `&${filters.join("&")}` : ""}`,
+    `select=id,happened_at,user_id,subscription_id,hwid,device_name,windows_version,cpu,gpu,ram_gb,error_type,message,stack_trace,app_version,tool_channel,fingerprint,raw_payload&order=happened_at.desc&limit=1000${filters.length ? `&${filters.join("&")}` : ""}`,
   );
-  const items = (Array.isArray(data) ? data : []).map((row) => ({
-    ...row,
-    message: sanitizeCrashString(row.message || ""),
-    stack_trace: sanitizeCrashString(String(row.stack_trace || "").split(/\r?\n/).slice(0, 12).join("\n")),
-  }));
-  return { success: true, items, page, limit };
+  const classified = (Array.isArray(data) ? data : [])
+    .map((row) => ({ row, classification: classifyDiagnostic(row) }))
+    .filter((item) => item.classification !== "expected")
+    .filter((item) => classification === "all" || item.classification === classification);
+  const items = classified.slice(offset, offset + limit).map(({ row, classification: rowClassification }) => {
+    const { raw_payload: _rawPayload, ...safeRow } = row;
+    return {
+      ...safeRow,
+      classification: rowClassification,
+      message: sanitizeCrashString(row.message || ""),
+      stack_trace: sanitizeCrashString(String(row.stack_trace || "").split(/\r?\n/).slice(0, 12).join("\n")),
+    };
+  });
+  return { success: true, items, page, limit, total: classified.length, classification };
 }
 
 function isExpiredIso(value) {
@@ -3582,12 +3597,13 @@ async function listCrashGroups(url, env) {
   const statusFilter = String(url.searchParams.get("status") || "").trim().toLowerCase();
   const search = safeSearchTerm(url.searchParams.get("search")).toLowerCase();
   const [data, states] = await Promise.all([
-    safeSupabaseRead(env, "crash_logs", `select=id,happened_at,user_id,subscription_id,hwid,error_type,message,stack_trace,app_version,fingerprint&order=happened_at.desc&limit=${limit}`),
+    safeSupabaseRead(env, "crash_logs", `select=id,happened_at,user_id,subscription_id,hwid,error_type,message,stack_trace,app_version,fingerprint,raw_payload&order=happened_at.desc&limit=${limit}`),
     safeSupabaseRead(env, "admin_crash_group_state", "select=fingerprint,status,assignee,note,updated_by,updated_at&limit=1000"),
   ]);
   const statesByFingerprint = new Map((Array.isArray(states) ? states : []).map((state) => [state.fingerprint, state]));
   const groups = new Map();
   for (const row of Array.isArray(data) ? data : []) {
+    if (!isActionableCrash(row)) continue;
     const fingerprint = await crashFingerprint(row);
     const existing = groups.get(fingerprint);
     if (!existing) {
@@ -4014,7 +4030,7 @@ async function getUserDetail(userKey, env) {
   const supportThreads = (Array.isArray(supportPayload?.threads) ? supportPayload.threads : []).filter((thread) =>
     String(thread?.user_id || "").trim() === userId || normalizeEmail(thread?.email) === userEmail,
   );
-  const safeCrashes = (Array.isArray(crashes) ? crashes : []).map((row) => ({
+  const safeCrashes = (Array.isArray(crashes) ? crashes : []).filter(isActionableCrash).map((row) => ({
     ...row,
     message: sanitizeCrashString(row.message || ""),
     stack_trace: sanitizeCrashString(String(row.stack_trace || "").split(/\r?\n/).slice(0, 8).join("\n")),
@@ -4246,9 +4262,14 @@ async function ingestCrashLog(request, env) {
     raw_payload: rawPayload,
   };
   if (!payload.stack_trace) throw new Error("missing_stack_trace");
+  const classification = classifyDiagnostic(payload);
+  if (classification === "expected") {
+    return { success: true, accepted: false, classification };
+  }
+  rawPayload.classification = classification;
   payload.fingerprint = await crashFingerprint(payload);
   const created = await insertCrashLogPayload(env, payload);
-  return { success: true, item: Array.isArray(created) ? created[0] : created };
+  return { success: true, accepted: true, classification, item: Array.isArray(created) ? created[0] : created };
 }
 
 async function insertCrashLogPayload(env, payload) {

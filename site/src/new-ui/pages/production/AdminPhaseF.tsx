@@ -2464,7 +2464,8 @@ export function AdminDiagnosticsPhaseF() {
     null,
   );
   const groups = useResource(() => admin.listCrashGroups(), [admin]);
-  const logs = useResource(() => admin.listCrashLogs(), [admin]);
+  const logs = useResource(() => admin.listCrashLogs("error"), [admin]);
+  const warnings = useResource(() => admin.listCrashLogs("warning"), [admin]);
   const tamper = useResource(
     () => admin.listTamperAlerts({ resolved: false }),
     [admin],
@@ -2529,6 +2530,14 @@ export function AdminDiagnosticsPhaseF() {
       render: (row) => date(row.happened_at, locale),
     },
   ];
+  const warningColumns: Column<AdminCrashLog>[] = [
+    {
+      key: "type",
+      header: copy(locale, "Type", "النوع"),
+      render: (row) => row.error_type,
+    },
+    ...logColumns.slice(1),
+  ];
   const tamperColumns: Column<AdminTamperAlert>[] = [
     {
       key: "severity",
@@ -2578,6 +2587,10 @@ export function AdminDiagnosticsPhaseF() {
           },
           { id: "occurrences", label: copy(locale, "Occurrences", "الأعطال") },
           {
+            id: "warnings",
+            label: copy(locale, "Operational warnings", "تنبيهات التشغيل"),
+          },
+          {
             id: "tamper",
             label: copy(locale, "Tamper alerts", "تنبيهات العبث"),
           },
@@ -2595,6 +2608,15 @@ export function AdminDiagnosticsPhaseF() {
             "New groups will appear here.",
             "ستظهر المجموعات الجديدة هنا.",
           )}
+        />
+      ) : tab === "warnings" ? (
+        <DataTable
+          columns={warningColumns}
+          rows={warnings.data || []}
+          loading={warnings.loading}
+          rowKey={(row) => row.id}
+          emptyTitle={copy(locale, "No operational warnings", "لا توجد تنبيهات تشغيل")}
+          emptyBody={copy(locale, "No recoverable operational events need review.", "لا توجد أحداث تشغيل قابلة للاسترداد تحتاج إلى مراجعة.")}
         />
       ) : tab === "tamper" ? (
         <DataTable

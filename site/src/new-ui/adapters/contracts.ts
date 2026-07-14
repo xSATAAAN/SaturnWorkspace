@@ -338,7 +338,7 @@ export type AdminAdapter = {
   processEmailOutbox(): Promise<{ processed: number; sent: number; skipped: number }>
   retryEmailJob(jobId: string): Promise<{ processed?: number; sent?: number; skipped?: number }>
   sendAdminTestEmail(input: { recipient: string; emailType?: string; locale?: 'ar' | 'en'; subject?: string; message?: string }): Promise<void>
-  listCrashLogs(): Promise<AdminCrashLog[]>
+  listCrashLogs(classification?: 'error' | 'warning' | 'all'): Promise<AdminCrashLog[]>
   listCrashGroups(): Promise<AdminCrashGroup[]>
   updateCrashGroupState(fingerprint: string, input: { status: AdminCrashGroup['status']; assignee?: string; note?: string }): Promise<AdminCrashGroup>
   listTamperAlerts(input?: { page?: number; limit?: number; resolved?: boolean; severity?: string }): Promise<AdminTamperAlert[]>
