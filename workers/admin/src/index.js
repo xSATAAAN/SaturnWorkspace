@@ -1,7 +1,12 @@
 import { handleCreatePayment, handleGetPaymentStatus, handleListPlans } from "./routes/payments.js";
 import { resolveSubscriptionTruth } from "../../shared/subscriptions/resolver.js";
 import { handleDownloadCatalog, handleDownloadFile } from "./routes/downloads.js";
-import { assertArtifactBinarySignature, compareReleaseVersions } from "./releaseContract.js";
+import {
+  assertArtifactBinarySignature,
+  compareReleaseVersions,
+  mergeWhatsNewReleaseHistory,
+  releaseTargetAudienceKey,
+} from "./releaseContract.js";
 import { classifyDiagnostic, isActionableCrash } from "./diagnosticClassification.js";
 import {
   adminContext,
@@ -1158,6 +1163,25 @@ function mergeTargetedReleaseRule(channelManifest, rule) {
   };
 }
 
+function targetedWhatsNewHistory(channelManifest, targets) {
+  const targeting = Array.isArray(channelManifest?.targeting) ? channelManifest.targeting : [];
+  const audienceKey = releaseTargetAudienceKey(targets);
+  const releases = [];
+  for (const rule of targeting) {
+    if (!rule || typeof rule !== "object" || rule.type !== "release") continue;
+    if (releaseTargetAudienceKey(rule) !== audienceKey) continue;
+    const release = safePlainObject(rule.release);
+    const history = safePlainObject(release.remote_config).whats_new_releases;
+    if (Array.isArray(history)) releases.push(...history);
+    releases.push({
+      version: release.version,
+      build_id: release.build_id,
+      notes: release.notes,
+    });
+  }
+  return releases;
+}
+
 function normalizeAnnouncements(value) {
   if (!Array.isArray(value)) return [];
   return value
@@ -1466,6 +1490,20 @@ async function publishRelease(request, env, adminEmail) {
   }
   const previousRemoteConfig = safePlainObject(manifest.channels?.[channel]?.remote_config);
   const { build_id: _oldBuildId, app_build_id: _oldAppBuildId, ...previousRemoteConfigWithoutBuildId } = previousRemoteConfig;
+  const previousChannelRelease = {
+    version: currentChannel?.version,
+    build_id: currentChannel?.build_id,
+    notes: currentChannel?.notes,
+  };
+  const matchingTargetedHistory = targets.selected ? targetedWhatsNewHistory(currentChannel, targets) : [];
+  const whatsNewReleases = mergeWhatsNewReleaseHistory(
+    previousRemoteConfigWithoutBuildId.whats_new_releases,
+    [
+      ...matchingTargetedHistory,
+      previousChannelRelease,
+      { version, build_id: buildId, notes },
+    ],
+  );
   const channelManifest = {
     version,
     available: true,
@@ -1483,6 +1521,7 @@ async function publishRelease(request, env, adminEmail) {
     remote_config: {
       ...previousRemoteConfigWithoutBuildId,
       update_mode: updateMode,
+      whats_new_releases: whatsNewReleases,
     },
     published_at: new Date().toISOString(),
   };
