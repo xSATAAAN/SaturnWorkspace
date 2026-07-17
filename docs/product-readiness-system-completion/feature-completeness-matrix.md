@@ -27,13 +27,13 @@ Status meanings: `VERIFIED_AUTOMATED`, `PRODUCTION_DEPLOYED`, `PRODUCTION_DEPLOY
 | Support | Private attachments | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | R2 private objects, ownership/admin authorization, projections, and orphan cleanup are implemented. Production fixture acceptance remains Phase G. |
 | Admin IA | Distinct operational routes | `PRODUCTION_DEPLOYED` | No duplicate Content shell or legacy Policy panel. |
 | Users | Search/filter/pagination | `VERIFIED_AUTOMATED` | `account_profiles.firebase_uid` source contract enforced. |
-| Users | Detail, sessions, devices, access requests, support | `VERIFIED_AUTOMATED` | Safe projections; no session tokens or device codes. |
+| Users | Detail, sessions, devices, access requests, support | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Safe projections; Firebase UID remains text identity while UUID-owned diagnostics join through subscription IDs. Users without subscriptions skip UUID diagnostic reads. No session tokens or device codes are exposed. |
 | Account lifecycle | Suspend/reactivate/pending deletion | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Preview/execute contracts, locks, audit; hard delete excluded. |
 | Account deletion | Request/cancel/cooling-off state | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Supabase migration applied; non-destructive request/cancel is operational. Disposable QA acceptance remains Phase G. |
 | Account deletion | Irreversible purge | `NOT_IMPLEMENTED` | Requires explicit destructive approval and separate purge design. |
 | Access | Revoke session/device/all account access | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Explicit scope and UID ownership. |
-| Subscriptions | List/filter/pagination/detail | `VERIFIED_AUTOMATED` | Real subscription rows only. |
-| Subscriptions | Explicit lifecycle transitions | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Invalid transitions fail closed; arbitrary PATCH removed. |
+| Subscriptions | List/filter/pagination/detail | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Real subscription rows only. Durable current-record state is displayed separately from entitlement projection, so expired current records remain operable without presenting history as current. |
+| Subscriptions | Explicit lifecycle transitions | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Invalid transitions fail closed; arbitrary PATCH removed. Historical expiry correction is rejected in Worker preview and the Postgres transition boundary before unique-current enforcement. |
 | Manual grant | User picker, context-aware action, preview, confirm | `VERIFIED_AUTOMATED` | No manual UID input in normal UI; no real customer grant test. |
 | Recovery | Evidence-led remaining-time restore | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Enriched schema applied; replacement-grant producer covered by automated checks without real grant. |
 | Dashboard | Structured KPIs/activity and partial failure | `VERIFIED_AUTOMATED` | No raw JSON. |

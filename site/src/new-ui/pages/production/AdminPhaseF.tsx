@@ -139,6 +139,18 @@ function copy(locale: "ar" | "en", en: string, ar: string) {
   return locale === "ar" ? ar : en;
 }
 
+function isCurrentSubscriptionRecord(subscription: AdminSubscription) {
+  return subscription.is_current_record ?? subscription.is_current === true;
+}
+
+function subscriptionDisplayLifecycle(subscription: AdminSubscription) {
+  return isCurrentSubscriptionRecord(subscription)
+    ? subscription.subscription_projection?.lifecycle ||
+        subscription.lifecycle_state ||
+        subscription.status
+    : subscription.lifecycle_state || subscription.status;
+}
+
 function adminMutationError(locale: "ar" | "en", value: unknown) {
   const code = value instanceof Error ? value.message : String(value || "");
   const messages: Record<string, [string, string]> = {
@@ -165,6 +177,14 @@ function adminMutationError(locale: "ar" | "en", value: unknown) {
     preview_changed: [
       "The account state changed. Review the grant again.",
       "تغيّرت حالة الحساب. راجع المنح مرة أخرى.",
+    ],
+    historical_subscription_cannot_be_reactivated: [
+      "This is a historical subscription. Open the current record or create a new grant.",
+      "هذا اشتراك سابق. افتح السجل الحالي أو أنشئ منحًا جديدًا.",
+    ],
+    subscription_integrity_conflict: [
+      "The subscription records conflict. Review the current record before continuing.",
+      "توجد مشكلة في سجلات الاشتراك. راجع السجل الحالي قبل المتابعة.",
     ],
   };
   const message = messages[code] || [
@@ -1499,8 +1519,8 @@ export function AdminSubscriptionsPhaseF() {
       key: "lifecycle",
       header: copy(locale, "Lifecycle", "دورة الاشتراك"),
       render: (row) => (
-        <Badge tone={tone(row.lifecycle_state || row.status)}>
-          {statusLabel(row.lifecycle_state || row.status, locale)}
+        <Badge tone={tone(subscriptionDisplayLifecycle(row))}>
+          {statusLabel(subscriptionDisplayLifecycle(row), locale)}
         </Badge>
       ),
     },
@@ -1520,13 +1540,16 @@ export function AdminSubscriptionsPhaseF() {
     {
       key: "current",
       header: copy(locale, "Record", "السجل"),
-      render: (row) => (
-        <Badge tone={row.is_current_projection ? "info" : "neutral"}>
-          {row.is_current_projection
-            ? copy(locale, "Current", "حالي")
-            : copy(locale, "History", "سابق")}
-        </Badge>
-      ),
+      render: (row) => {
+        const isCurrentRecord = isCurrentSubscriptionRecord(row);
+        return (
+          <Badge tone={isCurrentRecord ? "info" : "neutral"}>
+            {isCurrentRecord
+              ? copy(locale, "Current", "حالي")
+              : copy(locale, "History", "سابق")}
+          </Badge>
+        );
+      },
     },
   ];
   const pendingColumns: Column<PendingSubscriptionGrant>[] = [
@@ -1796,19 +1819,29 @@ function SubscriptionDetailDrawer({
   const { locale } = useExperience();
   const [operation, setOperation] = useState<OperationIntent | null>(null);
   if (!subscription) return null;
-  const actions: SubscriptionAction[] =
-    subscription.lifecycle_state === "suspended"
-      ? ["resume"]
-      : subscription.plan_term === "lifetime"
-        ? ["suspend", "cancel_now", "revoke_entitlement"]
-        : [
-            "suspend",
-            "cancel_at_period_end",
-            "cancel_now",
-            "correct_expiry",
-            "revoke_entitlement",
-          ];
-  if (subscription.lifecycle_state === "trialing") actions.unshift("end_trial");
+  const isCurrentRecord = isCurrentSubscriptionRecord(subscription);
+  const isExpiredCurrent =
+    isCurrentRecord &&
+    ["expired", "no_subscription"].includes(
+      String(subscriptionDisplayLifecycle(subscription)),
+    );
+  let actions: SubscriptionAction[] = [];
+  if (isExpiredCurrent) {
+    actions = ["correct_expiry"];
+  } else if (isCurrentRecord && subscription.lifecycle_state === "suspended") {
+    actions = ["resume"];
+  } else if (isCurrentRecord && subscription.plan_term === "lifetime") {
+    actions = ["suspend", "cancel_now", "revoke_entitlement"];
+  } else if (isCurrentRecord) {
+    actions = [
+      "suspend",
+      "cancel_at_period_end",
+      "cancel_now",
+      "correct_expiry",
+      "revoke_entitlement",
+    ];
+  }
+  if (isCurrentRecord && subscription.lifecycle_state === "trialing") actions.unshift("end_trial");
   return (
     <>
       <Drawer
@@ -1890,6 +1923,10 @@ function SubscriptionDetailDrawer({
                 "يجب حل تعارض بيانات الاشتراك أولًا.",
               )}
             </Alert>
+          ) : !isCurrentRecord ? (
+            <Alert title={copy(locale, "Historical record", "سجل سابق")} tone="info">
+              {copy(locale, "Historical subscriptions are read-only.", "الاشتراكات السابقة متاحة للعرض فقط.")}
+            </Alert>
           ) : (
             <section className="danger-zone">
               <SectionHeader
@@ -1912,7 +1949,9 @@ function SubscriptionDetailDrawer({
                       })
                     }
                   >
-                    {statusLabel(action, locale)}
+                    {action === "correct_expiry" && isExpiredCurrent
+                      ? copy(locale, "Renew subscription", "تجديد الاشتراك")
+                      : statusLabel(action, locale)}
                   </Button>
                 ))}
               </div>

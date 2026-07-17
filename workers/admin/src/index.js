@@ -597,7 +597,7 @@ export default {
       ]);
       const forbiddenErrors = new Set(["download_not_entitled", "forbidden_origin", "origin_not_allowed", "admin_permission_denied"]);
       const notFoundErrors = new Set(["release_not_found", "release_artifact_missing", "order_not_found", "account_not_found", "subscription_not_found", "session_not_found", "device_not_found", "pending_grant_not_found", "device_change_request_not_found"]);
-      const conflictErrors = new Set(["pending_grant_already_exists", "pending_grant_not_pending", "device_change_request_not_pending", "device_change_request_changed", "preview_changed", "same_version_already_active", "release_version_not_newer"]);
+      const conflictErrors = new Set(["pending_grant_already_exists", "pending_grant_not_pending", "device_change_request_not_pending", "device_change_request_changed", "preview_changed", "same_version_already_active", "release_version_not_newer", "subscription_integrity_conflict", "historical_subscription_cannot_be_reactivated", "stale_subscription_state", "operation_previously_failed"]);
       const status = authErrors.has(message) || message.startsWith("admin_email_not_allowed")
         ? 401
         : forbiddenErrors.has(message)
@@ -2190,7 +2190,7 @@ function subscriptionResolutionsByUid(rows) {
   );
 }
 
-function subscriptionRowsWithProjection(rows) {
+export function subscriptionRowsWithProjection(rows) {
   const sourceRows = Array.isArray(rows) ? rows : [];
   const resolutions = subscriptionResolutionsByUid(sourceRows);
   return sourceRows.map((row) => {
@@ -2199,6 +2199,7 @@ function subscriptionRowsWithProjection(rows) {
       return {
         ...row,
         identity_authority: "legacy_email_only",
+        is_current_record: Boolean(row?.is_current),
         is_current_projection: false,
         subscription_projection: null,
         integrity_warning: "missing_firebase_uid",
@@ -2208,6 +2209,7 @@ function subscriptionRowsWithProjection(rows) {
     return {
       ...row,
       identity_authority: "firebase_uid",
+      is_current_record: Boolean(row?.is_current),
       is_current_projection: resolution?.currentRow?.id === row?.id,
       subscription_projection: resolution?.projection || null,
       integrity_warning: resolution?.diagnostics?.code || null,
@@ -2272,8 +2274,8 @@ async function listSubscriptions(url, env) {
   if (lifecycle) items = items.filter((item) => String(item?.lifecycle_state || item?.status || "").trim().toLowerCase() === lifecycle);
   if (planTerm) items = items.filter((item) => String(item?.plan_term || "").trim().toLowerCase() === planTerm);
   if (source) items = items.filter((item) => String(item?.source_type || item?.provider || "").trim().toLowerCase() === source);
-  if (current === "current") items = items.filter((item) => item.is_current_projection);
-  if (current === "history") items = items.filter((item) => !item.is_current_projection);
+  if (current === "current") items = items.filter((item) => item.is_current_record);
+  if (current === "history") items = items.filter((item) => !item.is_current_record);
   if (integrity === "conflict") items = items.filter((item) => Boolean(item.integrity_warning));
   if (search) {
     const normalizedSearch = search.toLowerCase();
@@ -3505,12 +3507,24 @@ async function findExistingSubscriptionForIdentity(env, { userEmail, firebaseUse
     "account_subscriptions",
     `select=*&firebase_user_id=eq.${encodeURIComponent(uid)}&order=created_at.desc&limit=50`,
   );
-  const resolution = resolveSubscriptionTruth(Array.isArray(rows) ? rows : [], {
+  const ownedRows = Array.isArray(rows) ? rows : [];
+  const resolution = resolveSubscriptionTruth(ownedRows, {
     firebaseUid: uid,
     email: normalizeEmail(userEmail),
   });
   if (resolution.diagnostics.integrity === "conflict") throw new Error("subscription_integrity_conflict");
-  return resolution.currentRow;
+  const durableCurrentRows = ownedRows.filter((row) => row?.is_current === true);
+  if (durableCurrentRows.length > 1) throw new Error("subscription_integrity_conflict");
+  return resolution.currentRow || durableCurrentRows[0] || null;
+}
+
+export function subscriptionDiagnosticFilter(rows) {
+  const subscriptionIds = (Array.isArray(rows) ? rows : [])
+    .map((row) => String(row?.id || "").trim())
+    .filter(Boolean);
+  return subscriptionIds.length
+    ? `subscription_id=in.(${subscriptionIds.map((id) => encodeURIComponent(id)).join(",")})`
+    : "";
 }
 
 function pickMatchingSubscription(row, subscriptions) {
@@ -4047,15 +4061,16 @@ async function getUserDetail(userKey, env) {
     `select=*&firebase_user_id=eq.${encodeURIComponent(userId)}&order=created_at.desc&limit=100`,
   );
   const resolution = resolveSubscriptionTruth(subscriptionRows, { firebaseUid: userId, email: userEmail });
-  const subscriptionIds = (Array.isArray(subscriptionRows) ? subscriptionRows : []).map((row) => row.id).filter(Boolean);
-  const crashFilter = subscriptionIds.length
-    ? `subscription_id=in.(${subscriptionIds.map((id) => encodeURIComponent(id)).join(",")})`
-    : `user_id=eq.__none__`;
+  const diagnosticFilter = subscriptionDiagnosticFilter(subscriptionRows);
   const [sessions, crashes, loginRequests, tamperAlerts, recentAudit, recoveryEvidence, deviceBindings, deviceChangeRequests] = await Promise.all([
     safeSupabaseRead(env, "app_sessions", `select=id,user_id,user_email,subscription_id,hwid,expires_at,revoked_at,created_at,last_seen_at&user_id=eq.${encodeURIComponent(userId)}&order=last_seen_at.desc&limit=100`),
-    safeSupabaseRead(env, "crash_logs", `select=id,happened_at,user_id,subscription_id,hwid,device_name,windows_version,error_type,message,stack_trace,app_version,tool_channel,fingerprint&${crashFilter}&order=happened_at.desc&limit=50`),
+    diagnosticFilter
+      ? safeSupabaseRead(env, "crash_logs", `select=id,happened_at,user_id,subscription_id,hwid,device_name,windows_version,error_type,message,stack_trace,app_version,tool_channel,fingerprint&${diagnosticFilter}&order=happened_at.desc&limit=50`)
+      : Promise.resolve([]),
     safeSupabaseRead(env, "device_login_sessions", `select=id,hwid,status,user_id,user_email,subscription_id,expires_at,authorized_at,consumed_at,created_at&user_id=eq.${encodeURIComponent(userId)}&order=created_at.desc&limit=50`),
-    safeSupabaseRead(env, "tamper_alerts", `select=id,happened_at,user_id,subscription_id,hwid,severity,reason,details,resolved,resolved_at&user_id=eq.${encodeURIComponent(userId)}&order=happened_at.desc&limit=50`),
+    diagnosticFilter
+      ? safeSupabaseRead(env, "tamper_alerts", `select=id,happened_at,user_id,subscription_id,hwid,severity,reason,details,resolved,resolved_at&${diagnosticFilter}&order=happened_at.desc&limit=50`)
+      : Promise.resolve([]),
     safeSupabaseRead(env, "admin_activity", `select=id,action,entity,entity_id,admin_email,payload,happened_at&order=happened_at.desc&limit=200`),
     safeSupabaseRead(env, "subscription_recovery_ledger", `select=id,firebase_uid,subscription_id,evidence_type,evidence_reference,remaining_seconds,status,created_at,expires_at,consumed_at&firebase_uid=eq.${encodeURIComponent(userId)}&order=created_at.desc&limit=50`),
     safeSupabaseRead(env, "account_device_bindings", `select=${ACCOUNT_DEVICE_BINDING_SELECT}&firebase_uid=eq.${encodeURIComponent(userId)}&order=created_at.desc&limit=20`),

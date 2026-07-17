@@ -5,9 +5,8 @@
 
 /* Admin is an operational desktop surface: keep it dense, scannable, and stable. */
 html[data-surface='admin'] {
-  --sidebar-width: 208px;
-  --header-height: 52px;
-  font-size: 14px;
+  --sidebar-width: 196px;
+  --header-height: 48px;
 }
 
 html[data-surface='admin'] .workspace-sidebar {
@@ -28,25 +27,37 @@ html[data-surface='admin'] .workspace-sidebar__nav nav > span {
 }
 
 html[data-surface='admin'] .workspace-sidebar__nav button {
-  min-height: 34px;
-  gap: 10px;
-  padding-inline: 10px;
+  min-height: 32px;
+  gap: 8px;
+  padding-inline: 9px;
   border-radius: var(--radius-sm);
   font-size: var(--text-body-sm);
 }
 
 html[data-surface='admin'] .workspace-sidebar__collapse {
-  min-height: 36px;
-  padding-inline: 10px;
+  min-height: 32px;
+  padding-inline: 9px;
 }
 
 html[data-surface='admin'] .workspace-topbar {
-  padding-inline: var(--space-5);
+  min-width: 0;
+  gap: var(--space-2);
+  padding-inline: 14px;
+}
+
+html[data-surface='admin'] .workspace-topbar__tools {
+  min-width: 0;
+}
+
+html[data-surface='admin'] .topbar-search {
+  width: clamp(180px, 22vw, 260px);
+  height: 32px;
 }
 
 html[data-surface='admin'] .workspace-content {
-  max-width: 1520px;
-  padding: 14px 16px 22px;
+  max-width: none;
+  min-width: 0;
+  padding: 12px 14px 20px;
 }
 
 html[data-surface='admin'] .workspace-content > .stack,
@@ -60,7 +71,7 @@ html[data-surface='admin'] .ui-page-header {
 }
 
 html[data-surface='admin'] .ui-page-header h1 {
-  font-size: 1.3rem;
+  font-size: 20px;
   line-height: 1.25;
 }
 
@@ -70,37 +81,37 @@ html[data-surface='admin'] .ui-section-header p {
   font-size: var(--text-body-sm);
 }
 
-html[data-surface='admin'] .ui-card--sm { padding: 12px; }
-html[data-surface='admin'] .ui-card--md { padding: 14px; }
-html[data-surface='admin'] .ui-card--lg { padding: 18px; }
+html[data-surface='admin'] .ui-card--sm { padding: 10px; }
+html[data-surface='admin'] .ui-card--md { padding: 12px; }
+html[data-surface='admin'] .ui-card--lg { padding: 14px; }
 
 html[data-surface='admin'] .ui-stat {
-  min-height: 76px;
-  gap: 6px;
+  min-height: 68px;
+  gap: 4px;
 }
 
 html[data-surface='admin'] .ui-stat > strong {
-  font-size: 1.3rem;
+  font-size: 20px;
 }
 
 html[data-surface='admin'] .ui-input {
-  min-height: 34px;
+  min-height: 32px;
   border-radius: var(--radius-md);
 }
 
 html[data-surface='admin'] .ui-button--md {
-  min-height: 34px;
-  padding-inline: 12px;
+  min-height: 32px;
+  padding-inline: 11px;
 }
 
 html[data-surface='admin'] .ui-table th {
-  height: 34px;
-  padding-inline: 10px;
+  height: 32px;
+  padding-inline: 9px;
 }
 
 html[data-surface='admin'] .ui-table td {
-  height: 40px;
-  padding-inline: 10px;
+  height: 38px;
+  padding-inline: 9px;
 }
 
 html[data-surface='admin'] .ui-table-toolbar {
@@ -109,7 +120,17 @@ html[data-surface='admin'] .ui-table-toolbar {
 }
 
 html[data-surface='admin'] .ui-table-toolbar .ui-search {
-  width: min(280px, 100%);
+  width: clamp(190px, 24vw, 280px);
+}
+
+html[data-surface='admin'] .ui-table-toolbar > * {
+  min-width: 0;
+}
+
+html[data-surface='admin'] .ui-table-wrap {
+  max-width: 100%;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
 }
 
 html[data-surface='admin'] .ui-pagination {
@@ -117,7 +138,7 @@ html[data-surface='admin'] .ui-pagination {
 }
 
 html[data-surface='admin'] .ui-drawer {
-  width: min(448px, 100vw);
+  width: min(480px, 100vw);
 }
 
 html[data-surface='admin'] .ui-modal > header,
@@ -207,6 +228,23 @@ html[data-surface='admin'] .coverage-summary {
 }
 
 @media (max-width: 1199px) and (min-width: 768px) {
-  html[data-surface='admin'] { --sidebar-width: 204px; }
-  html[data-surface='admin'] .workspace-content { padding-inline: var(--space-4); }
+  html[data-surface='admin'] { --sidebar-width: 184px; }
+  html[data-surface='admin'] .workspace-content { padding-inline: 12px; }
+  html[data-surface='admin'] .workspace-topbar { padding-inline: 12px; }
+  html[data-surface='admin'] .account-trigger strong,
+  html[data-surface='admin'] .account-trigger small { max-width: 112px; }
+}
+
+@media (max-width: 1100px) and (min-width: 768px) {
+  html[data-surface='admin'] { --sidebar-width: 72px; }
+  html[data-surface='admin'] .workspace-sidebar { align-items: center; }
+  html[data-surface='admin'] .workspace-sidebar .brand span,
+  html[data-surface='admin'] .workspace-sidebar__nav nav > span,
+  html[data-surface='admin'] .workspace-sidebar__nav button > span,
+  html[data-surface='admin'] .workspace-sidebar__nav button em,
+  html[data-surface='admin'] .workspace-sidebar__collapse > span { display: none; }
+  html[data-surface='admin'] .workspace-sidebar__nav button,
+  html[data-surface='admin'] .workspace-sidebar__collapse { justify-content: center; padding-inline: 0; }
+  html[data-surface='admin'] .workspace-topbar__identity > div { display: none; }
+  html[data-surface='admin'] .topbar-search { width: clamp(160px, 30vw, 220px); }
 }

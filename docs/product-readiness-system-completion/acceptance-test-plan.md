@@ -51,6 +51,7 @@ Operational precondition: the Auth Worker finalizer configuration (`FIREBASE_SER
 
 - Verify user list search/filter/pagination and direct-route refresh.
 - Inspect identity, subscription, sessions, devices, access requests, support, diagnostics, and audit sections.
+- Open users with and without subscription history and confirm diagnostic sections load without UUID input errors.
 - Verify suspend/reactivate/pending-deletion and session/device revocation previews with fixtures or rollback-only operations.
 - Configure `ADMIN_ROLE_ASSIGNMENTS` before multi-role acceptance; then confirm unauthorized roles receive 403 through direct API calls.
 - Test request/cancel/cooling-off on a disposable QA account. Do not test irreversible purge.
@@ -59,6 +60,7 @@ Operational precondition: the Auth Worker finalizer configuration (`FIREBASE_SER
 
 - Verify current/history, lifecycle, plan, source, and integrity filters.
 - Review valid and invalid transition previews, stale-preview rejection, duplicate request replay, and lifetime restrictions.
+- Confirm an expired durable current record can be renewed, while a historical record is read-only and cannot collide with the one-current-record constraint.
 - Review Manual Grant user picker, context-aware defaults, reason model, preview, and double-submit protection without confirming a real customer grant.
 - Verify replacement-grant recovery evidence through a fixture-only path and restore uses a valid fixture ledger record.
 

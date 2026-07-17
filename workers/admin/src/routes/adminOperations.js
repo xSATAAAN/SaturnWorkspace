@@ -251,6 +251,7 @@ function previewSubscriptionResult(subscription, action, newExpiry) {
     return { lifecycle: "active", entitlement: "active" }
   }
   if (action === "correct_expiry") {
+    if (subscription.is_current !== true) throw new Error("historical_subscription_cannot_be_reactivated")
     const expiry = Date.parse(String(newExpiry || ""))
     if (!Number.isFinite(expiry) || expiry <= Date.parse(subscription.starts_at)) throw new Error("invalid_new_expiry")
     if (subscription.plan_term === "lifetime") throw new Error("lifetime_has_no_expiry")

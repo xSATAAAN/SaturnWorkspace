@@ -92,3 +92,15 @@ test('subscription transitions reject invalid resume and lifetime period cancell
     await assert.rejects(() => previewSubscriptionTransition(env, context, 'sub-1', { action: 'cancel_at_period_end', reason_code: 'customer_request' }), /lifetime_cannot_cancel_at_period_end/)
   } finally { globalThis.fetch = originalFetch }
 })
+
+test('historical subscriptions cannot be reactivated through expiry correction', async () => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () => jsonResponse([{ id: 'sub-history', firebase_user_id: 'uid-1', user_email: 'user@example.com', lifecycle_state: 'expired', status: 'expired', plan_term: 'monthly', is_current: false, integrity_state: 'ok', starts_at: '2026-01-01T00:00:00.000Z', expires_at: '2026-02-01T00:00:00.000Z', updated_at: '2026-06-22T10:00:00.000Z' }])
+  try {
+    const context = adminContext(env, 'billing@example.com')
+    await assert.rejects(
+      () => previewSubscriptionTransition(env, context, 'sub-history', { action: 'correct_expiry', new_expiry: '2026-12-01T00:00:00.000Z', reason_code: 'billing_correction' }),
+      /historical_subscription_cannot_be_reactivated/,
+    )
+  } finally { globalThis.fetch = originalFetch }
+})

@@ -46,6 +46,7 @@ export type AdminSubscription = {
   is_current?: boolean
   integrity_state?: string
   identity_authority?: 'firebase_uid' | 'legacy_email_only'
+  is_current_record?: boolean
   is_current_projection?: boolean
   integrity_warning?: string | null
   subscription_projection?: {

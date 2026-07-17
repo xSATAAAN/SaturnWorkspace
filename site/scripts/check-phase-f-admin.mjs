@@ -13,7 +13,8 @@ const manualGrant = section('function ManualGrantDrawer', 'function AdminOperati
 const userDetail = section('function UserDetailDrawer', 'function SubscriptionRecoveryDrawer')
 const recovery = section('function SubscriptionRecoveryDrawer', 'export function AdminSubscriptionsPhaseF')
 const diagnostics = section('export function AdminDiagnosticsPhaseF', 'export function AdminAuditPhaseF')
-const adminReleasesAdapter = adapters.slice(adapters.indexOf('async listReleases()'), adapters.indexOf('async uploadRelease(input)'))
+const adminReleasesStart = adapters.indexOf('async listReleases(')
+const adminReleasesAdapter = adapters.slice(adminReleasesStart, adapters.indexOf('async uploadRelease(', adminReleasesStart))
 
 const checks = [
   ['Phase F user page is routed', pages.includes("page === 'users' ? <AdminUsersPhaseF")],
@@ -32,7 +33,7 @@ const checks = [
   ['Explicit subscription transition endpoints exist', api.includes('/transition/preview') && api.includes('/transition/execute')],
   ['Explicit account lifecycle endpoints exist', api.includes('/lifecycle/preview') && api.includes('/lifecycle/execute')],
   ['Release publication has a review step', pages.includes('Confirm release publication')],
-  ['Admin release list uses an admin endpoint contract', adminReleasesAdapter.includes("fetchRemoteControls('beta')") && !adminReleasesAdapter.includes('productionAdapters.releases.getLatest')],
+  ['Admin release list uses an admin endpoint contract', adminReleasesAdapter.includes('fetchRemoteControls(channel)') && !adminReleasesAdapter.includes('productionAdapters.releases.getLatest')],
   ['Admin release page does not call customer protected release catalog', !pages.slice(pages.indexOf('function AdminReleases'), pages.indexOf('function AdminSupportV2')).includes('adapters.releases.getLatest')],
   ['Origin errors are mapped before rendering', pages.includes('userFacingErrorMessage') && pages.includes('origin_not_allowed') && pages.includes('forbidden_origin')],
   ['Primary Phase F pages contain no raw JSON dump', !phaseF.includes('<pre') && !phaseF.includes('JSON.stringify(')],
