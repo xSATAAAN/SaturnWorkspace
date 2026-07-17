@@ -2403,8 +2403,10 @@ function normalizeManualGrantInput(raw, { requireReason = false, requireIdempote
   const exactExpiryRaw = String(body.exact_expiry || body.exact_expiry_iso || body.expires_at || "").trim();
   const timezone = String(body.timezone || "UTC").trim().slice(0, 80) || "UTC";
   const legacyReason = String(body.reason || "").trim();
-  const reasonCode = String(body.reason_code || (legacyReason ? "other" : "")).trim().toLowerCase();
-  const reasonNote = String(body.reason_note || legacyReason || "").trim().slice(0, 1000);
+  const explicitReasonCode = String(body.reason_code || "").trim();
+  const reasonCode = String(explicitReasonCode || (legacyReason ? "other" : "")).trim().toLowerCase();
+  const suppliedReasonNote = String(body.reason_note || legacyReason || "").trim();
+  const reasonNote = String(explicitReasonCode && suppliedReasonNote.toLowerCase() === reasonCode ? "" : suppliedReasonNote).slice(0, 1000);
   const recoveryEvidenceId = String(body.recovery_evidence_id || "").trim();
   const idempotencyKey = String(body.idempotency_key || "").trim();
   const previewHash = String(body.preview_hash || body.preview_reference || "").trim();
@@ -2472,6 +2474,7 @@ function summarizeSubscriptionRow(row) {
     starts_at: row.starts_at || null,
     expires_at: row.expires_at || null,
     provider: row.provider || null,
+    updated_at: row.updated_at || null,
     is_lifetime: isUnlimitedExpiry(row.expires_at) || Boolean(row?.metadata?.is_unlimited),
     usable: rowIsUsableSubscription(row),
   };

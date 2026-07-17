@@ -401,6 +401,52 @@ const missingReason = await post('/api/admin/subscriptions/manual-grant/execute'
 assert.ok(missingReason.status >= 400)
 assert.match(missingReason.payload.error, /missing_reason/)
 
+const noNoteInput = {
+  target_firebase_uid: 'uid-new',
+  target_email: 'new@example.com',
+  operation_type: 'start_from_now',
+  plan: 'monthly',
+  duration_mode: 'duration',
+  duration_value: 30,
+  duration_unit: 'days',
+  reason_code: 'admin_grant',
+}
+const noNotePreview = await post('/api/admin/subscriptions/manual-grant/preview', noNoteInput)
+assert.equal(noNotePreview.status, 200)
+await new Promise((resolve) => setTimeout(resolve, 20))
+const noNoteExecuted = await post('/api/admin/subscriptions/manual-grant/execute', {
+  ...noNoteInput,
+  reason: 'admin_grant',
+  idempotency_key: 'idem-no-note-1',
+  preview_hash: noNotePreview.payload.preview.preview_hash,
+})
+assert.equal(noNoteExecuted.status, 200, JSON.stringify(noNoteExecuted.payload))
+
+const staleInput = {
+  target_firebase_uid: 'uid-expired',
+  target_email: 'expired@example.com',
+  operation_type: 'start_from_now',
+  plan: 'monthly',
+  duration_mode: 'duration',
+  duration_value: 30,
+  duration_unit: 'days',
+  reason_code: 'technical_support',
+  reason_note: 'Restore access after support review',
+}
+const stalePreview = await post('/api/admin/subscriptions/manual-grant/preview', staleInput)
+assert.equal(stalePreview.status, 200)
+const staleUpdatedAt = rows[1].updated_at
+rows[1].updated_at = new Date(Date.parse(staleUpdatedAt) + 1000).toISOString()
+const staleExecute = await post('/api/admin/subscriptions/manual-grant/execute', {
+  ...staleInput,
+  reason: staleInput.reason_note,
+  idempotency_key: 'idem-stale-preview-1',
+  preview_hash: stalePreview.payload.preview.preview_hash,
+})
+assert.equal(staleExecute.status, 409)
+assert.equal(staleExecute.payload.error, 'preview_changed')
+rows[1].updated_at = staleUpdatedAt
+
 const executeReason = 'Manual acceptance test grant'
 const executePreview = await post('/api/admin/subscriptions/manual-grant/preview', {
   ...base,

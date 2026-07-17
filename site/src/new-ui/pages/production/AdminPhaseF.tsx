@@ -2060,7 +2060,7 @@ function ManualGrantDrawer({
     try {
       await admin.executeManualGrant({
         ...input,
-        reason: note || reasonCode,
+        reason: note.trim(),
         idempotency_key: idempotencyKey,
         preview_hash: preview.preview_hash,
       });

@@ -8,6 +8,8 @@ const pages = read('src/new-ui/pages/production/ProductionPages.tsx')
 const phaseF = read('src/new-ui/pages/production/AdminPhaseF.tsx')
 const api = read('src/api/admin.ts')
 const adapters = read('src/new-ui/adapters/productionAdapters.ts')
+const overlays = read('src/new-ui/components/ui/Overlays.tsx')
+const adminResponsive = read('src/new-ui/foundation/admin-responsive.css')
 const section = (start, end) => phaseF.slice(phaseF.indexOf(start), phaseF.indexOf(end))
 const manualGrant = section('function ManualGrantDrawer', 'function AdminOperationDialog')
 const userDetail = section('function UserDetailDrawer', 'function SubscriptionRecoveryDrawer')
@@ -24,6 +26,7 @@ const checks = [
   ['Policy route uses structured Phase F page', pages.includes("page === 'policies' ? <AdminPoliciesPhaseF")],
   ['Manual grant uses a user picker', manualGrant.includes('Search by name or email')],
   ['Manual grant does not expose Firebase UID input', !manualGrant.includes('Firebase UID')],
+  ['Manual grant does not invent a reason note', manualGrant.includes('reason: note.trim()') && !manualGrant.includes('reason: note || reasonCode')],
   ['Recovery is not a normal grant action', !manualGrant.includes('restore_remaining_time')],
   ['Recovery requires ledger evidence', recovery.includes('recovery_evidence_id') && userDetail.includes('recovery_evidence')],
   ['User detail exposes safe session revocation', userDetail.includes('scope: "session"') && userDetail.includes('scope: "all"') && !userDetail.includes('row.hwid')],
@@ -36,6 +39,8 @@ const checks = [
   ['Admin release list uses an admin endpoint contract', adminReleasesAdapter.includes('fetchRemoteControls(channel)') && !adminReleasesAdapter.includes('productionAdapters.releases.getLatest')],
   ['Admin release page does not call customer protected release catalog', !pages.slice(pages.indexOf('function AdminReleases'), pages.indexOf('function AdminSupportV2')).includes('adapters.releases.getLatest')],
   ['Origin errors are mapped before rendering', pages.includes('userFacingErrorMessage') && pages.includes('origin_not_allowed') && pages.includes('forbidden_origin')],
+  ['Overlays render at the viewport root', overlays.includes("createPortal") && overlays.includes('document.body')],
+  ['Admin density is explicit and drawers keep actions visible', adminResponsive.includes('font-size: 13px') && adminResponsive.includes('width: min(420px, 100vw)') && adminResponsive.includes('overflow-y: auto')],
   ['Primary Phase F pages contain no raw JSON dump', !phaseF.includes('<pre') && !phaseF.includes('JSON.stringify(')],
 ]
 
