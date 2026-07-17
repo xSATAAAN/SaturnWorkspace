@@ -1,6 +1,6 @@
 # Current Issues and Phase Ownership
 
-Updated: 2026-07-14
+Updated: 2026-07-17
 
 ## Phase Closure
 
@@ -45,6 +45,7 @@ Updated: 2026-07-14
 | PR-024 | Browser session reused known direct/proxy IP | Automated verification complete, partial real-provider acceptance | Shared Desktop preflight resolves direct or actual proxy exit IPv4 before Brave/AdsPower/Dolphin launch, fails closed on lookup errors, blocks IPs already stored locally, reserves against concurrent launches, and commits only after successful start. Full Python suite is `199 passed, 30 subtests`; real AdsPower temporary-profile acceptance passed without changing user data, while dedicated Dolphin/Brave acceptance remains Phase G. | Phase G acceptance |
 | PR-025 | AdsPower profiles failed to open and expected states polluted crash diagnostics | Production deployed pending affected-user acceptance | AdsPower readiness and profile operations now validate provider codes, resolve legacy profile numbers, use canonical IDs, preserve startup tabs through supported APIs, and fall back to V1 when V2 is unavailable. Real temporary-profile QA passed for canonical and legacy identifiers. Desktop reporting suppresses expected prevention/validation outcomes, and Admin separates recoverable operational warnings from actionable crashes. Admin Worker `1d0fa983-8415-4e9a-9614-8cb809f0a2b5` is deployed from commit `5bfd61782585b14510eb0af85ed166104577ee53`; affected-user confirmation remains pending. | Phase G acceptance |
 | PR-026 | Admin user detail UUID failure and duplicate current subscription renewal | Production deployed pending authenticated acceptance | User diagnostics now query UUID-owned crash/tamper rows through subscription IDs and skip those reads when no subscription exists. The subscription list distinguishes durable current records from entitlement projection, historical records are read-only, and both Worker preview and Postgres transition reject historical reactivation before the unique index can fail. Migration `20260717135012_fix_admin_identity_and_subscription_transition` and Admin Worker `48ae0763-1100-433c-a522-ecfbefee07a7` are deployed; rollback-only database verification and automated regression suites pass. | Phase G acceptance |
+| PR-027 | Admin layout remained oversized and Manual Grant rejected unchanged previews | Production deployed pending authenticated acceptance | Admin density had been partially overridden while the root font returned to the public-site scale, and fixed overlays were trapped by the animated page containing block. The shared Admin density layer now controls typography, spacing, controls, tables, sidebar, and drawers; overlays use a document-root portal with fixed actions. Manual Grant now normalizes an empty note consistently and hashes the real subscription `updated_at`. Worker `58ad77c6-0eb1-4948-9fea-424e1e6252af`, automated stale/unchanged preview tests, production build, and 1280/1024/768 RTL/LTR viewport checks pass. | Phase G acceptance |
 
 ## Resolved Systemic Defects
 
@@ -56,6 +57,8 @@ Updated: 2026-07-14
 | Users and subscriptions shared one Admin surface | Separate routes and data sources now exist. |
 | Generic subscription PATCH | Removed with `410 explicit_subscription_operation_required`; explicit state transitions replace it. |
 | Admin actions lacked deterministic preview/idempotency | Operation requests, preview hashes, request IDs, locks, transition validation, and audit are implemented. |
+| Admin fixed overlays inherited page-animation dimensions | Shared Modal/Drawer components now render through a portal at `document.body`, cover the full viewport, trap and restore focus, prevent background scrolling, and keep drawer actions visible. |
+| Manual Grant rejected an unchanged empty-note preview | Reason code and optional note normalization are stable between preview and execute; the stale-state hash now uses the durable subscription row `updated_at`. |
 | Invite one-per-user/device race | Atomic D1 claims and conditional consumption prevent concurrent reuse. |
 | Account deletion schema pending state | Supabase schema is applied and status path now projects real none/pending/cancelled states instead of a prepared-disabled projection. |
 | Arabic plan catalog mojibake | Stored Supabase values repaired; API transport uses UTF-8 and repository guard prevents reintroduction. |

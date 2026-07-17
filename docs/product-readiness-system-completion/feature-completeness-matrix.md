@@ -1,6 +1,6 @@
 # Feature Completeness Matrix
 
-Updated: 2026-07-14
+Updated: 2026-07-17
 
 Status meanings: `VERIFIED_AUTOMATED`, `PRODUCTION_DEPLOYED`, `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE`, `DEPLOYED_PENDING_SAFE_EVENT_VERIFICATION`, `IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED`, `OPERATIONAL_CONFIGURATION_REQUIRED`, `WAITING_EXTERNAL`, `WAITING_EXTERNAL_BILLING_DEFENSE_IN_DEPTH`, `MITIGATED_BY_SATURN_DUAL_TRUST_PENDING_DEPLOYMENT`, `PREPARED_DISABLED`, `PREPARED_DISABLED_WITH_PRODUCER`, `PARTIALLY_IMPLEMENTED`, `PENDING_DEPLOYMENT_VERIFICATION`, `NOT_IMPLEMENTED`, `DEFERRED_TO_PHASE_G_MANUAL_ACCEPTANCE`, `QA_ARTIFACT_BUILT_PENDING_MANUAL_ACCEPTANCE`.
 
@@ -26,6 +26,7 @@ Status meanings: `VERIFIED_AUTOMATED`, `PRODUCTION_DEPLOYED`, `PRODUCTION_DEPLOY
 | Support | Customer tickets, admin replies, email operations | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Phase D automated suite passes. |
 | Support | Private attachments | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | R2 private objects, ownership/admin authorization, projections, and orphan cleanup are implemented. Production fixture acceptance remains Phase G. |
 | Admin IA | Distinct operational routes | `PRODUCTION_DEPLOYED` | No duplicate Content shell or legacy Policy panel. |
+| Admin UI | Desktop density and viewport overlays | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | One Admin-scoped density layer covers navigation, typography, controls, tables, forms, cards, and drawers. Shared overlays render at the document root with full-viewport sizing, focus containment/restoration, background scroll lock, and fixed drawer actions. Automated RTL/LTR checks at 1280, 1024, and 768 pixels report zero horizontal overflow. |
 | Users | Search/filter/pagination | `VERIFIED_AUTOMATED` | `account_profiles.firebase_uid` source contract enforced. |
 | Users | Detail, sessions, devices, access requests, support | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Safe projections; Firebase UID remains text identity while UUID-owned diagnostics join through subscription IDs. Users without subscriptions skip UUID diagnostic reads. No session tokens or device codes are exposed. |
 | Account lifecycle | Suspend/reactivate/pending deletion | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Preview/execute contracts, locks, audit; hard delete excluded. |
@@ -34,7 +35,7 @@ Status meanings: `VERIFIED_AUTOMATED`, `PRODUCTION_DEPLOYED`, `PRODUCTION_DEPLOY
 | Access | Revoke session/device/all account access | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Explicit scope and UID ownership. |
 | Subscriptions | List/filter/pagination/detail | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Real subscription rows only. Durable current-record state is displayed separately from entitlement projection, so expired current records remain operable without presenting history as current. |
 | Subscriptions | Explicit lifecycle transitions | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Invalid transitions fail closed; arbitrary PATCH removed. Historical expiry correction is rejected in Worker preview and the Postgres transition boundary before unique-current enforcement. |
-| Manual grant | User picker, context-aware action, preview, confirm | `VERIFIED_AUTOMATED` | No manual UID input in normal UI; no real customer grant test. |
+| Manual grant | User picker, context-aware action, preview, confirm | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Empty optional notes remain stable between preview and execute, real subscription `updated_at` changes invalidate stale previews, and double-submit idempotency remains covered. Admin Worker `58ad77c6-0eb1-4948-9fea-424e1e6252af` is live; no real customer grant was executed during automated verification. |
 | Recovery | Evidence-led remaining-time restore | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Enriched schema applied; replacement-grant producer covered by automated checks without real grant. |
 | Dashboard | Structured KPIs/activity and partial failure | `VERIFIED_AUTOMATED` | No raw JSON. |
 | Audit | Unified bounded Admin read contract | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Supabase canonical; R2 bounded fallback. |

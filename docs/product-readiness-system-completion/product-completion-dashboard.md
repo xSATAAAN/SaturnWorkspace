@@ -1,6 +1,6 @@
 # Saturn Workspace Product Completion Dashboard
 
-Updated: 2026-07-14
+Updated: 2026-07-17
 
 ## Current Phase Status
 
@@ -23,6 +23,7 @@ Updated: 2026-07-14
 - Supply chain: repository secret gate passes for all 338 tracked files; all five npm package roots report zero known vulnerabilities. Desktop `cryptography` was raised above the affected 48.0.0 release, build tooling now requires fixed pip/setuptools versions, and the permanent strict `pip-audit` readiness step reports no known vulnerabilities.
 - Production-safe smoke: public site, Auth health, Policy health, public plan catalog with allowed Origin, missing-Origin denial, and OTA manifest all match their expected live status. This is a contract smoke, not a load test.
 - Admin identity and renewal remediation: `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE`. User detail diagnostics now join through subscription UUIDs instead of sending Firebase UID text to UUID columns. Current subscription records are separated from entitlement projection, historical expiry correction fails closed, and migration `20260717135012_fix_admin_identity_and_subscription_transition` plus Admin Worker version `48ae0763-1100-433c-a522-ecfbefee07a7` are live. Rollback-only database verification and the Admin Phase F/Phase G suites pass; authenticated UI acceptance remains pending.
+- Admin density, overlay, and manual-grant preview remediation: `PRODUCTION_DEPLOYED_PENDING_AUTHENTICATED_ACCEPTANCE`. Admin typography, navigation, controls, tables, forms, and drawers use one scoped density layer. Modal and drawer overlays render through a document-root portal so viewport sizing, dimming, focus trapping, and fixed action footers are independent of page animation containers. Manual Grant no longer turns an empty note into a new reason value between preview and execute, while the preview hash now includes the subscription row `updated_at` so real stale state still fails closed. Admin Worker `58ad77c6-0eb1-4948-9fea-424e1e6252af` is live; automated grant, build, Phase F, RTL/LTR, and 1280/1024/768 viewport checks pass. A real authenticated retry remains pending.
 - Desktop session network preflight: `VERIFIED_AUTOMATED_PENDING_REAL_PROXY_MANUAL_ACCEPTANCE`. Brave, AdsPower, and Dolphin launch paths now resolve the direct or actual proxy exit IPv4, fail closed when it cannot be verified, reject an IP already present in the local IP database, reserve it against concurrent launch races, and persist it only after the browser/profile starts successfully.
 - OTA version contract: `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE`. The administrator explicitly assigns the release version independently of the uploaded filename. The Admin Worker validates the selected artifact type, binary signature, size, SHA256, channel, and rejects normal publication of a version equal to or older than the active channel. Desktop comparison distinguishes prereleases from final releases. Admin Worker version `1d0fa983-8415-4e9a-9614-8cb809f0a2b5` is deployed from canonical commit `5bfd61782585b14510eb0af85ed166104577ee53`.
 

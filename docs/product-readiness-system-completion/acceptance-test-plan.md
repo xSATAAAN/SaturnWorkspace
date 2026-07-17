@@ -50,6 +50,7 @@ Operational precondition: the Auth Worker finalizer configuration (`FIREBASE_SER
 ## 4. Admin Users and Account Operations
 
 - Verify user list search/filter/pagination and direct-route refresh.
+- At 1280x900 and other supported desktop viewports, confirm the sidebar, toolbar, tables, and user-detail drawer use the compact Admin density; the drawer must cover the viewport edge-to-edge vertically, dim the full application including navigation, keep its actions visible, and scroll only its body.
 - Inspect identity, subscription, sessions, devices, access requests, support, diagnostics, and audit sections.
 - Open users with and without subscription history and confirm diagnostic sections load without UUID input errors.
 - Verify suspend/reactivate/pending-deletion and session/device revocation previews with fixtures or rollback-only operations.
@@ -62,6 +63,7 @@ Operational precondition: the Auth Worker finalizer configuration (`FIREBASE_SER
 - Review valid and invalid transition previews, stale-preview rejection, duplicate request replay, and lifetime restrictions.
 - Confirm an expired durable current record can be renewed, while a historical record is read-only and cannot collide with the one-current-record constraint.
 - Review Manual Grant user picker, context-aware defaults, reason model, preview, and double-submit protection without confirming a real customer grant.
+- On a disposable QA user only, verify preview followed by confirm succeeds when the account state is unchanged and the optional note is empty; separately change the fixture subscription after preview and confirm execution fails as stale. Do not use a real customer subscription.
 - Verify replacement-grant recovery evidence through a fixture-only path and restore uses a valid fixture ledger record.
 
 ## 6. Support, Communications, and Email
