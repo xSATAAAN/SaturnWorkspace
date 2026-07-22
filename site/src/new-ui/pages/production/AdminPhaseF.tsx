@@ -102,6 +102,7 @@ function operationIntentKey(intent: OperationIntent | null) {
 function useResource<T>(
   loader: () => Promise<T>,
   dependencies: DependencyList,
+  refreshMs = 0,
 ): Resource<T> {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
@@ -132,6 +133,11 @@ function useResource<T>(
     // The caller controls refresh dependencies explicitly.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...dependencies, version]);
+  useEffect(() => {
+    if (!refreshMs) return undefined;
+    const timer = window.setInterval(() => setVersion((value) => value + 1), refreshMs);
+    return () => window.clearInterval(timer);
+  }, [refreshMs]);
   return { data, loading, error, reload };
 }
 
@@ -2502,12 +2508,14 @@ export function AdminDiagnosticsPhaseF() {
   const [selectedTamper, setSelectedTamper] = useState<AdminTamperAlert | null>(
     null,
   );
-  const groups = useResource(() => admin.listCrashGroups(), [admin]);
-  const logs = useResource(() => admin.listCrashLogs("error"), [admin]);
-  const warnings = useResource(() => admin.listCrashLogs("warning"), [admin]);
+  const [selectedLog, setSelectedLog] = useState<AdminCrashLog | null>(null);
+  const groups = useResource(() => admin.listCrashGroups(), [admin], tab === "groups" ? 10000 : 0);
+  const logs = useResource(() => admin.listCrashLogs("error"), [admin], tab === "occurrences" ? 10000 : 0);
+  const warnings = useResource(() => admin.listCrashLogs("warning"), [admin], tab === "warnings" ? 10000 : 0);
   const tamper = useResource(
     () => admin.listTamperAlerts({ resolved: false }),
     [admin],
+    tab === "tamper" ? 10000 : 0,
   );
   const groupColumns: Column<AdminCrashGroup>[] = [
     {
@@ -2559,6 +2567,11 @@ export function AdminDiagnosticsPhaseF() {
       render: (row) => row.message || row.stack_trace?.split("\n")[0] || "—",
     },
     {
+      key: "component",
+      header: copy(locale, "Source", "المصدر"),
+      render: (row) => row.component || "desktop-app",
+    },
+    {
       key: "version",
       header: copy(locale, "Version", "الإصدار"),
       render: (row) => row.app_version || "—",
@@ -2567,6 +2580,15 @@ export function AdminDiagnosticsPhaseF() {
       key: "date",
       header: copy(locale, "Time", "الوقت"),
       render: (row) => date(row.happened_at, locale),
+    },
+    {
+      key: "action",
+      header: copy(locale, "Action", "الإجراء"),
+      render: (row) => (
+        <Button size="sm" onClick={() => setSelectedLog(row)}>
+          {copy(locale, "View", "عرض")}
+        </Button>
+      ),
     },
   ];
   const warningColumns: Column<AdminCrashLog>[] = [
@@ -2702,7 +2724,56 @@ export function AdminDiagnosticsPhaseF() {
           tamper.reload();
         }}
       />
+      <DiagnosticReportDialog
+        key={selectedLog?.id || "diagnostic-report:closed"}
+        report={selectedLog}
+        onClose={() => setSelectedLog(null)}
+      />
     </div>
+  );
+}
+
+function DiagnosticReportDialog({
+  report,
+  onClose,
+}: {
+  report: AdminCrashLog | null;
+  onClose: () => void;
+}) {
+  const { locale } = useExperience();
+  return (
+    <Modal
+      open={Boolean(report)}
+      onClose={onClose}
+      title={copy(locale, "Error report", "تقرير الخطأ")}
+      closeLabel={copy(locale, "Close", "إغلاق")}
+      footer={
+        <Button onClick={onClose}>
+          {copy(locale, "Close", "إغلاق")}
+        </Button>
+      }
+    >
+      {report ? (
+        <div className="stack">
+          <dl className="detail-list">
+            <div><dt>{copy(locale, "Error", "الخطأ")}</dt><dd>{report.error_type}</dd></div>
+            <div><dt>{copy(locale, "Source", "المصدر")}</dt><dd>{report.component || "desktop-app"}</dd></div>
+            <div><dt>{copy(locale, "Context", "السياق")}</dt><dd>{report.context || "—"}</dd></div>
+            <div><dt>{copy(locale, "Version", "الإصدار")}</dt><dd>{report.app_version || "—"}</dd></div>
+            <div><dt>{copy(locale, "Time", "الوقت")}</dt><dd>{date(report.happened_at, locale)}</dd></div>
+            <div><dt>{copy(locale, "Device", "الجهاز")}</dt><dd>{report.device_name || report.hwid || "—"}</dd></div>
+          </dl>
+          <div>
+            <strong>{copy(locale, "Summary", "الملخص")}</strong>
+            <p className="diagnostic-report-message">{report.message || "—"}</p>
+          </div>
+          <div>
+            <strong>{copy(locale, "Technical trace", "التتبع الفني")}</strong>
+            <pre className="diagnostic-report-trace" dir="ltr">{report.stack_trace || "—"}</pre>
+          </div>
+        </div>
+      ) : null}
+    </Modal>
   );
 }
 

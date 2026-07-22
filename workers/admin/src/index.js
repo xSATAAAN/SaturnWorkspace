@@ -37,11 +37,26 @@ const MANUAL_GRANT_SOURCES = {
 const CRASH_PAYLOAD_REDACTED = "[redacted]";
 const CRASH_SENSITIVE_KEYS = new Set([
   "access_token",
+  "api_key",
+  "apikey",
+  "app_password",
   "refresh_token",
   "id_token",
   "session_token",
   "session_id",
   "password",
+  "pass",
+  "email",
+  "gmail",
+  "mail",
+  "otp",
+  "totp",
+  "totp_secret",
+  "two_factor_secret",
+  "username",
+  "user_name",
+  "user_email",
+  "proxy_password",
   "cookie",
   "cookies",
   "authorization",
@@ -146,15 +161,18 @@ function isSensitiveCrashKey(value) {
   );
 }
 
-function sanitizeCrashString(value) {
+export function sanitizeCrashString(value) {
   return String(value || "")
     .replace(/\b(authorization)\s*:\s*bearer\s+[^\s,;]+/gi, `$1: Bearer ${CRASH_PAYLOAD_REDACTED}`)
     .replace(/\b(set-cookie|cookie)\s*:\s*[^\r\n]+/gi, (_, key) => `${key}: ${CRASH_PAYLOAD_REDACTED}`)
     .replace(/([?&](?:access_token|refresh_token|id_token|session_token|session_id|auth_code|code_verifier|password|cookie)=)[^&#\s]+/gi, (_, prefix) => `${prefix}${CRASH_PAYLOAD_REDACTED}`)
-    .replace(/\b(access_token|refresh_token|id_token|session_token|session_id|auth_code|code_verifier|password|cookie|google_drive_token|client_secret)\b\s*([:=])\s*([^\s,;]+)/gi, (_, key, separator) => `${key}${separator}${separator === ":" ? " " : ""}${CRASH_PAYLOAD_REDACTED}`);
+    .replace(/\b(access_token|api_key|app_password|refresh_token|id_token|session_token|session_id|auth_code|code_verifier|password|proxy_password|totp_secret|cookie|google_drive_token|client_secret)\b\s*([:=])\s*([^\s,;]+)/gi, (_, key, separator) => `${key}${separator}${separator === ":" ? " " : ""}${CRASH_PAYLOAD_REDACTED}`)
+    .replace(/\b(https?|socks5):\/\/[^/@\s:]+:[^/@\s]+@/gi, (_, protocol) => `${protocol}://${CRASH_PAYLOAD_REDACTED}@`)
+    .replace(/(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?![A-Za-z0-9._%+-])/g, "[redacted-email]")
+    .replace(/C:[\\/]Users[\\/][^\\/\s]+/gi, "C:\\Users\\[redacted-user]");
 }
 
-function sanitizeCrashValue(value, key = "") {
+export function sanitizeCrashValue(value, key = "") {
   const normalized = normalizeCrashKey(key);
   if (isSensitiveCrashKey(normalized)) return CRASH_PAYLOAD_REDACTED;
   if (normalized && CRASH_CONTENT_DUMP_KEYS.has(normalized)) return CRASH_PAYLOAD_REDACTED;
@@ -168,6 +186,39 @@ function sanitizeCrashValue(value, key = "") {
   }
   if (typeof value === "string") return sanitizeCrashString(value);
   return value;
+}
+
+const MAX_CRASH_INGEST_BYTES = 256 * 1024;
+
+export async function enforceCrashIngestRateLimit(request, env, body) {
+  const limiter = env.ADMIN_RATE_LIMIT_CRASH_INGEST;
+  if (!limiter || typeof limiter.limit !== "function") throw new Error("rate_limit_unavailable");
+  const stableClientKey = String(body?.hwid || request.headers.get("CF-Connecting-IP") || "anonymous").trim();
+  const hashedKey = await sha256Hex(`crash-ingest:${stableClientKey}`);
+  const result = await limiter.limit({ key: hashedKey }).catch(() => null);
+  if (!result) throw new Error("rate_limit_unavailable");
+  if (!result.success) throw new Error("rate_limited");
+}
+
+export async function readCrashIngestBody(request) {
+  const contentLength = Number(request.headers.get("Content-Length") || 0);
+  if (Number.isFinite(contentLength) && contentLength > MAX_CRASH_INGEST_BYTES) {
+    throw new Error("diagnostic_payload_too_large");
+  }
+  const raw = await request.text();
+  if (new TextEncoder().encode(raw).byteLength > MAX_CRASH_INGEST_BYTES) {
+    throw new Error("diagnostic_payload_too_large");
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("invalid_diagnostic_payload");
+    }
+    return parsed;
+  } catch (error) {
+    if (error instanceof Error && error.message === "invalid_diagnostic_payload") throw error;
+    throw new Error("invalid_diagnostic_json");
+  }
 }
 
 export default {
@@ -610,6 +661,8 @@ export default {
               ? 429
               : message === "rate_limit_unavailable"
                 ? 503
+                : message === "diagnostic_payload_too_large"
+                  ? 413
               : 400;
       const publicMessage = message === "forbidden_origin" ? "origin_not_allowed" : message;
       return json({ success: false, error: publicMessage }, status, corsHeaders(request, env));
@@ -3465,12 +3518,16 @@ async function listCrashLogs(url, env) {
     .filter((item) => item.classification !== "expected")
     .filter((item) => classification === "all" || item.classification === classification);
   const items = classified.slice(offset, offset + limit).map(({ row, classification: rowClassification }) => {
-    const { raw_payload: _rawPayload, ...safeRow } = row;
+    const { raw_payload: rawPayload, ...safeRow } = row;
     return {
       ...safeRow,
       classification: rowClassification,
       message: sanitizeCrashString(row.message || ""),
       stack_trace: sanitizeCrashString(String(row.stack_trace || "").split(/\r?\n/).slice(0, 12).join("\n")),
+      event_id: String(rawPayload?.event_id || "") || null,
+      component: String(rawPayload?.component || rawPayload?.source || "desktop-app") || "desktop-app",
+      context: String(rawPayload?.context || "") || null,
+      severity: String(rawPayload?.severity || rowClassification || "error"),
     };
   });
   return { success: true, items, page, limit, total: classified.length, classification };
@@ -3631,13 +3688,15 @@ async function listAccessRequests(url, env) {
   return { success: true, items };
 }
 
-function crashSignatureSource(row) {
+export function crashSignatureSource(row) {
   const stackLine = String(row?.stack_trace || "")
     .split(/\r?\n/)
     .map((line) => line.trim())
     .find(Boolean);
   return [
     String(row?.error_type || "unknown").trim().toLowerCase(),
+    String(row?.raw_payload?.component || row?.raw_payload?.source || "").trim().toLowerCase(),
+    String(row?.raw_payload?.context || "").trim().toLowerCase(),
     String(row?.message || "").trim().toLowerCase().slice(0, 240),
     String(stackLine || "").trim().toLowerCase().slice(0, 240),
   ].join("|");
@@ -4283,20 +4342,23 @@ async function resolveCrashIngestAuth(request, env, body) {
 }
 
 async function ingestCrashLog(request, env) {
-  const body = await request.json();
+  const body = await readCrashIngestBody(request);
+  await enforceCrashIngestRateLimit(request, env, body);
   const auth = await resolveCrashIngestAuth(request, env, body);
   const session = auth.session || {};
   const safeBody = body && typeof body === "object" ? sanitizeCrashValue(body) : {};
-  const rawPayload = safeBody && typeof safeBody === "object" ? { ...safeBody } : {};
+  const rawPayload = safeBody?.raw_payload && typeof safeBody.raw_payload === "object"
+    ? { ...safeBody.raw_payload }
+    : {};
+  rawPayload.event_id = String(safeBody?.event_id || rawPayload.event_id || "") || null;
   rawPayload.auth = {
     source: auth.source,
-    firebase_user_id: session.user_id || rawPayload.firebase_user_id || null,
-    user_email: session.user_email || rawPayload.user_email || null,
     warning: auth.warning || null,
   };
+  const requestIp = String(request.headers.get("CF-Connecting-IP") || "").trim();
   rawPayload.request = {
-    ip: String(request.headers.get("CF-Connecting-IP") || "").trim() || null,
-    user_agent: String(request.headers.get("User-Agent") || "").trim() || null,
+    ip_hash: requestIp ? await sha256Hex(requestIp) : null,
+    user_agent: limitString(sanitizeCrashString(String(request.headers.get("User-Agent") || "").trim()), 512) || null,
     colo: String(request.cf?.colo || "").trim() || null,
     country: String(request.cf?.country || "").trim() || null,
   };

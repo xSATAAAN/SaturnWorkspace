@@ -42,6 +42,13 @@ namespace_id = "41013"
   limit = 80
   period = 60
 
+[[ratelimits]]
+name = "ADMIN_RATE_LIMIT_CRASH_INGEST"
+namespace_id = "41014"
+  [ratelimits.simple]
+  limit = 120
+  period = 60
+
 [vars]
 ADMIN_ORIGIN = "https://admin.saturnws.com"
 PUBLIC_UPDATES_BASE_URL = "https://saturnws.com/updates"

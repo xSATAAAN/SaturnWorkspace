@@ -318,6 +318,10 @@ export type AdminCrashLog = {
   tool_channel?: string | null
   fingerprint?: string | null
   classification?: 'error' | 'warning'
+  event_id?: string | null
+  component?: string | null
+  context?: string | null
+  severity?: string | null
   raw_payload?: {
     auth?: {
       source?: string | null
