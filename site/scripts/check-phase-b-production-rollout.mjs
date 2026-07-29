@@ -131,7 +131,11 @@ assertIncludes(productionPages, 'termsVersion: CURRENT_TERMS_VERSION', 'signup a
 assertIncludes(productionAdapters, 'baseUser.trustedEmailIdentity', 'trusted Google identity bypasses password OTP routing')
 assertIncludes(productionAdapters, 'GoogleAuthProvider.credentialFromError', 'Google collision preserves the pending provider credential')
 assertIncludes(productionAdapters, 'linkWithCredential(result.user, pendingProviderLink.credential)', 'password login completes pending Google provider linking')
-assertIncludes(productionAdapters, "throw new Error('AUTH_SIGNUP_REQUIRED')", 'new Google identity without accepted terms returns to signup')
+assertIncludes(
+  productionAdapters,
+  "throw new Error('AUTH_SIGNUP_REQUIRED', { cause: error })",
+  'new Google identity without accepted terms returns to signup without losing the original failure cause',
+)
 assertIncludes(productionPages, "key.includes('auth_provider_collision')", 'provider collision has localized recovery copy')
 assertIncludes(productionPages, 'if (collisionEmail) setEmail(collisionEmail)', 'provider collision restores the existing account email')
 assertIncludes(authWorker, 'return errorJson(request, "PROFILE_TERMS_REQUIRED", 409', 'trusted Google profile does not bypass account terms')
