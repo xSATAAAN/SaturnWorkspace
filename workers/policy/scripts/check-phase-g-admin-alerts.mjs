@@ -1,14 +1,13 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { build } from 'esbuild'
 import { Miniflare } from 'miniflare'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const temp = await mkdtemp(path.join(tmpdir(), 'saturnws-phase-g-alerts-'))
+const temp = await mkdtemp(path.join(root, 'node_modules', '.saturnws-phase-g-alerts-'))
 const bundle = path.join(temp, 'worker.mjs')
 const adminToken = 'phase-g-local-admin-token-2026'
 let failSend = false
@@ -25,8 +24,10 @@ await build({
 })
 
 const mf = new Miniflare({
+  rootPath: temp,
   modules: true,
-  scriptPath: bundle,
+  modulesRoot: temp,
+  scriptPath: path.basename(bundle),
   compatibilityDate: '2026-05-28',
   d1Databases: ['DB'],
   r2Buckets: ['SUPPORT_ATTACHMENTS'],

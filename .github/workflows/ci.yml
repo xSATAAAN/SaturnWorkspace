@@ -1,0 +1,81 @@
+name: Web CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web-required:
+    name: web-required
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: "true"
+
+    steps:
+      - name: Check out the candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            site/package-lock.json
+            workers/admin/package-lock.json
+            workers/auth/package-lock.json
+            workers/policy/package-lock.json
+
+      - name: Install locked site dependencies
+        working-directory: site
+        run: npm ci
+
+      - name: Verify the site
+        working-directory: site
+        run: |
+          npm run lint
+          npm run build
+          npm run test:new-ui:round3b
+          npm run test:phase-b
+          npm run test:phase-b1
+          npm run test:phase-f
+
+      - name: Install locked admin Worker dependencies
+        working-directory: workers/admin
+        run: npm ci
+
+      - name: Verify the admin Worker
+        working-directory: workers/admin
+        run: |
+          npm run check:syntax
+          npm run test:phase-g
+
+      - name: Install locked auth Worker dependencies
+        working-directory: workers/auth
+        run: npm ci
+
+      - name: Verify the auth Worker
+        working-directory: workers/auth
+        run: |
+          npm run check
+          npm run test:phase-c
+
+      - name: Install locked policy Worker dependencies
+        working-directory: workers/policy
+        run: npm ci
+
+      - name: Verify the policy Worker
+        working-directory: workers/policy
+        run: npm run test:phase-g

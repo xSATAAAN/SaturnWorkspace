@@ -477,7 +477,7 @@ export const productionAdapters: AppAdapters = {
           const code = String(error instanceof Error ? error.message : error || '').toLowerCase()
           if (code.includes('profile_terms_required')) {
             await signOut(firebaseAuth).catch(() => undefined)
-            throw new Error('AUTH_SIGNUP_REQUIRED')
+            throw new Error('AUTH_SIGNUP_REQUIRED', { cause: error })
           }
           throw error
         }

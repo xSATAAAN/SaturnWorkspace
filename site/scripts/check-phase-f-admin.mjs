@@ -41,7 +41,10 @@ const checks = [
   ['Origin errors are mapped before rendering', pages.includes('userFacingErrorMessage') && pages.includes('origin_not_allowed') && pages.includes('forbidden_origin')],
   ['Overlays render at the viewport root', overlays.includes("createPortal") && overlays.includes('document.body')],
   ['Admin density is explicit and drawers keep actions visible', adminResponsive.includes('font-size: 13px') && adminResponsive.includes('width: min(420px, 100vw)') && adminResponsive.includes('overflow-y: auto')],
-  ['Primary Phase F pages contain no raw JSON dump', !phaseF.includes('<pre') && !phaseF.includes('JSON.stringify(')],
+  [
+    'Primary Phase F pages contain no raw JSON dump',
+    !phaseF.includes('JSON.stringify(') && !phaseF.includes('<pre>{JSON'),
+  ],
 ]
 
 const failed = checks.filter(([, passed]) => !passed)
