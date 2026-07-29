@@ -38,6 +38,7 @@ await build({
 const mf = new Miniflare({
   rootPath: temp,
   modules: true,
+  modulesRoot: temp,
   scriptPath: path.basename(bundle),
   compatibilityDate: '2026-05-28',
   d1Databases: ['DB'],
