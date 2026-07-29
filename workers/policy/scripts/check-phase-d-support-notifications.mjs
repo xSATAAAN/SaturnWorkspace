@@ -1,14 +1,13 @@
 import assert from 'node:assert/strict'
 import { createHash, createHmac } from 'node:crypto'
 import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { build } from 'esbuild'
 import { Miniflare } from 'miniflare'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const temp = await mkdtemp(path.join(tmpdir(), 'saturnws-phase-d-'))
+const temp = await mkdtemp(path.join(root, 'node_modules', '.saturnws-phase-d-'))
 const bundle = path.join(temp, 'worker.mjs')
 const adminToken = 'phase-d-local-admin-token-2026'
 const authEmailToken = 'phase-d-local-auth-email-token-2026'
