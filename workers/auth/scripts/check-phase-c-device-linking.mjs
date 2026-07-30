@@ -4,8 +4,10 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import * as esbuild from 'esbuild'
+import { loadRuntimeContract, validateRuntimeOperation } from '../../../tools/runtime-contract.mjs'
 
 const ROOT = process.cwd()
+const CONTRACT = loadRuntimeContract(path.resolve(ROOT, '../../contracts/desktop-control-plane.v1.json'))
 const BUILD_DIR = path.resolve(ROOT, '.phase-c-test-build')
 if (!BUILD_DIR.startsWith(`${path.resolve(ROOT)}${path.sep}`)) throw new Error('unsafe_test_build_path')
 fs.rmSync(BUILD_DIR, { recursive: true, force: true })
@@ -393,6 +395,7 @@ async function start(hwid, deviceName = 'QA Device') {
   const result = await call('/device/start', { hwid, app_version: '1.0.7-beta', device_name: deviceName, platform: 'Windows', os_version: 'Windows 11' })
   assert.equal(result.status, 200)
   assert.equal(result.body.success, true)
+  validateRuntimeOperation(CONTRACT, 'auth.device_start', result.body)
   return result.body
 }
 
@@ -401,10 +404,12 @@ async function link(token, hwid) {
   const complete = await call('/device/complete', { id_token: token, device_code: pending.device_code })
   assert.equal(complete.status, 200)
   assert.equal(complete.body.connection_state, 'linked')
+  validateRuntimeOperation(CONTRACT, 'auth.device_complete', complete.body)
   const poll = await call('/device/poll', { device_code: pending.device_code, hwid })
   assert.equal(poll.status, 200)
   assert.equal(poll.body.connection_state, 'linked')
   assert.ok(String(poll.body.session_token || '').startsWith('stk_'))
+  validateRuntimeOperation(CONTRACT, 'auth.device_poll_authorized', poll.body)
   return { pending, complete: complete.body, session: poll.body }
 }
 
@@ -837,6 +842,7 @@ await call('/device/complete', { id_token: tokenActive, device_code: wrongDevice
 const wrongDevice = await call('/device/poll', { device_code: wrongDevicePending.device_code, hwid: 'c'.repeat(32) })
 assert.equal(wrongDevice.status, 403)
 assert.equal(wrongDevice.body.error, 'device_hwid_mismatch')
+validateRuntimeOperation(CONTRACT, 'auth.error', wrongDevice.body)
 
 const expiredPending = await start('d'.repeat(32))
 db.device_login_sessions.find((row) => row.device_code === expiredPending.device_code).expires_at = past(1)
@@ -874,6 +880,7 @@ assert.equal(activeRows.some((row) => row.hwid === '2'.repeat(32)), false, 'a se
 const verify = await call('/session/verify', { session_token: active.session.session_token, hwid: 'e'.repeat(32) })
 assert.equal(verify.status, 200)
 assert.equal(verify.body.connection_state, 'linked')
+validateRuntimeOperation(CONTRACT, 'auth.session_verify', verify.body)
 const wrongVerify = await call('/session/verify', { session_token: active.session.session_token, hwid: '9'.repeat(32) })
 assert.equal(wrongVerify.status, 401)
 assert.equal(wrongVerify.body.error, 'session_hwid_mismatch')
@@ -881,6 +888,7 @@ assert.equal(wrongVerify.body.error, 'session_hwid_mismatch')
 const refresh = await call('/session/refresh', { session_token: active.session.session_token, hwid: 'e'.repeat(32) })
 assert.equal(refresh.status, 200)
 assert.ok(String(refresh.body.session_token || '').startsWith('stk_'))
+validateRuntimeOperation(CONTRACT, 'auth.session_refresh', refresh.body)
 const oldAfterRefresh = await call('/session/verify', { session_token: active.session.session_token, hwid: 'e'.repeat(32) })
 assert.equal(oldAfterRefresh.status, 401)
 const refreshedVerify = await call('/session/verify', { session_token: refresh.body.session_token, hwid: 'e'.repeat(32) })
