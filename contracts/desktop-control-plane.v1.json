@@ -1,0 +1,257 @@
+{
+  "schema": "saturnws.desktop-control-plane.contract.v1",
+  "contract_version": 1,
+  "status": "canonical",
+  "owners": {
+    "producer": "SaturnWorkspace Web Auth and Policy Workers",
+    "consumer": "SaturnWorkspace Desktop"
+  },
+  "product_invariants": {
+    "account_connection_is_separate_from_entitlement": true,
+    "linked_without_subscription_is_valid": true,
+    "paid_access_requires_entitled_policy": true,
+    "identity_owner_key": "firebase_uid",
+    "policy_is_signed_and_fail_closed": true
+  },
+  "auth": {
+    "connection_states": [
+      "signed_out",
+      "link_pending",
+      "linked",
+      "session_expired",
+      "revoked",
+      "offline",
+      "error"
+    ],
+    "entitlement_states": [
+      "unknown",
+      "no_subscription",
+      "active",
+      "trial",
+      "grace",
+      "expired",
+      "suspended",
+      "lifetime"
+    ],
+    "entitled_states": [
+      "active",
+      "trial",
+      "grace",
+      "lifetime"
+    ],
+    "operations": {
+      "device_start": {
+        "method": "POST",
+        "path": "/device/start",
+        "request_required": [
+          "hwid"
+        ],
+        "response": {
+          "required": {
+            "success": "boolean",
+            "device_code": "non_empty_string",
+            "user_code": "non_empty_string",
+            "verification_url": "https_url",
+            "expires_at": "iso_datetime",
+            "expires_in": "positive_integer",
+            "interval": "positive_integer"
+          },
+          "fixed": {
+            "success": true
+          }
+        }
+      },
+      "device_complete": {
+        "method": "POST",
+        "path": "/device/complete",
+        "request_required_any": [
+          "device_code",
+          "user_code"
+        ],
+        "request_required": [
+          "id_token"
+        ],
+        "response": {
+          "required": {
+            "success": "boolean",
+            "status": "non_empty_string",
+            "connection_state": "string",
+            "entitlement_state": "string",
+            "entitlement": "object",
+            "subscription": [
+              "object",
+              "null"
+            ]
+          },
+          "fixed": {
+            "success": true,
+            "status": "authorized",
+            "connection_state": "linked"
+          },
+          "enums": {
+            "entitlement_state": "$auth.entitlement_states"
+          }
+        }
+      },
+      "device_poll_authorized": {
+        "method": "POST",
+        "path": "/device/poll",
+        "request_required": [
+          "device_code",
+          "hwid"
+        ],
+        "response": {
+          "required": {
+            "success": "boolean",
+            "status": "non_empty_string",
+            "connection_state": "string",
+            "entitlement_state": "string",
+            "entitlement": "object",
+            "subscription": [
+              "object",
+              "null"
+            ],
+            "session_token": "non_empty_string",
+            "session_expires_at": "iso_datetime"
+          },
+          "fixed": {
+            "success": true,
+            "status": "authorized",
+            "connection_state": "linked"
+          },
+          "enums": {
+            "entitlement_state": "$auth.entitlement_states"
+          }
+        }
+      },
+      "session_verify": {
+        "method": "POST",
+        "path": "/session/verify",
+        "request_required": [
+          "session_token",
+          "hwid"
+        ],
+        "response": {
+          "required": {
+            "success": "boolean",
+            "connection_state": "string",
+            "entitlement_state": "string",
+            "entitlement": "object",
+            "policy": "object",
+            "session_expires_at": "iso_datetime"
+          },
+          "fixed": {
+            "success": true,
+            "connection_state": "linked"
+          },
+          "enums": {
+            "entitlement_state": "$auth.entitlement_states"
+          }
+        }
+      },
+      "session_refresh": {
+        "method": "POST",
+        "path": "/session/refresh",
+        "request_required": [
+          "session_token",
+          "hwid"
+        ],
+        "response": {
+          "required": {
+            "success": "boolean",
+            "connection_state": "string",
+            "session_token": "non_empty_string",
+            "session_expires_at": "iso_datetime"
+          },
+          "fixed": {
+            "success": true,
+            "connection_state": "linked"
+          }
+        }
+      },
+      "error": {
+        "response": {
+          "required": {
+            "success": "boolean",
+            "error": "non_empty_string"
+          },
+          "fixed": {
+            "success": false
+          }
+        }
+      }
+    },
+    "compatibility": {
+      "license": {
+        "status": "deprecated_optional_alias",
+        "canonical": "subscription"
+      },
+      "license_id": {
+        "status": "deprecated_optional_alias",
+        "canonical": "subscription_id"
+      },
+      "SATAN_environment_prefix": {
+        "status": "legacy_local_compatibility",
+        "canonical": "SATURNWS_environment_prefix"
+      }
+    }
+  },
+  "policy": {
+    "decisions": [
+      "allow",
+      "deny_user",
+      "subscription_required",
+      "subscription_expired",
+      "mandatory_update",
+      "disabled_version",
+      "global_kill_switch",
+      "plan_feature_not_allowed",
+      "policy_unavailable"
+    ],
+    "operations": {
+      "check": {
+        "method": "POST",
+        "path": "/v1/policy/check",
+        "authorization": "bearer_app_session",
+        "response": {
+          "required": {
+            "success": "boolean",
+            "decision": "string",
+            "allow": "boolean",
+            "reason": "non_empty_string",
+            "message": "string",
+            "plan": "string",
+            "features": "object",
+            "limits": "object",
+            "blocked_actions": "array",
+            "issued_at": "iso_datetime",
+            "expires_at": "iso_datetime",
+            "ttl_seconds": "positive_integer",
+            "sticky": "boolean",
+            "signature": "non_empty_string"
+          },
+          "fixed": {
+            "success": true
+          },
+          "enums": {
+            "decision": "$policy.decisions"
+          },
+          "relations": [
+            {
+              "kind": "equals",
+              "left": "allow",
+              "right_expression": "decision == 'allow'"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "qa_boundary": {
+    "real_user_data": false,
+    "production_credentials": false,
+    "production_signing_keys": false,
+    "deploy_or_release": false,
+    "required_transport": "hermetic_loopback_or_in_process"
+  }
+}

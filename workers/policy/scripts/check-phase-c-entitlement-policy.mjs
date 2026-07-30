@@ -3,8 +3,10 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import * as esbuild from 'esbuild'
+import { loadRuntimeContract, validateRuntimeOperation } from '../../../tools/runtime-contract.mjs'
 
 const ROOT = process.cwd()
+const CONTRACT = loadRuntimeContract(path.resolve(ROOT, '../../contracts/desktop-control-plane.v1.json'))
 const BUILD_DIR = path.resolve(ROOT, '.phase-c-test-build')
 if (!BUILD_DIR.startsWith(`${path.resolve(ROOT)}${path.sep}`)) throw new Error('unsafe_test_build_path')
 fs.rmSync(BUILD_DIR, { recursive: true, force: true })
@@ -78,7 +80,9 @@ async function evaluate(entitlementState, subscriptionId = null) {
     body: JSON.stringify({ user_id: 'uid-test', email: 'uid-test@example.test', device_id: 'a'.repeat(32), requested_action: 'app_start' }),
   })
   const response = await worker.fetch(request, env, { waitUntil() {} })
-  return { status: response.status, body: await response.json(), db }
+  const body = await response.json()
+  validateRuntimeOperation(CONTRACT, 'policy.check', body)
+  return { status: response.status, body, db }
 }
 
 const none = await evaluate('no_subscription')

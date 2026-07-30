@@ -42,6 +42,7 @@ jobs:
         run: |
           node --test tools/deployment-boundary.test.mjs
           node tools/check-deployment-boundary.mjs
+          node --test tools/runtime-contract.test.mjs
 
       - name: Install locked site dependencies
         working-directory: site
