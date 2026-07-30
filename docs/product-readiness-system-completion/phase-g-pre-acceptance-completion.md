@@ -99,7 +99,11 @@ Artifact:
 - Secret filename scan: no `.env`, private signing key, OAuth local JSON file, or local secret file was present. Public verification keys and CA bundle are present by design.
 - Product package mojibake scan: clean.
 
-Install/uninstall smoke was not executed because it would modify the real local installed application and user environment. It remains part of consolidated Phase G manual acceptance.
+This historical batch did not execute install/uninstall smoke because doing so
+would have modified the real local installation. EXEC-15 later closed the
+non-interactive lifecycle boundary on a disposable GitHub-hosted Windows runner;
+the visible Setup wizard and runtime-absent WebView2 prerequisite boundary
+remain for manual acceptance.
 
 ## Desktop Reproducibility Inventory
 
@@ -163,7 +167,7 @@ Known warnings:
 | `ADMIN_ROLE_ASSIGNMENTS` | `PENDING_DEPLOYMENT_VERIFICATION` | UID-based role JSON is configured as an Admin Worker secret for the currently authorized administrator. Run authenticated route sweep before multi-role acceptance. |
 | QA email recipient | `PENDING_MANUAL_ACCEPTANCE` | Use a dedicated QA recipient to confirm provider delivery without exposing OTP values. |
 | Payment provider | `WAITING_EXTERNAL` | Approve and configure real provider, mappings, webhooks, rollback, and billing email activation. |
-| Manual Desktop install/uninstall acceptance | `PENDING_MANUAL_ACCEPTANCE` | Test install, launch, shortcuts, Add/Remove Programs, repair/upgrade, uninstall, logs, and data retention in Phase G manual acceptance. |
+| Interactive Desktop Setup acceptance | `PENDING_MANUAL_ACCEPTANCE` | Automated disposable CI now covers silent install, isolated launch, repair, synthetic-predecessor upgrade, uninstall, machine-state cleanup, and fixture-data retention. Manually test visible Setup choices, accessibility, cancellation/failure recovery, and runtime-absent WebView2 prerequisite installation only on a disposable image. |
 | Public plan CORS deployment verification | `PRODUCTION_VERIFIED_AUTOMATED` | Admin Worker was redeployed and the live plan catalog allows `https://saturnws.com` as an origin. |
 | Public pricing Pages deployment | `PRODUCTION_VERIFIED_AUTOMATED` | GitHub Pages deployed the current commit. Live bundle `assets/index-rasVfIJe.js` contains the approved weekly/monthly/annual prices, omits the old redundant pricing IA, omits public provider-name copy, and has no mojibake markers. |
 | Email verification pending-registration state | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Auth Worker `0186ad21-4c7b-4399-8c92-20a876fd5bee` and Pages run `28174200979` are deployed. Browser evidence under `D:\SaturnWS\build-output\phase-g-live-render` records direct-route safe handling, one destination email occurrence, no editable email field, and Change email return to signup. |

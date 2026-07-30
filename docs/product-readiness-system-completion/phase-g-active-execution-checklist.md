@@ -1,6 +1,6 @@
 # Phase G Active Execution Checklist
 
-Updated: 2026-06-25
+Updated: 2026-07-30
 
 Current state: `PHASE_G_PRE_ACCEPTANCE_COMPLETION_ACTIVE`
 
@@ -33,13 +33,19 @@ Evidence:
   - Git is available and the canonical repository is on `main`; local HEAD and `origin/main` both resolve to `dcaab0a55b5259551039ab962bc595e459f0bde6`; working tree was clean at session start.
   - Node `v24.15.0`, npm `10.9.4`, Python 3.11, Wrangler, Chrome, Brave, and PostgreSQL 17 tools under `C:\Program Files\PostgreSQL\17\bin` are available.
   - `gh`, `psql`, `pg_dump`, and `pg_restore` are not on PATH; PostgreSQL tools must be invoked by absolute path when needed.
-  - Windows Sandbox feature `Containers-DisposableClientVM` is disabled, so installer/Desktop GUI proof must remain manual acceptance unless another isolated environment is provided.
+  - Windows Sandbox feature `Containers-DisposableClientVM` remains disabled
+    locally. EXEC-15 now uses the existing GitHub-hosted Windows runner as the
+    disposable environment for non-interactive install, repair, upgrade,
+    uninstall, and degraded-runtime acceptance.
   - Local Playwright package was not installed in the root or `site` workspace at discovery time; browser proof can use the available Playwright MCP or install/use project tooling only when needed.
   - Tool discovery exposed Node REPL, Playwright browser control, Cloudflare API, Supabase connector, GitHub connector, and multi-agent tools.
   - Regular Chrome exists locally, but no existing authenticated Chrome session was accessed during this discovery.
 - Deployment evidence: not applicable.
 - Live verification evidence: not applicable.
-- Remaining limitation: authenticated browser journeys still require a safe authenticated session; Desktop installer proof requires an isolated environment or remains Phase G manual acceptance.
+- Remaining limitation: authenticated browser journeys still require a safe
+  authenticated session. Desktop interactive Setup UX and first-time WebView2
+  prerequisite installation still require a suitable disposable image; silent
+  installed lifecycle mechanics are covered by required CI.
 
 ## 1. Session Continuity and No-Forgetting Protocol
 
