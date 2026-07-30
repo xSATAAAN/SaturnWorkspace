@@ -1,8 +1,8 @@
 # Feature Completeness Matrix
 
-Updated: 2026-07-17
+Updated: 2026-07-30
 
-Status meanings: `VERIFIED_AUTOMATED`, `PRODUCTION_DEPLOYED`, `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE`, `DEPLOYED_PENDING_SAFE_EVENT_VERIFICATION`, `IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED`, `OPERATIONAL_CONFIGURATION_REQUIRED`, `WAITING_EXTERNAL`, `WAITING_EXTERNAL_BILLING_DEFENSE_IN_DEPTH`, `MITIGATED_BY_SATURN_DUAL_TRUST_PENDING_DEPLOYMENT`, `PREPARED_DISABLED`, `PREPARED_DISABLED_WITH_PRODUCER`, `PARTIALLY_IMPLEMENTED`, `PENDING_DEPLOYMENT_VERIFICATION`, `NOT_IMPLEMENTED`, `DEFERRED_TO_PHASE_G_MANUAL_ACCEPTANCE`, `QA_ARTIFACT_BUILT_PENDING_MANUAL_ACCEPTANCE`.
+Status meanings: `VERIFIED_AUTOMATED`, `PRODUCTION_DEPLOYED`, `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE`, `DEPLOYED_PENDING_SAFE_EVENT_VERIFICATION`, `IMPLEMENTED_NOT_OPERATIONALLY_ACCEPTED`, `OPERATIONAL_CONFIGURATION_REQUIRED`, `WAITING_EXTERNAL`, `WAITING_EXTERNAL_BILLING_DEFENSE_IN_DEPTH`, `MITIGATED_BY_SATURN_DUAL_TRUST_PENDING_DEPLOYMENT`, `PREPARED_DISABLED`, `PREPARED_DISABLED_WITH_PRODUCER`, `PARTIALLY_IMPLEMENTED`, `PENDING_DEPLOYMENT_VERIFICATION`, `NOT_IMPLEMENTED`, `DEFERRED_BY_PRODUCT_OWNER`, `DEFERRED_TO_PHASE_G_MANUAL_ACCEPTANCE`, `QA_ARTIFACT_BUILT_PENDING_MANUAL_ACCEPTANCE`.
 
 | Domain | Feature | Status | Evidence / limitation |
 | --- | --- | --- | --- |
@@ -44,6 +44,8 @@ Status meanings: `VERIFIED_AUTOMATED`, `PRODUCTION_DEPLOYED`, `PRODUCTION_DEPLOY
 | Policies | Structured policy controls | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Two-step confirmation; no live destructive test. |
 | Invites | List/create/revoke/usage/restrictions | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Hash storage, shown-once code, atomic claims. |
 | Releases | Admin review and publish management plane | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | Admin uses an explicit version field independent of the artifact filename and displays the selected channel rather than the legacy root. The Worker validates artifact extension and binary signature, size, SHA256, channel, and rejects non-newer normal releases. Admin Worker `1d0fa983-8415-4e9a-9614-8cb809f0a2b5` is deployed from canonical commit `5bfd61782585b14510eb0af85ed166104577ee53`. Production beta `1.1.5` is published as optional at 100% rollout with no minimum-version or forced-update policy. |
+| Web promotion | Protected source-to-Pages boundary | `VERIFIED_AUTOMATED` | Merging source does not deploy. The manual workflow accepts one exact `main` SHA, requires its successful `web-required` GitHub Actions check, rebuilds with the complete site gate, pins deployment actions, scopes permissions by job, and writes artifact provenance. Establishing the boundary did not run a production deployment. |
+| Desktop release | Production publisher identity and signing | `DEFERRED_BY_PRODUCT_OWNER` | EXEC-11 proves source and unsigned-package qualification only. Certificate purchase, KYC, production signing, production-key access, publication, and release are deferred. The fail-closed release profile is unchanged. Saturn Workspace is an independently owned product and has no registered corporate publisher. |
 | Promotions | Structured list/create/state controls | `VERIFIED_AUTOMATED` | No client-authoritative discount; checkout provider absent. |
 | Content | Operational CMS | `NOT_IMPLEMENTED` | Route omitted; static versioned content retained. |
 | Admin security | UID role assignments and backend permissions | `DEPLOYED_PENDING_SAFE_EVENT_VERIFICATION` | Code supports `super_admin`, `support`, `billing`, `release_manager`, `security_auditor`, and `read_only`; UID-based `ADMIN_ROLE_ASSIGNMENTS` is configured as an Admin Worker secret for the currently authorized administrator. Authenticated route sweep remains pending. |

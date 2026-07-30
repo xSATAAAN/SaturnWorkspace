@@ -38,6 +38,11 @@ jobs:
             workers/auth/package-lock.json
             workers/policy/package-lock.json
 
+      - name: Verify the production promotion boundary
+        run: |
+          node --test tools/deployment-boundary.test.mjs
+          node tools/check-deployment-boundary.mjs
+
       - name: Install locked site dependencies
         working-directory: site
         run: npm ci
