@@ -1,6 +1,26 @@
 # Saturn Workspace Product Completion Dashboard
 
-Updated: 2026-07-17
+Updated: 2026-07-30
+
+## Current Rehabilitation and Release Boundary
+
+- Canonical source is protected in the Web and Desktop repositories and is
+  qualified by required CI. Web source acceptance no longer triggers a GitHub
+  Pages production deployment.
+- GitHub Pages promotion is manual-only, accepts an exact `main` commit, requires
+  the successful `web-required` check for that exact SHA, rebuilds through the
+  complete site gate, and emits source provenance. No Pages or Worker deployment
+  was performed while establishing this boundary.
+- Desktop source and unsigned package qualification from EXEC-11 remain valid.
+  They do not satisfy the production release profile.
+- EXEC-12, certificate purchase, KYC, production signing, and access to
+  production signing keys are deferred by product-owner decision. The release
+  gate remains fail closed and must not be weakened to accommodate the deferral.
+- Saturn Workspace is owned and developed by one independent
+  individual/student. There is no registered company, institution, corporate
+  publisher, or multi-person engineering organization to infer from the product
+  name. Reconsidering publisher identity or production signing requires a new
+  explicit owner decision.
 
 ## Current Phase Status
 

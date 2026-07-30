@@ -25,6 +25,36 @@ Do not use `D:\SaturnWS\web-platform` as a source of truth. It may contain stale
 
 When local source, GitHub, production configuration, and reports disagree, investigate and reconcile them before claiming completion.
 
+### Product ownership and publisher identity
+
+Saturn Workspace is a product owned and developed by one independent
+individual/student. No registered company, institution, corporate publisher, or
+multi-person engineering organization is established for this repository.
+
+- Treat "Saturn Workspace" as the product name, not evidence of a legal entity.
+- Do not invent company, team, department, enterprise approval, or institutional
+  policy language.
+- Keep technical roles in workflows and documents when they describe a real
+  responsibility, but do not imply that separate people occupy those roles.
+- Do not publish the owner's private legal identity. A future verified publisher
+  identity requires an explicit product/legal decision.
+
+### Source acceptance and production promotion
+
+Merging an accepted source change must not publish it automatically. GitHub
+Pages promotion is an explicit production operation:
+
+- `.github/workflows/deploy-pages.yml` is manual-only and accepts one exact
+  40-character source commit SHA.
+- The source commit must be reachable from `main` and must have a successful
+  `web-required` GitHub Actions check for that exact SHA.
+- The promoted artifact records source provenance and is built with the same
+  locked runtime and complete site verification gates as protected CI.
+- Production deployment actions use immutable revisions and deployment-only
+  permissions are limited to the deploy job.
+- Worker deployment, Pages promotion, Desktop release, signing, and publication
+  remain separate operations. Source merge is not approval for any of them.
+
 ## 2. Evidence Precedence
 
 Use this evidence order when resolving conflicts:

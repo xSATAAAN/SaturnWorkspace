@@ -1,6 +1,6 @@
 # Current Issues and Phase Ownership
 
-Updated: 2026-07-17
+Updated: 2026-07-30
 
 ## Phase Closure
 
@@ -16,6 +16,8 @@ Updated: 2026-07-17
 
 | ID | Item | Type | Current state | Owner |
 | --- | --- | --- | --- | --- |
+| PR-028 | Web source merge automatically promoted to production Pages | Release governance | Closed in source. Pages promotion is manual-only, accepts an exact `main` commit, requires the successful `web-required` check for that SHA, rebuilds through the complete site gate, and writes artifact provenance. No production deployment was run while closing the boundary. | Product owner / release operation |
+| PR-029 | Desktop production publisher identity and signing | Product and release decision | `DEFERRED_BY_PRODUCT_OWNER`. EXEC-11 source and unsigned-package qualification remain valid; production signing, certificate purchase, KYC, key access, publication, and release remain fail closed until an explicit owner decision reopens the gate. Saturn Workspace currently has one independent individual/student owner-developer and no registered company, institution, or corporate publisher. | Product owner |
 | PR-014 | Isolated Cloudflare/D1 capacity validation | Scale acceptance | Local 10,000-identity full profile passes with zero request failures; provider event-loop/capacity SLO remains `STAGING_REQUIRED`. Production load is prohibited. | Phase G acceptance / Operations |
 | PR-015 | Distributed Auth/Admin rate-limit rollout | Security rollout | Six Cloudflare Rate Limiting bindings are implemented, tested, and dry-run validated. Source is not deployed; current production versions still require rollout verification. | Phase G pre-acceptance |
 | PR-016 | Desktop Python supply-chain hardening | Distribution | Vulnerable cryptography build dependency was raised, pip/setuptools minima were hardened, and strict pip-audit is part of the readiness gate. New QA Setup acceptance remains pending. | Phase G pre-acceptance |

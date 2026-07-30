@@ -1,11 +1,17 @@
-﻿# Saturn Workspace Legal
+# Saturn Workspace Web Platform
 
-Public legal pages for Saturn Workspace.
+Canonical web source for the Saturn Workspace public site, customer and admin
+frontends, and Cloudflare Workers.
+
+Saturn Workspace is owned and developed by one independent individual/student.
+The product name is not a claim that a registered company, institution, or
+corporate publisher exists.
 
 - `index.html`: app homepage
 - `privacy/`: privacy policy
 
-Designed for GitHub Pages deployment.
+The site can be promoted to GitHub Pages only through the manual protected
+promotion workflow. Merging source does not deploy it.
 
 ## Project Structure
 
