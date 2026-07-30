@@ -90,3 +90,18 @@ test("the checked-in workflow enforces the deployment boundary", async () => {
   assert.equal(result.trigger, "workflow_dispatch");
   assert.equal(result.sourceCheck, "web-required");
 });
+
+test("a stale main ancestor is not an eligible production candidate", async () => {
+  const workflow = await readFile(
+    path.join(".github", "workflows", "deploy-pages.yml"),
+    "utf8",
+  );
+  const weakened = workflow.replace(
+    'test "$SATURNWS_SOURCE_SHA" = "$(git rev-parse origin/main)"',
+    'git merge-base --is-ancestor "$SATURNWS_SOURCE_SHA" origin/main',
+  );
+  assert.throws(
+    () => verifyDeploymentBoundary(weakened),
+    /exact current main-tip promotion/,
+  );
+});
