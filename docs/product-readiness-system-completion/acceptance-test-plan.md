@@ -31,6 +31,7 @@ Operational precondition: the Auth Worker finalizer configuration (`FIREBASE_SER
 
 ## 2. Account and Desktop Linking
 
+- Automated producer/consumer contract acceptance is complete at Web commit `07cccf26bc2e37fac8fb349a83ce1fa7aad06eda` and Desktop commit `4d2674deaa1dd25413149981c914177992c21d69`. The checks below are installed-app/manual journey acceptance and must not redefine malformed legacy responses as valid behavior.
 - Test device login success, wrong code, expired code, replay, wrong device, polling interruption, refresh, revocation, logout, unlink, multiple devices, and account switching using QA devices.
 - Confirm connection and entitlement states remain independent.
 - Confirm one-account/device policy across Desktop and Admin: pending request, approve, reject, reset, replacement request, terms state, stale/replayed request rejection, and audit, without exposing device codes or session tokens.

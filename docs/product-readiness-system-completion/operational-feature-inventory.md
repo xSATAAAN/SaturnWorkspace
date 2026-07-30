@@ -1,6 +1,6 @@
 # Operational Feature Inventory
 
-Updated: 2026-06-26
+Updated: 2026-07-30
 
 Status: `PHASE_G_PRE_ACCEPTANCE_COMPLETION_ACTIVE`
 
@@ -43,7 +43,7 @@ This inventory classifies visible or callable product capabilities by operationa
 | Admin | Live release publish, forced update, kill switch | Admin confirmation modals | Admin/Policy update routes | R2/D1/Supabase | Admin role | Explicit user approval | `DESTRUCTIVE_APPROVAL_GATED` | Review-step tests | Separate approval |
 | System | Invite validation | Signup/device unlock flows | Policy `/v1/invite/validate` | D1 invite codes/audit | Public with policy checks | D1 binding | `FULLY_OPERATIONAL_ENABLED` | Policy Phase F | Phase G |
 | System | Crash ingest / OTA manifest / update downloads | Desktop/Admin Worker routes | Admin Worker crash/update routes | Supabase/R2 | Desktop/admin | Existing config | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` for existing contracts; no live OTA publication in this batch | Admin Phase F | Phase G |
-| Desktop | QA setup artifact | External desktop source | Existing build output only | Local artifact | QA only | No rebuild requested | `DESTRUCTIVE_APPROVAL_GATED` for publishing; local QA artifact recorded | Reproducibility manifest | Phase G manual |
+| Desktop | QA setup artifact | Canonical private repository `xSATAAAN/SaturnWorkspace-Desktop`; generated package remains outside Git | Existing build output only | Local artifact | QA only | No rebuild requested | `DESTRUCTIVE_APPROVAL_GATED` for publishing; local QA artifact recorded | Protected source history, source qualification, and reproducibility manifest | Phase G manual |
 
 ## Findings From This Continuation
 

@@ -1,6 +1,6 @@
 # Saturn Workspace System and Workflow Map
 
-Updated: 2026-06-26
+Updated: 2026-07-30
 
 Current state: `PHASE_G_PRE_ACCEPTANCE_COMPLETION_ACTIVE`
 
@@ -8,8 +8,9 @@ This map records the active production architecture and high-value workflows. It
 
 ## Canonical Source
 
-- Repository: `D:\SaturnWS\github-deploy\SaturnWorkspace`.
-- Branch: `main`.
+- Web repository: `D:\SaturnWS\github-deploy\SaturnWorkspace` (`xSATAAAN/SaturnWorkspace`).
+- Desktop repository: `D:\SaturnWS\desktop-app` (`xSATAAAN/SaturnWorkspace-Desktop`).
+- Canonical branch in both repositories: `main`.
 - Do not use `D:\SaturnWS\web-platform` as source of truth.
 
 ## Runtime Surfaces
@@ -23,7 +24,7 @@ This map records the active production architecture and high-value workflows. It
 | Admin SPA | `site/src/new-ui` admin routes | `https://admin.saturnws.com/*` | Administrative UI. |
 | Supabase/Postgres | migrations under `workers/auth/migrations` and admin schema | External managed database | Account profiles, subscriptions, app sessions, email verification, deletion/recovery records. |
 | D1/R2 | Policy/Admin bindings and migrations | Cloudflare | Policy/read models, support/email operational state, releases/artifacts, attachment storage. |
-| Desktop app | `D:\SaturnWS\desktop-app` outside this current repo | Installed Windows app | Desktop workflows, AdsPower/Brave automation, local user data. Not modified in this Phase G batch. |
+| Desktop app | Separate canonical repository `xSATAAAN/SaturnWorkspace-Desktop` at `D:\SaturnWS\desktop-app` | Installed Windows app | Desktop workflows, AdsPower/Brave automation, and protected local user data. The repository pins the exact Web-owned control-plane contract revision; local user data and generated artifacts remain outside Git. |
 
 ## Trust Boundaries
 
@@ -73,6 +74,7 @@ This map records the active production architecture and high-value workflows. It
 3. Auth Worker blocks unverified or unfinalized email/password identities and rejects stale pre-finalization tokens.
 4. Auth Worker issues a session only after account connection is valid.
 5. Entitlement is resolved separately from account connection.
+6. Web owns the versioned Auth/Policy response contract; Desktop pins its exact immutable Web commit and fails closed before persisting malformed successful responses or accepting malformed/signed-invalid Policy decisions.
 
 ### Support and Notifications
 
