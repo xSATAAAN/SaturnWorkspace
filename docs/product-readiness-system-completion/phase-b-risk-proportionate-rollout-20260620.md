@@ -153,7 +153,12 @@ Site build:
 - `node tools/publish-static-pages.mjs`: success
 - `npm run test:phase-b`: success
 
-Production GitHub Pages deployment was not triggered from this workspace because `D:\SaturnWS\web-platform` is not a Git repository and the local machine does not have `gh` installed. The current deploy mechanism is `.github/workflows/deploy-pages.yml`, which runs on push or `workflow_dispatch`.
+Production GitHub Pages deployment was not triggered from that historical
+workspace because `D:\SaturnWS\web-platform` was not a Git repository and the
+local machine did not have `gh` installed. At the time of this 2026-06-20
+report, `.github/workflows/deploy-pages.yml` ran on push or
+`workflow_dispatch`; that statement records the former mechanism and is not
+current deployment guidance.
 
 Site revision:
 
