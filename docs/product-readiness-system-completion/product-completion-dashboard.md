@@ -14,6 +14,11 @@ Updated: 2026-07-30
   Worker deployment was performed while establishing this boundary.
 - Desktop source and unsigned package qualification from EXEC-11 remain valid.
   They do not satisfy the production release profile.
+- Cross-repository control-plane acceptance is closed at Web commit
+  `07cccf26bc2e37fac8fb349a83ce1fa7aad06eda` and Desktop commit
+  `4d2674deaa1dd25413149981c914177992c21d69`. The producer contract, exact
+  consumer pin, malformed-response fail-closed behavior, and hermetic
+  Auth/Policy transport/signature acceptance are required by CI.
 - EXEC-12, certificate purchase, KYC, production signing, and access to
   production signing keys are deferred by product-owner decision. The release
   gate remains fail closed and must not be weakened to accommodate the deferral.
@@ -102,7 +107,7 @@ Updated: 2026-07-30
 - Supabase account deletion schema is live. The old account-deletion `schema_pending` status fallback has been removed from the status path; request/cancel still fail safely if a real backend schema error occurs.
 - Recovery ledger schema is enriched in production. No real recovery or grant was executed.
 - Arabic mojibake root cause identified for plan catalog: stored Supabase data, not transport charset. Deterministic values were repaired by migration.
-- Desktop QA source also contained recoverable mojibake in startup and Google Drive OAuth copy; it was repaired in the external desktop source and the QA package product files scan clean.
+- The historical pre-repository Desktop QA source contained recoverable mojibake in startup and Google Drive OAuth copy; it was repaired before canonical repository adoption and the QA package product files scan clean.
 - Repository-wide mojibake guard now scans runtime source, Workers, AGENTS, and generated `site/dist` when requested.
 - Email catalog Phase G test renders Arabic/English HTML and plain text for each template and blocks mojibake, missing charset, missing RTL/LTR wrappers, empty CTA URLs, unsafe interpolation, disabled test sends, and implementation vocabulary leakage.
 - Billing and release email templates remain disabled. The `1.1.5` publication was not wired to release email delivery, and no communications rollout was activated.
@@ -137,7 +142,7 @@ Updated: 2026-07-30
 | Real payment provider | `WAITING_EXTERNAL` | Approve provider, plan mappings, webhook contract, and rollout before checkout or billing emails are enabled. |
 | QA email delivery acceptance | `PENDING_MANUAL_ACCEPTANCE` | Use a dedicated QA recipient in Phase G to confirm provider delivery without exposing OTP values. |
 | QA Desktop Setup artifact | `QA_ARTIFACT_BUILT_PENDING_MANUAL_ACCEPTANCE` | Local artifact: `D:\SaturnWS\desktop-app\qa-builds\1.1.5-20260714-adspower-diagnostics\setup\SaturnWorkspace-Setup-1.1.5.exe`; size `41,492,180` bytes; SHA256 `F38123D5EE58AE1272FC018A215481915F8F4D8FE4E50F04230CBAFF2681A79A`. Source/package payload hashes match and the isolated packaged runtime remained healthy for the full 15-second observation window. |
-| Desktop source reproducibility | `RECORDED_PENDING_MANUAL_ACCEPTANCE` | `D:\SaturnWS\desktop-app` is not a Git repository. Current source/package parity covers `105/105` runtime payload files; the current source snapshot covers `424` files with aggregate SHA256 `32E8BE683ABBBE7E191E63C21B5B938FA144DB6DC6A260925FCCAAC9380E0E4D`. |
+| Desktop source reproducibility | `VERIFIED_AUTOMATED_PENDING_MANUAL_ACCEPTANCE` | `D:\SaturnWS\desktop-app` is the protected private Git repository `xSATAAAN/SaturnWorkspace-Desktop`. Accepted main commit `4d2674deaa1dd25413149981c914177992c21d69` passed clean-checkout required CI. Current source qualification inventories `339` files with aggregate SHA256 `DB330B6CB60C7DF932333FD3844CC66E7402EF1C7EA6E7FC7541397B174BBF69` and zero unknown lifecycle paths. Existing package parity remains `105/105`; installed-package manual acceptance remains separate. |
 | Published Desktop OTA artifact | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | `D:\SaturnWS\desktop-app\qa-builds\1.1.5-20260714-adspower-diagnostics\updates\SaturnWorkspace-app-1.1.5.zip`; size `44,957,459` bytes; SHA256 `5E13ABA8F8401D1EF294C7B3E4ED4C57659BB42ADF491EE1876ADDC374B879A6`. Internal version/build ID are `1.1.5` / `2026-07-14-adspower-diagnostics`; beta publication is optional, non-mandatory, and has no minimum-version constraint. |
 | Gmail read-only Desktop integration | `WAITING_EXTERNAL` | Product code, capability endpoint, local state, safe Windows toast activation, tests, and disabled-state UI are implemented. Production activation requires Google verification for the restricted `gmail.readonly` scope and an explicit later rollout; Auth flag remains false. |
 | Public plan CORS live verification | `PRODUCTION_VERIFIED_AUTOMATED` | Admin Worker was redeployed and `https://admin-api.saturnws.com/api/plans/catalog` returns `Access-Control-Allow-Origin: https://saturnws.com` for the public origin. |
