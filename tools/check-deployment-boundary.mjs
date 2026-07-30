@@ -39,6 +39,14 @@ export function verifyDeploymentBoundary(text) {
     /\[\[ "\$SATURNWS_SOURCE_SHA" =~ \^\[0-9a-f\]\{40\}\$ \]\]/,
     "source SHA validation before Git operations",
   );
+  requirePattern(
+    text,
+    /test "\$SATURNWS_SOURCE_SHA" = "\$\(git rev-parse origin\/main\)"/,
+    "exact current main-tip promotion",
+  );
+  if (/git merge-base --is-ancestor/.test(text)) {
+    throw new Error("production promotion must not accept a stale main ancestor");
+  }
   requirePattern(text, /verify-protected-source\.mjs/, "protected-check verification");
   requirePattern(text, /write-pages-provenance\.mjs/, "artifact source provenance");
   requirePattern(text, /check-frontend-cutover\.mjs/, "frontend cutover verification");

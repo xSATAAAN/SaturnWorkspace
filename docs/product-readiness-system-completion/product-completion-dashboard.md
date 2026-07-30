@@ -7,10 +7,11 @@ Updated: 2026-07-30
 - Canonical source is protected in the Web and Desktop repositories and is
   qualified by required CI. Web source acceptance no longer triggers a GitHub
   Pages production deployment.
-- GitHub Pages promotion is manual-only, accepts an exact `main` commit, requires
-  the successful `web-required` check for that exact SHA, rebuilds through the
-  complete site gate, and emits source provenance. No Pages or Worker deployment
-  was performed while establishing this boundary.
+- GitHub Pages promotion is manual-only, accepts only the exact current `main`
+  tip, requires the successful `web-required` check for that SHA, rebuilds
+  through the complete site gate, and emits source provenance. Rollback uses a
+  reviewed revert commit rather than promoting a stale ancestor. No Pages or
+  Worker deployment was performed while establishing this boundary.
 - Desktop source and unsigned package qualification from EXEC-11 remain valid.
   They do not satisfy the production release profile.
 - EXEC-12, certificate purchase, KYC, production signing, and access to

@@ -46,8 +46,9 @@ Pages promotion is an explicit production operation:
 
 - `.github/workflows/deploy-pages.yml` is manual-only and accepts one exact
   40-character source commit SHA.
-- The source commit must be reachable from `main` and must have a successful
-  `web-required` GitHub Actions check for that exact SHA.
+- The source commit must equal the current `main` tip and must have a successful
+  `web-required` GitHub Actions check for that exact SHA. Rollback uses a new
+  reviewed revert commit; it does not promote a stale historical ancestor.
 - The promoted artifact records source provenance and is built with the same
   locked runtime and complete site verification gates as protected CI.
 - Production deployment actions use immutable revisions and deployment-only

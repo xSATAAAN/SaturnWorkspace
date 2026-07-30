@@ -56,8 +56,8 @@ jobs:
           [[ "$SATURNWS_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
           git fetch --no-tags origin main
           test "$(git rev-parse origin/main)" = "$GITHUB_SHA"
+          test "$SATURNWS_SOURCE_SHA" = "$(git rev-parse origin/main)"
           git cat-file -e "${SATURNWS_SOURCE_SHA}^{commit}"
-          git merge-base --is-ancestor "$SATURNWS_SOURCE_SHA" origin/main
           node tools/verify-protected-source.mjs
           git checkout --detach "$SATURNWS_SOURCE_SHA"
           test "$(git rev-parse HEAD)" = "$SATURNWS_SOURCE_SHA"
