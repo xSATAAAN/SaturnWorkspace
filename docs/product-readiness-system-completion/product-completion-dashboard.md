@@ -12,12 +12,13 @@ Updated: 2026-07-30
   through the complete site gate, and emits source provenance. Rollback uses a
   reviewed revert commit rather than promoting a stale ancestor. No Pages or
   Worker deployment was performed while establishing this boundary.
-- Desktop source and unsigned package qualification from EXEC-11 remain valid.
-  They do not satisfy the production release profile.
+- Desktop source, unsigned package qualification, and disposable installed
+  lifecycle acceptance through EXEC-15 are required by protected CI. They do
+  not satisfy the production release profile.
 - Cross-repository control-plane acceptance is closed at Web commit
-  `07cccf26bc2e37fac8fb349a83ce1fa7aad06eda` and Desktop commit
-  `4d2674deaa1dd25413149981c914177992c21d69`. The producer contract, exact
-  consumer pin, malformed-response fail-closed behavior, and hermetic
+  `07cccf26bc2e37fac8fb349a83ce1fa7aad06eda`; protected Desktop `main` at
+  `5d5d4dceba78a919972ea1b94d8a3b83e9996fbe` retains the exact consumer pin.
+  The producer contract, malformed-response fail-closed behavior, and hermetic
   Auth/Policy transport/signature acceptance are required by CI.
 - EXEC-12, certificate purchase, KYC, production signing, and access to
   production signing keys are deferred by product-owner decision. The release
@@ -141,8 +142,8 @@ Updated: 2026-07-30
 | Email/password OTP remediation credentialed QA | `PENDING_MANUAL_ACCEPTANCE` | Previous live health, route, bundle, CORS, stable unauthenticated error contracts, pending-registration UI, and server enqueue path passed for the earlier deployed model. The current OTP-first source requires the Firebase Admin configuration above before live completion can be tested. |
 | Real payment provider | `WAITING_EXTERNAL` | Approve provider, plan mappings, webhook contract, and rollout before checkout or billing emails are enabled. |
 | QA email delivery acceptance | `PENDING_MANUAL_ACCEPTANCE` | Use a dedicated QA recipient in Phase G to confirm provider delivery without exposing OTP values. |
-| QA Desktop Setup artifact | `QA_ARTIFACT_BUILT_PENDING_MANUAL_ACCEPTANCE` | Local artifact: `D:\SaturnWS\desktop-app\qa-builds\1.1.5-20260714-adspower-diagnostics\setup\SaturnWorkspace-Setup-1.1.5.exe`; size `41,492,180` bytes; SHA256 `F38123D5EE58AE1272FC018A215481915F8F4D8FE4E50F04230CBAFF2681A79A`. Source/package payload hashes match and the isolated packaged runtime remained healthy for the full 15-second observation window. |
-| Desktop source reproducibility | `VERIFIED_AUTOMATED_PENDING_MANUAL_ACCEPTANCE` | `D:\SaturnWS\desktop-app` is the protected private Git repository `xSATAAAN/SaturnWorkspace-Desktop`. Accepted main commit `4d2674deaa1dd25413149981c914177992c21d69` passed clean-checkout required CI. Current source qualification inventories `339` files with aggregate SHA256 `DB330B6CB60C7DF932333FD3844CC66E7402EF1C7EA6E7FC7541397B174BBF69` and zero unknown lifecycle paths. Existing package parity remains `105/105`; installed-package manual acceptance remains separate. |
+| Current unsigned Desktop candidate | `VERIFIED_AUTOMATED_PENDING_MANUAL_ACCEPTANCE` | Exact candidate `62faadefd0538374a4a91ce6c8449b0d0734416d` produced unsigned Setup `1.2.7`, size `70,929,643` bytes, SHA256 `C54E9C7462E57023EF00E0D2326726B18250967B7D57BC1823E8B79995F76F29`. Package qualification, clean-profile authentication boundary, reconstruction, and the disposable installed lifecycle passed. This is QA evidence, not a published or signed release. |
+| Desktop source reproducibility | `VERIFIED_AUTOMATED_PENDING_MANUAL_ACCEPTANCE` | `D:\SaturnWS\desktop-app` is the protected private Git repository `xSATAAAN/SaturnWorkspace-Desktop`. Accepted `main` commit `5d5d4dceba78a919972ea1b94d8a3b83e9996fbe` was merged through required `desktop-required` and `desktop-installed-lifecycle-gate` checks. The lifecycle run proved clean install, network-isolated launch, repair, synthetic-predecessor upgrade, uninstall, exact content, ACLs, and fixture-data preservation. Interactive Setup UX and first-time WebView2 prerequisite installation remain separate. |
 | Published Desktop OTA artifact | `PRODUCTION_DEPLOYED_PENDING_MANUAL_ACCEPTANCE` | `D:\SaturnWS\desktop-app\qa-builds\1.1.5-20260714-adspower-diagnostics\updates\SaturnWorkspace-app-1.1.5.zip`; size `44,957,459` bytes; SHA256 `5E13ABA8F8401D1EF294C7B3E4ED4C57659BB42ADF491EE1876ADDC374B879A6`. Internal version/build ID are `1.1.5` / `2026-07-14-adspower-diagnostics`; beta publication is optional, non-mandatory, and has no minimum-version constraint. |
 | Gmail read-only Desktop integration | `WAITING_EXTERNAL` | Product code, capability endpoint, local state, safe Windows toast activation, tests, and disabled-state UI are implemented. Production activation requires Google verification for the restricted `gmail.readonly` scope and an explicit later rollout; Auth flag remains false. |
 | Public plan CORS live verification | `PRODUCTION_VERIFIED_AUTOMATED` | Admin Worker was redeployed and `https://admin-api.saturnws.com/api/plans/catalog` returns `Access-Control-Allow-Origin: https://saturnws.com` for the public origin. |

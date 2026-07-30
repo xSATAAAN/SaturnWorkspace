@@ -31,7 +31,11 @@ Operational precondition: the Auth Worker finalizer configuration (`FIREBASE_SER
 
 ## 2. Account and Desktop Linking
 
-- Automated producer/consumer contract acceptance is complete at Web commit `07cccf26bc2e37fac8fb349a83ce1fa7aad06eda` and Desktop commit `4d2674deaa1dd25413149981c914177992c21d69`. The checks below are installed-app/manual journey acceptance and must not redefine malformed legacy responses as valid behavior.
+- Automated producer/consumer contract acceptance is complete at Web commit
+  `07cccf26bc2e37fac8fb349a83ce1fa7aad06eda`; protected Desktop `main` at
+  `5d5d4dceba78a919972ea1b94d8a3b83e9996fbe` retains the exact contract pin.
+  The checks below are credentialed end-to-end journey acceptance and must not
+  redefine malformed legacy responses as valid behavior.
 - Test device login success, wrong code, expired code, replay, wrong device, polling interruption, refresh, revocation, logout, unlink, multiple devices, and account switching using QA devices.
 - Confirm connection and entitlement states remain independent.
 - Confirm one-account/device policy across Desktop and Admin: pending request, approve, reject, reset, replacement request, terms state, stale/replayed request rejection, and audit, without exposing device codes or session tokens.
@@ -114,10 +118,23 @@ Operational precondition: the Auth Worker finalizer configuration (`FIREBASE_SER
 
 - Current Setup: `D:\SaturnWS\desktop-app\qa-builds\1.1.5-20260714-adspower-diagnostics\setup\SaturnWorkspace-Setup-1.1.5.exe`; size `41,492,180` bytes; SHA256 `F38123D5EE58AE1272FC018A215481915F8F4D8FE4E50F04230CBAFF2681A79A`.
 - Published optional beta OTA artifact: `D:\SaturnWS\desktop-app\qa-builds\1.1.5-20260714-adspower-diagnostics\updates\SaturnWorkspace-app-1.1.5.zip`; size `44,957,459` bytes; SHA256 `5E13ABA8F8401D1EF294C7B3E4ED4C57659BB42ADF491EE1876ADDC374B879A6`.
-- Automated evidence proves `105/105` source/package parity, isolated packaged-app smoke, installed runtime launch, Launcher handoff, `72/72` Arabic/English light/dark/mono UI cases, prerelease-aware update comparison, signed-manifest loading, and full online artifact download/hash verification.
+- Historical beta evidence proves `105/105` source/package parity, isolated
+  packaged-app smoke, Launcher handoff, `72/72` Arabic/English
+  light/dark/mono UI cases, prerelease-aware update comparison,
+  signed-manifest loading, and full online artifact download/hash verification.
+- EXEC-15 separately proves unsigned Setup `1.2.7` from exact candidate
+  `62faadefd0538374a4a91ce6c8449b0d0734416d`: clean install, a
+  network-isolated degraded launch, targeted repair, upgrade from a deterministic
+  synthetic predecessor that is not product history, uninstall, exact package
+  content and ACLs, and fixture LocalAppData preservation on a disposable
+  Windows runner.
 - Verify a known current direct IP blocks Brave without creating a session; a known selected proxy exit IP blocks AdsPower and Dolphin; IP-resolution/proxy-probe failure fails closed; a successful launch writes the clean IP once after success; and two concurrent launches cannot reserve the same IP. Use dedicated QA profiles and proxies only.
 - Repeat AdsPower acceptance on the affected user's machine. Automated and local real-provider evidence already covers readiness, temporary profile create/start/active-check/stop/delete, legacy profile-number resolution, canonical ID persistence, and V2-to-V1 compatibility without changing user vault or IP data.
-- Manual Phase G acceptance still owns a clean-machine install, shortcut and Add/Remove Programs inspection, repair from the visible installer UI, uninstall of this exact artifact, and confirmation that user data retention/removal matches the approved product policy. Do not perform these destructive checks on the active data-bearing workstation.
+- Manual Phase G acceptance no longer needs to repeat silent lifecycle mechanics.
+  It still owns the visible Setup wizard labels, choices, accessibility,
+  cancellation and failure recovery, plus first-time WebView2 prerequisite
+  installation on a disposable image where that runtime is absent. Do not run
+  those checks on the active data-bearing workstation.
 
 ## Exit Evidence
 
