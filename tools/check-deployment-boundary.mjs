@@ -48,6 +48,7 @@ export function verifyDeploymentBoundary(text) {
     throw new Error("production promotion must not accept a stale main ancestor");
   }
   requirePattern(text, /verify-protected-source\.mjs/, "protected-check verification");
+  requirePattern(text, /check-authority-surface\.mjs/, "canonical authority verification");
   requirePattern(text, /write-pages-provenance\.mjs/, "artifact source provenance");
   requirePattern(text, /check-frontend-cutover\.mjs/, "frontend cutover verification");
   requirePattern(text, /checks: read/, "read-only check-run access");

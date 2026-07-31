@@ -40,6 +40,8 @@ jobs:
 
       - name: Verify the production promotion boundary
         run: |
+          node --test tools/authority-surface.test.mjs
+          node tools/check-authority-surface.mjs
           node --test tools/deployment-boundary.test.mjs
           node tools/check-deployment-boundary.mjs
           node --test tools/runtime-contract.test.mjs
@@ -53,10 +55,11 @@ jobs:
         run: |
           npm run lint
           npm run build
-          npm run test:new-ui:round3b
-          npm run test:phase-b
-          npm run test:phase-b1
-          npm run test:phase-f
+          npm run test:production-integration
+          npm run test:production-rollout
+          npm run test:content
+          npm run test:account-linking
+          npm run test:admin-surface
 
       - name: Install locked admin Worker dependencies
         working-directory: workers/admin
@@ -66,7 +69,7 @@ jobs:
         working-directory: workers/admin
         run: |
           npm run check:syntax
-          npm run test:phase-g
+          npm run test:required
 
       - name: Install locked auth Worker dependencies
         working-directory: workers/auth
@@ -76,7 +79,7 @@ jobs:
         working-directory: workers/auth
         run: |
           npm run check
-          npm run test:phase-c
+          npm run test:device-linking
 
       - name: Install locked policy Worker dependencies
         working-directory: workers/policy
@@ -84,4 +87,4 @@ jobs:
 
       - name: Verify the policy Worker
         working-directory: workers/policy
-        run: npm run test:phase-g
+        run: npm run test:required

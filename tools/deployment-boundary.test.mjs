@@ -91,6 +91,14 @@ test("the checked-in workflow enforces the deployment boundary", async () => {
   assert.equal(result.sourceCheck, "web-required");
 });
 
+test("production promotion rechecks the canonical authority surface", async () => {
+  const workflow = await readFile(
+    path.join(".github", "workflows", "deploy-pages.yml"),
+    "utf8",
+  );
+  assert.match(workflow, /node tools\/check-authority-surface\.mjs/);
+});
+
 test("a stale main ancestor is not an eligible production candidate", async () => {
   const workflow = await readFile(
     path.join(".github", "workflows", "deploy-pages.yml"),

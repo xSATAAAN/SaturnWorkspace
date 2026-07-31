@@ -3890,7 +3890,7 @@ async function getAdminReadiness(env) {
     generated_at: new Date().toISOString(),
     services: {
       supabase: checks[0].status === "fulfilled" ? "ready" : "degraded",
-      phase_f_schema: checks.slice(1).every((check) => check.status === "fulfilled") ? "ready" : "migration_pending",
+      admin_operations_schema: checks.slice(1).every((check) => check.status === "fulfilled") ? "ready" : "migration_pending",
       policy_worker_binding: env.POLICY_WORKER ? "configured" : "missing",
       ota_bucket_binding: hasOtaBucket(env) ? "configured" : "missing",
     },
