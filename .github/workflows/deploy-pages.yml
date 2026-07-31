@@ -61,6 +61,7 @@ jobs:
           node tools/verify-protected-source.mjs
           git checkout --detach "$SATURNWS_SOURCE_SHA"
           test "$(git rev-parse HEAD)" = "$SATURNWS_SOURCE_SHA"
+          node tools/check-authority-surface.mjs
 
       - name: Install locked site dependencies
         working-directory: site
@@ -72,10 +73,11 @@ jobs:
           npm run lint
           node scripts/check-production-env.mjs
           npm run build
-          npm run test:new-ui:round3b
-          npm run test:phase-b
-          npm run test:phase-b1
-          npm run test:phase-f
+          npm run test:production-integration
+          npm run test:production-rollout
+          npm run test:content
+          npm run test:account-linking
+          npm run test:admin-surface
 
       - name: Publish static pages and SPA path fallbacks
         run: node tools/publish-static-pages.mjs
