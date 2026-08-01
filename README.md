@@ -26,9 +26,10 @@ does not imply a registered company or corporate publisher.
 - `.github/workflows/ci.yml`: protected source qualification.
 - `.github/workflows/deploy-pages.yml`: manual exact-commit Pages promotion.
 
-The Desktop source is a separate protected repository at
-`D:\SaturnWS\desktop-app`. `contracts/desktop-control-plane.v1.json` is the Web
-producer contract; Desktop pins its reviewed content and producer commit.
+The Desktop source is the separate protected repository
+`xSATAAAN/SaturnWorkspace-Desktop`. `contracts/desktop-control-plane.v1.json`
+is the Web producer contract; Desktop pins its reviewed content and producer
+commit.
 
 ## Local qualification
 

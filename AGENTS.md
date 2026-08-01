@@ -3,18 +3,21 @@
 - Status: active repository instructions
 - Scope: `D:\SaturnWS\github-deploy\SaturnWorkspace`
 - Owner: repository maintainer
-- Last verified: 2026-07-31
+- Last verified: 2026-08-01
 - Verification: protected `web-required` CI and `tools/check-authority-surface.mjs`
 
-The workspace contract at `D:\SaturnWS\AGENTS.md` applies first. This file
-contains only Web-repository-specific facts and constraints.
+When this repository is used inside the full `D:\SaturnWS` workspace, the
+workspace-level `AGENTS.md` also applies. A standalone clone or worktree remains
+governed by this tracked file and must not assume that the workspace root or a
+sibling checkout exists.
 
 ## Canonical boundary
 
 - This protected Git repository is the canonical source for the public site,
   customer and administrator UI, shared Web contracts, and Auth, Admin, and
   Policy Workers.
-- Desktop is a separate protected repository at `D:\SaturnWS\desktop-app`.
+- Desktop is the separate protected repository
+  `xSATAAAN/SaturnWorkspace-Desktop`.
   The producer contract is `contracts/desktop-control-plane.v1.json`; Desktop
   pins an exact reviewed copy and producer commit.
 - Other workspace trees, generated Pages output, Wrangler state, screenshots,
@@ -39,6 +42,18 @@ named verification path.
 
 Applied migration filenames are immutable operational history. Their names do
 not establish current roadmap, product, or engineering authority.
+
+## Cross-repository product decisions
+
+The single cumulative owner-approved product decision register is the
+`Approved product decision register` section at
+https://github.com/xSATAAAN/SaturnWorkspace-Desktop/blob/main/README.md#approved-product-decision-register.
+An authenticated product-design or review context must read it before changing
+cross-repository product intent or capability boundaries. If that private
+register is unavailable, stop that work explicitly; do not infer intent from
+legacy Web code and do not create a local copy or fallback register. Web CI
+enforces repository-local executable contracts and the uniqueness of this
+pointer without receiving cross-repository credentials.
 
 ## Product and ownership facts
 
