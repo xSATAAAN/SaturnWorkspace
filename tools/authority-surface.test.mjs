@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { evaluateAuthoritySurface } from './check-authority-surface.mjs'
+import {
+  evaluateAuthoritySurface,
+  PRODUCT_DECISION_REGISTER_URL,
+} from './check-authority-surface.mjs'
 
 const metadata = [
   '- Status: active',
@@ -13,7 +16,7 @@ const metadata = [
 
 function evaluate(extra = {}, extraPaths = []) {
   const files = new Map([
-    ['AGENTS.md', `${metadata}\nInstructions\n`],
+    ['AGENTS.md', `${metadata}\n${PRODUCT_DECISION_REGISTER_URL}\nInstructions\n`],
     ['README.md', `${metadata}\nGuide\n`],
     ['workers/auth/migrations/20260101_phase_a.sql', 'select 1;\n'],
     ['site/src/app.ts', 'export const app = true\n'],
@@ -49,4 +52,28 @@ test('obsolete references and missing authority metadata are rejected', () => {
   assert.equal(report.success, false)
   assert.ok(report.violations.some(({ code }) => code === 'AUTHORITY_METADATA_MISSING'))
   assert.ok(report.violations.some(({ code }) => code === 'OBSOLETE_AUTHORITY_REFERENCE'))
+})
+
+test('one remote product-decision pointer is required without a local register', () => {
+  const missing = evaluate({ 'AGENTS.md': `${metadata}\nInstructions\n` })
+  assert.equal(missing.success, false)
+  assert.ok(missing.violations.some(
+    ({ code }) => code === 'PRODUCT_DECISION_REGISTER_POINTER_INVALID',
+  ))
+
+  const duplicated = evaluate({
+    'AGENTS.md': `${metadata}\n${PRODUCT_DECISION_REGISTER_URL}\n${PRODUCT_DECISION_REGISTER_URL}\n`,
+  })
+  assert.equal(duplicated.success, false)
+  assert.ok(duplicated.violations.some(
+    ({ code }) => code === 'PRODUCT_DECISION_REGISTER_POINTER_INVALID',
+  ))
+
+  const localRegister = evaluate({
+    'README.md': `${metadata}\n## Approved product decision register\n`,
+  })
+  assert.equal(localRegister.success, false)
+  assert.ok(localRegister.violations.some(
+    ({ code }) => code === 'DUPLICATE_PRODUCT_DECISION_REGISTER',
+  ))
 })

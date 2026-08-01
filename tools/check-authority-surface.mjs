@@ -6,6 +6,9 @@ import { fileURLToPath } from 'node:url'
 
 const TOOL_PATH = 'tools/check-authority-surface.mjs'
 const TEST_PATH = 'tools/authority-surface.test.mjs'
+export const PRODUCT_DECISION_REGISTER_URL =
+  'https://github.com/xSATAAAN/SaturnWorkspace-Desktop/blob/main/README.md#approved-product-decision-register'
+const PRODUCT_DECISION_REGISTER_HEADING = '## Approved product decision register'
 const ACTIVE_AUTHORITY = new Map([
   ['AGENTS.md', 16_384],
   ['README.md', 20_480],
@@ -74,6 +77,20 @@ export function evaluateAuthoritySurface({ paths, readText }) {
     }
     if (REQUIRED_METADATA.some((marker) => !text.includes(marker))) {
       violations.push(violation('AUTHORITY_METADATA_MISSING', file))
+    }
+  }
+
+  if (pathSet.has('AGENTS.md')) {
+    const instructions = readText('AGENTS.md')
+    const pointerCount = instructions.split(PRODUCT_DECISION_REGISTER_URL).length - 1
+    if (pointerCount !== 1) {
+      violations.push(violation('PRODUCT_DECISION_REGISTER_POINTER_INVALID', 'AGENTS.md'))
+    }
+  }
+
+  for (const file of ACTIVE_AUTHORITY.keys()) {
+    if (pathSet.has(file) && readText(file).includes(PRODUCT_DECISION_REGISTER_HEADING)) {
+      violations.push(violation('DUPLICATE_PRODUCT_DECISION_REGISTER', file))
     }
   }
 
