@@ -35,6 +35,8 @@ test("public JSON forwarding keeps only the minimum internal headers", async () 
       "Authorization": "Bearer must-not-forward",
       "Cookie": "must-not-forward=true",
       "Referer": "https://private.example/path",
+      "User-Agent": "ambient-browser-metadata",
+      "Accept-Language": "private-locale",
     }),
     { fetch: async (incoming) => { forwarded.push(incoming); return new Response(null, { status: 204 }) } },
     "/internal/observe",

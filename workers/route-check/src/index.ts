@@ -1,7 +1,7 @@
 import { DurableObject } from "cloudflare:workers"
 import { normalizePublicIp, normalizeTtl, securityHeaders, validAttemptId, validSecretHash } from "./contract.js"
 import { ROUTE_CHECK_PAGE } from "./page.js"
-import { forwardJsonRequest } from "./public-forward.js"
+import { forwardJsonRequest, minimumInternalHeaders } from "./public-forward.js"
 import { error, json, readJson, RouteAttemptCore, sha256 } from "./route-attempt-core.js"
 
 function attemptStub(env: Env, request: Request): DurableObjectStub | null {
@@ -13,7 +13,7 @@ function attemptStub(env: Env, request: Request): DurableObjectStub | null {
 function internalRequest(request: Request, path: string, body?: string): Request {
   return new Request(`https://route-attempt.invalid${path}`, {
     method: "POST",
-    headers: request.headers,
+    headers: minimumInternalHeaders(request),
     body,
   })
 }
