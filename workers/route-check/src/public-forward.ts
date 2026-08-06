@@ -5,9 +5,14 @@ type RouteAttemptFetcher = {
 }
 
 function internalRequest(request: Request, path: string, body: string): Request {
+  const headers = new Headers({ "Content-Type": "application/json" })
+  for (const name of ["X-Route-Token", "CF-Connecting-IP"]) {
+    const value = request.headers.get(name)
+    if (value) headers.set(name, value)
+  }
   return new Request(`https://route-attempt.invalid${path}`, {
     method: "POST",
-    headers: request.headers,
+    headers,
     body,
   })
 }
