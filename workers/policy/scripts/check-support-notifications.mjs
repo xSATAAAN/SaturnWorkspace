@@ -5,6 +5,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { build } from 'esbuild'
 import { Miniflare } from 'miniflare'
+import { cloudflareWorkersTestShim } from './esbuild-cloudflare-test-shim.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const temp = await mkdtemp(path.join(root, 'node_modules', '.saturnws-support-notifications-'))
@@ -32,6 +33,7 @@ await build({
   target: 'es2022',
   outfile: bundle,
   logLevel: 'silent',
+  plugins: [cloudflareWorkersTestShim],
 })
 
 const mf = new Miniflare({

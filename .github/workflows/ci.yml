@@ -37,6 +37,7 @@ jobs:
             workers/admin/package-lock.json
             workers/auth/package-lock.json
             workers/policy/package-lock.json
+            workers/route-check/package-lock.json
 
       - name: Verify the production promotion boundary
         run: |
@@ -87,4 +88,12 @@ jobs:
 
       - name: Verify the policy Worker
         working-directory: workers/policy
+        run: npm run test:required
+
+      - name: Install locked route-check Worker dependencies
+        working-directory: workers/route-check
+        run: npm ci
+
+      - name: Verify the route-check Worker
+        working-directory: workers/route-check
         run: npm run test:required

@@ -1,4 +1,5 @@
 import nacl from "tweetnacl"
+import { WorkerEntrypoint } from "cloudflare:workers"
 import {
   EMAIL_CATALOG,
   RESEND_KNOWN_EVENTS,
@@ -71,6 +72,9 @@ interface PolicyRequest {
   platform?: string
   build_info?: Record<string, unknown>
   subscription?: Record<string, unknown>
+  attempt_id?: string
+  browser_secret_hash?: string
+  desktop_secret_hash?: string
 }
 
 interface GlobalPolicyRow {
@@ -3235,6 +3239,89 @@ async function handlePolicyCheck(request: Request, env: Env): Promise<Response> 
   return json(signPayload(evaluated, env))
 }
 
+const ROUTE_ATTEMPT_ID = /^[A-Za-z0-9_-]{32,64}$/
+const ROUTE_SECRET_HASH = /^[a-f0-9]{64}$/
+const ROUTE_CAPABILITY_TTL_MS = 120_000
+
+function validRouteCapabilityInput(body: PolicyRequest): boolean {
+  return ROUTE_ATTEMPT_ID.test(normalizeText(body.attempt_id))
+    && ROUTE_SECRET_HASH.test(normalizeText(body.browser_secret_hash))
+    && ROUTE_SECRET_HASH.test(normalizeText(body.desktop_secret_hash))
+}
+
+async function readBoundedRouteCapabilityRequest(request: Request): Promise<PolicyRequest | null> {
+  const declared = Number(request.headers.get("Content-Length") || 0)
+  if (declared > 4096 || !request.body) return null
+  const reader = request.body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      total += value.byteLength
+      if (total > 4096) {
+        await reader.cancel("request_too_large")
+        return null
+      }
+      chunks.push(value)
+    }
+  } finally {
+    reader.releaseLock()
+  }
+  const bytes = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  try {
+    const value = JSON.parse(new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(bytes))
+    return value && typeof value === "object" && !Array.isArray(value) ? value as PolicyRequest : null
+  } catch {
+    return null
+  }
+}
+
+async function handleRouteCapabilityMint(request: Request, env: Env): Promise<Response> {
+  const body = await readBoundedRouteCapabilityRequest(request)
+  if (!body || typeof body !== "object" || !validRouteCapabilityInput(body)) {
+    return json(signPayload({ success: false, error: "invalid_route_attempt" }, env), 400)
+  }
+  const evaluated = await evaluatePolicy(request, env, { ...body, requested_action: "session_route_check_init" })
+  if (normalizeLower(evaluated.decision) !== "allow") {
+    return json(signPayload({ success: false, error: normalizeText(evaluated.decision) || "route_check_not_allowed" }, env), 403)
+  }
+  const capability = randomHex(32)
+  const tokenHash = await sha256Hex(capability)
+  const expiresAt = new Date(Date.now() + ROUTE_CAPABILITY_TTL_MS).toISOString()
+  await env.DB.prepare(
+    "INSERT INTO route_check_capabilities (token_hash, attempt_id, browser_secret_hash, desktop_secret_hash, expires_at) VALUES (?1, ?2, ?3, ?4, ?5)"
+  ).bind(tokenHash, normalizeText(body.attempt_id), normalizeText(body.browser_secret_hash), normalizeText(body.desktop_secret_hash), expiresAt).run()
+  await env.DB.prepare("DELETE FROM route_check_capabilities WHERE consumed_at IS NOT NULL OR datetime(expires_at) <= datetime('now')").run().catch(() => null)
+  return json(signPayload({ success: true, capability, expires_at: expiresAt }, env))
+}
+
+export class RouteCapabilityService extends WorkerEntrypoint<Env> {
+  async consumeRouteCapability(input: unknown): Promise<{ success: boolean; error?: string }> {
+    const value = input && typeof input === "object" && !Array.isArray(input) ? input as Record<string, unknown> : {}
+    const capability = normalizeText(value.capability)
+    const attemptId = normalizeText(value.attempt_id)
+    const browserHash = normalizeText(value.browser_secret_hash)
+    const desktopHash = normalizeText(value.desktop_secret_hash)
+    if (!/^[a-f0-9]{64}$/.test(capability) || !ROUTE_ATTEMPT_ID.test(attemptId) || !ROUTE_SECRET_HASH.test(browserHash) || !ROUTE_SECRET_HASH.test(desktopHash)) {
+      return { success: false, error: "invalid_route_capability" }
+    }
+    const tokenHash = await sha256Hex(capability)
+    const result = await this.env.DB.prepare(
+      "UPDATE route_check_capabilities SET consumed_at = datetime('now') WHERE token_hash = ?1 AND attempt_id = ?2 AND browser_secret_hash = ?3 AND desktop_secret_hash = ?4 AND consumed_at IS NULL AND datetime(expires_at) > datetime('now')"
+    ).bind(tokenHash, attemptId, browserHash, desktopHash).run()
+    return Number(result.meta.changes || 0) === 1
+      ? { success: true }
+      : { success: false, error: "route_capability_rejected" }
+  }
+}
+
 async function requireSupportUser(request: Request, env: Env, body: PolicyRequest): Promise<{ body: PolicyRequest; auth: AuthResolved; user: UserRow; email: string; userId: string; installId: string; deviceId: string } | Response> {
   const auth = await verifyAuthSession(request, env, body)
   if (!auth.ok) {
@@ -4608,6 +4695,10 @@ export default {
       }
       if (request.method === "POST" && url.pathname === "/v1/policy/check") {
         const res = await handlePolicyCheck(request, env)
+        return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
+      }
+      if (request.method === "POST" && url.pathname === "/v1/route-check/capability") {
+        const res = await handleRouteCapabilityMint(request, env)
         return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
       }
       return json({ success: false, error: "not_found" }, 404, cors)
