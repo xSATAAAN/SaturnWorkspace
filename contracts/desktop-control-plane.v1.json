@@ -247,6 +247,86 @@
       }
     }
   },
+  "route_check": {
+    "origin": "https://route-check.saturnws.com",
+    "owner": "SaturnWorkspace Web route-check Worker",
+    "consumer": "SaturnWorkspace Desktop session lifecycle",
+    "retention_seconds": {
+      "default": 180,
+      "minimum": 45,
+      "maximum": 300
+    },
+    "privacy": {
+      "attempt_identity": "random_ephemeral_token_only",
+      "forbidden_request_data": [
+        "saturn_account_identity",
+        "email",
+        "browser_profile_identity",
+        "target_urls",
+        "proxy_credentials",
+        "browsing_content"
+      ],
+      "persistent_application_observability": false,
+      "raw_network_result_deleted_on_finalize_or_expiry": true,
+      "browser_secret_and_desktop_secret_are_distinct": true
+    },
+    "operations": {
+      "initialize": {
+        "method": "POST",
+        "path": "/v1/attempts",
+        "required": ["attempt_id", "browser_secret_hash", "desktop_secret_hash", "ttl_seconds"]
+      },
+      "observe": {
+        "method": "POST",
+        "path": "/v1/observe",
+        "authorization": "browser_attempt_token",
+        "required": ["ipv4_probe_attempted", "ipv6_probe_attempted", "browser_probe_completed", "webrtc_gathering_completed", "webrtc_public_candidate", "webrtc_public_candidates", "webrtc_private_candidate", "webrtc_relay_candidate"]
+      },
+      "result": {
+        "method": "POST",
+        "path": "/v1/result",
+        "authorization": "desktop_attempt_token"
+      },
+      "decision": {
+        "method": "POST",
+        "path": "/v1/decision",
+        "authorization": "desktop_attempt_token",
+        "required": ["qualified", "code"]
+      },
+      "browser_result": {
+        "method": "POST",
+        "path": "/v1/browser-result",
+        "authorization": "browser_attempt_token",
+        "forbidden": ["raw_exit_ip", "network_observation"]
+      },
+      "browser_acknowledgement": {
+        "method": "POST",
+        "path": "/v1/browser-ack",
+        "authorization": "browser_attempt_token",
+        "effect": "confirm_visible_decision_rendered"
+      },
+      "finalize": {
+        "method": "POST",
+        "path": "/v1/finalize",
+        "authorization": "desktop_attempt_token",
+        "effect": "delete_attempt_state"
+      }
+    },
+    "qualification": {
+      "requires_https_exit_match": true,
+      "requires_ipv4_and_ipv6_side_route_evidence": true,
+      "requires_browser_probe": true,
+      "requires_complete_webrtc_candidate_gathering": true,
+      "requires_measurement_host_resolution": true,
+      "proxy_dns_requires_authoritative_per_attempt_evidence": true,
+      "current_proxy_dns_qualification_available": false,
+      "webrtc_public_candidates_must_match_observed_exit": true,
+      "webrtc_private_candidate_rejected": true,
+      "requires_visible_browser_acknowledgement_before_targets": true,
+      "unknown_or_conflicting_result_fails_closed": true,
+      "does_not_claim_to_measure_dns_resolver_identity": true
+    }
+  },
   "qa_boundary": {
     "real_user_data": false,
     "production_credentials": false,

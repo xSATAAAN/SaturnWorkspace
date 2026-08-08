@@ -14,8 +14,8 @@ sibling checkout exists.
 ## Canonical boundary
 
 - This protected Git repository is the canonical source for the public site,
-  customer and administrator UI, shared Web contracts, and Auth, Admin, and
-  Policy Workers.
+  customer and administrator UI, shared Web contracts, and Auth, Admin, Policy,
+  and Route Check Workers.
 - Desktop is the separate protected repository
   `xSATAAAN/SaturnWorkspace-Desktop`.
   The producer contract is `contracts/desktop-control-plane.v1.json`; Desktop
@@ -119,6 +119,11 @@ npm run test:device-linking
 Pop-Location
 
 Push-Location workers/policy
+npm ci
+npm run test:required
+Pop-Location
+
+Push-Location workers/route-check
 npm ci
 npm run test:required
 Pop-Location

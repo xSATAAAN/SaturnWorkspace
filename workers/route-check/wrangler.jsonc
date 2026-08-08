@@ -1,0 +1,34 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "saturnws-route-check",
+  "account_id": "0665376659b7e5b47ccc2114b25f75a6",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-01",
+  "workers_dev": false,
+  "preview_urls": false,
+  "vars": { "QA_LOOPBACK_ALLOWED": "false" },
+  "routes": [
+    { "pattern": "route-check.saturnws.com/*", "zone_name": "saturnws.com" },
+    { "pattern": "v4.route-check.saturnws.com/*", "zone_name": "saturnws.com" },
+    { "pattern": "v6.route-check.saturnws.com/*", "zone_name": "saturnws.com" }
+  ],
+  "observability": { "enabled": false },
+  "services": [
+    { "binding": "POLICY_CAPABILITIES", "service": "saturnws-policy", "entrypoint": "RouteCapabilityService" }
+  ],
+  "ratelimits": [
+    {
+      "name": "INIT_RATE_LIMITER",
+      "namespace_id": "910701",
+      "simple": { "limit": 30, "period": 60 }
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      { "name": "ROUTE_ATTEMPTS", "class_name": "RouteAttempt" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["RouteAttempt"] }
+  ]
+}

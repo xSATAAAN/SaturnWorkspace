@@ -1,0 +1,24 @@
+{
+  "name": "saturn-workspace-route-check-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "tsc --noEmit",
+    "check:bindings": "wrangler types src/worker-configuration.d.ts --include-runtime false --check",
+    "check:bundle": "wrangler deploy --dry-run",
+    "test": "node scripts/run-tests.mjs",
+    "test:runtime": "vitest run --config vitest.config.ts",
+    "test:required": "npm run check && npm run check:bindings && npm run test && npm run test:runtime && npm run check:bundle",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.16.20",
+    "@cloudflare/workers-types": "^5.20260722.1",
+    "@types/node": "^24.12.2",
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.10",
+    "wrangler": "^4.115.0"
+  }
+}

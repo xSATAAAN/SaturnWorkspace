@@ -1,9 +1,9 @@
 # Saturn Workspace Web Platform
 
 - Status: canonical source guide
-- Scope: public/customer/admin Web surfaces and Auth, Admin, and Policy Workers
+- Scope: public/customer/admin Web surfaces and Auth, Admin, Policy, and Route Check Workers
 - Owner: repository maintainer
-- Last verified: 2026-07-31
+- Last verified: 2026-08-06
 - Verification: protected `web-required` CI
 
 Canonical Web and control-plane source for Saturn Workspace. The project is
@@ -20,11 +20,22 @@ does not imply a registered company or corporate publisher.
   metadata, and provider-disabled commerce routes.
 - `workers/policy`: entitlement decisions, notifications, invitations, email
   content, and policy signing.
+- `workers/route-check`: short-lived, privacy-bounded browser-origin route
+  qualification for the Desktop session lifecycle.
 - `workers/shared`: shared subscription and account-domain behavior.
 - `contracts`: machine-readable producer contracts consumed by Desktop.
 - `tools`: source-promotion, runtime-contract, provenance, and authority checks.
 - `.github/workflows/ci.yml`: protected source qualification.
 - `.github/workflows/deploy-pages.yml`: manual exact-commit Pages promotion.
+
+The route-check page sends attempt-scoped observations only to Saturn's three
+route-check HTTPS origins. Its WebRTC side-route probe also contacts
+`stun.cloudflare.com:3478`, a Cloudflare infrastructure boundary that is not
+governed by the page's HTTP `connect-src` policy. The page sends no Saturn user
+identity, account email, profile identifier, browsing target, or proxy secret;
+attempt observations are short-lived and excluded from persistent application
+analytics. Infrastructure providers may still create transport-level logs
+outside Saturn's application retention controls.
 
 The Desktop source is the separate protected repository
 `xSATAAAN/SaturnWorkspace-Desktop`. `contracts/desktop-control-plane.v1.json`
@@ -66,6 +77,11 @@ Push-Location workers/policy
 npm ci
 npm run test:required
 Pop-Location
+
+Push-Location workers/route-check
+npm ci
+npm run test:required
+Pop-Location
 ```
 
 `npm run dev` or `wrangler dev` is a local development surface only. Local
@@ -82,6 +98,9 @@ production data into tests.
 - Irreversible account deletion is not approved; do not promise hard deletion.
 - Gmail read access remains disabled until provider verification and an explicit
   rollout decision.
+- The Route Check Worker source may be adopted through a protected PR, but its
+  custom route, Durable Object, and rate-limit binding are not live capability
+  until a separately authorized Worker deployment and browser-provider QA.
 - Desktop production signing, publisher verification, publication, and release
   remain outside this repository and are deferred.
 
@@ -94,6 +113,14 @@ Merging a protected pull request adopts source; it does not deploy. GitHub Pages
 can be promoted only by manually dispatching `deploy-pages.yml` with the exact
 current `main` SHA after `web-required` succeeds. Worker deployment is a separate
 operator action and is not automated by this repository.
+
+Route Check retains one random attempt's minimum route observation only for its
+bounded TTL and deletes it on finalization or alarm. It receives no Saturn user
+identity, mailbox, account/profile identifier, target URL, browsing content, or
+proxy credential. Application observability is disabled for this Worker; any
+provider-level infrastructure logs outside the application contract remain an
+explicit hosting boundary. No merge authorizes deployment or changes that
+boundary.
 
 Expected environment bindings are declared by Worker configuration and code.
 Secret values belong only in the approved external platform or local ignored
