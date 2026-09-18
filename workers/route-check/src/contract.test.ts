@@ -98,10 +98,10 @@ test("worker configuration enforces bounded initiation and no persistent observa
     simple: { limit: 30, period: 60 },
   }])
   assert.deepEqual(config.durable_objects.bindings, [{ name: "ROUTE_ATTEMPTS", class_name: "RouteAttempt" }])
-  assert.deepEqual(config.routes.map((route: { pattern: string }) => route.pattern), [
-    "route-check.saturnws.com/*",
-    "v4.route-check.saturnws.com/*",
-    "v6.route-check.saturnws.com/*",
+  assert.deepEqual(config.routes, [
+    { pattern: "route-check.saturnws.com", custom_domain: true },
+    { pattern: "v4.route-check.saturnws.com", custom_domain: true },
+    { pattern: "v6.route-check.saturnws.com", custom_domain: true },
   ])
   assert.equal(config.preview_urls, false)
   assert.equal(config.workers_dev, false)
