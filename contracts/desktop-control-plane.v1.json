@@ -301,6 +301,7 @@
         "v6.route-check.saturnws.com"
       ],
       "machine_api_path_prefix": "/v1/",
+      "desktop_machine_user_agent": "SaturnWorkspace-RouteCheck/1",
       "machine_api_must_not_require_browser_challenge_or_browser_integrity_headers": true,
       "machine_api_remains_capability_or_attempt_token_bound": true,
       "one_time_capability_endpoints_remain_rate_limited": true,
