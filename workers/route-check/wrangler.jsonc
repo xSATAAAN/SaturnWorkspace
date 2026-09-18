@@ -8,9 +8,9 @@
   "preview_urls": false,
   "vars": { "QA_LOOPBACK_ALLOWED": "false" },
   "routes": [
-    { "pattern": "route-check.saturnws.com/*", "zone_name": "saturnws.com" },
-    { "pattern": "v4.route-check.saturnws.com/*", "zone_name": "saturnws.com" },
-    { "pattern": "v6.route-check.saturnws.com/*", "zone_name": "saturnws.com" }
+    { "pattern": "route-check.saturnws.com", "custom_domain": true },
+    { "pattern": "v4.route-check.saturnws.com", "custom_domain": true },
+    { "pattern": "v6.route-check.saturnws.com", "custom_domain": true }
   ],
   "observability": { "enabled": false },
   "services": [
