@@ -244,6 +244,30 @@
             }
           ]
         }
+      },
+      "route_capability": {
+        "method": "POST",
+        "path": "/v1/route-check/capability",
+        "authorization": "bearer_app_session",
+        "request_required": [
+          "user_id",
+          "email",
+          "device_id",
+          "attempt_id",
+          "browser_secret_hash",
+          "desktop_secret_hash"
+        ],
+        "response": {
+          "required": {
+            "success": "boolean",
+            "capability": "non_empty_string",
+            "expires_at": "iso_datetime",
+            "signature": "non_empty_string"
+          },
+          "fixed": {
+            "success": true
+          }
+        }
       }
     }
   },
@@ -270,7 +294,52 @@
       "raw_network_result_deleted_on_finalize_or_expiry": true,
       "browser_secret_and_desktop_secret_are_distinct": true
     },
+    "delivery": {
+      "custom_domains": [
+        "route-check.saturnws.com",
+        "v4.route-check.saturnws.com",
+        "v6.route-check.saturnws.com"
+      ],
+      "machine_api_path_prefix": "/v1/",
+      "machine_api_must_not_require_browser_challenge_or_browser_integrity_headers": true,
+      "machine_api_remains_capability_or_attempt_token_bound": true,
+      "one_time_capability_endpoints_remain_rate_limited": true,
+      "production_acceptance_requires_edge_to_worker_evidence": true
+    },
+    "failure_observability": {
+      "stages": [
+        "policy_capability",
+        "route_transport",
+        "route_edge",
+        "route_worker",
+        "route_response",
+        "route_result_validation",
+        "unexpected"
+      ],
+      "forbidden_values": [
+        "capability",
+        "attempt_token",
+        "public_ip",
+        "user_identity",
+        "request_body"
+      ]
+    },
     "operations": {
+      "host_exit": {
+        "method": "POST",
+        "path": "/v1/host-exit",
+        "authorization": "one_time_policy_capability",
+        "required": ["attempt_id", "browser_secret_hash", "desktop_secret_hash"],
+        "response": {
+          "required": {
+            "success": "boolean",
+            "exit_ip": "non_empty_string"
+          },
+          "fixed": {
+            "success": true
+          }
+        }
+      },
       "initialize": {
         "method": "POST",
         "path": "/v1/attempts",

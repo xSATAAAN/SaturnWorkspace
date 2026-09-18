@@ -81,11 +81,60 @@ test("worker protocol matches the canonical desktop control-plane contract", () 
   assert.equal(contract.route_check.qualification.requires_complete_webrtc_candidate_gathering, true)
   assert.equal(contract.route_check.qualification.requires_ipv4_and_ipv6_side_route_evidence, true)
   assert.equal(contract.route_check.operations.decision.authorization, "desktop_attempt_token")
+  assert.equal(contract.policy.operations.route_capability.path, "/v1/route-check/capability")
+  assert.equal(contract.route_check.operations.host_exit.path, "/v1/host-exit")
+  assert.equal(contract.route_check.operations.host_exit.authorization, "one_time_policy_capability")
+  assert.equal(contract.route_check.delivery.machine_api_must_not_require_browser_challenge_or_browser_integrity_headers, true)
+  assert.equal(contract.route_check.delivery.machine_api_remains_capability_or_attempt_token_bound, true)
+  assert.equal(contract.route_check.delivery.one_time_capability_endpoints_remain_rate_limited, true)
+  assert.equal(contract.route_check.delivery.production_acceptance_requires_edge_to_worker_evidence, true)
+  assert.deepEqual(contract.route_check.failure_observability.stages, [
+    "policy_capability",
+    "route_transport",
+    "route_edge",
+    "route_worker",
+    "route_response",
+    "route_result_validation",
+    "unexpected",
+  ])
+  assert.deepEqual(contract.route_check.failure_observability.forbidden_values, [
+    "capability",
+    "attempt_token",
+    "public_ip",
+    "user_identity",
+    "request_body",
+  ])
   assert.equal(contract.route_check.operations.browser_result.authorization, "browser_attempt_token")
   assert.deepEqual(contract.route_check.operations.browser_result.forbidden, ["raw_exit_ip", "network_observation"])
   assert.equal(contract.route_check.operations.browser_acknowledgement.effect, "confirm_visible_decision_rendered")
   assert.equal(contract.route_check.qualification.requires_visible_browser_acknowledgement_before_targets, true)
   assert.equal(contract.route_check.privacy.persistent_application_observability, false)
+})
+
+test("edge delivery disables BIC only for the declared capability-bound API surface", () => {
+  const delivery = JSON.parse(readFileSync(path.resolve(process.cwd(), "edge-delivery.ruleset.json"), "utf8"))
+  assert.equal(delivery.schema, "saturnws.route-check.edge-delivery.v1")
+  assert.equal(delivery.phase, "http_config_settings")
+  assert.equal(delivery.rule.ref, "saturn_route_check_machine_api_no_bic")
+  assert.equal(delivery.rule.action, "set_config")
+  assert.deepEqual(delivery.rule.action_parameters, { bic: false })
+  assert.match(delivery.rule.expression, /http\.host in \{\"route-check\.saturnws\.com\" \"v4\.route-check\.saturnws\.com\" \"v6\.route-check\.saturnws\.com\"\}/)
+  assert.match(delivery.rule.expression, /starts_with\(http\.request\.uri\.path, \"\/v1\/\"\)/)
+  assert.doesNotMatch(delivery.rule.expression, /true/)
+  assert.equal(delivery.rollback, "remove_only_the_rule_with_the_declared_ref")
+})
+
+test("live delivery acceptance distinguishes Policy and edge-to-Worker boundaries without secrets", () => {
+  const packageJson = JSON.parse(readFileSync(path.resolve(process.cwd(), "package.json"), "utf8"))
+  const probe = readFileSync(path.resolve(process.cwd(), "scripts/check-live-delivery.mjs"), "utf8")
+  assert.equal(packageJson.scripts["check:delivery-live"], "node scripts/check-live-delivery.mjs")
+  assert.match(probe, /\/v1\/route-check\/capability/)
+  assert.match(probe, /\/v1\/host-exit/)
+  assert.match(probe, /v4\.route-check\.saturnws\.com/)
+  assert.match(probe, /v6\.route-check\.saturnws\.com/)
+  assert.match(probe, /Python-urllib\/3\.11/)
+  assert.match(probe, /sent_capability_or_user_data: false/)
+  assert.doesNotMatch(probe, /Authorization/)
 })
 
 test("worker configuration enforces bounded initiation and no persistent observability", () => {

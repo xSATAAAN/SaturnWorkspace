@@ -14,9 +14,21 @@ fs.rmSync(BUILD_DIR, { recursive: true, force: true })
 fs.mkdirSync(BUILD_DIR, { recursive: true })
 const bundlePath = path.join(BUILD_DIR, 'policy-worker.mjs')
 await esbuild.build({ entryPoints: [path.join(ROOT, 'src/index.ts')], outfile: bundlePath, bundle: true, format: 'esm', platform: 'browser', target: 'es2022', plugins: [cloudflareWorkersTestShim] })
+const routeCapabilityBundlePath = path.join(BUILD_DIR, 'route-capability.mjs')
+await esbuild.build({
+  entryPoints: [path.resolve(ROOT, '../route-check/src/route-capability.ts')],
+  outfile: routeCapabilityBundlePath,
+  bundle: true,
+  format: 'esm',
+  platform: 'browser',
+  target: 'es2022',
+  plugins: [cloudflareWorkersTestShim],
+})
 const policyModule = await import(`${pathToFileURL(bundlePath).href}?v=${Date.now()}`)
+const routeCapabilityModule = await import(`${pathToFileURL(routeCapabilityBundlePath).href}?v=${Date.now()}`)
 const worker = policyModule.default
 const { RouteCapabilityService } = policyModule
+const { authorizeRouteCapability } = routeCapabilityModule
 
 class Statement {
   constructor(db, sql) { this.db = db; this.sql = sql; this.args = [] }
@@ -180,8 +192,27 @@ assert.equal(minted.response.status, 200)
 assert.equal(minted.payload.success, true)
 assert.match(minted.payload.capability, /^[a-f0-9]{64}$/)
 assert.ok(minted.payload.signature, 'route capability response must be signed')
+validateRuntimeOperation(CONTRACT, 'policy.route_capability', minted.payload)
 assert.equal(minted.db.routeCapability.attempt_id, 'r'.repeat(43))
 assert.equal(minted.db.routeCapability.browser_secret_hash, 'b'.repeat(64))
+
+const crossSurfaceMint = await mintRouteCapability('active')
+const crossSurfaceService = new RouteCapabilityService(undefined, { DB: crossSurfaceMint.db })
+const crossSurfaceDenied = await authorizeRouteCapability(
+  { POLICY_CAPABILITIES: crossSurfaceService },
+  crossSurfaceMint.payload.capability,
+  {
+    attempt_id: 'r'.repeat(43),
+    browser_secret_hash: 'b'.repeat(64),
+    desktop_secret_hash: 'd'.repeat(64),
+  },
+  {
+    validAttemptId: (value) => /^[A-Za-z0-9_-]{32,64}$/.test(String(value || '')),
+    validSecretHash: (value) => /^[a-f0-9]{64}$/.test(String(value || '')),
+  },
+)
+assert.equal(crossSurfaceDenied, null, 'the actual Policy capability must be accepted by the actual Route authorization boundary')
+assert.ok(crossSurfaceMint.db.routeCapability.consumed_at, 'cross-surface authorization must consume the one-time capability')
 
 const deniedCapability = await mintRouteCapability('no_subscription')
 assert.equal(deniedCapability.response.status, 403)
