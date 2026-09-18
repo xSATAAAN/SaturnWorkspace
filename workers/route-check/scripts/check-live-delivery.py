@@ -11,9 +11,19 @@ POLICY_ORIGIN = "https://api.saturnws.com"
 TIMEOUT_SECONDS = 8
 POLICY_USER_AGENT = "SaturnWorkspace-RouteCapability/1"
 ROUTE_USER_AGENT = "SaturnWorkspace-RouteCheck/1"
+WORKER_RESPONSE_HEADER = "X-Saturn-Route-Response"
+WORKER_RESPONSE_HEADER_VALUE = "1"
 
 
-def request_json(url: str, *, user_agent: str, expected_status: int, expected_error: str) -> None:
+def request_json(
+    url: str,
+    *,
+    user_agent: str,
+    expected_status: int,
+    expected_error: str,
+    require_route_worker_marker: bool = False,
+    require_signature: bool = False,
+) -> None:
     request = urllib.request.Request(
         url,
         data=b"{}",
@@ -29,18 +39,31 @@ def request_json(url: str, *, user_agent: str, expected_status: int, expected_er
         with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
             status = response.status
             content_type = str(response.headers.get("Content-Type") or "").lower()
+            response_headers = response.headers
             raw = response.read(64 * 1024)
     except urllib.error.HTTPError as exc:
         status = exc.code
         content_type = str(exc.headers.get("Content-Type") or "").lower()
+        response_headers = exc.headers
         raw = exc.read(64 * 1024)
-    if status != expected_status or "application/json" not in content_type:
+    if (
+        status != expected_status
+        or "application/json" not in content_type
+        or (
+            require_route_worker_marker
+            and response_headers.get(WORKER_RESPONSE_HEADER) != WORKER_RESPONSE_HEADER_VALUE
+        )
+    ):
         raise RuntimeError(f"delivery_boundary_rejected:{urllib.parse.urlsplit(url).hostname}:{status}")
     try:
         body = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise RuntimeError(f"delivery_response_invalid:{url}") from exc
-    if not isinstance(body, dict) or body.get("error") != expected_error:
+    if (
+        not isinstance(body, dict)
+        or body.get("error") != expected_error
+        or (require_signature and not isinstance(body.get("signature"), str))
+    ):
         raise RuntimeError(f"delivery_contract_mismatch:{url}")
 
 
@@ -49,12 +72,14 @@ request_json(
     user_agent=POLICY_USER_AGENT,
     expected_status=400,
     expected_error="invalid_route_attempt",
+    require_signature=True,
 )
 request_json(
     f"{ROUTE_ORIGIN}/v1/host-exit",
     user_agent=ROUTE_USER_AGENT,
     expected_status=401,
     expected_error="route_capability_required",
+    require_route_worker_marker=True,
 )
 for hostname in ("v4.route-check.saturnws.com", "v6.route-check.saturnws.com"):
     request_json(
@@ -62,6 +87,7 @@ for hostname in ("v4.route-check.saturnws.com", "v6.route-check.saturnws.com"):
         user_agent=ROUTE_USER_AGENT,
         expected_status=403,
         expected_error="forbidden_origin",
+        require_route_worker_marker=True,
     )
 
 print(json.dumps({

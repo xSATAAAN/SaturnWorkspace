@@ -85,6 +85,7 @@ export function securityHeaders(contentType: string): Headers {
     "Cross-Origin-Resource-Policy": "same-origin",
     "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
     "Referrer-Policy": "no-referrer",
+    "X-Saturn-Route-Response": "1",
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
   })
