@@ -7,6 +7,7 @@
     "check": "tsc --noEmit",
     "check:bindings": "wrangler types src/worker-configuration.d.ts --include-runtime false --check",
     "check:bundle": "wrangler deploy --dry-run",
+    "check:delivery-live": "python scripts/check-live-delivery.py",
     "test": "node scripts/run-tests.mjs",
     "test:runtime": "vitest run --config vitest.config.ts",
     "test:required": "npm run check && npm run check:bindings && npm run test && npm run test:runtime && npm run check:bundle",

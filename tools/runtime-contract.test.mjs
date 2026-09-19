@@ -65,3 +65,16 @@ test('policy decision and allow flag cannot contradict each other', () => {
     /invalid_relation:allow_decision/,
   )
 })
+
+test('route-check contract composes Policy mint, Desktop transport and edge delivery', () => {
+  assert.equal(contract.policy.operations.route_capability.path, '/v1/route-check/capability')
+  assert.equal(contract.policy.operations.route_capability.authorization, 'bearer_app_session')
+  assert.equal(contract.route_check.operations.host_exit.path, '/v1/host-exit')
+  assert.equal(contract.route_check.operations.host_exit.authorization, 'one_time_policy_capability')
+  assert.equal(contract.route_check.delivery.machine_api_path_prefix, '/v1/')
+  assert.equal(contract.route_check.delivery.desktop_machine_user_agent, 'SaturnWorkspace-RouteCheck/1')
+  assert.equal(contract.route_check.delivery.worker_response_header, 'X-Saturn-Route-Response')
+  assert.equal(contract.route_check.delivery.worker_response_header_value, '1')
+  assert.equal(contract.route_check.delivery.machine_api_must_not_require_browser_challenge_or_browser_integrity_headers, true)
+  assert.equal(contract.route_check.delivery.production_acceptance_requires_edge_to_worker_evidence, true)
+})

@@ -2,6 +2,7 @@ import { DurableObject } from "cloudflare:workers"
 import { normalizePublicIp, normalizeTtl, securityHeaders, validAttemptId, validSecretHash } from "./contract.js"
 import { ROUTE_CHECK_PAGE } from "./page.js"
 import { forwardJsonRequest, minimumInternalHeaders } from "./public-forward.js"
+import { authorizeRouteCapability } from "./route-capability.js"
 import { error, json, readJson, RouteAttemptCore, sha256 } from "./route-attempt-core.js"
 
 function attemptStub(env: Env, request: Request): DurableObjectStub | null {
@@ -19,37 +20,6 @@ function internalRequest(request: Request, path: string, body?: string): Request
 }
 
 const ROUTE_PAGE_ORIGIN = "https://route-check.saturnws.com"
-
-type RouteCapabilityBinding = {
-  consumeRouteCapability(input: {
-    capability: string
-    attempt_id: string
-    browser_secret_hash: string
-    desktop_secret_hash: string
-  }): Promise<{ success: boolean }>
-}
-
-async function authorizeRouteCapability(
-  env: Env,
-  capability: string,
-  body: Record<string, unknown>,
-): Promise<Response | null> {
-  if (!validAttemptId(body.attempt_id) || !validSecretHash(body.browser_secret_hash) || !validSecretHash(body.desktop_secret_hash)) {
-    return error("invalid_attempt")
-  }
-  try {
-    const policyCapabilities = env.POLICY_CAPABILITIES as unknown as RouteCapabilityBinding
-    const authorization = await policyCapabilities.consumeRouteCapability({
-      capability,
-      attempt_id: body.attempt_id,
-      browser_secret_hash: body.browser_secret_hash,
-      desktop_secret_hash: body.desktop_secret_hash,
-    })
-    return authorization.success ? null : error("route_capability_rejected", 401)
-  } catch {
-    return error("route_check_authorization_unavailable", 503)
-  }
-}
 
 function corsHeaders(origin: string): Headers {
   return new Headers({
@@ -111,7 +81,7 @@ export default {
         const tooLarge = caught instanceof Error && caught.message === "request_too_large"
         return error(tooLarge ? "request_too_large" : "invalid_json", tooLarge ? 413 : 400)
       }
-      const denied = await authorizeRouteCapability(env, capability, body)
+      const denied = await authorizeRouteCapability(env, capability, body, { validAttemptId, validSecretHash })
       if (denied) return denied
       const attemptId = String(body.attempt_id || "")
       if (!/^[A-Za-z0-9_-]{32,64}$/.test(attemptId)) return error("invalid_attempt", 400)
@@ -147,7 +117,7 @@ export default {
         const tooLarge = caught instanceof Error && caught.message === "request_too_large"
         return error(tooLarge ? "request_too_large" : "invalid_json", tooLarge ? 413 : 400)
       }
-      const denied = await authorizeRouteCapability(env, capability, body)
+      const denied = await authorizeRouteCapability(env, capability, body, { validAttemptId, validSecretHash })
       if (denied) return denied
       const exitIp = normalizePublicIp(source)
       return exitIp ? json({ success: true, exit_ip: exitIp }) : error("host_exit_unavailable", 503)

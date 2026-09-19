@@ -51,6 +51,7 @@ test("security headers disable storage and ambient capabilities", () => {
   const headers = securityHeaders("application/json")
   assert.equal(headers.get("Cache-Control"), "no-store, max-age=0")
   assert.equal(headers.get("Referrer-Policy"), "no-referrer")
+  assert.equal(headers.get("X-Saturn-Route-Response"), "1")
   assert.match(headers.get("Permissions-Policy") || "", /camera=\(\)/)
 })
 test("measurement page CSP limits HTTPS probes and permits only the declared external STUN endpoint", () => {
@@ -81,11 +82,52 @@ test("worker protocol matches the canonical desktop control-plane contract", () 
   assert.equal(contract.route_check.qualification.requires_complete_webrtc_candidate_gathering, true)
   assert.equal(contract.route_check.qualification.requires_ipv4_and_ipv6_side_route_evidence, true)
   assert.equal(contract.route_check.operations.decision.authorization, "desktop_attempt_token")
+  assert.equal(contract.policy.operations.route_capability.path, "/v1/route-check/capability")
+  assert.equal(contract.route_check.operations.host_exit.path, "/v1/host-exit")
+  assert.equal(contract.route_check.operations.host_exit.authorization, "one_time_policy_capability")
+  assert.equal(contract.route_check.delivery.desktop_machine_user_agent, "SaturnWorkspace-RouteCheck/1")
+  assert.equal(contract.route_check.delivery.worker_response_header, "X-Saturn-Route-Response")
+  assert.equal(contract.route_check.delivery.worker_response_header_value, "1")
+  assert.equal(contract.route_check.delivery.machine_api_must_not_require_browser_challenge_or_browser_integrity_headers, true)
+  assert.equal(contract.route_check.delivery.machine_api_remains_capability_or_attempt_token_bound, true)
+  assert.equal(contract.route_check.delivery.one_time_capability_endpoints_remain_rate_limited, true)
+  assert.equal(contract.route_check.delivery.production_acceptance_requires_edge_to_worker_evidence, true)
+  assert.deepEqual(contract.route_check.failure_observability.stages, [
+    "policy_capability",
+    "route_transport",
+    "route_edge",
+    "route_worker",
+    "route_response",
+    "route_result_validation",
+    "unexpected",
+  ])
+  assert.deepEqual(contract.route_check.failure_observability.forbidden_values, [
+    "capability",
+    "attempt_token",
+    "public_ip",
+    "user_identity",
+    "request_body",
+  ])
   assert.equal(contract.route_check.operations.browser_result.authorization, "browser_attempt_token")
   assert.deepEqual(contract.route_check.operations.browser_result.forbidden, ["raw_exit_ip", "network_observation"])
   assert.equal(contract.route_check.operations.browser_acknowledgement.effect, "confirm_visible_decision_rendered")
   assert.equal(contract.route_check.qualification.requires_visible_browser_acknowledgement_before_targets, true)
   assert.equal(contract.route_check.privacy.persistent_application_observability, false)
+})
+
+test("live delivery acceptance uses the shipped urllib transport without secrets", () => {
+  const packageJson = JSON.parse(readFileSync(path.resolve(process.cwd(), "package.json"), "utf8"))
+  const probe = readFileSync(path.resolve(process.cwd(), "scripts/check-live-delivery.py"), "utf8")
+  assert.equal(packageJson.scripts["check:delivery-live"], "python scripts/check-live-delivery.py")
+  assert.match(probe, /\/v1\/route-check\/capability/)
+  assert.match(probe, /\/v1\/host-exit/)
+  assert.match(probe, /v4\.route-check\.saturnws\.com/)
+  assert.match(probe, /v6\.route-check\.saturnws\.com/)
+  assert.match(probe, /urllib\.request/)
+  assert.match(probe, /SaturnWorkspace-RouteCheck\/1/)
+  assert.doesNotMatch(probe, /Python-urllib\/3\.11/)
+  assert.match(probe, /"sent_capability_or_user_data": False/)
+  assert.doesNotMatch(probe, /Authorization/)
 })
 
 test("worker configuration enforces bounded initiation and no persistent observability", () => {
