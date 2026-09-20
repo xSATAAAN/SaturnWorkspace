@@ -29,6 +29,8 @@ test("observation rejects raw or incomplete values", () => {
 test("measurement page carries no analytics or identity fields", () => {
   for (const forbidden of ["firebase", "email", "profile_id", "analytics", "target_url", "proxy_password"]) assert.equal(ROUTE_CHECK_PAGE.toLowerCase().includes(forbidden), false, forbidden)
   assert.match(ROUTE_CHECK_PAGE, /history\.replaceState/)
+  assert.match(ROUTE_CHECK_PAGE, /launchToken/)
+  assert.match(ROUTE_CHECK_PAGE, /window\.__saturnStartRouteCheck\(\{attempt,token:launchToken\}\)/)
   assert.match(ROUTE_CHECK_PAGE, /credentials:'omit'/)
   assert.match(ROUTE_CHECK_PAGE, /\.route-check\.saturnws\.com\/v1\/network/)
   assert.match(ROUTE_CHECK_PAGE, /probeNetwork\('ipv4'\)/)
