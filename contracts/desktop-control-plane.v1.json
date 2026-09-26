@@ -375,7 +375,7 @@
         "method": "POST",
         "path": "/v1/browser-ack",
         "authorization": "browser_attempt_token",
-        "effect": "confirm_visible_decision_rendered"
+        "effect": "confirm_browser_processed_decision"
       },
       "finalize": {
         "method": "POST",
@@ -406,7 +406,7 @@
       },
       "webrtc_public_candidates_must_match_observed_exit": true,
       "webrtc_private_candidate_rejected": true,
-      "requires_visible_browser_acknowledgement_before_targets": true,
+      "requires_browser_acknowledgement_before_targets": true,
       "unknown_or_conflicting_result_fails_closed": true,
       "does_not_claim_to_measure_dns_resolver_identity": true
     }

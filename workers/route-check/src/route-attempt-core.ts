@@ -177,11 +177,11 @@ export class RouteAttemptCore {
       if (record.status === "observed") {
         const sameObservation = record.exit_ip === exitIp && JSON.stringify(record.observation) === JSON.stringify(observation)
         if (!sameObservation) return error("observation_conflict", 409)
-        return json({ success: true, status: record.status, exit_ip_masked: maskIp(exitIp) })
+        return json({ success: true, status: record.status, exit_ip: exitIp })
       }
       const next: AttemptRecord = { ...record, status: "observed", observed_at: Date.now(), exit_ip: exitIp, observation }
       await this.storage.put("attempt", next)
-      return json({ success: true, status: next.status, exit_ip_masked: maskIp(exitIp) })
+      return json({ success: true, status: next.status, exit_ip: exitIp })
     }
     if (path === "/internal/result") {
       if (!await this.authorize(request, record.desktop_secret_hash)) return error("unauthorized", 401)

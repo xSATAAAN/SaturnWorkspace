@@ -85,7 +85,7 @@ test("attempt lifecycle is single-init, owner-bound, and deleted on finalize", a
     browser_probe_completed: true,
   }, { "X-Route-Token": browserToken, "CF-Connecting-IP": "203.0.113.42" }))
   assert.equal(observed.status, 200)
-  assert.equal((await observed.json() as { exit_ip_masked: string }).exit_ip_masked, "203.0.x.x")
+  assert.equal((await observed.json() as { exit_ip: string }).exit_ip, "203.0.113.42")
   const repeatedObservation = await durable.fetch(call("/internal/observe", {
     ipv4_probe_attempted: true,
     ipv6_probe_attempted: true,
@@ -97,6 +97,7 @@ test("attempt lifecycle is single-init, owner-bound, and deleted on finalize", a
     browser_probe_completed: true,
   }, { "X-Route-Token": browserToken, "CF-Connecting-IP": "203.0.113.42" }))
   assert.equal(repeatedObservation.status, 200)
+  assert.equal((await repeatedObservation.json() as { exit_ip: string }).exit_ip, "203.0.113.42")
   const conflictingObservation = await durable.fetch(call("/internal/observe", {
     ipv4_probe_attempted: true,
     ipv6_probe_attempted: true,
