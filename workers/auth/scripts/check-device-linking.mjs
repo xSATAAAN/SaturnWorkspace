@@ -50,6 +50,7 @@ const tokenDirectBypassFinalized = finalizedToken('uid-direct-bypass', 'direct-b
 const tokenUnfinalizedProfile = rawToken('uid-unfinalized-profile', 'unfinalized-profile@example.test')
 const tokenQuarantinedLegacy = rawToken('uid-quarantined-legacy', 'quarantined-legacy@example.test')
 const tokenAdminDisabled = rawToken('uid-admin-disabled', 'admin-disabled@example.test')
+const tokenPasswordClaimRefresh = rawToken('uid-password-claim-refresh', 'password-claim-refresh@example.test')
 const users = new Map([
   [tokenNone, { localId: 'uid-none', email: 'none@example.test', emailVerified: true, customAttributes: finalizedCustomAttributes }],
   [tokenActive, { localId: 'uid-active', email: 'active@example.test', emailVerified: true, customAttributes: finalizedCustomAttributes }],
@@ -63,6 +64,7 @@ const users = new Map([
   [tokenUnfinalizedProfile, { localId: 'uid-unfinalized-profile', email: 'unfinalized-profile@example.test', emailVerified: true, displayName: 'Unfinalized Profile', providerUserInfo: [{ providerId: 'password' }] }],
   [tokenQuarantinedLegacy, { localId: 'uid-quarantined-legacy', email: 'quarantined-legacy@example.test', emailVerified: true, displayName: 'Quarantined Legacy', providerUserInfo: [{ providerId: 'password' }], disabled: true, password: 'legacy-password-123', createdAt: String(now - 10 * 86400000) }],
   [tokenAdminDisabled, { localId: 'uid-admin-disabled', email: 'admin-disabled@example.test', emailVerified: true, displayName: 'Admin Disabled', providerUserInfo: [{ providerId: 'password' }], disabled: true, password: 'admin-disabled-password-123', createdAt: String(now - 10 * 86400000) }],
+  [tokenPasswordClaimRefresh, { localId: 'uid-password-claim-refresh', email: 'password-claim-refresh@example.test', emailVerified: true, displayName: 'Password Claim Refresh', providerUserInfo: [{ providerId: 'password' }], password: 'password-claim-refresh-123' }],
 ])
 const securityEmailToken = 'fixture-security-email-token'
 const securityEmailRequests = []
@@ -83,6 +85,7 @@ const db = {
     { id: 'profile-delete', firebase_uid: 'uid-delete', normalized_email: 'delete@example.test', display_name: 'Delete User', email_verified: true, email_verified_at: past(10), verification_source: 'saturnws_otp', auth_providers: ['password'], locale: 'en', account_status: 'active', terms_version: '2026-06', terms_accepted_at: past(10), metadata: {}, created_at: past(10), updated_at: past(10) },
     { id: 'profile-stale-delete', firebase_uid: 'uid-stale-delete', normalized_email: 'stale-delete@example.test', display_name: 'Stale Delete User', email_verified: true, email_verified_at: past(10), verification_source: 'saturnws_otp', auth_providers: ['password'], locale: 'en', account_status: 'active', terms_version: '2026-06', terms_accepted_at: past(10), metadata: {}, created_at: past(10), updated_at: past(10) },
     { id: 'profile-unfinalized', firebase_uid: 'uid-unfinalized-profile', normalized_email: 'unfinalized-profile@example.test', display_name: 'Unfinalized Profile', email_verified: true, email_verified_at: past(10), verification_source: null, auth_providers: ['password'], locale: 'en', account_status: 'active', terms_version: '2026-06', terms_accepted_at: past(10), metadata: {}, created_at: past(10), updated_at: past(10) },
+    { id: 'profile-password-claim-refresh', firebase_uid: 'uid-password-claim-refresh', normalized_email: 'password-claim-refresh@example.test', display_name: 'Password Claim Refresh', email_verified: true, email_verified_at: past(10), verification_source: 'saturnws_otp', auth_providers: ['password'], locale: 'en', account_status: 'active', terms_version: '2026-06', terms_accepted_at: past(10), metadata: { finalization: { state: 'finalized', finalized_at: past(10), credential_epoch: authTime - 60, source: 'saturnws_otp' } }, created_at: past(10), updated_at: past(10) },
   ],
   account_subscriptions: [
     { id: 'sub-active', firebase_user_id: 'uid-active', user_email: 'active@example.test', plan: 'monthly', tier: 'public', status: 'active', hwid: null, starts_at: past(2), expires_at: future(28), feature_payload: {}, metadata: {}, created_at: past(2), updated_at: past(1) },
@@ -670,6 +673,20 @@ const directBypassProfiles = db.account_profiles.filter((row) => row.normalized_
 assert.equal(directBypassProfiles.length, 1, 'direct Firebase identity reconciliation must create exactly one canonical profile')
 assert.equal(directBypassProfiles[0].firebase_uid, 'uid-direct-bypass')
 assert.equal(new Set([...users.values()].filter((user) => user.email === 'direct-bypass@example.test').map((user) => user.localId)).size, 1, 'direct Firebase identity reconciliation must keep one Firebase UID')
+
+const passwordClaimRefreshPending = await start('1'.repeat(32))
+const passwordClaimRefreshLinked = await call('/device/password-complete', {
+  device_code: passwordClaimRefreshPending.device_code,
+  email: 'password-claim-refresh@example.test',
+  password: 'password-claim-refresh-123',
+})
+assert.equal(passwordClaimRefreshLinked.status, 200, 'password login must refresh a newly assigned finalized claim within the same attempt')
+assert.equal(passwordClaimRefreshLinked.body.connection_state, 'linked')
+assert.equal(
+  JSON.parse(String([...users.values()].find((user) => user.localId === 'uid-password-claim-refresh')?.customAttributes || '{}')).saturn_account_state,
+  'finalized',
+  'password login must persist the finalized account claim before retrying authorization',
+)
 
 const quarantinedWrongPasswordPending = await start('4'.repeat(32))
 const quarantinedWrongPassword = await call('/device/password-complete', {
