@@ -285,6 +285,25 @@ async function completeDeviceActivation(idToken: string, activation: ActivationP
   return payload
 }
 
+async function completeDeviceActivationWithCurrentToken(
+  getIdToken: (forceRefresh?: boolean) => Promise<string | null>,
+  activation: ActivationPayload,
+) {
+  let token = await getIdToken(false)
+  if (!token) throw new Error('not_authenticated')
+  try {
+    return await completeDeviceActivation(token, activation)
+  } catch (error) {
+    const activationError = error instanceof DeviceActivationError
+      ? String(error.payload.error || '').trim().toLowerCase()
+      : ''
+    if (activationError !== 'account_token_refresh_required') throw error
+    token = await getIdToken(true)
+    if (!token) throw new Error('not_authenticated', { cause: error })
+    return completeDeviceActivation(token, activation)
+  }
+}
+
 function stableTicketNumber(id: string, createdAt?: string | null, updatedAt?: string | null) {
   const year = (createdAt || updatedAt || new Date().toISOString()).slice(0, 4).replace(/\D/g, '') || '2026'
   let hash = 0
@@ -392,6 +411,21 @@ function deviceActivationErrorMessage(error: unknown, locale: 'ar' | 'en') {
   }
   if (key === 'device_change_required') {
     return copyByLocale(locale, 'This account is already linked to another desktop device.', 'هذا الحساب مرتبط بالفعل بجهاز سطح مكتب آخر.')
+  }
+  if (key === 'account_token_refresh_required' || key === 'account_reauth_required') {
+    return copyByLocale(locale, 'Your account session must be refreshed before linking. Sign in again from this page.', 'يلزم تجديد جلسة حسابك قبل الربط. سجّل الدخول مرة أخرى من هذه الصفحة.')
+  }
+  if (key === 'email_verification_required') {
+    return copyByLocale(locale, 'Verify your email address before linking the desktop app.', 'أكّد بريدك الإلكتروني قبل ربط أداة سطح المكتب.')
+  }
+  if (key === 'profile_terms_required') {
+    return copyByLocale(locale, 'Finish creating your Saturn account and accept the current terms before linking.', 'أكمل إنشاء حساب Saturn ووافق على الشروط الحالية قبل الربط.')
+  }
+  if (key === 'device_policy_unavailable') {
+    return copyByLocale(locale, 'Device linking is temporarily unavailable. Try again shortly from the desktop app.', 'ربط الجهاز غير متاح مؤقتًا. حاول بعد قليل من أداة سطح المكتب.')
+  }
+  if (key === 'device_code_already_used') {
+    return copyByLocale(locale, 'This desktop linking attempt was already completed. Start a new sign-in from the desktop app.', 'اكتملت محاولة ربط الأداة هذه بالفعل. ابدأ تسجيل دخول جديدًا من أداة سطح المكتب.')
   }
   if (key.includes('device_code_expired') || key.includes('not_found')) {
     return copyByLocale(locale, 'This desktop linking session expired. Start sign-in again from the desktop app.', 'انتهت صلاحية جلسة ربط الأداة. ابدأ تسجيل الدخول مرة أخرى من أداة سطح المكتب.')
@@ -790,10 +824,11 @@ function EmailPasswordProductionPage({ page, routeState, navigate }: { page: str
     if (!activationPayload) return false
     if (completionStartedRef.current) return true
     completionStartedRef.current = true
-    const token = await auth.getIdToken(false)
-    if (!token) throw new Error('not_authenticated')
     try {
-      await completeDeviceActivation(token, activationPayload)
+      await completeDeviceActivationWithCurrentToken(
+        (forceRefresh) => auth.getIdToken(forceRefresh),
+        activationPayload,
+      )
     } catch (err) {
       captureActivationError(err)
       throw err

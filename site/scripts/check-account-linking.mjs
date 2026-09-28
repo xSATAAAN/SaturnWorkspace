@@ -48,6 +48,9 @@ includes(policyWorker, 'normalizeText(auth.subscription_id)', 'policy paid proje
 includes(accountApi, '/account/sessions/revoke-all', 'account sessions API')
 includes(adapters, 'async revokeAllSessions()', 'account sessions adapter')
 includes(pages, 'function PortalDevices()', 'portal devices page')
+includes(pages, "activationError !== 'account_token_refresh_required'", 'device activation refresh retry guard')
+includes(pages, 'token = await getIdToken(true)', 'device activation forced token refresh')
+includes(pages, '(forceRefresh) => auth.getIdToken(forceRefresh)', 'device activation fresh-token completion')
 excludes(pages, '<Alert title={t(\'currentDevice\')} tone="info">{t(\'noSessions\')}</Alert>', 'legacy devices shell')
 
 for (const state of ['unknown', 'no_subscription', 'active', 'trial', 'grace', 'expired', 'suspended', 'lifetime']) {

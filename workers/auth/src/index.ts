@@ -2436,7 +2436,17 @@ async function handleDevicePasswordComplete(request: Request, env: Env): Promise
     }
   }
 
-  const authorization = await authorizePendingDeviceLogin(request, env, pending, firebaseUser)
+  let authorization = await authorizePendingDeviceLogin(request, env, pending, firebaseUser)
+  if (!authorization.success && authorization.error === "account_token_refresh_required") {
+    try {
+      firebaseUser = await authenticateFirebasePassword(env, email, password)
+      authorization = await authorizePendingDeviceLogin(request, env, pending, firebaseUser)
+    } catch (error: any) {
+      const code = String(error?.message || "firebase_password_auth_failed")
+      const status = code === "invalid_credentials" ? 401 : 503
+      return json({ success: false, error: code }, status)
+    }
+  }
   if (!authorization.success) {
     return json({ success: false, error: authorization.error, ...(authorization.details || {}) }, authorization.status)
   }
