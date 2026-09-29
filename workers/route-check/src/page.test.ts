@@ -3,7 +3,7 @@ import test from "node:test"
 import vm from "node:vm"
 import { ROUTE_CHECK_PAGE } from "./page.js"
 
-test("a background route-check page acknowledges the browser decision without a paint callback", async () => {
+test("a background route-check page survives a stalled network family and acknowledges without a paint callback", async () => {
   const script = ROUTE_CHECK_PAGE.match(/<script>([\s\S]*?)<\/script>/)?.[1]
   assert.ok(script)
   const elements = new Map<string, { textContent: string; className: string; setAttribute: () => void }>()
@@ -19,7 +19,8 @@ test("a background route-check page acknowledges the browser decision without a 
     location: { hash: `#attempt=${"a".repeat(43)}&token=${"b".repeat(48)}`, pathname: "/check", search: "", hostname: "127.0.0.1" },
     history: { replaceState() {} },
     URLSearchParams,
-    setTimeout: (callback: () => void, delay: number) => delay === 15000 ? 0 : setTimeout(callback, delay),
+    AbortController,
+    setTimeout: (callback: () => void, delay: number) => delay === 15000 ? 0 : setTimeout(callback, delay === 8000 ? 5 : delay),
     clearTimeout,
     // Chromium may suspend animation frames in a background tab/window.
     requestAnimationFrame() {},
@@ -31,7 +32,12 @@ test("a background route-check page acknowledges the browser decision without a 
       async setLocalDescription() {}
       close() {}
     },
-    fetch: async (path: string) => {
+    fetch: async (path: string, options?: { signal?: AbortSignal }) => {
+      if (path === "/v1/network?family=ipv6") {
+        return await new Promise((_resolve, reject) => {
+          options?.signal?.addEventListener("abort", () => reject(new Error("synthetic stalled IPv6 probe")), { once: true })
+        })
+      }
       if (path.startsWith("/v1/network")) return response({ success: true, exit_ip_masked: "198.51.x.x" })
       if (path === "/v1/observe") return response({ success: true, exit_ip_masked: "198.51.x.x" })
       if (path === "/v1/browser-result") return response({ success: true, decision: "qualified" })
