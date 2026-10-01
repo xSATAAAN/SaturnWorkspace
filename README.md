@@ -3,7 +3,7 @@
 - Status: canonical source guide
 - Scope: public/customer/admin Web surfaces and Auth, Admin, Policy, and Route Check Workers
 - Owner: repository maintainer
-- Last verified: 2026-08-23
+- Last verified: 2026-10-01
 - Verification: protected `web-required` CI
 
 Canonical Web and control-plane source for Saturn Workspace. The project is
@@ -88,24 +88,17 @@ Pop-Location
 fixtures and tokens must remain synthetic; never copy real customer or
 production data into tests.
 
-## Current product boundaries
+## Current executable boundaries
 
-- Account connection and entitlement are distinct. A linked account can have no
-  subscription, while paid operations remain denied.
-- No production payment provider is active. Checkout, manual grants, and
-  billing communications stay disabled or fail closed until separately
-  approved and externally verified.
-- Irreversible account deletion is not approved; do not promise hard deletion.
-- Gmail read access remains disabled until provider verification and an explicit
-  rollout decision.
-- The Route Check Worker source may be adopted through a protected PR, but its
-  custom route, Durable Object, and rate-limit binding are not live capability
-  until a separately authorized Worker deployment and browser-provider QA.
-- Desktop production signing, publisher verification, publication, and release
-  remain outside this repository and are deferred.
+The production Route Check surface currently responds at
+`https://route-check.saturnws.com/check`. Its source, contracts, and tests are
+under `workers/route-check`. Deployment state remains separate from source
+adoption and must be verified from the deployed route when it matters.
 
-These boundaries are enforced in runtime code, contracts, and tests. A prose
-change cannot activate an integration or authorize an operation.
+No cumulative product-decision register or historical project-state log is
+active during the context reset. Older product statements remain in Git history
+but do not establish current intent. A prose change cannot activate an
+integration, authorize an external operation, or prove deployed behavior.
 
 ## Source, deployment, and secrets
 
