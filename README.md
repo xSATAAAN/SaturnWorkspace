@@ -3,7 +3,7 @@
 - Status: canonical source guide
 - Scope: public/customer/admin Web surfaces and Auth, Admin, Policy, and Route Check Workers
 - Owner: repository maintainer
-- Last verified: 2026-08-23
+- Last verified: 2026-10-10
 - Verification: protected `web-required` CI
 
 Canonical Web and control-plane source for Saturn Workspace. The project is
@@ -43,6 +43,17 @@ is the Web producer contract; Desktop pins its reviewed content and producer
 commit.
 
 ## Local qualification
+
+Desktop diagnostics use a bounded local outbox and stable event IDs. The Admin
+Worker accepts sanitized technical failures from startup through shutdown,
+attributes reports only through a matching verified app session, and leaves
+pre-login reports unattributed. Administrator-only history and report detail
+support user filters, cursor pagination, occurrence counts, and lifecycle
+context. The daily scheduled task deletes reports older than 90 days. Delivery
+retries do not change a report's original attribution. Offline delivery is
+delayed; an abrupt shutdown can prevent an unsaved failure from being recorded.
+Passwords, authentication secrets, access tokens, message contents, and notes
+are excluded. Worker and Pages promotion are separate release operations.
 
 Use Node.js 22 and the committed npm lock files:
 

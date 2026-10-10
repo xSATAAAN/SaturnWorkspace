@@ -13,6 +13,9 @@ routes = [
   { pattern = "admin-api.saturnws.com/api/*", zone_name = "saturnws.com" }
 ]
 
+[triggers]
+crons = ["17 3 * * *"]
+
 [[r2_buckets]]
 binding = "OTA_BUCKET"
 bucket_name = "saturnws-ota"
