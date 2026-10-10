@@ -1,6 +1,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
+import assert from 'node:assert/strict'
+import ts from 'typescript'
 
 const root = process.cwd()
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8')
@@ -10,6 +12,18 @@ const api = read('src/api/admin.ts')
 const adapters = read('src/new-ui/adapters/productionAdapters.ts')
 const overlays = read('src/new-ui/components/ui/Overlays.tsx')
 const adminResponsive = read('src/new-ui/foundation/admin-responsive.css')
+const syntax = ts.createSourceFile('AdminOperations.tsx', adminOperations, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+const diagnosticFunction = syntax.statements.find((item) => ts.isFunctionDeclaration(item) && item.name?.text === 'diagnosticTechnicalFields')
+assert.ok(diagnosticFunction, 'Diagnostic context renderer must exist')
+const compiledFunction = ts.transpileModule(diagnosticFunction.getText(syntax).replace(/^export\s+/, ''), { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText
+const technicalFields = new Function(`${compiledFunction}; return diagnosticTechnicalFields;`)()
+assert.deepEqual(technicalFields({ lifecycle: { phase: 'checking_data' }, auth: { warning: 'session_expired' }, extra: { attempt: 3 } }), [
+  ['lifecycle.phase', 'checking_data'], ['auth.warning', 'session_expired'], ['extra.attempt', '3'],
+])
+const cyclic = { phase: 'ready' }
+cyclic.self = cyclic
+assert.deepEqual(technicalFields(cyclic), [['phase', 'ready']])
+assert.ok(technicalFields(Array.from({ length: 1000 }, () => 'x')).length <= 160)
 const section = (start, end) => adminOperations.slice(adminOperations.indexOf(start), adminOperations.indexOf(end))
 const manualGrant = section('function ManualGrantDrawer', 'function AdminOperationDialog')
 const userDetail = section('function UserDetailDrawer', 'function SubscriptionRecoveryDrawer')

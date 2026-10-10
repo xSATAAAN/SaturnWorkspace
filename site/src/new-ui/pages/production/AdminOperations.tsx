@@ -17,6 +17,7 @@ import type {
   AdminAuditLogItem,
   AdminCrashGroup,
   AdminCrashLog,
+  AdminDiagnosticFilters,
   AdminDeviceChangePreview,
   AdminDeviceChangeRequest,
   AdminDeviceResetPreview,
@@ -1090,6 +1091,7 @@ function UserDetailDrawer({
                     value={data.audit?.length || 0}
                   />
                 </div>
+                <DiagnosticReportHistory filters={{ user: data.profile.firebase_uid }} />
               </section>
               <section className="danger-zone">
                 <SectionHeader
@@ -2501,17 +2503,19 @@ function AdminOperationDialog({
 export function AdminDiagnostics() {
   const { locale } = useExperience();
   const { admin } = useAdapters();
-  const [tab, setTab] = useState("groups");
+  const [tab, setTab] = useState("occurrences");
+  const [userSearch, setUserSearch] = useState("");
+  const [reportSearch, setReportSearch] = useState("");
+  const [attribution, setAttribution] = useState<"" | "verified" | "unattributed">("");
+  const [filters, setFilters] = useState<AdminDiagnosticFilters>({});
+  const [groupCursors, setGroupCursors] = useState([""]);
   const [selectedGroup, setSelectedGroup] = useState<AdminCrashGroup | null>(
     null,
   );
   const [selectedTamper, setSelectedTamper] = useState<AdminTamperAlert | null>(
     null,
   );
-  const [selectedLog, setSelectedLog] = useState<AdminCrashLog | null>(null);
-  const groups = useResource(() => admin.listCrashGroups(), [admin], tab === "groups" ? 10000 : 0);
-  const logs = useResource(() => admin.listCrashLogs("error"), [admin], tab === "occurrences" ? 10000 : 0);
-  const warnings = useResource(() => admin.listCrashLogs("warning"), [admin], tab === "warnings" ? 10000 : 0);
+  const groups = useResource(() => admin.listCrashGroups({ ...filters, cursor: groupCursors.at(-1) }), [admin, filters, groupCursors], tab === "groups" ? 10000 : 0);
   const tamper = useResource(
     () => admin.listTamperAlerts({ resolved: false }),
     [admin],
@@ -2555,50 +2559,6 @@ export function AdminDiagnostics() {
       ),
     },
   ];
-  const logColumns: Column<AdminCrashLog>[] = [
-    {
-      key: "type",
-      header: copy(locale, "Error", "الخطأ"),
-      render: (row) => row.error_type,
-    },
-    {
-      key: "message",
-      header: copy(locale, "Summary", "الملخص"),
-      render: (row) => row.message || row.stack_trace?.split("\n")[0] || "—",
-    },
-    {
-      key: "component",
-      header: copy(locale, "Source", "المصدر"),
-      render: (row) => row.component || "desktop-app",
-    },
-    {
-      key: "version",
-      header: copy(locale, "Version", "الإصدار"),
-      render: (row) => row.app_version || "—",
-    },
-    {
-      key: "date",
-      header: copy(locale, "Time", "الوقت"),
-      render: (row) => date(row.happened_at, locale),
-    },
-    {
-      key: "action",
-      header: copy(locale, "Action", "الإجراء"),
-      render: (row) => (
-        <Button size="sm" onClick={() => setSelectedLog(row)}>
-          {copy(locale, "View", "عرض")}
-        </Button>
-      ),
-    },
-  ];
-  const warningColumns: Column<AdminCrashLog>[] = [
-    {
-      key: "type",
-      header: copy(locale, "Type", "النوع"),
-      render: (row) => row.error_type,
-    },
-    ...logColumns.slice(1),
-  ];
   const tamperColumns: Column<AdminTamperAlert>[] = [
     {
       key: "severity",
@@ -2637,6 +2597,23 @@ export function AdminDiagnostics() {
   return (
     <div className="stack">
       <PageHeader title={copy(locale, "Diagnostics", "التشخيص")} />
+      <p>{copy(locale, "Redacted technical reports are available for 90 days. Unattributed reports have no verified Saturn user.", "التقارير الفنية المنقّحة متاحة لمدة 90 يومًا. التقارير غير المنسوبة لا ترتبط بمستخدم Saturn موثّق.")}</p>
+      <form className="admin-filter-grid" onSubmit={(event) => { event.preventDefault(); setFilters({ user: userSearch.trim(), search: reportSearch.trim(), attribution: attribution || undefined }); setGroupCursors([""]); }}>
+        <FormField label={copy(locale, "Saturn user email or ID", "بريد مستخدم Saturn أو معرّفه")} htmlFor="diagnostic-user">
+          <Input id="diagnostic-user" value={userSearch} onChange={(event) => setUserSearch(event.target.value)} />
+        </FormField>
+        <FormField label={copy(locale, "Search reports", "بحث في التقارير")} htmlFor="diagnostic-search">
+          <Input id="diagnostic-search" value={reportSearch} onChange={(event) => setReportSearch(event.target.value)} />
+        </FormField>
+        <FormField label={copy(locale, "Attribution", "نسبة التقرير")} htmlFor="diagnostic-attribution">
+          <Select id="diagnostic-attribution" value={attribution} onChange={(event) => setAttribution(event.target.value as typeof attribution)}>
+            <option value="">{copy(locale, "All reports", "كل التقارير")}</option>
+            <option value="verified">{copy(locale, "Verified Saturn user", "مستخدم Saturn موثّق")}</option>
+            <option value="unattributed">{copy(locale, "Unattributed", "غير منسوب")}</option>
+          </Select>
+        </FormField>
+        <Button type="submit">{copy(locale, "Apply filters", "تطبيق الفلاتر")}</Button>
+      </form>
       <Tabs
         ariaLabel={copy(locale, "Diagnostics sections", "أقسام التشخيص")}
         active={tab}
@@ -2646,7 +2623,7 @@ export function AdminDiagnostics() {
             id: "groups",
             label: copy(locale, "Crash groups", "مجموعات الأعطال"),
           },
-          { id: "occurrences", label: copy(locale, "Occurrences", "الأعطال") },
+          { id: "occurrences", label: copy(locale, "All reports", "كل التقارير") },
           {
             id: "warnings",
             label: copy(locale, "Operational warnings", "تنبيهات التشغيل"),
@@ -2658,9 +2635,12 @@ export function AdminDiagnostics() {
         ]}
       />
       {tab === "groups" ? (
+        <>
+        <p>{copy(locale, "Groups summarize reports on this page. Browse older pages to review the rest.", "المجموعات تلخّص تقارير الصفحة الحالية. انتقل للصفحات الأقدم لمراجعة الباقي.")}</p>
+        {groups.error ? <Alert tone="danger" title={copy(locale, "Reports could not be loaded", "تعذر تحميل التقارير")}><Button onClick={groups.reload}>{copy(locale, "Retry", "إعادة المحاولة")}</Button></Alert> : null}
         <DataTable
           columns={groupColumns}
-          rows={groups.data || []}
+          rows={groups.data?.items || []}
           loading={groups.loading}
           rowKey={(row) => row.fingerprint}
           emptyTitle={copy(locale, "No crash groups", "لا توجد مجموعات أعطال")}
@@ -2670,15 +2650,8 @@ export function AdminDiagnostics() {
             "ستظهر المجموعات الجديدة هنا.",
           )}
         />
-      ) : tab === "warnings" ? (
-        <DataTable
-          columns={warningColumns}
-          rows={warnings.data || []}
-          loading={warnings.loading}
-          rowKey={(row) => row.id}
-          emptyTitle={copy(locale, "No operational warnings", "لا توجد تنبيهات تشغيل")}
-          emptyBody={copy(locale, "No recoverable operational events need review.", "لا توجد أحداث تشغيل قابلة للاسترداد تحتاج إلى مراجعة.")}
-        />
+        <Pagination page={groupCursors.length} pages={groupCursors.length + (groups.data?.has_more ? 1 : 0)} label={copy(locale, "Report page", "صفحة التقارير")} previousLabel={copy(locale, "Newer", "الأحدث")} nextLabel={copy(locale, "Older", "الأقدم")} onChange={(page) => { if (page < groupCursors.length) setGroupCursors((items) => items.slice(0, -1)); else if (groups.data?.next_cursor) setGroupCursors((items) => [...items, groups.data!.next_cursor!]); }} />
+        </>
       ) : tab === "tamper" ? (
         <DataTable
           columns={tamperColumns}
@@ -2693,18 +2666,7 @@ export function AdminDiagnostics() {
           )}
         />
       ) : (
-        <DataTable
-          columns={logColumns}
-          rows={logs.data || []}
-          loading={logs.loading}
-          rowKey={(row) => row.id}
-          emptyTitle={copy(locale, "No crash reports", "لا توجد تقارير أعطال")}
-          emptyBody={copy(
-            locale,
-            "Crash reports will appear here.",
-            "ستظهر تقارير الأعطال هنا.",
-          )}
-        />
+        <DiagnosticReportHistory key={`${tab}:${filters.user || ""}:${filters.search || ""}:${filters.attribution || ""}`} filters={{ ...filters, classification: tab === "warnings" ? "warning" : "all" }} />
       )}
       <CrashGroupStateDialog
         key={selectedGroup?.fingerprint || "crash-group:closed"}
@@ -2724,23 +2686,82 @@ export function AdminDiagnostics() {
           tamper.reload();
         }}
       />
-      <DiagnosticReportDialog
-        key={selectedLog?.id || "diagnostic-report:closed"}
-        report={selectedLog}
-        onClose={() => setSelectedLog(null)}
-      />
     </div>
   );
 }
 
+function DiagnosticReportHistory({ filters }: { filters: AdminDiagnosticFilters }) {
+  const { locale } = useExperience();
+  const { admin } = useAdapters();
+  const [cursors, setCursors] = useState([""]);
+  const [selected, setSelected] = useState<AdminCrashLog | null>(null);
+  const reports = useResource(
+    () => admin.listCrashLogs({ ...filters, cursor: cursors.at(-1) }),
+    [admin, filters.user, filters.search, filters.classification, filters.attribution, cursors],
+    10000,
+  );
+  const columns: Column<AdminCrashLog>[] = [
+    { key: "user", header: copy(locale, "Saturn user", "مستخدم Saturn"), render: (row) => row.operator?.email || row.operator?.display_name || row.operator?.firebase_uid || copy(locale, "Unattributed", "غير منسوب") },
+    { key: "type", header: copy(locale, "Error", "الخطأ"), render: (row) => row.error_type },
+    { key: "message", header: copy(locale, "Summary", "الملخص"), render: (row) => row.message || "—" },
+    { key: "count", header: copy(locale, "Occurrences", "التكرار"), render: (row) => row.occurrence_count || 1 },
+    { key: "source", header: copy(locale, "Source", "المصدر"), render: (row) => row.component || "desktop-app" },
+    { key: "version", header: copy(locale, "Version", "الإصدار"), render: (row) => row.app_version || "—" },
+    { key: "date", header: copy(locale, "Last seen", "آخر ظهور"), render: (row) => date(row.last_happened_at || row.happened_at, locale) },
+    { key: "action", header: copy(locale, "Report", "التقرير"), render: (row) => <Button size="sm" onClick={() => setSelected(row)}>{copy(locale, "View", "عرض")}</Button> },
+  ];
+  return <div className="stack">
+    <div className="cluster"><Button onClick={() => { setCursors([""]); reports.reload(); }}>{copy(locale, "Refresh latest reports", "تحديث أحدث التقارير")}</Button></div>
+    {reports.error ? <Alert tone="danger" title={copy(locale, "Reports could not be loaded", "تعذر تحميل التقارير")}><Button onClick={reports.reload}>{copy(locale, "Retry", "إعادة المحاولة")}</Button></Alert> : <DataTable columns={columns} rows={reports.data?.items || []} loading={reports.loading} rowKey={(row) => row.id} emptyTitle={copy(locale, "No matching reports", "لا توجد تقارير مطابقة")} emptyBody={copy(locale, "Reports are retained for 90 days. Continue to older pages when available.", "نحتفظ بالتقارير لمدة 90 يومًا. انتقل للصفحات الأقدم إن كانت متاحة.")} />}
+    <Pagination page={cursors.length} pages={cursors.length + (reports.data?.has_more ? 1 : 0)} label={copy(locale, "Report page", "صفحة التقارير")} previousLabel={copy(locale, "Newer", "الأحدث")} nextLabel={copy(locale, "Older", "الأقدم")} onChange={(page) => { if (page < cursors.length) setCursors((items) => items.slice(0, -1)); else if (reports.data?.next_cursor) setCursors((items) => [...items, reports.data!.next_cursor!]); }} />
+    <DiagnosticReportDialog key={selected?.id || "diagnostic-report:closed"} report={selected} onClose={() => setSelected(null)} />
+  </div>;
+}
+
+function diagnosticTechnicalFields(value: unknown): [string, string][] {
+  const fields: [string, string][] = [];
+  const seen = new WeakSet<object>();
+  const visit = (item: unknown, path: string, depth: number) => {
+    if (fields.length >= 160 || item == null) return;
+    if (typeof item !== "object") {
+      fields.push([path, String(item).slice(0, 4000)]);
+      return;
+    }
+    if (seen.has(item)) return;
+    seen.add(item);
+    if (depth >= 8) {
+      fields.push([path, "[depth limit]"]);
+      return;
+    }
+    for (const [key, child] of Object.entries(item).slice(0, 80)) {
+      visit(child, path ? `${path}.${key}` : key, depth + 1);
+    }
+  };
+  visit(value, "", 0);
+  return fields;
+}
+
 function DiagnosticReportDialog({
-  report,
+  report: summary,
   onClose,
 }: {
   report: AdminCrashLog | null;
   onClose: () => void;
 }) {
   const { locale } = useExperience();
+  const { admin } = useAdapters();
+  const details = useResource(() => summary ? admin.getCrashLog(summary.id) : Promise.resolve(null), [admin, summary?.id]);
+  const report = details.data || summary;
+  const technicalFields = diagnosticTechnicalFields({
+    environment: {
+      windows_version: report?.windows_version,
+      cpu: report?.cpu,
+      gpu: report?.gpu,
+      ram_gb: report?.ram_gb,
+      tool_channel: report?.tool_channel,
+    },
+    ...report?.technical_context,
+  });
   return (
     <Modal
       open={Boolean(report)}
@@ -2755,13 +2776,20 @@ function DiagnosticReportDialog({
     >
       {report ? (
         <div className="stack">
+          {details.error ? <Alert tone="danger" title={copy(locale, "The full report could not be loaded", "تعذر تحميل التقرير الكامل")}><Button onClick={details.reload}>{copy(locale, "Retry", "إعادة المحاولة")}</Button></Alert> : null}
           <dl className="detail-list">
+            <div><dt>{copy(locale, "Saturn user", "مستخدم Saturn")}</dt><dd>{report.operator?.email || report.operator?.firebase_uid || copy(locale, "Unattributed", "غير منسوب")}</dd></div>
+            <div><dt>{copy(locale, "Attribution", "نسبة التقرير")}</dt><dd>{report.attribution === "verified" ? copy(locale, "Verified session", "جلسة موثّقة") : copy(locale, "No verified user", "لا يوجد مستخدم موثّق")}</dd></div>
+            <div><dt>{copy(locale, "Event ID", "معرّف الحدث")}</dt><dd>{report.event_id || report.id}</dd></div>
+            <div><dt>{copy(locale, "Occurrences", "التكرار")}</dt><dd>{report.occurrence_count || 1}</dd></div>
             <div><dt>{copy(locale, "Error", "الخطأ")}</dt><dd>{report.error_type}</dd></div>
             <div><dt>{copy(locale, "Source", "المصدر")}</dt><dd>{report.component || "desktop-app"}</dd></div>
             <div><dt>{copy(locale, "Context", "السياق")}</dt><dd>{report.context || "—"}</dd></div>
             <div><dt>{copy(locale, "Version", "الإصدار")}</dt><dd>{report.app_version || "—"}</dd></div>
             <div><dt>{copy(locale, "Time", "الوقت")}</dt><dd>{date(report.happened_at, locale)}</dd></div>
+            <div><dt>{copy(locale, "Last seen", "آخر ظهور")}</dt><dd>{date(report.last_happened_at || report.happened_at, locale)}</dd></div>
             <div><dt>{copy(locale, "Device", "الجهاز")}</dt><dd>{report.device_name || report.hwid || "—"}</dd></div>
+            {technicalFields.map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{String(value)}</dd></div>)}
           </dl>
           <div>
             <strong>{copy(locale, "Summary", "الملخص")}</strong>
@@ -2769,7 +2797,7 @@ function DiagnosticReportDialog({
           </div>
           <div>
             <strong>{copy(locale, "Technical trace", "التتبع الفني")}</strong>
-            <pre className="diagnostic-report-trace" dir="ltr">{report.stack_trace || "—"}</pre>
+            <pre className="diagnostic-report-trace" dir="ltr">{details.loading ? copy(locale, "Loading technical trace…", "جارٍ تحميل التتبّع الفني…") : report.stack_trace || "—"}</pre>
           </div>
         </div>
       ) : null}

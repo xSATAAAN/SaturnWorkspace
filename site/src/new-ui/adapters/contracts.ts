@@ -2,6 +2,8 @@ import type {
   AdminAuditLogItem,
   AdminCrashGroup,
   AdminCrashLog,
+  AdminDiagnosticFilters,
+  AdminDiagnosticPage,
   AdminDeviceChangePreview,
   AdminDeviceChangeRequest,
   AdminDeviceResetPreview,
@@ -338,8 +340,9 @@ export type AdminAdapter = {
   processEmailOutbox(): Promise<{ processed: number; sent: number; skipped: number }>
   retryEmailJob(jobId: string): Promise<{ processed?: number; sent?: number; skipped?: number }>
   sendAdminTestEmail(input: { recipient: string; emailType?: string; locale?: 'ar' | 'en'; subject?: string; message?: string }): Promise<void>
-  listCrashLogs(classification?: 'error' | 'warning' | 'all'): Promise<AdminCrashLog[]>
-  listCrashGroups(): Promise<AdminCrashGroup[]>
+  listCrashLogs(filters?: AdminDiagnosticFilters): Promise<AdminDiagnosticPage>
+  getCrashLog(id: string): Promise<AdminCrashLog>
+  listCrashGroups(filters?: AdminDiagnosticFilters): Promise<AdminDiagnosticPage<AdminCrashGroup>>
   updateCrashGroupState(fingerprint: string, input: { status: AdminCrashGroup['status']; assignee?: string; note?: string }): Promise<AdminCrashGroup>
   listTamperAlerts(input?: { page?: number; limit?: number; resolved?: boolean; severity?: string }): Promise<AdminTamperAlert[]>
   resolveTamperAlert(alertId: string, reason: string): Promise<AdminTamperAlert>
