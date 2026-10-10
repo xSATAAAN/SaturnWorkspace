@@ -7,7 +7,6 @@ test("expected prevention and validation states are not crashes", () => {
   for (const message of [
     "cancelled",
     "session_ip_already_used",
-    "startup_preload_missing",
     "invalid_email_requires_at",
   ]) {
     assert.equal(classifyDiagnostic({ error_type: "HandledApiError", message }), "expected");
@@ -22,6 +21,9 @@ test("recoverable operational failures are warnings", () => {
 });
 
 test("unknown provider and runtime failures remain actionable", () => {
+  assert.equal(classifyDiagnostic({ error_type: "HandledApiError", message: "startup_preload_missing" }), "error");
+  assert.equal(classifyDiagnostic({ error_type: "TimeoutError", message: "timed out", raw_payload: { context: "app.main" } }), "error");
+  assert.equal(classifyDiagnostic({ error_type: "PreviousRunUnclosed", message: "previous_run_unclosed", raw_payload: { severity: "warning" } }), "warning");
   assert.equal(classifyDiagnostic({ error_type: "HandledApiError", message: "AdsPower rejected profile start" }), "error");
   assert.equal(classifyDiagnostic({ error_type: "FrontendStartupTimeout", message: "Frontend did not become ready" }), "error");
   assert.equal(classifyDiagnostic({ error_type: "OSError", message: "[Errno 22] Invalid argument" }), "error");

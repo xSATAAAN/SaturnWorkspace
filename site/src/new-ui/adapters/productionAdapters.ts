@@ -24,6 +24,7 @@ import {
   fetchAdminSession,
   fetchAuditLog,
   fetchCrashGroups,
+  fetchCrashLog,
   fetchCrashLogs,
   fetchEmailOperations as fetchAdminEmailOperations,
   fetchPromoCodes,
@@ -951,13 +952,14 @@ export const productionAdapters: AppAdapters = {
         message: input.message,
       })
     },
-    async listCrashLogs(classification = 'error') {
-      const data = await fetchCrashLogs({ limit: 100, classification })
-      return data.items || []
+    listCrashLogs(filters = {}) {
+      return fetchCrashLogs(filters)
     },
-    async listCrashGroups() {
-      const data = await fetchCrashGroups()
-      return data.items || []
+    async getCrashLog(id) {
+      return (await fetchCrashLog(id)).item
+    },
+    listCrashGroups(filters = {}) {
+      return fetchCrashGroups(filters)
     },
     async updateCrashGroupState(fingerprint, input) {
       return (await updateCrashGroupStateRequest(fingerprint, input)).item
