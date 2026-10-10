@@ -49,7 +49,11 @@ Worker accepts sanitized technical failures from startup through shutdown,
 attributes reports only through a matching verified app session, and leaves
 pre-login reports unattributed. Administrator-only history and report detail
 support user filters, cursor pagination, occurrence counts, and lifecycle
-context. The daily scheduled task deletes reports older than 90 days. Delivery
+context. Diagnostics refreshes manually. Administrators can copy a full report
+or every matching report across all pages, using sanitized detail responses.
+If clipboard access is blocked, selectable text and a file download remain
+available. Collection errors never produce a partial export presented as complete.
+The daily scheduled task deletes reports older than 90 days. Delivery
 retries do not change a report's original attribution. Offline delivery is
 delayed; an abrupt shutdown can prevent an unsaved failure from being recorded.
 Passwords, authentication secrets, access tokens, message contents, and notes
