@@ -59,6 +59,8 @@ import {
 } from "../../components/ui/FormControls";
 import { Tabs } from "../../components/ui/Navigation";
 import { Drawer, Modal } from "../../components/ui/Overlays";
+import { DiagnosticCopyControl } from "./DiagnosticCopyControl";
+import { collectDiagnosticReports, formatDiagnosticReports } from "./diagnosticReportExport";
 
 type Resource<T> = {
   data: T | null;
@@ -2515,11 +2517,10 @@ export function AdminDiagnostics() {
   const [selectedTamper, setSelectedTamper] = useState<AdminTamperAlert | null>(
     null,
   );
-  const groups = useResource(() => admin.listCrashGroups({ ...filters, cursor: groupCursors.at(-1) }), [admin, filters, groupCursors], tab === "groups" ? 10000 : 0);
+  const groups = useResource(() => admin.listCrashGroups({ ...filters, cursor: groupCursors.at(-1) }), [admin, filters, groupCursors]);
   const tamper = useResource(
     () => admin.listTamperAlerts({ resolved: false }),
     [admin],
-    tab === "tamper" ? 10000 : 0,
   );
   const groupColumns: Column<AdminCrashGroup>[] = [
     {
@@ -2597,7 +2598,7 @@ export function AdminDiagnostics() {
   return (
     <div className="stack">
       <PageHeader title={copy(locale, "Diagnostics", "التشخيص")} />
-      <p>{copy(locale, "Redacted technical reports are available for 90 days. Unattributed reports have no verified Saturn user.", "التقارير الفنية المنقّحة متاحة لمدة 90 يومًا. التقارير غير المنسوبة لا ترتبط بمستخدم Saturn موثّق.")}</p>
+      <p className="secondary">{copy(locale, "Reports stay available for 90 days. The page updates only when you press Refresh. Search by user to review or copy their reports.", "التقارير متاحة لمدة 90 يومًا. الصفحة تتحدث فقط عند الضغط على تحديث. ابحث بالمستخدم لعرض تقاريره أو نسخها.")}</p>
       <form className="admin-filter-grid" onSubmit={(event) => { event.preventDefault(); setFilters({ user: userSearch.trim(), search: reportSearch.trim(), attribution: attribution || undefined }); setGroupCursors([""]); }}>
         <FormField label={copy(locale, "Saturn user email or ID", "بريد مستخدم Saturn أو معرّفه")} htmlFor="diagnostic-user">
           <Input id="diagnostic-user" value={userSearch} onChange={(event) => setUserSearch(event.target.value)} />
@@ -2636,6 +2637,7 @@ export function AdminDiagnostics() {
       />
       {tab === "groups" ? (
         <>
+        <Button disabled={groups.loading} onClick={groups.reload}>{copy(locale, "Refresh", "تحديث")}</Button>
         <p>{copy(locale, "Groups summarize reports on this page. Browse older pages to review the rest.", "المجموعات تلخّص تقارير الصفحة الحالية. انتقل للصفحات الأقدم لمراجعة الباقي.")}</p>
         {groups.error ? <Alert tone="danger" title={copy(locale, "Reports could not be loaded", "تعذر تحميل التقارير")}><Button onClick={groups.reload}>{copy(locale, "Retry", "إعادة المحاولة")}</Button></Alert> : null}
         <DataTable
@@ -2653,6 +2655,9 @@ export function AdminDiagnostics() {
         <Pagination page={groupCursors.length} pages={groupCursors.length + (groups.data?.has_more ? 1 : 0)} label={copy(locale, "Report page", "صفحة التقارير")} previousLabel={copy(locale, "Newer", "الأحدث")} nextLabel={copy(locale, "Older", "الأقدم")} onChange={(page) => { if (page < groupCursors.length) setGroupCursors((items) => items.slice(0, -1)); else if (groups.data?.next_cursor) setGroupCursors((items) => [...items, groups.data!.next_cursor!]); }} />
         </>
       ) : tab === "tamper" ? (
+        <>
+        <Button disabled={tamper.loading} onClick={tamper.reload}>{copy(locale, "Refresh", "تحديث")}</Button>
+        {tamper.error ? <Alert tone="danger" title={copy(locale, "Alerts could not be loaded", "تعذر تحميل التنبيهات")} /> : null}
         <DataTable
           columns={tamperColumns}
           rows={tamper.data || []}
@@ -2665,6 +2670,7 @@ export function AdminDiagnostics() {
             "لا توجد تنبيهات عبث غير محلولة.",
           )}
         />
+        </>
       ) : (
         <DiagnosticReportHistory key={`${tab}:${filters.user || ""}:${filters.search || ""}:${filters.attribution || ""}`} filters={{ ...filters, classification: tab === "warnings" ? "warning" : "all" }} />
       )}
@@ -2698,12 +2704,11 @@ function DiagnosticReportHistory({ filters }: { filters: AdminDiagnosticFilters 
   const reports = useResource(
     () => admin.listCrashLogs({ ...filters, cursor: cursors.at(-1) }),
     [admin, filters.user, filters.search, filters.classification, filters.attribution, cursors],
-    10000,
   );
   const columns: Column<AdminCrashLog>[] = [
     { key: "user", header: copy(locale, "Saturn user", "مستخدم Saturn"), render: (row) => row.operator?.email || row.operator?.display_name || row.operator?.firebase_uid || copy(locale, "Unattributed", "غير منسوب") },
     { key: "type", header: copy(locale, "Error", "الخطأ"), render: (row) => row.error_type },
-    { key: "message", header: copy(locale, "Summary", "الملخص"), render: (row) => row.message || "—" },
+    { key: "message", header: copy(locale, "Summary", "الملخص"), render: (row) => <span className="diagnostic-table-message" title={row.message || undefined}>{row.message || "—"}</span> },
     { key: "count", header: copy(locale, "Occurrences", "التكرار"), render: (row) => row.occurrence_count || 1 },
     { key: "source", header: copy(locale, "Source", "المصدر"), render: (row) => row.component || "desktop-app" },
     { key: "version", header: copy(locale, "Version", "الإصدار"), render: (row) => row.app_version || "—" },
@@ -2711,7 +2716,11 @@ function DiagnosticReportHistory({ filters }: { filters: AdminDiagnosticFilters 
     { key: "action", header: copy(locale, "Report", "التقرير"), render: (row) => <Button size="sm" onClick={() => setSelected(row)}>{copy(locale, "View", "عرض")}</Button> },
   ];
   return <div className="stack">
-    <div className="cluster"><Button onClick={() => { setCursors([""]); reports.reload(); }}>{copy(locale, "Refresh latest reports", "تحديث أحدث التقارير")}</Button></div>
+    <div className="cluster">
+      <Button disabled={reports.loading} onClick={() => { if (cursors.length > 1) setCursors([""]); else reports.reload(); }}>{copy(locale, "Refresh latest reports", "تحديث أحدث التقارير")}</Button>
+      <DiagnosticCopyControl label={copy(locale, "Copy all matching reports", "نسخ كل التقارير المطابقة")} prepare={async (signal, progress) => formatDiagnosticReports(await collectDiagnosticReports(admin, filters, signal, progress), filters)} />
+    </div>
+    <p className="secondary">{copy(locale, "Copy includes full report details across all pages for the applied filters. Passwords, tokens, messages and notes are excluded.", "النسخ يشمل تفاصيل التقارير الكاملة من كل الصفحات حسب الفلاتر المطبقة. كلمات المرور والتوكنات ومحتوى الرسائل والملاحظات مستبعدة.")}</p>
     {reports.error ? <Alert tone="danger" title={copy(locale, "Reports could not be loaded", "تعذر تحميل التقارير")}><Button onClick={reports.reload}>{copy(locale, "Retry", "إعادة المحاولة")}</Button></Alert> : <DataTable columns={columns} rows={reports.data?.items || []} loading={reports.loading} rowKey={(row) => row.id} emptyTitle={copy(locale, "No matching reports", "لا توجد تقارير مطابقة")} emptyBody={copy(locale, "Reports are retained for 90 days. Continue to older pages when available.", "نحتفظ بالتقارير لمدة 90 يومًا. انتقل للصفحات الأقدم إن كانت متاحة.")} />}
     <Pagination page={cursors.length} pages={cursors.length + (reports.data?.has_more ? 1 : 0)} label={copy(locale, "Report page", "صفحة التقارير")} previousLabel={copy(locale, "Newer", "الأحدث")} nextLabel={copy(locale, "Older", "الأقدم")} onChange={(page) => { if (page < cursors.length) setCursors((items) => items.slice(0, -1)); else if (reports.data?.next_cursor) setCursors((items) => [...items, reports.data!.next_cursor!]); }} />
     <DiagnosticReportDialog key={selected?.id || "diagnostic-report:closed"} report={selected} onClose={() => setSelected(null)} />
@@ -2769,14 +2778,21 @@ function DiagnosticReportDialog({
       title={copy(locale, "Error report", "تقرير الخطأ")}
       closeLabel={copy(locale, "Close", "إغلاق")}
       footer={
+        <>
+        <DiagnosticCopyControl label={copy(locale, "Copy full report", "نسخ التقرير كاملًا")} disabled={details.loading || !details.data} prepare={async () => formatDiagnosticReports([details.data!], {})} />
         <Button onClick={onClose}>
           {copy(locale, "Close", "إغلاق")}
         </Button>
+        </>
       }
     >
       {report ? (
         <div className="stack">
           {details.error ? <Alert tone="danger" title={copy(locale, "The full report could not be loaded", "تعذر تحميل التقرير الكامل")}><Button onClick={details.reload}>{copy(locale, "Retry", "إعادة المحاولة")}</Button></Alert> : null}
+          <div>
+            <h3>{report.error_type}</h3>
+            <p className="diagnostic-report-message">{report.message || "—"}</p>
+          </div>
           <dl className="detail-list">
             <div><dt>{copy(locale, "Saturn user", "مستخدم Saturn")}</dt><dd>{report.operator?.email || report.operator?.firebase_uid || copy(locale, "Unattributed", "غير منسوب")}</dd></div>
             <div><dt>{copy(locale, "Attribution", "نسبة التقرير")}</dt><dd>{report.attribution === "verified" ? copy(locale, "Verified session", "جلسة موثّقة") : copy(locale, "No verified user", "لا يوجد مستخدم موثّق")}</dd></div>
@@ -2789,16 +2805,15 @@ function DiagnosticReportDialog({
             <div><dt>{copy(locale, "Time", "الوقت")}</dt><dd>{date(report.happened_at, locale)}</dd></div>
             <div><dt>{copy(locale, "Last seen", "آخر ظهور")}</dt><dd>{date(report.last_happened_at || report.happened_at, locale)}</dd></div>
             <div><dt>{copy(locale, "Device", "الجهاز")}</dt><dd>{report.device_name || report.hwid || "—"}</dd></div>
-            {technicalFields.map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{String(value)}</dd></div>)}
           </dl>
-          <div>
-            <strong>{copy(locale, "Summary", "الملخص")}</strong>
-            <p className="diagnostic-report-message">{report.message || "—"}</p>
-          </div>
           <div>
             <strong>{copy(locale, "Technical trace", "التتبع الفني")}</strong>
             <pre className="diagnostic-report-trace" dir="ltr">{details.loading ? copy(locale, "Loading technical trace…", "جارٍ تحميل التتبّع الفني…") : report.stack_trace || "—"}</pre>
           </div>
+          <details className="diagnostic-technical-details">
+            <summary>{copy(locale, "Device and lifecycle details", "تفاصيل الجهاز ومراحل التشغيل")}</summary>
+            <dl className="detail-list" dir="ltr">{technicalFields.map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl>
+          </details>
         </div>
       ) : null}
     </Modal>

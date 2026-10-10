@@ -24,6 +24,43 @@ const cyclic = { phase: 'ready' }
 cyclic.self = cyclic
 assert.deepEqual(technicalFields(cyclic), [['phase', 'ready']])
 assert.ok(technicalFields(Array.from({ length: 1000 }, () => 'x')).length <= 160)
+const exportSource = read('src/new-ui/pages/production/diagnosticReportExport.ts')
+const exportModule = { exports: {} }
+new Function('exports', ts.transpileModule(exportSource, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText)(exportModule.exports)
+const { collectDiagnosticReports, formatDiagnosticReports } = exportModule.exports
+const fullReport = (id) => ({ id, happened_at: '2026-10-11T12:00:00Z', error_type: 'synthetic_failure', message: 'Synthetic report', stack_trace: 'full trace\n'.repeat(1000), technical_context: { lifecycle: { phase: 'ready' } }, raw_payload: { secret: 'not-for-export' } })
+const requested = []
+let concurrent = 0
+let peak = 0
+const reader = {
+  listCrashLogs: async (filters) => {
+    requested.push(filters)
+    return filters.cursor === '' ? { success: true, items: [1, 2, 3, 4, 5].map((id) => ({ id: String(id) })), has_more: true, next_cursor: 'older', retention_days: 90 }
+      : { success: true, items: [{ id: '5' }, { id: '6' }], has_more: false, next_cursor: null, retention_days: 90 }
+  },
+  getCrashLog: async (id) => { concurrent++; peak = Math.max(peak, concurrent); await Promise.resolve(); concurrent--; return fullReport(id) },
+}
+const progress = []
+const collected = await collectDiagnosticReports(reader, { user: 'synthetic@example.invalid', classification: 'warning' }, new AbortController().signal, (count) => progress.push(count))
+assert.deepEqual(collected.map((report) => report.id), ['1', '2', '3', '4', '5', '6'])
+assert.deepEqual(progress, [4, 5, 6])
+assert.equal(peak, 4)
+assert.ok(requested.every((filters) => filters.user === 'synthetic@example.invalid' && filters.classification === 'warning' && filters.limit === 200))
+const exported = JSON.parse(formatDiagnosticReports(collected, requested[0]))
+assert.equal(exported.report_count, 6)
+assert.equal(exported.reports[0].stack_trace, fullReport('1').stack_trace)
+assert.deepEqual(exported.reports[0].technical_context, fullReport('1').technical_context)
+assert.ok(!JSON.stringify(exported).includes('not-for-export'))
+assert.ok(!('cursor' in exported.filters))
+await assert.rejects(collectDiagnosticReports({ ...reader, getCrashLog: async () => { throw new Error('synthetic_read_failed') } }, {}, new AbortController().signal, () => {}), /synthetic_read_failed/)
+await assert.rejects(collectDiagnosticReports({ ...reader, listCrashLogs: async () => ({ success: true, items: [], has_more: true, next_cursor: 'repeated' }) }, {}, new AbortController().signal, () => {}), /cursor_invalid/)
+await assert.rejects(collectDiagnosticReports({ ...reader, getCrashLog: async () => fullReport('wrong') }, {}, new AbortController().signal, () => {}), /mismatch/)
+const cancelled = new AbortController()
+cancelled.abort()
+await assert.rejects(collectDiagnosticReports(reader, {}, cancelled.signal, () => {}), { name: 'AbortError' })
+const duringRead = new AbortController()
+await assert.rejects(collectDiagnosticReports({ ...reader, getCrashLog: async (id) => { duringRead.abort(); return fullReport(id) } }, {}, duringRead.signal, () => assert.fail('Cancelled work must not publish progress')), { name: 'AbortError' })
+console.log('PASS Full diagnostic collection: pagination, detail, bounded concurrency, filters, cancellation, failures and safe export')
 const section = (start, end) => adminOperations.slice(adminOperations.indexOf(start), adminOperations.indexOf(end))
 const manualGrant = section('function ManualGrantDrawer', 'function AdminOperationDialog')
 const userDetail = section('function UserDetailDrawer', 'function SubscriptionRecoveryDrawer')
@@ -46,6 +83,8 @@ const checks = [
   ['User detail exposes safe session revocation', userDetail.includes('scope: "session"') && userDetail.includes('scope: "all"') && !userDetail.includes('row.hwid')],
   ['User detail includes support and access requests', userDetail.includes('support_threads') && userDetail.includes('login_requests')],
   ['Crash group state is operational', diagnostics.includes('updateCrashGroupState') && diagnostics.includes('CrashGroupStateDialog')],
+  ['Diagnostics uses manual refresh only', !diagnostics.includes('10000')],
+  ['Diagnostics copies full detail across every matching page', diagnostics.includes('collectDiagnosticReports(admin, filters') && diagnostics.includes('formatDiagnosticReports([details.data!]')],
   ['Tamper resolution requires an explicit note', diagnostics.includes('TamperResolveDialog') && diagnostics.includes('reason.trim().length < 3')],
   ['Explicit subscription transition endpoints exist', api.includes('/transition/preview') && api.includes('/transition/execute')],
   ['Explicit account lifecycle endpoints exist', api.includes('/lifecycle/preview') && api.includes('/lifecycle/execute')],
