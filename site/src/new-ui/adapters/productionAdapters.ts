@@ -952,11 +952,11 @@ export const productionAdapters: AppAdapters = {
         message: input.message,
       })
     },
-    listCrashLogs(filters = {}) {
-      return fetchCrashLogs(filters)
+    listCrashLogs(filters = {}, signal) {
+      return fetchCrashLogs(filters, signal)
     },
-    async getCrashLog(id) {
-      return (await fetchCrashLog(id)).item
+    async getCrashLog(id, signal) {
+      return (await fetchCrashLog(id, signal)).item
     },
     listCrashGroups(filters = {}) {
       return fetchCrashGroups(filters)
