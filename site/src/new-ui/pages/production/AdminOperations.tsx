@@ -60,7 +60,7 @@ import {
 import { Tabs } from "../../components/ui/Navigation";
 import { Drawer, Modal } from "../../components/ui/Overlays";
 import { DiagnosticCopyControl } from "./DiagnosticCopyControl";
-import { collectDiagnosticReports, formatDiagnosticReports } from "./diagnosticReportExport";
+import { collectDiagnosticReports, createDiagnosticBundle, formatDiagnosticReports } from "./diagnosticReportExport";
 
 type Resource<T> = {
   data: T | null;
@@ -2718,9 +2718,10 @@ function DiagnosticReportHistory({ filters }: { filters: AdminDiagnosticFilters 
   return <div className="stack">
     <div className="cluster">
       <Button disabled={reports.loading} onClick={() => { if (cursors.length > 1) setCursors([""]); else reports.reload(); }}>{copy(locale, "Refresh latest reports", "تحديث أحدث التقارير")}</Button>
-      <DiagnosticCopyControl label={copy(locale, "Copy all matching reports", "نسخ كل التقارير المطابقة")} prepare={async (signal, progress) => formatDiagnosticReports(await collectDiagnosticReports(admin, filters, signal, progress), filters)} />
+      <DiagnosticCopyControl bundle label={copy(locale, "Copy problem summary", "نسخ ملخص المشاكل")} prepare={(signal, progress) => createDiagnosticBundle(admin, filters, signal, progress)} />
+      <DiagnosticCopyControl label={copy(locale, "Copy all matching reports (slower)", "نسخ كل التقارير المطابقة (أبطأ)")} prepare={async (signal, progress) => formatDiagnosticReports(await collectDiagnosticReports(admin, filters, signal, progress), filters)} />
     </div>
-    <p className="secondary">{copy(locale, "Copy includes full report details across all pages for the applied filters. Passwords, tokens, messages and notes are excluded.", "النسخ يشمل تفاصيل التقارير الكاملة من كل الصفحات حسب الفلاتر المطبقة. كلمات المرور والتوكنات ومحتوى الرسائل والملاحظات مستبعدة.")}</p>
+    <p className="secondary">{copy(locale, "The problem summary groups up to 1,000 recent matching records and includes up to 40 full examples within 512 KiB. It states its coverage and omissions. Copy all matching reports collects every page and may take longer. Passwords, tokens, message contents and notes are excluded.", "ملخص المشاكل يجمع حتى 1,000 سجل حديث مطابق حسب المشكلة، ويضم حتى 40 مثالًا كاملًا في حدود 512 KiB، مع توضيح نطاقه وما لم يُدرج فيه. نسخ كل التقارير المطابقة يجمع كل الصفحات وقد يستغرق وقتًا أطول. كلمات المرور والتوكنات ومحتوى الرسائل والملاحظات مستبعدة.")}</p>
     {reports.error ? <Alert tone="danger" title={copy(locale, "Reports could not be loaded", "تعذر تحميل التقارير")}><Button onClick={reports.reload}>{copy(locale, "Retry", "إعادة المحاولة")}</Button></Alert> : <DataTable columns={columns} rows={reports.data?.items || []} loading={reports.loading} rowKey={(row) => row.id} emptyTitle={copy(locale, "No matching reports", "لا توجد تقارير مطابقة")} emptyBody={copy(locale, "Reports are retained for 90 days. Continue to older pages when available.", "نحتفظ بالتقارير لمدة 90 يومًا. انتقل للصفحات الأقدم إن كانت متاحة.")} />}
     <Pagination page={cursors.length} pages={cursors.length + (reports.data?.has_more ? 1 : 0)} label={copy(locale, "Report page", "صفحة التقارير")} previousLabel={copy(locale, "Newer", "الأحدث")} nextLabel={copy(locale, "Older", "الأقدم")} onChange={(page) => { if (page < cursors.length) setCursors((items) => items.slice(0, -1)); else if (reports.data?.next_cursor) setCursors((items) => [...items, reports.data!.next_cursor!]); }} />
     <DiagnosticReportDialog key={selected?.id || "diagnostic-report:closed"} report={selected} onClose={() => setSelected(null)} />

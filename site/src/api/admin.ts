@@ -1123,12 +1123,12 @@ function diagnosticQuery(params: AdminDiagnosticFilters) {
   return query
 }
 
-export async function fetchCrashLogs(params: AdminDiagnosticFilters = {}) {
-  return adminFetch<AdminDiagnosticPage>(`/crash-logs?${diagnosticQuery(params)}`)
+export async function fetchCrashLogs(params: AdminDiagnosticFilters = {}, signal?: AbortSignal) {
+  return adminFetch<AdminDiagnosticPage>(`/crash-logs?${diagnosticQuery(params)}`, { signal })
 }
 
-export async function fetchCrashLog(id: string) {
-  return adminFetch<{ success: boolean; item: AdminCrashLog }>(`/crash-logs/${encodeURIComponent(id)}`)
+export async function fetchCrashLog(id: string, signal?: AbortSignal) {
+  return adminFetch<{ success: boolean; item: AdminCrashLog }>(`/crash-logs/${encodeURIComponent(id)}`, { signal })
 }
 
 export async function fetchCrashGroups(params: AdminDiagnosticFilters = {}) {

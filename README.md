@@ -49,8 +49,16 @@ Worker accepts sanitized technical failures from startup through shutdown,
 attributes reports only through a matching verified app session, and leaves
 pre-login reports unattributed. Administrator-only history and report detail
 support user filters, cursor pagination, occurrence counts, and lifecycle
-context. Diagnostics refreshes manually. Administrators can copy a full report
-or every matching report across all pages, using sanitized detail responses.
+context. Diagnostics refreshes manually. The primary problem summary scans up
+to 1,000 recent matching records, groups recurring failures, and includes up
+to 40 full sanitized examples with four concurrent detail requests. Its JSON
+states the scanned window, occurrence counts, omitted signatures and examples,
+and whether more pages may remain. It is limited to 512 KiB; examples are
+included whole or omitted, never shortened. This is not a whole-history count
+or an atomic snapshot. A separate action copies every matching report across
+all pages. Administrators can also copy an individual full report.
+Summary collection stops after 45 seconds; full collection stops
+after 120 seconds. Cancellation and deadlines abort the underlying requests.
 If clipboard access is blocked, selectable text and a file download remain
 available. Collection errors never produce a partial export presented as complete.
 The daily scheduled task deletes reports older than 90 days. Delivery
