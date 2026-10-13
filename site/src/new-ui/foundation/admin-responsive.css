@@ -206,6 +206,10 @@ html[data-surface='admin'] .detail-list > div {
   padding: 7px 0;
 }
 
+.diagnostic-event-window {
+  overflow-wrap: anywhere;
+}
+
 html[data-surface='admin'] .ui-form-field {
   gap: 4px;
 }

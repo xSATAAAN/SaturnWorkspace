@@ -3,7 +3,7 @@
 - Status: canonical source guide
 - Scope: public/customer/admin Web surfaces and Auth, Admin, Policy, and Route Check Workers
 - Owner: repository maintainer
-- Last verified: 2026-10-10
+- Last verified: 2026-10-13
 - Verification: protected `web-required` CI
 
 Canonical Web and control-plane source for Saturn Workspace. The project is
@@ -57,6 +57,12 @@ and whether more pages may remain. It is limited to 512 KiB; examples are
 included whole or omitted, never shortened. This is not a whole-history count
 or an atomic snapshot. A separate action copies every matching report across
 all pages. Administrators can also copy an individual full report.
+New Desktop reports can include a bounded technical timeline before the failure
+and a linked follow-up collected afterward. Report detail verifies the link's
+event, run and operator boundaries, displays ordered events with expandable
+facts, and includes both windows in the full copy. Unattributed reports remain
+unattributed. Missing follow-ups, capacity limits and incomplete collection are
+visible rather than presented as complete evidence.
 Summary collection stops after 45 seconds; full collection stops
 after 120 seconds. Cancellation and deadlines abort the underlying requests.
 If clipboard access is blocked, selectable text and a file download remain

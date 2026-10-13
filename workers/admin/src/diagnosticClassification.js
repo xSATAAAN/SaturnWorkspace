@@ -10,6 +10,7 @@ const EXPECTED_MESSAGES = new Set([
 ]);
 
 const WARNING_ERROR_TYPES = new Set([
+  "diagnostictracefollowup",
   "googledriveautosyncfailed",
   "googledriveinitialsyncfailed",
   "updatemanifesterror",
