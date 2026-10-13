@@ -2751,6 +2751,23 @@ function diagnosticTechnicalFields(value: unknown): [string, string][] {
   return fields;
 }
 
+function DiagnosticEventWindow({ value, title }: { value: unknown; title: string }) {
+  const { locale } = useExperience();
+  const trace = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  const metadata = diagnosticTechnicalFields(Object.fromEntries(Object.entries(trace).filter(([key]) => key !== "events")));
+  const events = Array.isArray(trace.events) ? trace.events.filter((event): event is Record<string, unknown> => Boolean(event) && typeof event === "object") : [];
+  return <details className="diagnostic-technical-details diagnostic-event-window">
+    <summary>{title} ({events.length})</summary>
+    <dl className="detail-list" dir="ltr">{metadata.map(([key, fact]) => <div key={key}><dt>{key}</dt><dd>{fact}</dd></div>)}</dl>
+    {events.length ? <ol className="stack" dir="ltr">{events.map((event, index) => <li key={String(event.sequence ?? index)}>
+      <details className="diagnostic-technical-details">
+        <summary><code>{String(event.event || "unknown")}</code> · {String(event.sequence ?? index + 1)} · {typeof event.at_unix_ms === "number" && Number.isFinite(new Date(event.at_unix_ms).valueOf()) ? <time dateTime={new Date(event.at_unix_ms).toISOString()}>{new Date(event.at_unix_ms).toISOString()}</time> : "—"}</summary>
+        <dl className="detail-list">{diagnosticTechnicalFields({ correlation: event.correlation, ...event.facts as Record<string, unknown> }).map(([key, fact]) => <div key={key}><dt>{key}</dt><dd>{fact}</dd></div>)}</dl>
+      </details>
+    </li>)}</ol> : <p className="secondary">{copy(locale, "No events were recorded for this window.", "لم تُسجّل أحداث لهذه الفترة.")}</p>}
+  </details>;
+}
+
 function DiagnosticReportDialog({
   report: summary,
   onClose,
@@ -2770,7 +2787,7 @@ function DiagnosticReportDialog({
       ram_gb: report?.ram_gb,
       tool_channel: report?.tool_channel,
     },
-    ...report?.technical_context,
+    ...Object.fromEntries(Object.entries(report?.technical_context || {}).filter(([key]) => !key.startsWith("trace"))),
   });
   return (
     <Modal
@@ -2781,6 +2798,7 @@ function DiagnosticReportDialog({
       footer={
         <>
         <DiagnosticCopyControl label={copy(locale, "Copy full report", "نسخ التقرير كاملًا")} disabled={details.loading || !details.data} prepare={async () => formatDiagnosticReports([details.data!], {})} />
+        <Button disabled={details.loading} onClick={details.reload}>{copy(locale, "Refresh report", "تحديث التقرير")}</Button>
         <Button onClick={onClose}>
           {copy(locale, "Close", "إغلاق")}
         </Button>
@@ -2811,6 +2829,12 @@ function DiagnosticReportDialog({
             <strong>{copy(locale, "Technical trace", "التتبع الفني")}</strong>
             <pre className="diagnostic-report-trace" dir="ltr">{details.loading ? copy(locale, "Loading technical trace…", "جارٍ تحميل التتبّع الفني…") : report.stack_trace || "—"}</pre>
           </div>
+          <details className="diagnostic-technical-details">
+            <summary>{copy(locale, "Events around the failure", "الأحداث المحيطة بالخطأ")}</summary>
+            <dl className="detail-list" dir="ltr"><div><dt>followup_status</dt><dd>{String(report.technical_context?.trace_followup_status || "—")}</dd></div></dl>
+            <DiagnosticEventWindow title={copy(locale, "Before the failure", "قبل الخطأ")} value={report.technical_context?.trace} />
+            <DiagnosticEventWindow title={copy(locale, "After the failure", "بعد الخطأ")} value={report.technical_context?.trace_followup} />
+          </details>
           <details className="diagnostic-technical-details">
             <summary>{copy(locale, "Device and lifecycle details", "تفاصيل الجهاز ومراحل التشغيل")}</summary>
             <dl className="detail-list" dir="ltr">{technicalFields.map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl>

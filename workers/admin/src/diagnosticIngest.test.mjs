@@ -3,6 +3,8 @@ import test from "node:test";
 
 import {
   crashSignatureSource,
+  diagnosticTrace,
+  getCrashLog,
   enforceCrashIngestRateLimit,
   ingestCrashLog,
   listCrashGroups,
@@ -71,6 +73,9 @@ async function mockDiagnosticStore(context, sessions = []) {
       const session = sessionsByHash.get(url.searchParams.get("session_token_hash")?.replace(/^eq\./, ""));
       return respond(session ? [session] : []);
     }
+    if (table === "account_profiles") {
+      return respond([...new Set(sessions.map(([, session]) => session.user_id))].map((uid) => ({ firebase_uid: uid })));
+    }
     assert.equal(table, "crash_logs");
     if (init.method === "POST") {
       const incoming = JSON.parse(init.body);
@@ -105,6 +110,128 @@ function assertDiagnosticAcknowledgement(result, eventId) {
   assert.equal(result.event_id, eventId);
   assert.deepEqual(Object.keys(result.item), ["id"]);
 }
+
+test("technical trace projection excludes arguments and preserves explicit limits", () => {
+  const trace = diagnosticTrace({
+    format: "saturnws.technical-trace.v1", run_id: "2ecda24e-2b8f-4381-9d16-15aefde2d32a",
+    history_at_capacity: true, followup_status: "scheduled", private_value: "synthetic-secret",
+    events: [{ event: "browser.cleanup", sequence: 3, facts: { reason: "temporary_profile_remove_failed", winerror: 32, browser: "1", hresult: -2147217394, password: "synthetic-secret", arguments: ["private"] } }],
+  });
+  assert.equal(trace.events[0].facts.winerror, 32);
+  assert.equal(trace.events[0].facts.browser, "1");
+  assert.equal(trace.events[0].facts.hresult, -2147217394);
+  assert.equal(trace.history_at_capacity, true);
+  assert.doesNotMatch(JSON.stringify(trace), /synthetic-secret|arguments|private_value/);
+});
+
+test("report detail includes before and linked after evidence without losing redaction", async (context) => {
+  const rootEventId = "00000000-0000-4000-8000-000000000001";
+  const childEventId = "00000000-0000-4000-8000-000000000002";
+  const run = "2ecda24e-2b8f-4381-9d16-15aefde2d32a";
+  const env = diagnosticEnv();
+  const store = await mockDiagnosticStore(context);
+  const root = await ingestCrashLog(diagnosticRequest({ event_id: rootEventId, raw_payload: { trace: {
+    format: "saturnws.technical-trace.v1", run_id: run, followup_event_id: childEventId,
+    events: [{ event: "api.begin", facts: { method: "synthetic_method" } }],
+  } } }), env);
+  const child = await ingestCrashLog(diagnosticRequest({ event_id: childEventId, error_type: "DiagnosticTraceFollowup", raw_payload: { severity: "info", trace: {
+    format: "saturnws.technical-trace.v1", run_id: run, parent_event_id: rootEventId, window_end: "elapsed", complete: true,
+    events: [{ event: "browser.close_requested", facts: { actor: "saturn", reason: "stop_environment", password: "synthetic-secret" } }],
+  } } }), env);
+  assert.notEqual(root.item.id, rootEventId);
+  assert.notEqual(child.item.id, childEventId);
+  assert.equal(root.classification, "error");
+  assert.equal(child.classification, "warning");
+  const result = await getCrashLog(root.item.id, env);
+  assert.equal(result.item.technical_context.trace.events[0].event, "api.begin");
+  assert.equal(result.item.technical_context.trace_followup.events[0].facts.actor, "saturn");
+  assert.equal(result.item.technical_context.trace_followup_status, "linked_unattributed");
+  assert.doesNotMatch(JSON.stringify(result), /synthetic-secret/);
+  store.rows.get(child.item.id).raw_payload.trace.run_id = "00000000-0000-4000-8000-000000000009";
+  const mismatch = await getCrashLog(root.item.id, env);
+  assert.equal(mismatch.item.technical_context.trace_followup_status, "identity_unverified");
+  assert.equal(mismatch.item.technical_context.trace_followup, undefined);
+  const childRow = store.rows.get(child.item.id);
+  childRow.raw_payload.trace.run_id = run;
+  childRow.raw_payload.trace.parent_event_id = "00000000-0000-4000-8000-000000000009";
+  assert.equal((await getCrashLog(root.item.id, env)).item.technical_context.trace_followup_status, "identity_unverified");
+  childRow.raw_payload.trace.parent_event_id = rootEventId;
+  childRow.raw_payload.event_id = "00000000-0000-4000-8000-000000000009";
+  assert.equal((await getCrashLog(root.item.id, env)).item.technical_context.trace_followup_status, "identity_unverified");
+  store.rows.delete(child.item.id);
+  const missing = await getCrashLog(root.item.id, env);
+  assert.equal(missing.item.technical_context.trace_followup_status, "not_received");
+  assert.equal(missing.item.technical_context.trace_followup, undefined);
+});
+
+test("matching verified diagnostics link both windows to the original operator", async (context) => {
+  const rootEventId = "00000000-0000-4000-8000-000000000031";
+  const childEventId = "00000000-0000-4000-8000-000000000032";
+  const run = "2ecda24e-2b8f-4381-9d16-15aefde2d32a";
+  const owner = { user_id: "synthetic-matching-owner", expires_at: "2099-01-01T00:00:00Z" };
+  const env = diagnosticEnv();
+  await mockDiagnosticStore(context, [["synthetic-matching-token", owner]]);
+  const headers = { Authorization: "Bearer synthetic-matching-token" };
+  const root = await ingestCrashLog(diagnosticRequest({ event_id: rootEventId, raw_payload: { runtime: { firebase_user_id: owner.user_id }, trace: {
+    format: "saturnws.technical-trace.v1", run_id: run, followup_event_id: childEventId, events: [],
+  } } }, headers), env);
+  await ingestCrashLog(diagnosticRequest({ event_id: childEventId, error_type: "DiagnosticTraceFollowup", raw_payload: { runtime: { firebase_user_id: owner.user_id }, trace: {
+    format: "saturnws.technical-trace.v1", run_id: run, parent_event_id: rootEventId, complete: true,
+    events: [{ event: "browser.exited", facts: { success: true } }],
+  } } }, headers), env);
+  const result = await getCrashLog(root.item.id, env);
+  assert.equal(result.item.user_id, owner.user_id);
+  assert.equal(result.item.technical_context.trace_followup_status, "linked");
+  assert.equal(result.item.technical_context.trace_followup.events[0].facts.success, true);
+});
+
+test("linked diagnostics never attach another verified operator's follow-up", async (context) => {
+  const rootEventId = "00000000-0000-4000-8000-000000000011";
+  const childEventId = "00000000-0000-4000-8000-000000000012";
+  const run = "2ecda24e-2b8f-4381-9d16-15aefde2d32a";
+  const owner = { user_id: "synthetic-original-owner", expires_at: "2099-01-01T00:00:00Z" };
+  const other = { user_id: "synthetic-other-owner", expires_at: "2099-01-01T00:00:00Z" };
+  const env = diagnosticEnv();
+  await mockDiagnosticStore(context, [["synthetic-owner-token", owner], ["synthetic-other-token", other]]);
+  const root = await ingestCrashLog(diagnosticRequest({ event_id: rootEventId, raw_payload: { runtime: { firebase_user_id: owner.user_id }, trace: {
+    format: "saturnws.technical-trace.v1", run_id: run, followup_event_id: childEventId, events: [],
+  } } }, { Authorization: "Bearer synthetic-owner-token" }), env);
+  await ingestCrashLog(diagnosticRequest({ event_id: childEventId, raw_payload: { runtime: { firebase_user_id: other.user_id }, trace: {
+    format: "saturnws.technical-trace.v1", run_id: run, parent_event_id: rootEventId, complete: true,
+    events: [{ event: "api.end", facts: { method: "synthetic_other_method" } }],
+  } } }, { Authorization: "Bearer synthetic-other-token" }), env);
+  const result = await getCrashLog(root.item.id, env);
+  assert.equal(result.item.user_id, owner.user_id);
+  assert.equal(result.item.technical_context.trace_followup_status, "identity_unverified");
+  assert.equal(result.item.technical_context.trace_followup, undefined);
+  assert.doesNotMatch(JSON.stringify(result), /synthetic_other_method/);
+});
+
+test("missing run identity cannot qualify two follow-up windows as matching", async (context) => {
+  const rootEventId = "00000000-0000-4000-8000-000000000021";
+  const childEventId = "00000000-0000-4000-8000-000000000022";
+  const env = diagnosticEnv();
+  await mockDiagnosticStore(context);
+  const root = await ingestCrashLog(diagnosticRequest({ event_id: rootEventId, raw_payload: { trace: {
+    format: "saturnws.technical-trace.v1", followup_event_id: childEventId, events: [],
+  } } }), env);
+  await ingestCrashLog(diagnosticRequest({ event_id: childEventId, raw_payload: { trace: {
+    format: "saturnws.technical-trace.v1", parent_event_id: rootEventId, complete: true, events: [],
+  } } }), env);
+  const result = await getCrashLog(root.item.id, env);
+  assert.equal(result.item.technical_context.trace_followup_status, "identity_unverified");
+  assert.equal(result.item.technical_context.trace_followup, undefined);
+});
+
+test("legacy reports without follow-up collection do not claim complete evidence", async (context) => {
+  const env = diagnosticEnv();
+  await mockDiagnosticStore(context);
+  const root = await ingestCrashLog(diagnosticRequest({}), env);
+  const result = await getCrashLog(root.item.id, env);
+  assert.equal(result.item.technical_context.trace, null);
+  assert.equal(result.item.technical_context.trace_followup_status, "not_recorded");
+  assert.equal(result.item.technical_context.trace_followup, undefined);
+});
 
 test("diagnostic sanitizer removes credentials, account email, and user paths", () => {
   const sanitized = sanitizeCrashValue({

@@ -3528,6 +3528,11 @@ function diagnosticCutoff(now = Date.now()) {
   return new Date(now - DIAGNOSTIC_RETENTION_DAYS * 86400000).toISOString();
 }
 
+async function diagnosticStorageId(eventId) {
+  const eventHash = await sha256Hex(`saturnws-diagnostic-event:${eventId}`);
+  return `${eventHash.slice(0, 8)}-${eventHash.slice(8, 12)}-4${eventHash.slice(13, 16)}-8${eventHash.slice(17, 20)}-${eventHash.slice(20, 32)}`;
+}
+
 export async function purgeExpiredDiagnostics(env, now = Date.now()) {
   await supabaseRequest(env, "crash_logs", "DELETE", {
     query: `happened_at=lt.${encodeURIComponent(diagnosticCutoff(now))}`,
@@ -3629,6 +3634,11 @@ async function projectDiagnosticRows(rows, env, { detail = false } = {}) {
             warning: raw.auth.warning || null,
           } : null,
           extra: raw.extra || {},
+          trace: diagnosticTrace(raw.trace),
+          collection: {
+            details_truncated: raw.details_truncated === true,
+            trace_status: raw.trace_status || null,
+          },
         }),
       } : {}),
     };
@@ -3689,7 +3699,60 @@ export async function getCrashLog(id, env) {
   if (!isUuid(id)) throw new Error("invalid_diagnostic_id");
   const rows = await safeSupabaseRead(env, "crash_logs", `select=${DIAGNOSTIC_SELECT}&id=eq.${id}&happened_at=gte.${encodeURIComponent(diagnosticCutoff())}&limit=1`);
   if (!rows.length) throw new Error("diagnostic_not_found");
-  return { success: true, item: (await projectDiagnosticRows(rows, env, { detail: true }))[0] };
+  const item = (await projectDiagnosticRows(rows, env, { detail: true }))[0];
+  const trace = item.technical_context.trace;
+  if (trace && isUuid(trace.followup_event_id)) {
+    if (!isUuid(trace.run_id) || !isUuid(item.event_id)) {
+      item.technical_context.trace_followup_status = "identity_unverified";
+      return { success: true, item };
+    }
+    const followupId = await diagnosticStorageId(trace.followup_event_id);
+    const followups = await safeSupabaseRead(env, "crash_logs", `select=${DIAGNOSTIC_SELECT}&id=eq.${followupId}&happened_at=gte.${encodeURIComponent(diagnosticCutoff())}&limit=1`);
+    const followup = followups[0];
+    if (followup) {
+      const related = diagnosticTrace(followup.raw_payload?.trace);
+      const sameOwner = verifiedDiagnosticUid(followup) === verifiedDiagnosticUid(rows[0]);
+      if (sameOwner && followup.raw_payload?.event_id === trace.followup_event_id && related?.parent_event_id === item.event_id && isUuid(related.run_id) && related.run_id === trace.run_id) {
+        item.technical_context.trace_followup = sanitizeCrashValue(related);
+        item.technical_context.trace_followup_status = verifiedDiagnosticUid(rows[0]) ? "linked" : "linked_unattributed";
+      } else {
+        item.technical_context.trace_followup_status = "identity_unverified";
+      }
+    } else {
+      item.technical_context.trace_followup_status = "not_received";
+    }
+  } else {
+    item.technical_context.trace_followup_status = trace?.followup_status || "not_recorded";
+  }
+  return { success: true, item };
+}
+
+export function diagnosticTrace(value) {
+  if (!value || value.format !== "saturnws.technical-trace.v1") return null;
+  const output = { format: value.format };
+  for (const key of ["run_id", "parent_event_id", "followup_event_id"]) if (isUuid(value[key])) output[key] = value[key];
+  if (/^[a-f0-9]{24}$/.test(value.correlation || "")) output.correlation = value.correlation;
+  for (const key of ["pre_seconds", "post_seconds", "omitted_events", "persistence_failures"]) if (Number.isSafeInteger(value[key]) && value[key] >= 0) output[key] = value[key];
+  for (const key of ["history_at_capacity", "complete"]) if (typeof value[key] === "boolean") output[key] = value[key];
+  for (const key of ["followup_status", "window_end"]) if (/^[a-z_]{1,48}$/.test(value[key] || "")) output[key] = value[key];
+  const names = new Set(["api.begin", "api.end", "operation.stage", "browser.launch", "browser.probe", "browser.close_requested", "browser.exited", "browser.cleanup", "policy.fetch", "runtime.phase", "owner.boundary", "failure"]);
+  const codes = new Set(["method", "stage", "state", "reason", "browser", "mode", "action", "exception_type", "actor"]);
+  const numbers = new Set(["elapsed_ms", "exit_code", "winerror", "errno", "hresult", "http_status", "matched_count", "unreadable_count", "attempt", "pid"]);
+  const flags = new Set(["success", "profile_verified", "profile_exists", "identity_present", "identity_matches", "query_complete", "proxy_enabled"]);
+  output.events = (Array.isArray(value.events) ? value.events : []).slice(0, 96).filter((row) => row && names.has(row.event)).map((row) => {
+    const event = { event: row.event, facts: {} };
+    for (const key of ["sequence", "at_unix_ms"]) if (Number.isSafeInteger(row[key])) event[key] = row[key];
+    if (/^[a-f0-9]{24}$/.test(row.correlation || "")) event.correlation = row.correlation;
+    for (const [key, fact] of Object.entries(row.facts || {})) {
+      if (key === "browser" && ["1", "2", "3"].includes(fact)) event.facts[key] = fact;
+      if (codes.has(key) && typeof fact === "string" && /^[a-zA-Z][a-zA-Z0-9_.:-]{0,95}$/.test(fact)) event.facts[key] = fact;
+      if (numbers.has(key) && Number.isSafeInteger(fact)) event.facts[key] = fact;
+      if (flags.has(key) && typeof fact === "boolean") event.facts[key] = fact;
+    }
+    return event;
+  });
+  if (Array.isArray(value.events) && value.events.length > 96) output.events_truncated = true;
+  return output;
 }
 
 function isExpiredIso(value) {
@@ -4535,8 +4598,7 @@ export async function ingestCrashLog(request, env) {
   rawPayload.occurrence_count = safeInt(safeBody?.occurrence_count || rawPayload.occurrence_count, 1, 1000000000);
   rawPayload.first_happened_at = new Date(first).toISOString();
   rawPayload.last_happened_at = new Date(Number.isFinite(lastAt) ? Math.max(first, Math.min(lastAt, now)) : first).toISOString();
-  const eventHash = await sha256Hex(`saturnws-diagnostic-event:${eventId}`);
-  const id = `${eventHash.slice(0, 8)}-${eventHash.slice(8, 12)}-4${eventHash.slice(13, 16)}-8${eventHash.slice(17, 20)}-${eventHash.slice(20, 32)}`;
+  const id = await diagnosticStorageId(eventId);
   const payload = {
     id,
     happened_at: rawPayload.first_happened_at,

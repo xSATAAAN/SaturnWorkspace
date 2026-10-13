@@ -3,6 +3,8 @@ import path from 'node:path'
 import process from 'node:process'
 import assert from 'node:assert/strict'
 import ts from 'typescript'
+import React from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 
 const root = process.cwd()
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8')
@@ -24,6 +26,20 @@ const cyclic = { phase: 'ready' }
 cyclic.self = cyclic
 assert.deepEqual(technicalFields(cyclic), [['phase', 'ready']])
 assert.ok(technicalFields(Array.from({ length: 1000 }, () => 'x')).length <= 160)
+const windowFunction = syntax.statements.find((item) => ts.isFunctionDeclaration(item) && item.name?.text === 'DiagnosticEventWindow')
+assert.ok(windowFunction, 'Diagnostic event timeline must exist')
+const windowCode = ts.transpileModule(windowFunction.getText(syntax), { compilerOptions: { target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React } }).outputText
+let timelineLocale = 'en'
+const Timeline = new Function('React', 'useExperience', 'copy', 'diagnosticTechnicalFields', `${windowCode}; return DiagnosticEventWindow;`)(React, () => ({ locale: timelineLocale }), (locale, en, ar) => locale === 'ar' ? ar : en, technicalFields)
+const timelineEvents = Array.from({ length: 96 }, (_, index) => ({ event: `api.event${index}`, sequence: index + 1, at_unix_ms: 1791800000000, facts: { method: 'synthetic_method', success: false } }))
+const timeline = renderToStaticMarkup(React.createElement(Timeline, { title: 'Before failure', value: { complete: false, omitted_events: 5, events: timelineEvents } }))
+assert.equal((timeline.match(/<li>/g) || []).length, 96)
+assert.match(timeline, /api.event95/)
+assert.match(timeline, /omitted_events/)
+assert.match(timeline, /<summary>/)
+timelineLocale = 'ar'
+assert.match(renderToStaticMarkup(React.createElement(Timeline, { title: 'After failure', value: null })), /لم تُسجّل أحداث لهذه الفترة/)
+console.log('PASS Diagnostic event timeline: ordered events, complete bounded window, coverage and Arabic empty state')
 const exportSource = read('src/new-ui/pages/production/diagnosticReportExport.ts')
 const exportModule = { exports: {} }
 new Function('exports', ts.transpileModule(exportSource, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText)(exportModule.exports)
