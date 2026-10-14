@@ -8,6 +8,24 @@ const TOOL_DIR = path.dirname(fileURLToPath(import.meta.url))
 const contract = loadRuntimeContract(path.resolve(TOOL_DIR, '../contracts/desktop-control-plane.v1.json'))
 const future = new Date(Date.now() + 60_000).toISOString()
 
+test('email registration proves an identity separately from desktop session authorization', () => {
+  const identity = { registration_id: 'synthetic-registration-id', email: 'qa@example.test' }
+  const cases = [
+    ['email_registration_start', { success: true, status: 'sent', ...identity, expires_at: future, resend_after_seconds: 45 }],
+    ['email_registration_verify', { success: true, status: 'verified', ...identity, verified_at: future, finalization_token: 'synthetic-finalization-proof', finalization_expires_at: future }],
+    ['email_registration_finalize', { success: true, status: 'finalized', email: identity.email }],
+    ['email_registration_cancel', { success: true, status: 'superseded' }],
+  ]
+  for (const [operation, payload] of cases) {
+    assert.equal(validateRuntimeOperation(contract, `auth.${operation}`, payload), payload)
+    assert.equal('session_token' in contract.auth.operations[operation].response.required, false)
+    assert.throws(() => validateRuntimeOperation(contract, `auth.${operation}`, { ...payload, success: false }), /invalid_fixed_value:success/)
+  }
+  assert.throws(() => validateRuntimeOperation(contract, 'auth.email_registration_verify', {
+    success: true, status: 'verified', ...identity, verified_at: future, finalization_expires_at: future,
+  }), /missing:finalization_token/)
+})
+
 test('canonical contract keeps account connection separate from entitlement', () => {
   assert.equal(contract.product_invariants.account_connection_is_separate_from_entitlement, true)
   assert.equal(contract.product_invariants.linked_without_subscription_is_valid, true)
