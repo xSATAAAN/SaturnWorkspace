@@ -12,7 +12,7 @@
     "build:new-ui:production": "tsc -p src/new-ui/tsconfig.json --noEmit && vite build --config src/new-ui/vite.production.config.ts && node scripts/check-new-ui-production-runtime.mjs --include-new-ui-dist-production",
     "lint:new-ui": "eslint src/new-ui --ignore-pattern dist --ignore-pattern dist-production",
     "test:new-ui:production": "node scripts/check-new-ui-production-runtime.mjs",
-    "test:production-integration": "node scripts/check-new-ui-production-runtime.mjs && node scripts/check-production-integration.mjs",
+    "test:production-integration": "node scripts/check-new-ui-production-runtime.mjs && node scripts/check-production-integration.mjs && node --test scripts/email-registration-delivery.test.mjs",
     "test:production-rollout": "node scripts/check-production-rollout.mjs",
     "test:content": "node scripts/check-no-mojibake.mjs && node scripts/check-copy-quality.mjs && node scripts/check-content-baseline.mjs",
     "test:account-linking": "node scripts/check-account-linking.mjs",

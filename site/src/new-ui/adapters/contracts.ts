@@ -153,6 +153,8 @@ export type EmailRegistrationStartResult = {
   email?: string
   expiresAt?: string
   resendAfterSeconds?: number
+  deliveryStatus?: 'queued' | 'sent' | 'failed' | 'unknown'
+  sentAt?: string | null
   retryAfterSeconds?: number
   error?: string
 }
@@ -201,6 +203,7 @@ export type AuthAdapter = {
   subscribe(callback: (state: AuthState) => void): () => void
   signInWithEmail(email: string, password: string): Promise<AppUser>
   startEmailRegistration(input: SignUpWithEmailInput): Promise<EmailRegistrationStartResult>
+  getEmailRegistrationStatus?(input: { registrationId: string; email: string }, signal?: AbortSignal): Promise<EmailRegistrationStartResult>
   finalizeEmailRegistration(input: { email: string; password: string; registrationId: string; finalizationToken: string }): Promise<AppUser>
   signInWithGoogle(input?: { locale?: 'ar' | 'en'; termsAccepted?: boolean; termsVersion?: string; provisionProfile?: boolean }): Promise<AppUser>
   provisionProfile?(input?: { displayName?: string; locale?: 'ar' | 'en'; termsAccepted?: boolean; termsVersion?: string }): Promise<AppUser>

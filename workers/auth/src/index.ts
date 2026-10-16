@@ -37,7 +37,7 @@ import {
   touchAppSession,
   upsertAccountProfile,
   updateDeviceLogin,
-  updateEmailVerification,
+  updateEmailVerificationIfCurrent,
 } from "./lib/supabase"
 import { isIsoExpired, isValidHwid, normalizeHwid } from "./lib/validators"
 import type { AccountProfileRow, AppSessionRow, Env, SubscriptionRow } from "./types"
@@ -504,6 +504,7 @@ async function verifyFirebaseUser(
   const apiKey = String(env.FIREBASE_WEB_API_KEY || "").trim()
   if (!apiKey) throw new Error("firebase_not_configured")
   const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${encodeURIComponent(apiKey)}`, {
+    signal: AbortSignal.timeout(20_000),
     method: "POST",
     headers: { "Content-Type": "application/json; charset=utf-8" },
     body: JSON.stringify({ idToken }),
@@ -667,6 +668,7 @@ async function firebaseAdminAccessToken(env: Env): Promise<{ token: string; proj
   const signature = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", key, new TextEncoder().encode(signingInput))
   const assertion = `${signingInput}.${base64UrlEncodeBytes(new Uint8Array(signature))}`
   const response = await fetch("https://oauth2.googleapis.com/token", {
+    signal: AbortSignal.timeout(20_000),
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -692,6 +694,7 @@ async function createFirebasePasswordUserAfterOtp(
   if (!apiKey) throw new Error("firebase_not_configured")
   const admin = await firebaseAdminAccessToken(env)
   const response = await fetch(`https://identitytoolkit.googleapis.com/v1/projects/${encodeURIComponent(admin.projectId)}/accounts?key=${encodeURIComponent(apiKey)}`, {
+    signal: AbortSignal.timeout(20_000),
     method: "POST",
     headers: {
       "Content-Type": "application/json; charset=utf-8",
@@ -788,6 +791,7 @@ async function updateFirebaseUserAdmin(
   if (input.customAttributes) body.customAttributes = JSON.stringify(input.customAttributes)
   if (input.revokeRefreshTokens) body.validSince = String(Math.floor(Date.now() / 1000))
   const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:update?key=${encodeURIComponent(apiKey)}`, {
+    signal: AbortSignal.timeout(20_000),
     method: "POST",
     headers: {
       "Content-Type": "application/json; charset=utf-8",
@@ -796,7 +800,9 @@ async function updateFirebaseUserAdmin(
     body: JSON.stringify(body),
   })
   const payload = await response.json<any>().catch(() => null)
-  if (!response.ok) throw new Error(mapFirebasePasswordError(String(payload?.error?.message || "")))
+  if (!response.ok) throw Object.assign(new Error(mapFirebasePasswordError(String(payload?.error?.message || ""))), {
+    remoteRejected: response.status < 500,
+  })
   const merged = {
     ...payload,
     localId: payload?.localId || input.userId,
@@ -836,6 +842,7 @@ async function lookupFirebaseAccountByEmailAfterOtp(
   if (!apiKey) throw new Error("firebase_not_configured")
   const admin = await firebaseAdminAccessToken(env)
   const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${encodeURIComponent(apiKey)}`, {
+    signal: AbortSignal.timeout(20_000),
     method: "POST",
     headers: {
       "Content-Type": "application/json; charset=utf-8",
@@ -1087,6 +1094,15 @@ async function hashEmailCode(env: Env, email: string, code: string): Promise<str
   return hmacSha256Hex(emailVerificationPepper(env), `${String(email || "").trim().toLowerCase()}:${String(code || "").trim()}`)
 }
 
+async function replacementEmailCode(env: Env, email: string, previousHash?: string): Promise<{ code: string; codeHash: string }> {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const code = randomOtpCode()
+    const codeHash = await hashEmailCode(env, email, code)
+    if (codeHash !== previousHash) return { code, codeHash }
+  }
+  throw new Error("email_verification_admission_conflict")
+}
+
 async function deliverEmailVerificationCode(
   env: Env,
   input: {
@@ -1100,9 +1116,9 @@ async function deliverEmailVerificationCode(
     idempotencyKey: string
     resend?: boolean
   },
-): Promise<{ transport: "test" | "email_operations" }> {
+): Promise<{ transport: "test" | "email_operations"; delivery: Record<string, unknown> }> {
   if (emailVerificationTestMode(env) && String(env.EMAIL_VERIFICATION_TEST_TRANSPORT || "").trim() === "response") {
-    return { transport: "test" }
+    return { transport: "test", delivery: { transport: "test", status: "sent", sent_at: new Date().toISOString() } }
   }
   if (String(env.EMAIL_AUTH_ENABLED || "").trim().toLowerCase() !== "true") {
     throw new Error("verification_delivery_disabled")
@@ -1111,6 +1127,7 @@ async function deliverEmailVerificationCode(
   const token = String(env.AUTH_EMAIL_ENQUEUE_TOKEN || "").trim()
   if (!url || !token) throw new Error("verification_delivery_not_configured")
   const deliveryRequest = new Request(url, {
+    signal: AbortSignal.timeout(10_000),
     method: "POST",
     headers: {
       "Content-Type": "application/json; charset=utf-8",
@@ -1162,7 +1179,128 @@ async function deliverEmailVerificationCode(
     if (response.status >= 500) throw new Error("verification_delivery_temporary_failure")
     throw new Error("verification_delivery_failed")
   }
-  return { transport: "email_operations" }
+  const payload = await response.json().catch(() => null)
+  const delivery = parseEmailDeliveryReply(payload)
+  if (!delivery) throw new Error("verification_delivery_temporary_failure")
+  return { transport: "email_operations", delivery: {
+    ...delivery,
+    idempotency_key: input.idempotencyKey,
+    verification_request_id: input.verificationId,
+    recipient: input.email,
+    event_type: input.resend ? "auth.verification_resend" : "auth.email_verification",
+  } }
+}
+
+const EMAIL_DELIVERY_STATES = new Set(["queued", "processing", "sent", "delivered", "failed", "suppressed", "cancelled", "expired"])
+
+function deliverySentAt(value: unknown): string | null {
+  if (typeof value !== "string" || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,3})?(?:Z|[+-]\d\d:\d\d)$/.test(value)) return null
+  const timestamp = Date.parse(value)
+  return Number.isFinite(timestamp) && timestamp <= Date.now() + 5000 ? new Date(timestamp).toISOString() : null
+}
+
+function parseEmailDeliveryReply(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null
+  const payload = value as Record<string, unknown>
+  if (payload.success !== true || typeof payload.status !== "string" || !EMAIL_DELIVERY_STATES.has(payload.status)) return null
+  if (typeof payload.job_id !== "string" || !/^[a-zA-Z0-9_-]{1,160}$/.test(payload.job_id)) return null
+  const sent = payload.status === "sent" || payload.status === "delivered"
+  const sentAt = deliverySentAt(payload.sent_at)
+  if (sent ? !sentAt : payload.sent_at !== null) return null
+  return { job_id: payload.job_id, status: payload.status, sent_at: sentAt }
+}
+
+function pinnedEmailDelivery(row: Record<string, any>): Record<string, any> | null {
+  const delivery = metadataObject(metadataObject(row.metadata).delivery)
+  if (delivery.transport === "test") return delivery
+  const eventType = delivery.event_type
+  if (delivery.verification_request_id !== row.id || delivery.recipient !== normalizeRegistrationEmail(row.email)
+      || (eventType !== "auth.email_verification" && eventType !== "auth.verification_resend")
+      || delivery.idempotency_key !== `${row.purpose === "registration" ? "auth-registration" : "auth-email-verification"}:${row.id}:${Number(row.resend_count || 0)}`
+      || typeof delivery.job_id !== "string" || !/^[a-zA-Z0-9_-]{1,160}$/.test(delivery.job_id)) return null
+  return delivery
+}
+
+function registrationDeliveryProjection(env: Env, row: Record<string, any>, supplied?: Record<string, any>): Record<string, unknown> {
+  const delivery = supplied || pinnedEmailDelivery(row)
+  if (!delivery || (delivery.transport === "test" && !emailVerificationTestMode(env))) {
+    return { delivery_status: "unknown", sent_at: null, resend_after_seconds: 0 }
+  }
+  const sentAt = deliverySentAt(delivery.sent_at)
+  if ((delivery.status === "sent" || delivery.status === "delivered") && sentAt) {
+    return { delivery_status: "sent", sent_at: sentAt,
+      resend_after_seconds: Math.max(0, Math.min(45, Math.ceil((Date.parse(sentAt) + 45_000 - Date.now()) / 1000))) }
+  }
+  return { delivery_status: ["queued", "processing"].includes(delivery.status) ? "queued"
+    : ["failed", "suppressed", "cancelled", "expired"].includes(delivery.status) ? "failed" : "unknown",
+    sent_at: null, resend_after_seconds: 0 }
+}
+
+async function persistRegistrationDelivery(env: Env, row: Record<string, any>, codeHash: string, delivery: Record<string, unknown>): Promise<Record<string, any>> {
+  let current = row
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (current.code_hash !== codeHash || current.last_sent_at !== row.last_sent_at
+        || !["pending", "verified"].includes(String(current.status))) return current
+    if ((current.status === "verified" && registrationFromRow(current).finalization_claim)
+        || JSON.stringify(metadataObject(current.metadata).delivery) === JSON.stringify(delivery)) {
+      const latest = await getEmailVerificationById(env, row.id)
+      if (!latest) throw new Error("email_verification_delivery_unavailable")
+      return latest
+    }
+    const updated = await updateEmailVerificationIfCurrent(env, current, { metadata: { ...metadataObject(current.metadata), delivery } })
+    if (updated) return updated
+    const latest = await getEmailVerificationById(env, row.id)
+    if (!latest) throw new Error("email_verification_delivery_unavailable")
+    current = latest
+  }
+  throw new Error("email_verification_delivery_unavailable")
+}
+
+async function recordDefiniteEmailDeliveryFailure(env: Env, row: Record<string, any>, error: unknown): Promise<void> {
+  if (!["verification_delivery_not_configured", "verification_delivery_disabled", "verification_delivery_configuration_error"]
+      .includes(String((error as Error)?.message))) return
+  await updateEmailVerificationIfCurrent(env, row, {
+    metadata: { ...metadataObject(row.metadata), transport: "delivery_failed", delivery: null },
+  }).catch(() => undefined)
+}
+
+async function readRegistrationDelivery(env: Env, request: Request, row: Record<string, any>): Promise<Record<string, unknown>> {
+  const delivery = pinnedEmailDelivery(row)
+  if (!delivery || delivery.transport === "test") return registrationDeliveryProjection(env, row)
+  const target = new URL(String(env.AUTH_EMAIL_ENQUEUE_URL || ""))
+  if (target.protocol !== "https:" || target.hostname !== "api.saturnws.com"
+      || target.pathname !== "/v1/internal/email/auth/enqueue" || target.port || target.username || target.password) {
+    throw new Error("email_verification_delivery_unavailable")
+  }
+  target.pathname = "/v1/internal/email/auth/status"
+  target.search = ""
+  target.hash = ""
+  const token = String(env.AUTH_EMAIL_ENQUEUE_TOKEN || "").trim()
+  if (!token) throw new Error("email_verification_delivery_unavailable")
+  const statusRequest = new Request(target, { method: "POST", headers: {
+    "Content-Type": "application/json", Authorization: `Bearer ${token}`, "X-Request-Id": requestId(request),
+  }, signal: AbortSignal.timeout(5000), body: JSON.stringify({ job_id: delivery.job_id, idempotency_key: delivery.idempotency_key,
+    verification_request_id: row.id, recipient: delivery.recipient, event_type: delivery.event_type }) })
+  const response = env.POLICY_SERVICE ? await env.POLICY_SERVICE.fetch(statusRequest) : await fetch(statusRequest)
+  if (!response.ok) throw new Error("email_verification_delivery_unavailable")
+  const payload = await response.json().catch(() => null)
+  const parsed = parseEmailDeliveryReply({ ...metadataObject(payload), job_id: delivery.job_id })
+  if (!parsed) throw new Error("email_verification_delivery_unavailable")
+  const recorded = await persistRegistrationDelivery(env, row, row.code_hash, { ...delivery, ...parsed })
+  if (recorded.code_hash !== row.code_hash || recorded.last_sent_at !== row.last_sent_at || recorded.status !== row.status) {
+    throw new Error("email_verification_admission_conflict")
+  }
+  return registrationDeliveryProjection(env, row, parsed)
+}
+
+async function refreshRecipientDelivery(env: Env, request: Request, email: string): Promise<void> {
+  const previous = await getLatestEmailVerification(env, { email, purpose: "registration" })
+  const account = await getLatestEmailVerification(env, { email, purpose: "email_verification" })
+  const latest = [previous, account].filter((row): row is Record<string, any> => !!row)
+    .sort((a, b) => Date.parse(b.last_sent_at) - Date.parse(a.last_sent_at))[0]
+  if (latest && Date.parse(latest.expires_at) > Date.now() && pinnedEmailDelivery(latest)) {
+    await readRegistrationDelivery(env, request, latest)
+  }
 }
 
 function emailVerificationDeliveryFailure(error: unknown): { code: string; status: number } {
@@ -1259,11 +1397,11 @@ async function resolveEmailVerificationUser(
   request: Request,
   env: Env,
   body: Record<string, any> | null,
-): Promise<{ userId: string | null; email: string; displayName?: string | null }> {
+): Promise<{ userId: string | null; email: string; displayName?: string | null; firebaseUser?: VerifiedFirebaseUser }> {
   const idToken = String(body?.id_token || "").trim()
   if (idToken) {
     const user = await verifyFirebaseUser(idToken, env)
-    return { userId: user.userId, email: user.email, displayName: user.displayName }
+    return { userId: user.userId, email: user.email, displayName: user.displayName, firebaseUser: user }
   }
   if (emailVerificationTestMode(env) && String(env.EMAIL_VERIFICATION_ALLOW_UNAUTHENTICATED_TEST || "").trim() === "1") {
     const email = String(body?.email || "").trim().toLowerCase()
@@ -1296,14 +1434,54 @@ function registrationFromRow(row: Record<string, any> | null): Record<string, an
   return metadataObject(metadata.registration)
 }
 
-function registrationResponse(row: Record<string, any>, testCode?: string): Record<string, unknown> {
+function emailFinalizationInProgress(row: Record<string, any>): boolean {
+  const registration = registrationFromRow(row)
+  return ["finalizing", "profile_finalizing", "claim_finalizing"].includes(String(registration.finalization_state))
+    && Date.parse(String(registration.finalization_claim_expires_at || "")) > Date.now()
+}
+
+async function claimEmailFinalization(env: Env, row: Record<string, any>, patch: Record<string, unknown> = {}): Promise<Record<string, any> | null> {
+  if (emailFinalizationInProgress(row)) return null
+  return updateEmailVerificationIfCurrent(env, row, {
+    ...patch,
+    metadata: { ...metadataObject(row.metadata), registration: {
+      ...registrationFromRow(row), finalization_state: "finalizing",
+      finalization_claim: randomBase64Url(24), finalization_claim_expires_at: new Date(Date.now() + 300_000).toISOString(),
+    } },
+  })
+}
+
+async function releaseEmailFinalization(env: Env, row: Record<string, any>, state: string): Promise<void> {
+  await updateEmailVerificationIfCurrent(env, row, {
+    metadata: { ...metadataObject(row.metadata), registration: { ...registrationFromRow(row), finalization_state: state } },
+  }).catch(() => undefined)
+}
+
+function emailVerificationFinalized(row: Record<string, any>, user: VerifiedFirebaseUser | undefined, profile: AccountProfileRow | null): boolean {
+  const epoch = Math.floor(Date.parse(String(row.verified_at || "")) / 1000)
+  return row.status === "verified" && Boolean(row.consumed_at) && Boolean(user && !user.disabled && user.emailVerified
+    && row.firebase_user_id === user.userId && normalizeRegistrationEmail(row.email) === user.email
+    && isSaturnFinalizedClaim(user.accountClaims) && isFinalizedProfile(profile, user)
+    && !accountLifecycleBlock(profile!) && Number.isFinite(epoch) && (profileCredentialEpoch(profile) || 0) >= epoch)
+}
+
+async function canReplaceEmailVerification(env: Env, row: Record<string, any> | null, user: VerifiedFirebaseUser | undefined): Promise<boolean> {
+  if (row?.status !== "verified") return true
+  if (emailFinalizationInProgress(row)) return false
+  const profile = user ? await getAccountProfileByFirebaseUid(env, user.userId) : null
+  if (emailVerificationFinalized(row, user, profile)) return true
+  if (!isIsoExpired(row.expires_at)) return false
+  return Boolean(await updateEmailVerificationIfCurrent(env, row, { status: "expired" }))
+}
+
+function registrationResponse(env: Env, row: Record<string, any>, testCode?: string, delivery?: Record<string, unknown>): Record<string, unknown> {
   return {
     success: true,
     status: "sent",
     registration_id: row.id,
     email: row.email,
     expires_at: row.expires_at,
-    resend_after_seconds: 45,
+    ...(delivery || registrationDeliveryProjection(env, row)),
     ...(testCode ? { test_code: testCode } : {}),
   }
 }
@@ -1331,36 +1509,53 @@ async function handlePendingRegistrationStart(request: Request, env: Env): Promi
   }
   const ip = request.headers.get("CF-Connecting-IP") || "unknown"
   const [registrationIpAllowed, registrationEmailAllowed] = await Promise.all([
-    allowRateLimit(env.AUTH_RATE_LIMIT_STANDARD, `registration-start:ip:${ip}`),
-    allowRateLimit(env.AUTH_RATE_LIMIT_SENSITIVE, `registration-start:email:${email}`),
+    allowRateLimit(env.AUTH_RATE_LIMIT_STANDARD, `email-otp:ip:${ip}`),
+    allowRateLimit(env.AUTH_RATE_LIMIT_SENSITIVE, `email-otp:email:${email}`),
   ])
   if (!registrationIpAllowed || !registrationEmailAllowed) {
     return verificationRateLimited(request, 60)
   }
 
+  await refreshRecipientDelivery(env, request, email)
+
   const now = Date.now()
   const expiresAt = new Date(now + emailVerificationTtlMs(env)).toISOString()
-  const code = randomOtpCode()
-  const codeHash = await hashEmailCode(env, email, code)
   const existing = await getLatestEmailVerification(env, {
     email,
     purpose: "registration",
     status: "pending",
   })
+  const { code, codeHash } = await replacementEmailCode(env, email, existing?.code_hash)
   if (existing) {
+    const metadata = metadataObject(existing.metadata)
+    const existingExpiry = Date.parse(String(existing.expires_at || ""))
+    if (existingExpiry > now && (pinnedEmailDelivery(existing) || metadata.transport === "provider_pending")) {
+      let delivery: Record<string, unknown>
+      try {
+        delivery = registrationDeliveryProjection(env, existing)
+      } catch {
+        return errorJson(request, "VERIFICATION_DELIVERY_TEMPORARY_FAILURE", 503, true)
+      }
+      if (delivery.delivery_status === "queued" || delivery.delivery_status === "unknown") {
+        return errorJson(request, "VERIFICATION_DELIVERY_PENDING", 409, true)
+      }
+      const remaining = Number(delivery.resend_after_seconds || 0)
+      if (delivery.delivery_status === "sent" && remaining > 0) return verificationRateLimited(request, remaining)
+    }
     const lastSent = Date.parse(String(existing.last_sent_at || existing.created_at || ""))
     if (Number.isFinite(lastSent) && now - lastSent < 45_000) {
       await auditEmailVerification(env, { verificationId: existing.id, email, action: "registration_start", result: "rate_limited", request })
       return verificationRateLimited(request, (45_000 - (now - lastSent)) / 1000)
     }
     if (Number(existing.resend_count || 0) >= Number(existing.max_resends || 5)) {
-      await updateEmailVerification(env, existing.id, { status: "blocked" }).catch(() => undefined)
+      const blocked = await updateEmailVerificationIfCurrent(env, existing, { status: "blocked" })
+      if (!blocked) return errorJson(request, "VERIFICATION_DELIVERY_PENDING", 409, true)
       await auditEmailVerification(env, { verificationId: existing.id, email, action: "registration_start", result: "blocked", request })
       const retryAt = Date.parse(String(existing.expires_at || ""))
       return verificationRateLimited(request, Number.isFinite(retryAt) ? (retryAt - now) / 1000 : 300)
     }
     const existingMetadata = metadataObject(existing.metadata)
-    const updated = await updateEmailVerification(env, existing.id, {
+    const updated = await updateEmailVerificationIfCurrent(env, existing, {
       code_hash: codeHash,
       attempts: 0,
       resend_count: Number(existing.resend_count || 0) + 1,
@@ -1370,10 +1565,12 @@ async function handlePendingRegistrationStart(request: Request, env: Env): Promi
       firebase_user_id: null,
       metadata: {
         ...existingMetadata,
+        delivery: null,
         transport: emailVerificationTestMode(env) ? "test" : "provider_pending",
         registration: { ...registrationFromRow(existing), ...registration, finalization_state: "pending" },
       },
     })
+    if (!updated) return errorJson(request, "VERIFICATION_DELIVERY_PENDING", 409, true)
     try {
       const delivery = await deliverEmailVerificationCode(env, {
         email,
@@ -1386,15 +1583,20 @@ async function handlePendingRegistrationStart(request: Request, env: Env): Promi
         idempotencyKey: `auth-registration:${updated.id}:${Number(updated.resend_count || 0)}`,
         resend: true,
       })
-      await updateEmailVerification(env, updated.id, { metadata: { ...(updated.metadata || {}), transport: delivery.transport } }).catch(() => undefined)
+      const recorded = await persistRegistrationDelivery(env, updated, codeHash, delivery.delivery)
+      if (recorded.code_hash !== codeHash || recorded.last_sent_at !== updated.last_sent_at
+          || !["pending", "verified"].includes(String(recorded.status))) {
+        return errorJson(request, "VERIFICATION_CODE_INVALID", 409)
+      }
+      updated.metadata = recorded.metadata
     } catch (error) {
-      await updateEmailVerification(env, updated.id, { status: "delivery_failed", metadata: { ...(updated.metadata || {}), delivery_error: String(error instanceof Error ? error.message : error || "delivery_failed") } }).catch(() => undefined)
+      await recordDefiniteEmailDeliveryFailure(env, updated, error)
       await auditEmailVerification(env, { verificationId: updated.id, email, action: "registration_start", result: "delivery_failed", request })
       const failure = emailVerificationDeliveryFailure(error)
       return errorJson(request, failure.code, failure.status, true)
     }
     await auditEmailVerification(env, { verificationId: updated.id, email, action: "registration_start", result: "sent", request })
-    return json(registrationResponse(updated, canReturnTestCode ? code : undefined))
+    return json(registrationResponse(env, updated, canReturnTestCode ? code : undefined))
   }
 
   const created = await createEmailVerification(env, {
@@ -1422,15 +1624,53 @@ async function handlePendingRegistrationStart(request: Request, env: Env): Promi
       verificationId: created.id,
       idempotencyKey: `auth-registration:${created.id}:0`,
     })
-    await updateEmailVerification(env, created.id, { metadata: { ...(created.metadata || {}), transport: delivery.transport } }).catch(() => undefined)
+    const recorded = await persistRegistrationDelivery(env, created, codeHash, delivery.delivery)
+    if (recorded.code_hash !== codeHash || recorded.last_sent_at !== created.last_sent_at
+        || !["pending", "verified"].includes(String(recorded.status))) {
+      return errorJson(request, "VERIFICATION_CODE_INVALID", 409)
+    }
+    created.metadata = recorded.metadata
   } catch (error) {
-    await updateEmailVerification(env, created.id, { status: "delivery_failed", metadata: { ...(created.metadata || {}), delivery_error: String(error instanceof Error ? error.message : error || "delivery_failed") } }).catch(() => undefined)
+    await recordDefiniteEmailDeliveryFailure(env, created, error)
     await auditEmailVerification(env, { verificationId: created.id, email, action: "registration_start", result: "delivery_failed", request })
     const failure = emailVerificationDeliveryFailure(error)
     return errorJson(request, failure.code, failure.status, true)
   }
   await auditEmailVerification(env, { verificationId: created.id, email, action: "registration_start", result: "sent", request })
-  return json(registrationResponse(created, canReturnTestCode ? code : undefined))
+  return json(registrationResponse(env, created, canReturnTestCode ? code : undefined))
+}
+
+async function handlePendingRegistrationStatus(request: Request, env: Env): Promise<Response> {
+  const body = await request.json<any>().catch(() => null)
+  const email = normalizeRegistrationEmail(body?.email)
+  const registrationId = body?.registration_id
+  if (!isValidRegistrationEmail(email) || typeof registrationId !== "string"
+      || !/^[a-zA-Z0-9_-]{1,128}$/.test(registrationId)) return errorJson(request, "VERIFICATION_CODE_INVALID", 400)
+  const ip = request.headers.get("CF-Connecting-IP") || "unknown"
+  const allowed = await Promise.all([
+    allowRateLimit(env.AUTH_RATE_LIMIT_STANDARD, `registration-status:ip:${ip}`),
+    allowRateLimit(env.AUTH_RATE_LIMIT_STANDARD, `registration-status:email:${email}`),
+  ])
+  if (allowed.some((value) => !value)) return verificationRateLimited(request, 60)
+  const row = await getEmailVerificationById(env, registrationId)
+  if (!row || row.purpose !== "registration" || normalizeRegistrationEmail(row.email) !== email
+      || !["pending", "verified"].includes(String(row.status))) return errorJson(request, "VERIFICATION_CODE_INVALID", 404)
+  if (isIsoExpired(row.expires_at)) return errorJson(request, "VERIFICATION_CODE_EXPIRED", 410)
+  try {
+    const delivery = await readRegistrationDelivery(env, request, row)
+    const current = await getEmailVerificationById(env, registrationId)
+    if (!current || current.code_hash !== row.code_hash || current.last_sent_at !== row.last_sent_at
+        || pinnedEmailDelivery(current)?.idempotency_key !== pinnedEmailDelivery(row)?.idempotency_key
+        || current.purpose !== "registration" || normalizeRegistrationEmail(current.email) !== email
+        || !["pending", "verified"].includes(String(current.status))) return errorJson(request, "VERIFICATION_CODE_INVALID", 409)
+    if (isIsoExpired(current.expires_at)) return errorJson(request, "VERIFICATION_CODE_EXPIRED", 410)
+    return json(registrationResponse(env, current, undefined, delivery))
+  } catch (error) {
+    if (String((error as Error)?.message) === "email_verification_admission_conflict") {
+      return errorJson(request, "VERIFICATION_CODE_INVALID", 409)
+    }
+    return errorJson(request, "VERIFICATION_DELIVERY_TEMPORARY_FAILURE", 503, true)
+  }
 }
 
 async function handlePendingRegistrationVerify(request: Request, env: Env, body: Record<string, any> | null): Promise<Response> {
@@ -1444,20 +1684,19 @@ async function handlePendingRegistrationVerify(request: Request, env: Env, body:
   if (suppliedEmail && suppliedEmail !== rowEmail) return errorJson(request, "VERIFICATION_CODE_INVALID", 400)
   if (String(row.status || "") !== "pending") return errorJson(request, "VERIFICATION_CODE_INVALID", 409)
   if (Date.parse(String(row.expires_at || "")) <= Date.now()) {
-    await updateEmailVerification(env, row.id, { status: "expired" }).catch(() => undefined)
+    await updateEmailVerificationIfCurrent(env, row, { status: "expired" })
     await auditEmailVerification(env, { verificationId: row.id, email: rowEmail, action: "registration_verify", result: "expired", request })
     return errorJson(request, "VERIFICATION_CODE_EXPIRED", 410)
   }
   if (Number(row.attempts || 0) >= Number(row.max_attempts || 6)) {
-    await updateEmailVerification(env, row.id, { status: "blocked" }).catch(() => undefined)
+    await updateEmailVerificationIfCurrent(env, row, { status: "blocked" })
     await auditEmailVerification(env, { verificationId: row.id, email: rowEmail, action: "registration_verify", result: "blocked", request })
     const retryAt = Date.parse(String(row.expires_at || ""))
     return verificationRateLimited(request, Number.isFinite(retryAt) ? (retryAt - Date.now()) / 1000 : 300)
   }
   const actual = await hashEmailCode(env, rowEmail, code)
   if (!timingSafeEqualHex(String(row.code_hash || ""), actual)) {
-    const attempts = Number(row.attempts || 0) + 1
-    await updateEmailVerification(env, row.id, { attempts, status: attempts >= Number(row.max_attempts || 6) ? "blocked" : "pending" }).catch(() => undefined)
+    await consumeInvalidEmailCode(env, row)
     await auditEmailVerification(env, { verificationId: row.id, email: rowEmail, action: "registration_verify", result: "invalid", request })
     return errorJson(request, "VERIFICATION_CODE_INVALID", 400)
   }
@@ -1466,7 +1705,7 @@ async function handlePendingRegistrationVerify(request: Request, env: Env, body:
   const finalizationTokenHash = await hashFinalizationToken(env, row.id, finalizationToken)
   const tokenExpiresAt = new Date(Date.now() + 10 * 60_000).toISOString()
   const metadata = metadataObject(row.metadata)
-  const updated = await updateEmailVerification(env, row.id, {
+  const updated = await updateEmailVerificationIfCurrent(env, row, {
     status: "verified",
     verified_at: verifiedAt,
     metadata: {
@@ -1479,6 +1718,7 @@ async function handlePendingRegistrationVerify(request: Request, env: Env, body:
       },
     },
   })
+  if (!updated) return errorJson(request, "VERIFICATION_CODE_INVALID", 409)
   await auditEmailVerification(env, { verificationId: row.id, email: rowEmail, action: "registration_verify", result: "verified", request })
   return json({
     success: true,
@@ -1491,6 +1731,25 @@ async function handlePendingRegistrationVerify(request: Request, env: Env, body:
   })
 }
 
+async function consumeInvalidEmailCode(env: Env, expected: Record<string, any>): Promise<void> {
+  let current = expected
+  for (let retry = 0; retry < 8; retry += 1) {
+    if (current.status !== expected.status || !["pending", "verified"].includes(String(current.status))
+        || emailFinalizationInProgress(current)
+        || (current.status === "verified" && registrationFromRow(current).finalization_state === "finalized")
+        || current.code_hash !== expected.code_hash
+        || current.last_sent_at !== expected.last_sent_at || isIsoExpired(current.expires_at)) return
+    const attempts = Math.min(Number(current.max_attempts || 6), Number(current.attempts || 0) + 1)
+    if (await updateEmailVerificationIfCurrent(env, current, {
+      attempts, status: attempts >= Number(current.max_attempts || 6) ? "blocked" : current.status,
+    })) return
+    const latest = await getEmailVerificationById(env, expected.id)
+    if (!latest) return
+    current = latest
+  }
+  throw new Error("email_verification_admission_conflict")
+}
+
 async function handlePendingRegistrationFinalize(request: Request, env: Env): Promise<Response> {
   const body = await request.json<any>().catch(() => null)
   const registrationId = String(body?.registration_id || body?.registrationId || "").trim()
@@ -1498,10 +1757,10 @@ async function handlePendingRegistrationFinalize(request: Request, env: Env): Pr
   const password = String(body?.password || "")
   if (!registrationId || !finalizationToken) return errorJson(request, "VERIFICATION_CODE_INVALID", 400)
   if (!passwordMeetsMinimum(password)) return errorJson(request, "AUTH_WEAK_PASSWORD", 400)
-  const row = await getEmailVerificationById(env, registrationId)
+  let row = await getEmailVerificationById(env, registrationId)
   if (!row || String(row.purpose || "") !== "registration") return errorJson(request, "VERIFICATION_CODE_INVALID", 404)
   const rowEmail = normalizeRegistrationEmail(row.email)
-  const registration = registrationFromRow(row)
+  let registration = registrationFromRow(row)
   if (String(row.status || "") === "consumed" && registration.finalized_firebase_user_id) {
     const expected = String(registration.finalization_token_hash || "")
     const actual = await hashFinalizationToken(env, row.id, finalizationToken)
@@ -1514,7 +1773,7 @@ async function handlePendingRegistrationFinalize(request: Request, env: Env): Pr
   }
   if (String(row.status || "") !== "verified") return errorJson(request, "VERIFICATION_CODE_INVALID", 409)
   if (Date.parse(String(row.expires_at || "")) <= Date.now()) {
-    await updateEmailVerification(env, row.id, { status: "expired" }).catch(() => undefined)
+    await updateEmailVerificationIfCurrent(env, row, { status: "expired" })
     return errorJson(request, "VERIFICATION_CODE_EXPIRED", 410)
   }
   const tokenExpiresAt = Date.parse(String(registration.finalization_token_expires_at || ""))
@@ -1532,16 +1791,14 @@ async function handlePendingRegistrationFinalize(request: Request, env: Env): Pr
     existingProfile &&
     String(existingProfile.firebase_uid || "").trim() === String(registration.finalized_firebase_user_id || row.firebase_user_id || "").trim()
   if (existingProfile && !existingProfileMatchesRegistration) {
-    await updateEmailVerification(env, row.id, { status: "blocked", metadata: { ...metadataObject(row.metadata), registration: { ...registration, finalization_state: "profile_collision" } } }).catch(() => undefined)
+    await updateEmailVerificationIfCurrent(env, row, { status: "blocked", metadata: { ...metadataObject(row.metadata), registration: { ...registration, finalization_state: "profile_collision" } } })
     await auditEmailVerification(env, { verificationId: row.id, email: rowEmail, action: "registration_finalize", result: "profile_collision", request })
     return errorJson(request, "AUTH_EMAIL_ALREADY_USED", 409, false)
   }
-  await updateEmailVerification(env, row.id, {
-    metadata: {
-      ...metadataObject(row.metadata),
-      registration: { ...registration, finalization_state: "finalizing" },
-    },
-  }).catch(() => undefined)
+  const claimed = await claimEmailFinalization(env, row)
+  if (!claimed) return errorJson(request, "REGISTRATION_FINALIZING", 409, true)
+  row = claimed
+  registration = registrationFromRow(row)
   let firebaseUser: Awaited<ReturnType<typeof verifyFirebaseUser>> | null = null
   try {
     firebaseUser = await createFirebasePasswordUserAfterOtp(env, {
@@ -1571,7 +1828,7 @@ async function handlePendingRegistrationFinalize(request: Request, env: Env): Pr
         : code === "firebase_admin_not_configured" || code === "firebase_service_account_invalid" || code === "firebase_service_account_project_mismatch" || code === "firebase_admin_token_failed"
           ? "AUTH_PROVIDER_SERVER_CREATE_NOT_CONFIGURED"
           : "AUTH_PROVIDER_UNAVAILABLE"
-      await updateEmailVerification(env, row.id, {
+      await updateEmailVerificationIfCurrent(env, row, {
         status: code === "email_already_exists" || code === "provider_collision" ? "blocked" : String(row.status || "verified"),
         metadata: {
           ...metadataObject(row.metadata),
@@ -1581,14 +1838,14 @@ async function handlePendingRegistrationFinalize(request: Request, env: Env): Pr
             finalization_error: publicCode,
           },
         },
-      }).catch(() => undefined)
+      })
       await auditEmailVerification(env, { verificationId: row.id, email: rowEmail, action: "registration_finalize", result: publicCode, request })
       return errorJson(request, publicCode, status, true)
     }
   }
   const now = new Date().toISOString()
   const credentialEpoch = Math.floor(Date.now() / 1000)
-  await updateEmailVerification(env, row.id, {
+  const profileClaim = await updateEmailVerificationIfCurrent(env, row, {
     firebase_user_id: firebaseUser.userId,
     metadata: {
       ...metadataObject(row.metadata),
@@ -1599,24 +1856,39 @@ async function handlePendingRegistrationFinalize(request: Request, env: Env): Pr
         finalized_firebase_user_id: firebaseUser.userId,
       },
     },
-  }).catch(() => undefined)
-  const profile = await provisionProfile(env, firebaseUser, {
-    displayName: cleanDisplayName(registration.display_name) || firebaseUser.displayName,
-    locale: normalizeLocale(registration.locale, env),
-    termsAccepted: Boolean(registration.terms_accepted),
-    termsVersion: normalizeTermsVersion(registration.terms_version, env),
-    termsAcceptedAt: String(registration.terms_accepted_at || "").trim() || null,
-    emailVerified: true,
-    verificationSource: "saturnws_otp",
-    metadata: mergeFinalizedProfileMetadata(
-      { email_verification_id: row.id },
-      { finalizedAt: now, credentialEpoch, source: "saturnws_otp" },
-    ),
   })
+  if (!profileClaim) return errorJson(request, "REGISTRATION_FINALIZING", 409, true)
+  row = profileClaim
+  registration = registrationFromRow(row)
+  let profile: Awaited<ReturnType<typeof provisionProfile>>
+  try {
+    profile = await provisionProfile(env, firebaseUser, {
+      displayName: cleanDisplayName(registration.display_name) || firebaseUser.displayName,
+      locale: normalizeLocale(registration.locale, env),
+      termsAccepted: Boolean(registration.terms_accepted),
+      termsVersion: normalizeTermsVersion(registration.terms_version, env),
+      termsAcceptedAt: String(registration.terms_accepted_at || "").trim() || null,
+      emailVerified: true,
+      verificationSource: "saturnws_otp",
+      metadata: mergeFinalizedProfileMetadata(
+        { email_verification_id: row.id },
+        { finalizedAt: now, credentialEpoch, source: "saturnws_otp" },
+      ),
+    })
+  } catch {
+    await updateEmailVerificationIfCurrent(env, row, {
+      metadata: { ...metadataObject(row.metadata), registration: {
+        ...registration, finalization_state: "profile_failed", finalization_error: "AUTH_PROVIDER_UNAVAILABLE",
+      } },
+    }).catch(() => undefined)
+    await auditEmailVerification(env, { verificationId: row.id, firebaseUserId: firebaseUser.userId,
+      email: rowEmail, action: "registration_finalize", result: "profile_failed", request })
+    return errorJson(request, "AUTH_PROVIDER_UNAVAILABLE", 503, true)
+  }
   try {
     await setFirebaseUserFinalizedClaim(env, firebaseUser.userId, { disabled: false, revokeRefreshTokens: true })
   } catch (error) {
-    await updateEmailVerification(env, row.id, {
+    await updateEmailVerificationIfCurrent(env, row, {
       metadata: {
         ...metadataObject(row.metadata),
         registration: {
@@ -1627,11 +1899,11 @@ async function handlePendingRegistrationFinalize(request: Request, env: Env): Pr
           finalization_error: "ACCOUNT_FINALIZATION_CLAIM_UNAVAILABLE",
         },
       },
-    }).catch(() => undefined)
+    })
     await auditEmailVerification(env, { verificationId: row.id, firebaseUserId: firebaseUser.userId, email: rowEmail, action: "registration_finalize", result: "claim_failed", request })
     return errorJson(request, "ACCOUNT_FINALIZATION_CLAIM_UNAVAILABLE", 503, true)
   }
-  await updateEmailVerification(env, row.id, {
+  const finalized = await updateEmailVerificationIfCurrent(env, row, {
     status: "consumed",
     firebase_user_id: firebaseUser.userId,
     consumed_at: now,
@@ -1646,6 +1918,7 @@ async function handlePendingRegistrationFinalize(request: Request, env: Env): Pr
       },
     },
   })
+  if (!finalized) return errorJson(request, "REGISTRATION_FINALIZING", 409, true)
   await auditEmailVerification(env, { verificationId: row.id, firebaseUserId: firebaseUser.userId, email: rowEmail, action: "registration_finalize", result: "finalized", request })
   return json({
     success: true,
@@ -1670,25 +1943,21 @@ async function handleEmailVerificationRequest(request: Request, env: Env): Promi
   }
   const ip = request.headers.get("CF-Connecting-IP") || "unknown"
   const [verificationIpAllowed, verificationEmailAllowed] = await Promise.all([
-    allowRateLimit(env.AUTH_RATE_LIMIT_STANDARD, `email-verification:ip:${ip}`),
-    allowRateLimit(env.AUTH_RATE_LIMIT_SENSITIVE, `email-verification:email:${user.email}`),
+    allowRateLimit(env.AUTH_RATE_LIMIT_STANDARD, `email-otp:ip:${ip}`),
+    allowRateLimit(env.AUTH_RATE_LIMIT_SENSITIVE, `email-otp:email:${user.email}`),
   ])
   if (!verificationIpAllowed || !verificationEmailAllowed) {
     return verificationRateLimited(request, 60)
   }
+  await refreshRecipientDelivery(env, request, user.email)
 
   const now = Date.now()
   const expiresAt = new Date(now + emailVerificationTtlMs(env)).toISOString()
-  const code = randomOtpCode()
-  const codeHash = await hashEmailCode(env, user.email, code)
   const registration = pendingRegistrationMetadata(body, user, env)
-  const existing = await getLatestEmailVerification(env, {
-    email: user.email,
-    firebaseUserId: user.userId,
-    purpose: "email_verification",
-    status: "pending",
-  })
-
+  const previous = await getLatestEmailVerification(env, { email: user.email, firebaseUserId: user.userId, purpose: "email_verification" })
+  if (!await canReplaceEmailVerification(env, previous, user.firebaseUser)) return errorJson(request, "REGISTRATION_FINALIZING", 409, true)
+  const existing = previous?.status === "pending" ? previous : null
+  const { code, codeHash } = await replacementEmailCode(env, user.email, existing?.code_hash)
   if (existing) {
     const existingMetadata = typeof existing.metadata === "object" && existing.metadata ? existing.metadata : {}
     const existingRegistration = typeof existingMetadata.registration === "object" && existingMetadata.registration ? existingMetadata.registration as Record<string, unknown> : {}
@@ -1698,12 +1967,12 @@ async function handleEmailVerificationRequest(request: Request, env: Env): Promi
       return verificationRateLimited(request, (45_000 - (now - lastSent)) / 1000)
     }
     if (Number(existing.resend_count || 0) >= Number(existing.max_resends || 5)) {
-      await updateEmailVerification(env, existing.id, { status: "blocked" }).catch(() => undefined)
+      await updateEmailVerificationIfCurrent(env, existing, { status: "blocked" })
       await auditEmailVerification(env, { verificationId: existing.id, firebaseUserId: user.userId, email: user.email, action: "request", result: "blocked", request })
       const retryAt = Date.parse(String(existing.expires_at || ""))
       return verificationRateLimited(request, Number.isFinite(retryAt) ? (retryAt - now) / 1000 : 300)
     }
-    const updated = await updateEmailVerification(env, existing.id, {
+    const updated = await updateEmailVerificationIfCurrent(env, existing, {
       code_hash: codeHash,
       attempts: 0,
       resend_count: Number(existing.resend_count || 0) + 1,
@@ -1713,10 +1982,12 @@ async function handleEmailVerificationRequest(request: Request, env: Env): Promi
       firebase_user_id: user.userId,
       metadata: {
         ...existingMetadata,
+        delivery: null,
         transport: emailVerificationTestMode(env) ? "test" : "provider_pending",
         registration: { ...existingRegistration, ...registration },
       },
     })
+    if (!updated) return errorJson(request, "VERIFICATION_DELIVERY_PENDING", 409, true)
     try {
       const delivery = await deliverEmailVerificationCode(env, {
         email: user.email,
@@ -1729,9 +2000,9 @@ async function handleEmailVerificationRequest(request: Request, env: Env): Promi
         idempotencyKey: `auth-email-verification:${updated.id}:${Number(updated.resend_count || 0)}`,
         resend: true,
       })
-      await updateEmailVerification(env, updated.id, { metadata: { ...(updated.metadata || {}), transport: delivery.transport } }).catch(() => undefined)
+      await persistRegistrationDelivery(env, updated, codeHash, delivery.delivery)
     } catch (error) {
-      await updateEmailVerification(env, updated.id, { status: "delivery_failed", metadata: { ...(updated.metadata || {}), delivery_error: String(error instanceof Error ? error.message : error || "delivery_failed") } }).catch(() => undefined)
+      await recordDefiniteEmailDeliveryFailure(env, updated, error)
       await auditEmailVerification(env, { verificationId: updated.id, firebaseUserId: user.userId, email: user.email, action: "request", result: "delivery_failed", request })
       const failure = emailVerificationDeliveryFailure(error)
       return errorJson(request, failure.code, failure.status, true)
@@ -1768,9 +2039,9 @@ async function handleEmailVerificationRequest(request: Request, env: Env): Promi
       verificationId: created.id,
       idempotencyKey: `auth-email-verification:${created.id}:0`,
     })
-    await updateEmailVerification(env, created.id, { metadata: { ...(created.metadata || {}), transport: delivery.transport } }).catch(() => undefined)
+    await persistRegistrationDelivery(env, created, codeHash, delivery.delivery)
   } catch (error) {
-    await updateEmailVerification(env, created.id, { status: "delivery_failed", metadata: { ...(created.metadata || {}), delivery_error: String(error instanceof Error ? error.message : error || "delivery_failed") } }).catch(() => undefined)
+    await recordDefiniteEmailDeliveryFailure(env, created, error)
     await auditEmailVerification(env, { verificationId: created.id, firebaseUserId: user.userId, email: user.email, action: "request", result: "delivery_failed", request })
     const failure = emailVerificationDeliveryFailure(error)
     return errorJson(request, failure.code, failure.status, true)
@@ -1798,37 +2069,55 @@ async function handleEmailVerificationVerify(request: Request, env: Env): Promis
   if (user instanceof Response) return user
   const code = String(body?.code || "").replace(/\D/g, "").slice(0, 6)
   if (code.length !== 6) return errorJson(request, "VERIFICATION_CODE_INVALID", 400)
-  const row = await getLatestEmailVerification(env, {
+  let row = await getLatestEmailVerification(env, {
     email: user.email,
     firebaseUserId: user.userId,
     purpose: "email_verification",
-    status: "pending",
   })
-  if (!row) return errorJson(request, "VERIFICATION_CODE_INVALID", 404)
+  if (!row || !["pending", "verified"].includes(String(row.status))) return errorJson(request, "VERIFICATION_CODE_INVALID", 404)
+  if (!user.userId || row.firebase_user_id !== user.userId || normalizeRegistrationEmail(row.email) !== user.email) {
+    return errorJson(request, "VERIFICATION_CODE_INVALID", 409)
+  }
+  if (user.firebaseUser?.disabled) return errorJson(request, "ACCOUNT_DISABLED", 403, false)
+  if (emailFinalizationInProgress(row)) return errorJson(request, "REGISTRATION_FINALIZING", 409, true)
+  let existingProfile = row.status === "verified" && row.consumed_at
+    ? await getAccountProfileByFirebaseUid(env, user.userId) : null
+  const actual = await hashEmailCode(env, user.email, code)
+  if (emailVerificationFinalized(row, user.firebaseUser, existingProfile)) {
+    if (!timingSafeEqualHex(String(row.code_hash || ""), actual)) return errorJson(request, "VERIFICATION_CODE_INVALID", 400)
+    return json({ success: true, status: "verified", verified_at: row.verified_at,
+      profile: profileProjection(existingProfile!, user.firebaseUser!), token_refresh_required: true })
+  }
   if (Date.parse(String(row.expires_at || "")) <= Date.now()) {
-    await updateEmailVerification(env, row.id, { status: "expired" }).catch(() => undefined)
+    await updateEmailVerificationIfCurrent(env, row, { status: "expired" })
     await auditEmailVerification(env, { verificationId: row.id, firebaseUserId: user.userId, email: user.email, action: "verify", result: "expired", request })
     return errorJson(request, "VERIFICATION_CODE_EXPIRED", 410)
   }
   if (Number(row.attempts || 0) >= Number(row.max_attempts || 6)) {
-    await updateEmailVerification(env, row.id, { status: "blocked" }).catch(() => undefined)
+    await updateEmailVerificationIfCurrent(env, row, { status: "blocked" })
     await auditEmailVerification(env, { verificationId: row.id, firebaseUserId: user.userId, email: user.email, action: "verify", result: "blocked", request })
     const retryAt = Date.parse(String(row.expires_at || ""))
     return verificationRateLimited(request, Number.isFinite(retryAt) ? (retryAt - Date.now()) / 1000 : 300)
   }
   const expected = String(row.code_hash || "")
-  const actual = await hashEmailCode(env, user.email, code)
   if (!timingSafeEqualHex(expected, actual)) {
-    const attempts = Number(row.attempts || 0) + 1
-    await updateEmailVerification(env, row.id, { attempts, status: attempts >= Number(row.max_attempts || 6) ? "blocked" : "pending" }).catch(() => undefined)
+    await consumeInvalidEmailCode(env, row)
     await auditEmailVerification(env, { verificationId: row.id, firebaseUserId: user.userId, email: user.email, action: "verify", result: "invalid", request })
     return errorJson(request, "VERIFICATION_CODE_INVALID", 400)
   }
-  const verifiedAt = new Date().toISOString()
-  const credentialEpoch = Math.floor(Date.now() / 1000)
-  await updateEmailVerification(env, row.id, { status: "verified", verified_at: verifiedAt, consumed_at: verifiedAt })
+  const verifiedAt = row.status === "verified" ? String(row.verified_at || "") : new Date().toISOString()
+  const credentialEpoch = Math.floor(Date.parse(verifiedAt) / 1000)
+  if (!Number.isFinite(credentialEpoch)) return errorJson(request, "AUTH_PROVIDER_UNAVAILABLE", 503, true)
+  existingProfile ||= await getAccountProfileByFirebaseUid(env, user.userId)
+  if (existingProfile && accountLifecycleBlock(existingProfile)) return errorJson(request, "ACCOUNT_DISABLED", 403, false)
+  if (existingProfile && (profileCredentialEpoch(existingProfile) || 0) > credentialEpoch) {
+    return errorJson(request, "VERIFICATION_CODE_INVALID", 409)
+  }
+  if (isIsoExpired(row.expires_at)) return errorJson(request, "VERIFICATION_CODE_EXPIRED", 410)
+  const claimed = await claimEmailFinalization(env, row, { status: "verified", verified_at: verifiedAt, consumed_at: null })
+  if (!claimed) return errorJson(request, "REGISTRATION_FINALIZING", 409, true)
+  row = claimed
   const registration = registrationMetadataFromRow(row, env)
-  if (!user.userId) return errorJson(request, "AUTH_SESSION_EXPIRED", 401, true)
   const verifiedProfileUser: VerifiedFirebaseUser = {
     userId: user.userId || "",
     email: user.email,
@@ -1843,33 +2132,56 @@ async function handleEmailVerificationVerify(request: Request, env: Env): Promis
     authTime: null,
     createdAtMs: null,
   }
-  const profile = await provisionProfile(env, verifiedProfileUser, {
-    displayName: registration.displayName || user.displayName || null,
-    locale: registration.locale,
-    termsAccepted: registration.termsAccepted,
-    termsVersion: registration.termsVersion,
-    termsAcceptedAt: registration.termsAcceptedAt,
-    emailVerified: true,
-    verificationSource: "saturnws_otp",
-    metadata: mergeFinalizedProfileMetadata(
-      { email_verification_id: row.id },
-      { finalizedAt: verifiedAt, credentialEpoch, source: "saturnws_otp" },
-    ),
+  let profile = existingProfile
+  const profileSaved = profile && isFinalizedProfile(profile, verifiedProfileUser)
+    && profileMetadata(profile).email_verification_id === row.id && profileCredentialEpoch(profile) === credentialEpoch
+  if (!profileSaved) {
+    try {
+      profile = await provisionProfile(env, verifiedProfileUser, {
+        displayName: registration.displayName || user.displayName || null,
+        locale: registration.locale,
+        termsAccepted: registration.termsAccepted,
+        termsVersion: registration.termsVersion,
+        termsAcceptedAt: registration.termsAcceptedAt,
+        emailVerified: true,
+        verificationSource: "saturnws_otp",
+        metadata: mergeFinalizedProfileMetadata(
+          { email_verification_id: row.id },
+          { finalizedAt: verifiedAt, credentialEpoch, source: "saturnws_otp" },
+        ),
+      })
+    } catch (error) {
+      if ((error as { remoteRejected?: boolean })?.remoteRejected) await releaseEmailFinalization(env, row, "profile_failed")
+      await auditEmailVerification(env, { verificationId: row.id, firebaseUserId: user.userId, email: user.email, action: "verify", result: "profile_failed", request })
+      return errorJson(request, "AUTH_PROVIDER_UNAVAILABLE", 503, true)
+    }
+  }
+  const checkpoint = await updateEmailVerificationIfCurrent(env, row, {
+    metadata: { ...metadataObject(row.metadata), registration: { ...registrationFromRow(row), finalization_state: "claim_finalizing" } },
   })
+  if (!checkpoint) return errorJson(request, "REGISTRATION_FINALIZING", 409, true)
+  row = checkpoint
+  const providerFinalized = user.firebaseUser?.emailVerified && isSaturnFinalizedClaim(user.firebaseUser.accountClaims)
   try {
-    await updateFirebaseUserAdmin(env, {
+    if (!providerFinalized) await updateFirebaseUserAdmin(env, {
       userId: user.userId,
       email: user.email,
       emailVerified: true,
       customAttributes: finalizedClaimPayload(),
       revokeRefreshTokens: true,
     })
-  } catch {
+  } catch (error) {
+    if ((error as { remoteRejected?: boolean })?.remoteRejected) await releaseEmailFinalization(env, row, "claim_failed")
     await auditEmailVerification(env, { verificationId: row.id, firebaseUserId: user.userId, email: user.email, action: "verify", result: "claim_failed", request })
     return errorJson(request, "ACCOUNT_FINALIZATION_CLAIM_UNAVAILABLE", 503, true)
   }
+  const completed = await updateEmailVerificationIfCurrent(env, row, {
+    consumed_at: new Date().toISOString(),
+    metadata: { ...metadataObject(row.metadata), registration: { ...registrationFromRow(row), finalization_state: "finalized" } },
+  })
+  if (!completed) return errorJson(request, "REGISTRATION_FINALIZING", 409, true)
   await auditEmailVerification(env, { verificationId: row.id, firebaseUserId: user.userId, email: user.email, action: "verify", result: "verified", request })
-  return json({ success: true, status: "verified", verified_at: verifiedAt, profile: profileProjection(profile, verifiedProfileUser), token_refresh_required: true })
+  return json({ success: true, status: "verified", verified_at: verifiedAt, profile: profileProjection(profile!, verifiedProfileUser), token_refresh_required: true })
 }
 
 async function handleEmailVerificationStatus(request: Request, env: Env): Promise<Response> {
@@ -1881,10 +2193,12 @@ async function handleEmailVerificationStatus(request: Request, env: Env): Promis
   })
   if (user instanceof Response) return user
   const row = await getLatestEmailVerification(env, { email: user.email, firebaseUserId: user.userId, purpose: "email_verification" })
+  const profile = row?.status === "verified" && user.userId ? await getAccountProfileByFirebaseUid(env, user.userId) : null
+  const verified = row ? emailVerificationFinalized(row, user.firebaseUser, profile) : false
   return json({
     success: true,
-    status: row?.status || "unverified",
-    verified: row?.status === "verified",
+    status: row?.status === "verified" && !verified ? "pending" : row?.status || "unverified",
+    verified,
     expires_at: row?.expires_at || null,
     attempts: row?.attempts || 0,
   })
@@ -1903,7 +2217,10 @@ async function handleEmailVerificationCancel(request: Request, env: Env): Promis
     const rowEmail = normalizeRegistrationEmail(row.email)
     if (suppliedEmail && suppliedEmail !== rowEmail) return errorJson(request, "VERIFICATION_CODE_INVALID", 400)
     const now = new Date().toISOString()
-    await updateEmailVerification(env, row.id, {
+    if (row.firebase_user_id || ["finalizing", "profile_finalizing", "claim_failed", "finalized"].includes(String(registrationFromRow(row).finalization_state))) {
+      return errorJson(request, "REGISTRATION_FINALIZING", 409, true)
+    }
+    const cancelled = await updateEmailVerificationIfCurrent(env, row, {
       status: "blocked",
       metadata: {
         ...metadataObject(row.metadata),
@@ -1914,7 +2231,8 @@ async function handleEmailVerificationCancel(request: Request, env: Env): Promis
           superseded_at: now,
         },
       },
-    }).catch(() => undefined)
+    })
+    if (!cancelled) return errorJson(request, "REGISTRATION_FINALIZING", 409, true)
     await auditEmailVerification(env, { verificationId: row.id, email: rowEmail, action: "registration_cancel", result: "superseded_by_email_change", request })
     return json({ success: true, status: "superseded" })
   }
@@ -1928,15 +2246,17 @@ async function handleEmailVerificationCancel(request: Request, env: Env): Promis
     email: user.email,
     firebaseUserId: user.userId,
     purpose: "email_verification",
-    status: "pending",
   })
-  if (!row) {
+  if (!await canReplaceEmailVerification(env, row, user.firebaseUser)) {
+    return errorJson(request, "REGISTRATION_FINALIZING", 409, true)
+  }
+  if (!row || row.status !== "pending") {
     await auditEmailVerification(env, { firebaseUserId: user.userId, email: user.email, action: "cancel", result: "not_found", request })
     return json({ success: true, status: "not_found" })
   }
   const now = new Date().toISOString()
   const metadata = typeof row.metadata === "object" && row.metadata ? row.metadata : {}
-  await updateEmailVerification(env, row.id, {
+  const cancelled = await updateEmailVerificationIfCurrent(env, row, {
     status: "blocked",
     metadata: {
       ...metadata,
@@ -1944,6 +2264,7 @@ async function handleEmailVerificationCancel(request: Request, env: Env): Promis
       superseded_at: now,
     },
   })
+  if (!cancelled) return errorJson(request, "VERIFICATION_CODE_INVALID", 409)
   await auditEmailVerification(env, {
     verificationId: row.id,
     firebaseUserId: user.userId,
@@ -1989,6 +2310,7 @@ async function authenticateFirebasePassword(
 
   const endpoint = "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword"
   const response = await fetch(`${endpoint}?key=${encodeURIComponent(apiKey)}`, {
+    signal: AbortSignal.timeout(20_000),
     method: "POST",
     headers: { "Content-Type": "application/json; charset=utf-8" },
     body: JSON.stringify({
@@ -3046,6 +3368,10 @@ export default {
         const res = await handlePendingRegistrationStart(request, env)
         return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
       }
+      if (request.method === "POST" && apiPath === "/email-verification/registration-status") {
+        const res = await handlePendingRegistrationStatus(request, env)
+        return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
+      }
       if (request.method === "POST" && apiPath === "/email-verification/verify") {
         const res = await handleEmailVerificationVerify(request, env)
         return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
@@ -3076,6 +3402,16 @@ export default {
       return json({ success: false, error: "not_found" }, 404, cors)
     } catch (err: any) {
       const code = String(err?.message || err || "").trim()
+      if (code === "email_verification_admission_rate_limited") {
+        const res = verificationRateLimited(request, err.retryAfterSeconds || 45)
+        return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
+      }
+      if (code === "email_verification_admission_conflict") {
+        return json({ success: false, error: "VERIFICATION_DELIVERY_PENDING" }, 409, cors)
+      }
+      if (code === "email_verification_admission_unavailable" || code === "email_verification_delivery_unavailable") {
+        return json({ success: false, error: "AUTH_PROVIDER_UNAVAILABLE" }, 503, cors)
+      }
       if (code === "firebase_token_invalid" || code === "firebase_user_not_verified") {
         const res = errorJson(request, "AUTH_SESSION_EXPIRED", 401, true)
         return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })

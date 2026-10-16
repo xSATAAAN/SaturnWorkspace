@@ -115,6 +115,18 @@ const db = {
 }
 
 let sequence = 0
+let syntheticEmailWriteFailure = null
+let syntheticBeforeEmailPatch = null
+let syntheticDuringAccountCreate = null
+let syntheticProfileWriteFailure = false
+let syntheticFirebaseUpdateFailure = false
+let syntheticBeforeProfileWrite = null
+let syntheticAfterProfileWrite = null
+let syntheticAfterFirebaseUpdate = null
+let syntheticAfterEmailPatch = null
+let syntheticAfterEmailRead = null
+const profileWriteRequests = []
+const firebaseUpdateRequests = []
 const nextId = (prefix) => `${prefix}-${++sequence}`
 const clone = (value) => JSON.parse(JSON.stringify(value))
 
@@ -162,6 +174,10 @@ async function mockFetch(input, init = {}) {
       return user ? Response.json({ users: [user] }) : Response.json({ error: { message: 'INVALID_ID_TOKEN' } }, { status: 401 })
     }
     if (url.pathname.endsWith('/accounts:update') && request.method.toUpperCase() === 'POST') {
+      firebaseUpdateRequests.push(clone(body))
+      if (syntheticFirebaseUpdateFailure) return Response.json({ error: { message: 'INTERNAL_ERROR' } }, {
+        status: typeof syntheticFirebaseUpdateFailure === 'number' ? syntheticFirebaseUpdateFailure : 503,
+      })
       const entry = [...users.entries()].find(([, user]) => String(user.localId || '') === String(body.localId || ''))
       if (!entry) return Response.json({ error: { message: 'EMAIL_NOT_FOUND' } }, { status: 404 })
       const [token, user] = entry
@@ -177,10 +193,12 @@ async function mockFetch(input, init = {}) {
         providerUserInfo: Array.isArray(user.providerUserInfo) && user.providerUserInfo.length ? user.providerUserInfo : [{ providerId: 'password' }],
       }
       users.set(token, updated)
+      if (syntheticAfterFirebaseUpdate) await syntheticAfterFirebaseUpdate(updated)
       return Response.json({ localId: updated.localId, email: updated.email, displayName: updated.displayName, emailVerified: updated.emailVerified, disabled: updated.disabled, customAttributes: updated.customAttributes, providerUserInfo: updated.providerUserInfo })
     }
     if (url.pathname.endsWith('/accounts') && request.method.toUpperCase() === 'POST') {
       const email = String(body.email || '').trim().toLowerCase()
+      if (syntheticDuringAccountCreate) await syntheticDuringAccountCreate(email)
       if ([...users.values()].some((user) => String(user.email || '').toLowerCase() === email)) {
         return Response.json({ error: { message: 'EMAIL_EXISTS' } }, { status: 409 })
       }
@@ -315,29 +333,63 @@ async function mockFetch(input, init = {}) {
   const rows = db[table]
   if (!Array.isArray(rows)) return Response.json({ message: `unknown_table:${table}` }, { status: 404 })
   const method = request.method.toUpperCase()
+  if (table === 'account_profiles' && method === 'POST' && syntheticProfileWriteFailure) {
+    return Response.json({ message: 'synthetic_profile_write_unavailable' }, {
+      status: typeof syntheticProfileWriteFailure === 'number' ? syntheticProfileWriteFailure : 503,
+    })
+  }
+  if (table === 'account_email_verifications' && ['POST', 'PATCH'].includes(method) && syntheticEmailWriteFailure) {
+    return Response.json(syntheticEmailWriteFailure, { status: 400 })
+  }
   if (method === 'GET') {
-    const filtered = rows.filter((row) => matches(row, url.searchParams))
+    let filtered = rows.filter((row) => matches(row, url.searchParams))
+    const order = url.searchParams.get('order')
+    if (order) {
+      const fields = order.split(',').map((item) => item.split('.'))
+      filtered.sort((a, b) => {
+        for (const [field, direction] of fields) {
+          if (a[field] === b[field]) continue
+          return (String(a[field]) < String(b[field]) ? -1 : 1) * (direction === 'desc' ? -1 : 1)
+        }
+        return 0
+      })
+    }
+    if (url.searchParams.has('limit')) filtered = filtered.slice(0, Number(url.searchParams.get('limit')))
     const safeDeviceTables = new Set(['account_device_bindings', 'account_device_change_requests', 'account_device_events'])
     const selectedFields = String(url.searchParams.get('select') || '').split(',').map((field) => field.trim()).filter(Boolean)
     if (safeDeviceTables.has(table) && selectedFields.length) {
       return Response.json(clone(filtered.map((row) => Object.fromEntries(selectedFields.map((field) => [field, row[field]])))))
     }
-    return Response.json(clone(filtered))
+    const snapshot = clone(filtered)
+    if (table === 'account_email_verifications' && syntheticAfterEmailRead) await syntheticAfterEmailRead(url, snapshot)
+    return Response.json(snapshot)
   }
   if (method === 'POST') {
     const body = await request.json()
-    const inserted = { id: body.id || nextId(table), created_at: body.created_at || new Date().toISOString(), last_seen_at: body.last_seen_at ?? null, revoked_at: body.revoked_at ?? null, ...body }
+    if (table === 'account_profiles') {
+      profileWriteRequests.push(clone(body))
+      if (syntheticBeforeProfileWrite) await syntheticBeforeProfileWrite(body)
+    }
+    const timestamp = new Date().toISOString()
+    const verificationDefaults = table === 'account_email_verifications'
+      ? { updated_at: timestamp, last_sent_at: timestamp, resend_count: 0, max_resends: 5, attempts: 0, max_attempts: 6 }
+      : {}
+    const inserted = { id: body.id || nextId(table), created_at: body.created_at || timestamp, last_seen_at: body.last_seen_at ?? null, revoked_at: body.revoked_at ?? null, ...verificationDefaults, ...body }
     rows.push(inserted)
+    if (table === 'account_profiles' && syntheticAfterProfileWrite) await syntheticAfterProfileWrite(inserted)
     return Response.json([clone(inserted)], { status: 201 })
   }
   if (method === 'PATCH') {
     const patch = await request.json()
+    if (table === 'account_email_verifications' && syntheticBeforeEmailPatch) await syntheticBeforeEmailPatch(patch, url)
     const changed = []
     for (const row of rows) {
       if (!matches(row, url.searchParams)) continue
-      Object.assign(row, patch)
+      Object.assign(row, patch, table === 'account_email_verifications'
+        ? { updated_at: new Date(Math.max(Date.now(), Date.parse(row.updated_at || '') + 1)).toISOString() } : {})
       changed.push(clone(row))
     }
+    if (table === 'account_email_verifications' && syntheticAfterEmailPatch) await syntheticAfterEmailPatch(patch, changed)
     return Response.json(changed)
   }
   return Response.json({ message: 'method_not_supported' }, { status: 405 })
@@ -443,6 +495,269 @@ assert.equal(gmailCapabilityEnabled.status, 200)
 assert.equal(gmailCapabilityEnabled.body.enabled, true)
 assert.equal(gmailCapabilityEnabled.body.reason, '')
 
+const deliveryRequests = []
+let deliveryEnqueueReply = { success: true, status: 'queued', sent_at: null }
+let deliveryStatusReply = { success: true, status: 'queued', sent_at: null }
+let duringDeliveryEnqueue = null
+let duringDeliveryRead = null
+const realDeliveryEnv = {
+  ...env,
+  EMAIL_AUTH_ENABLED: 'true',
+  EMAIL_VERIFICATION_TEST_TRANSPORT: '',
+  AUTH_EMAIL_ENQUEUE_URL: 'https://api.saturnws.com/v1/internal/email/auth/enqueue',
+  POLICY_SERVICE: { async fetch(request) {
+    const body = await request.json()
+    const pathname = new URL(request.url).pathname
+    deliveryRequests.push({ pathname, body })
+    if (pathname.endsWith('/enqueue')) {
+      if (duringDeliveryEnqueue) await duringDeliveryEnqueue(body)
+      return Response.json({ job_id: `job-${body.verification_request_id}-${body.idempotency_key.split(':').at(-1)}`, ...deliveryEnqueueReply })
+    }
+    assert.equal(pathname, '/v1/internal/email/auth/status')
+    if (duringDeliveryRead) await duringDeliveryRead(body)
+    return Response.json(deliveryStatusReply)
+  } },
+}
+const startDeliveryRegistration = (email, requestEnv = realDeliveryEnv) => call('/email-verification/start', {
+  email, display_name: 'Delivery Test', terms_accepted: true, locale: 'en',
+}, null, requestEnv)
+const readDeliveryRegistration = (started, email, requestEnv = realDeliveryEnv) => call('/email-verification/registration-status', {
+  registration_id: started.body.registration_id, email,
+}, null, requestEnv)
+const queuedRegistration = await startDeliveryRegistration('queued-delivery@example.test')
+assert.equal(queuedRegistration.status, 200)
+assert.equal(queuedRegistration.body.status, 'sent', 'legacy status is not delivery authority')
+assert.equal(queuedRegistration.body.delivery_status, 'queued')
+assert.equal(queuedRegistration.body.sent_at, null)
+assert.equal(queuedRegistration.body.resend_after_seconds, 0)
+assert.equal(queuedRegistration.body.test_code, undefined)
+const queuedRow = db.account_email_verifications.find((row) => row.id === queuedRegistration.body.registration_id)
+assert.equal(queuedRow.metadata.delivery.idempotency_key, `auth-registration:${queuedRow.id}:0`)
+const queuedRead = await readDeliveryRegistration(queuedRegistration, 'QUEUED-DELIVERY@example.test')
+assert.equal(queuedRead.status, 200)
+assert.equal(queuedRead.body.delivery_status, 'queued')
+assert.equal(queuedRead.body.resend_after_seconds, 0)
+assert.deepEqual(Object.keys(queuedRead.body).sort(), ['delivery_status', 'email', 'expires_at', 'registration_id', 'resend_after_seconds', 'sent_at', 'status', 'success'].sort())
+assert.deepEqual(deliveryRequests.at(-1).body, {
+  job_id: queuedRow.metadata.delivery.job_id,
+  idempotency_key: queuedRow.metadata.delivery.idempotency_key,
+  verification_request_id: queuedRow.id,
+  recipient: 'queued-delivery@example.test',
+  event_type: 'auth.email_verification',
+})
+deliveryStatusReply = { success: true, status: 'sent', sent_at: new Date(Date.now() - 10_000).toISOString() }
+const sentRead = await readDeliveryRegistration(queuedRegistration, 'queued-delivery@example.test')
+assert.equal(sentRead.body.delivery_status, 'sent')
+assert.ok(sentRead.body.resend_after_seconds >= 33 && sentRead.body.resend_after_seconds <= 35)
+assert.equal(sentRead.body.sent_at, deliveryStatusReply.sent_at)
+deliveryStatusReply = { success: true, status: 'delivered', sent_at: new Date(Date.now() - 60_000).toISOString() }
+assert.equal((await readDeliveryRegistration(queuedRegistration, 'queued-delivery@example.test')).body.resend_after_seconds, 0)
+for (const status of ['failed', 'suppressed', 'cancelled', 'expired']) {
+  deliveryStatusReply = { success: true, status, sent_at: null }
+  const failedRead = await readDeliveryRegistration(queuedRegistration, 'queued-delivery@example.test')
+  assert.equal(failedRead.body.delivery_status, 'failed')
+  assert.equal(failedRead.body.sent_at, null)
+  assert.equal(failedRead.body.resend_after_seconds, 0)
+}
+for (const malformed of [
+  { success: true, status: 'sent', sent_at: null },
+  { success: true, status: 'sent', sent_at: '2026-01-01 12:00:00' },
+  { success: true, status: 'sent', sent_at: new Date(Date.now() + 120_000).toISOString() },
+  { success: true, status: 'queued', sent_at: new Date().toISOString() },
+  { success: true, status: 'invented', sent_at: null },
+  { success: false, status: 'sent', sent_at: new Date().toISOString() },
+]) {
+  deliveryStatusReply = malformed
+  const malformedRead = await readDeliveryRegistration(queuedRegistration, 'queued-delivery@example.test')
+  assert.equal(malformedRead.status, 503)
+  assert.equal(malformedRead.body.error, 'VERIFICATION_DELIVERY_TEMPORARY_FAILURE')
+}
+deliveryStatusReply = { success: true, status: 'sent', sent_at: new Date().toISOString() }
+const requestsBeforeMismatch = deliveryRequests.length
+assert.equal((await readDeliveryRegistration(queuedRegistration, 'different@example.test')).status, 404)
+queuedRow.purpose = 'email_verification'
+assert.equal((await readDeliveryRegistration(queuedRegistration, 'queued-delivery@example.test')).status, 404)
+queuedRow.purpose = 'registration'
+assert.equal(deliveryRequests.length, requestsBeforeMismatch, 'identity mismatches must not query Policy')
+const failClosedRead = await readDeliveryRegistration(queuedRegistration, 'queued-delivery@example.test', { ...realDeliveryEnv, AUTH_RATE_LIMIT_STANDARD: undefined })
+assert.equal(failClosedRead.status, 429)
+const legacyDelivery = queuedRow.metadata.delivery
+delete queuedRow.metadata.delivery
+const legacyRead = await readDeliveryRegistration(queuedRegistration, 'queued-delivery@example.test')
+assert.equal(legacyRead.body.delivery_status, 'unknown')
+assert.equal(legacyRead.body.sent_at, null)
+assert.equal(legacyRead.body.resend_after_seconds, 0)
+queuedRow.metadata.delivery = legacyDelivery
+const requestsBeforeUnsafeUrl = deliveryRequests.length
+assert.equal((await readDeliveryRegistration(queuedRegistration, 'queued-delivery@example.test', { ...realDeliveryEnv, AUTH_EMAIL_ENQUEUE_URL: 'https://unexpected.test/status' })).status, 503)
+assert.equal(deliveryRequests.length, requestsBeforeUnsafeUrl)
+const oldExpiresAt = queuedRow.expires_at
+duringDeliveryRead = () => { queuedRow.expires_at = past(1) }
+assert.equal((await readDeliveryRegistration(queuedRegistration, 'queued-delivery@example.test')).status, 410)
+queuedRow.expires_at = oldExpiresAt
+duringDeliveryRead = () => { queuedRow.status = 'cancelled' }
+assert.equal((await readDeliveryRegistration(queuedRegistration, 'queued-delivery@example.test')).status, 409)
+queuedRow.status = 'pending'
+duringDeliveryRead = () => { queuedRow.code_hash = 'replacement-challenge-hash' }
+assert.equal((await readDeliveryRegistration(queuedRegistration, 'queued-delivery@example.test')).status, 409)
+duringDeliveryRead = null
+queuedRow.code_hash = 'legacy-manual-challenge'
+queuedRow.metadata.delivery = { ...legacyDelivery, idempotency_key: 'foreign-challenge' }
+assert.equal((await readDeliveryRegistration(queuedRegistration, 'queued-delivery@example.test')).body.delivery_status, 'unknown')
+deliveryEnqueueReply = { success: true, status: 'sent', sent_at: new Date().toISOString() }
+const immediateSent = await startDeliveryRegistration('immediate-delivery@example.test')
+assert.equal(immediateSent.body.delivery_status, 'sent')
+assert.ok(immediateSent.body.resend_after_seconds > 0 && immediateSent.body.resend_after_seconds <= 45)
+deliveryEnqueueReply = { success: true, status: 'suppressed', sent_at: null }
+assert.equal((await startDeliveryRegistration('suppressed-delivery@example.test')).body.delivery_status, 'failed')
+deliveryEnqueueReply = { success: true, status: 'queued' }
+assert.equal((await startDeliveryRegistration('malformed-delivery@example.test')).status, 503)
+deliveryEnqueueReply = { success: true, status: 'queued', sent_at: null }
+duringDeliveryEnqueue = (input) => {
+  const row = db.account_email_verifications.find((item) => item.id === input.verification_request_id)
+  row.status = 'verified'
+  row.updated_at = new Date(Date.now() + 1).toISOString()
+  row.metadata.registration.finalization_token_hash = 'test-concurrent-proof-hash'
+}
+const concurrentProof = await startDeliveryRegistration('proof-during-delivery@example.test')
+assert.equal(concurrentProof.status, 200)
+assert.equal(db.account_email_verifications.find((row) => row.id === concurrentProof.body.registration_id).metadata.registration.finalization_token_hash, 'test-concurrent-proof-hash')
+assert.equal(concurrentProof.body.finalization_token, undefined)
+duringDeliveryEnqueue = (input) => {
+  const row = db.account_email_verifications.find((item) => item.id === input.verification_request_id)
+  row.code_hash = 'newer-resend-hash'
+  row.updated_at = new Date(Date.now() + 1).toISOString()
+  row.metadata.delivery = { status: 'queued', job_id: 'newer-delivery-job' }
+}
+const staleEnqueue = await startDeliveryRegistration('replacement-during-delivery@example.test')
+assert.equal(staleEnqueue.status, 409)
+assert.equal(db.account_email_verifications.find((row) => row.email === 'replacement-during-delivery@example.test').metadata.delivery.job_id, 'newer-delivery-job')
+duringDeliveryEnqueue = null
+
+const delayedRegistration = await startDeliveryRegistration('delayed-delivery@example.test')
+const delayedRow = db.account_email_verifications.find((row) => row.id === delayedRegistration.body.registration_id)
+delayedRow.last_sent_at = new Date(Date.now() - 60_000).toISOString()
+const delayedHash = delayedRow.code_hash
+const enqueueCount = () => deliveryRequests.filter((item) => item.pathname.endsWith('/enqueue')).length
+const beforeDelayed = enqueueCount()
+for (const status of ['queued', 'processing']) {
+  deliveryStatusReply = { success: true, status, sent_at: null }
+  const blocked = await startDeliveryRegistration(delayedRow.email)
+  assert.equal(blocked.status, 409)
+  assert.equal(blocked.body.error, 'VERIFICATION_DELIVERY_PENDING')
+  assert.equal(delayedRow.code_hash, delayedHash)
+  assert.equal(delayedRow.resend_count, 0)
+}
+deliveryStatusReply = { success: true, status: 'sent', sent_at: new Date().toISOString() }
+const delayedCooldown = await startDeliveryRegistration(delayedRow.email)
+assert.equal(delayedCooldown.status, 429)
+assert.ok(delayedCooldown.body.retry_after_seconds >= 43 && delayedCooldown.body.retry_after_seconds <= 45)
+assert.equal(enqueueCount(), beforeDelayed)
+deliveryStatusReply = { success: true, status: 'sent', sent_at: null }
+assert.equal((await startDeliveryRegistration(delayedRow.email)).status, 503)
+assert.equal(enqueueCount(), beforeDelayed)
+deliveryStatusReply = { success: true, status: 'failed', sent_at: null }
+for (const status of ['verified', 'cancelled']) {
+  duringDeliveryRead = () => { delayedRow.status = status }
+  assert.equal((await startDeliveryRegistration(delayedRow.email)).status, 409)
+  assert.equal(delayedRow.status, status)
+  assert.equal(enqueueCount(), beforeDelayed)
+  delayedRow.status = 'pending'
+}
+duringDeliveryRead = () => { delayedRow.status = 'verified' }
+delayedRow.resend_count = delayedRow.max_resends
+delayedRow.metadata.delivery.idempotency_key = `auth-registration:${delayedRow.id}:${delayedRow.resend_count}`
+assert.equal((await startDeliveryRegistration(delayedRow.email)).status, 409)
+assert.equal(delayedRow.status, 'verified', 'a late limit check must not overwrite verification')
+delayedRow.status = 'pending'
+delayedRow.resend_count = 0
+delayedRow.metadata.delivery.idempotency_key = `auth-registration:${delayedRow.id}:0`
+duringDeliveryRead = null
+assert.equal((await startDeliveryRegistration(delayedRow.email)).status, 200)
+assert.equal(delayedRow.resend_count, 1)
+assert.notEqual(delayedRow.code_hash, delayedHash)
+assert.equal(enqueueCount(), beforeDelayed + 1)
+deliveryStatusReply = { success: true, status: 'queued', sent_at: null }
+
+const syntheticRegistration = (email) => call('/email-verification/start', {
+  email, display_name: 'Concurrency Test', terms_accepted: true, locale: 'en',
+})
+const definiteFailure = await startDeliveryRegistration('definite-failure@example.test', {
+  ...realDeliveryEnv, AUTH_EMAIL_ENQUEUE_TOKEN: '',
+})
+assert.equal(definiteFailure.status, 503)
+const definiteFailureRow = db.account_email_verifications.find((row) => row.email === 'definite-failure@example.test')
+assert.equal(definiteFailureRow.metadata.transport, 'delivery_failed')
+assert.equal((await startDeliveryRegistration(definiteFailureRow.email)).status, 429, 'known no-send failures retain the admission delay')
+definiteFailureRow.last_sent_at = past(1)
+assert.equal((await startDeliveryRegistration(definiteFailureRow.email)).status, 200, 'known no-send failures recover after spacing without expiring the challenge')
+for (const [failure, expectedStatus, expectedCode] of [
+  [{ message: 'email_verification_admission_rate_limited', details: '71' }, 429, 'VERIFICATION_RATE_LIMITED'],
+  [{ message: 'email_verification_admission_conflict' }, 409, 'VERIFICATION_DELIVERY_PENDING'],
+  [{ message: "Could not find the 'admission_version' column" }, 503, 'AUTH_PROVIDER_UNAVAILABLE'],
+]) {
+  syntheticEmailWriteFailure = failure
+  const rejected = await syntheticRegistration('admission-error@example.test')
+  assert.equal(rejected.status, expectedStatus)
+  assert.equal(rejected.body.error, expectedCode)
+  if (expectedStatus === 429) assert.equal(rejected.body.retry_after_seconds, 71)
+}
+syntheticEmailWriteFailure = null
+
+const guesses = await syntheticRegistration('parallel-guesses@example.test')
+const guessRow = db.account_email_verifications.find((row) => row.id === guesses.body.registration_id)
+let releaseGuesses
+const guessesReady = new Promise((resolve) => { releaseGuesses = resolve })
+let waitingGuesses = 0
+syntheticBeforeEmailPatch = async (patch, url) => {
+  if (url.searchParams.get('id') !== `eq.${guessRow.id}` || patch.attempts !== 1) return
+  waitingGuesses += 1
+  if (waitingGuesses === 12) releaseGuesses()
+  await guessesReady
+}
+const invalidCode = guesses.body.test_code === '000000' ? '000001' : '000000'
+const wrongGuesses = await Promise.all(Array.from({ length: 12 }, () => call('/email-verification/verify', {
+  registration_id: guessRow.id, email: guessRow.email, code: invalidCode,
+})))
+syntheticBeforeEmailPatch = null
+assert.ok(wrongGuesses.every((reply) => reply.status !== 200))
+assert.equal(guessRow.attempts, 6, 'parallel guesses must not lose increments')
+assert.equal(guessRow.status, 'blocked')
+assert.equal((await call('/email-verification/verify', {
+  registration_id: guessRow.id, code: guesses.body.test_code,
+})).status, 409, 'the correct code cannot revive an exhausted challenge')
+
+const concurrentVerified = await syntheticRegistration('parallel-verify@example.test')
+const proofReplies = await Promise.all(Array.from({ length: 8 }, () => call('/email-verification/verify', {
+  registration_id: concurrentVerified.body.registration_id, code: concurrentVerified.body.test_code,
+})))
+assert.equal(proofReplies.filter((reply) => reply.status === 200).length, 1, 'only one verification can issue a finalization proof')
+const cancelledVerify = await syntheticRegistration('cancel-verify@example.test')
+const cancelledRow = db.account_email_verifications.find((row) => row.id === cancelledVerify.body.registration_id)
+syntheticBeforeEmailPatch = async (patch, url) => {
+  if (url.searchParams.get('id') !== `eq.${cancelledRow.id}` || patch.status !== 'verified') return
+  syntheticBeforeEmailPatch = null
+  assert.equal((await call('/email-verification/cancel', { registration_id: cancelledRow.id })).status, 200)
+}
+assert.equal((await call('/email-verification/verify', {
+  registration_id: cancelledRow.id, code: cancelledVerify.body.test_code,
+})).status, 409)
+assert.equal(cancelledRow.status, 'blocked', 'late verification must not overwrite cancellation')
+syntheticBeforeEmailPatch = null
+const replacedVerify = await syntheticRegistration('resend-verify@example.test')
+const replacedRow = db.account_email_verifications.find((row) => row.id === replacedVerify.body.registration_id)
+syntheticBeforeEmailPatch = async (patch, url) => {
+  if (url.searchParams.get('id') !== `eq.${replacedRow.id}` || patch.status !== 'verified') return
+  syntheticBeforeEmailPatch = null
+  replacedRow.code_hash = 'synthetic-newer-challenge'
+  replacedRow.last_sent_at = new Date(Date.now() + 1).toISOString()
+}
+assert.equal((await call('/email-verification/verify', {
+  registration_id: replacedRow.id, code: replacedVerify.body.test_code,
+})).status, 409)
+assert.equal(replacedRow.status, 'pending', 'late verification must not verify a replacement code')
+syntheticBeforeEmailPatch = null
+
 const registrationStart = await call('/email-verification/start', {
   email: 'new-registration@example.test',
   display_name: 'New Registration',
@@ -452,6 +767,8 @@ const registrationStart = await call('/email-verification/start', {
 })
 assert.equal(registrationStart.status, 200)
 assert.equal(registrationStart.body.status, 'sent')
+assert.equal(registrationStart.body.delivery_status, 'sent')
+assert.ok(Number.isFinite(Date.parse(registrationStart.body.sent_at)))
 assert.ok(registrationStart.body.registration_id)
 assert.equal(String(registrationStart.body.test_code || '').length, 6)
 assert.equal([...users.values()].some((user) => user.email === 'new-registration@example.test'), false, 'pending registration must not create a Firebase password identity before OTP')
@@ -466,13 +783,25 @@ assert.notEqual(unavailableBeforeFinalize.status, 200, 'protected account API mu
 const wrongRegistrationOtp = await call('/email-verification/verify', {
   registration_id: registrationStart.body.registration_id,
   email: 'new-registration@example.test',
-  code: '000000',
+  code: registrationStart.body.test_code === '000000' ? '000001' : '000000',
 })
 assert.equal(wrongRegistrationOtp.status, 400)
 assert.equal(wrongRegistrationOtp.body.error, 'VERIFICATION_CODE_INVALID')
 assert.equal([...users.values()].some((user) => user.email === 'new-registration@example.test'), false, 'wrong OTP must not create a Firebase identity')
 
 pendingRegistrationRow.last_sent_at = past(1)
+pendingRegistrationRow.metadata.delivery.sent_at = past(1)
+const originalRandom = crypto.getRandomValues
+let forcedRepeatedCode = false
+crypto.getRandomValues = function (array) {
+  if (!forcedRepeatedCode && array.length === 4) {
+    forcedRepeatedCode = true
+    const value = Number(registrationStart.body.test_code)
+    array.set([(value >>> 24) & 255, (value >>> 16) & 255, (value >>> 8) & 255, value & 255])
+    return array
+  }
+  return originalRandom.call(this, array)
+}
 const registrationResend = await call('/email-verification/start', {
   email: 'new-registration@example.test',
   display_name: 'New Registration',
@@ -480,6 +809,8 @@ const registrationResend = await call('/email-verification/start', {
   terms_accepted: true,
   terms_version: '2026-06',
 })
+crypto.getRandomValues = originalRandom
+assert.equal(forcedRepeatedCode, true)
 assert.equal(registrationResend.status, 200)
 assert.equal(registrationResend.body.registration_id, registrationStart.body.registration_id)
 assert.notEqual(registrationResend.body.test_code, registrationStart.body.test_code)
@@ -511,6 +842,14 @@ assert.equal(weakRegistrationFinalize.status, 400)
 assert.equal(weakRegistrationFinalize.body.error, 'AUTH_WEAK_PASSWORD')
 assert.equal([...users.values()].some((user) => user.email === 'new-registration@example.test'), false, 'weak password finalization must not create Firebase identity')
 
+pendingRegistrationRow.metadata.registration.finalization_state = 'finalizing'
+pendingRegistrationRow.metadata.registration.finalization_claim = 'synthetic-crashed-claim'
+pendingRegistrationRow.metadata.registration.finalization_claim_expires_at = future(1)
+assert.equal((await call('/email-verification/finalize', {
+  registration_id: registrationVerified.body.registration_id,
+  finalization_token: registrationVerified.body.finalization_token, password: 'strong-password-123',
+})).body.error, 'REGISTRATION_FINALIZING', 'an active claim excludes a second finalizer')
+pendingRegistrationRow.metadata.registration.finalization_claim_expires_at = past(1)
 const mismatchedProjectFinalize = await call('/email-verification/finalize', {
   registration_id: registrationVerified.body.registration_id,
   email: 'new-registration@example.test',
@@ -530,12 +869,45 @@ assert.equal(mismatchedProjectFinalize.body.error, 'AUTH_PROVIDER_SERVER_CREATE_
 assert.equal([...users.values()].some((user) => user.email === 'new-registration@example.test'), false, 'project mismatch must fail before Firebase identity creation')
 assert.equal(db.account_profiles.some((row) => row.normalized_email === 'new-registration@example.test'), false, 'project mismatch must fail before canonical profile creation')
 
-const registrationFinalized = await call('/email-verification/finalize', {
+let finalizationCreateCalls = 0
+pendingRegistrationRow.metadata.delivery = {
+  job_id: 'synthetic-finalizing-job', status: 'queued', sent_at: null,
+  idempotency_key: `auth-registration:${pendingRegistrationRow.id}:${pendingRegistrationRow.resend_count}`,
+  verification_request_id: pendingRegistrationRow.id, recipient: pendingRegistrationRow.email,
+  event_type: 'auth.verification_resend',
+}
+syntheticDuringAccountCreate = async (email) => {
+  assert.equal(email, 'new-registration@example.test')
+  finalizationCreateCalls += 1
+  const concurrent = await call('/email-verification/finalize', {
+    registration_id: registrationVerified.body.registration_id,
+    finalization_token: registrationVerified.body.finalization_token, password: 'other-strong-password-123',
+  })
+  assert.equal(concurrent.status, 409)
+  assert.equal(concurrent.body.error, 'REGISTRATION_FINALIZING')
+  assert.equal((await call('/email-verification/cancel', {
+    registration_id: registrationVerified.body.registration_id,
+  })).status, 409, 'cancellation must not race a provider-side account creation')
+  const beforeStatus = pendingRegistrationRow.updated_at
+  deliveryStatusReply = { success: true, status: 'sent', sent_at: new Date().toISOString() }
+  assert.equal((await readDeliveryRegistration(registrationStart, email)).status, 200)
+  assert.equal(pendingRegistrationRow.updated_at, beforeStatus, 'delivery readback must not invalidate the finalization claim')
+}
+const finalizeFixture = () => call('/email-verification/finalize', {
   registration_id: registrationVerified.body.registration_id,
   email: 'new-registration@example.test',
   finalization_token: registrationVerified.body.finalization_token,
   password: 'strong-password-123',
 })
+syntheticProfileWriteFailure = true
+const failedProfileFinalization = await finalizeFixture()
+assert.equal(failedProfileFinalization.status, 503)
+assert.equal(pendingRegistrationRow.metadata.registration.finalization_state, 'profile_failed')
+assert.equal(pendingRegistrationRow.status, 'verified', 'a profile write failure preserves the finalization proof')
+syntheticProfileWriteFailure = false
+const registrationFinalized = await finalizeFixture()
+syntheticDuringAccountCreate = null
+assert.equal(finalizationCreateCalls, 2, 'a definite profile failure is recoverable without waiting for the crash lease')
 assert.equal(registrationFinalized.status, 200)
 assert.equal(registrationFinalized.body.status, 'finalized')
 assert.ok(users.get(tokenRegistrationFinalized), 'Firebase identity must be created after OTP finalization')
@@ -783,6 +1155,13 @@ const verificationRequest = await call('/email-verification/request', {
 assert.equal(verificationRequest.status, 200)
 assert.equal(verificationRequest.body.status, 'sent')
 assert.equal(String(verificationRequest.body.test_code || '').length, 6)
+const authenticatedRow = db.account_email_verifications.find((row) => row.email === 'pending@example.test' && row.status === 'pending')
+const badAuthenticatedCode = verificationRequest.body.test_code === '000000' ? '000001' : '000000'
+const authenticatedGuesses = await Promise.all(Array.from({ length: 3 }, () => call('/email-verification/verify', {
+  id_token: tokenPendingEmail, code: badAuthenticatedCode,
+}, tokenPendingEmail)))
+assert.ok(authenticatedGuesses.every((reply) => reply.status === 400))
+assert.equal(authenticatedRow.attempts, 3, 'authenticated verification also counts parallel guesses')
 const verificationCancel = await call('/email-verification/cancel', {
   id_token: tokenPendingEmail,
   email: 'pending@example.test',
@@ -796,6 +1175,15 @@ const supersededVerification = await call('/email-verification/verify', {
 }, tokenPendingEmail)
 assert.equal(supersededVerification.status, 404)
 assert.equal(supersededVerification.body.error, 'VERIFICATION_CODE_INVALID')
+syntheticEmailWriteFailure = { message: 'email_verification_admission_rate_limited', details: '45' }
+const rejectedAfterCancel = await call('/email-verification/request', {
+  id_token: tokenPendingEmail, email: 'pending@example.test',
+}, tokenPendingEmail)
+assert.equal(rejectedAfterCancel.status, 429)
+assert.equal(rejectedAfterCancel.body.retry_after_seconds, 45, 'the authenticated route must preserve database cooldowns after cancellation')
+syntheticEmailWriteFailure = null
+authenticatedRow.last_sent_at = past(1)
+authenticatedRow.metadata.delivery.sent_at = past(1)
 const verificationRequestAfterCancel = await call('/email-verification/request', {
   id_token: tokenPendingEmail,
   email: 'pending@example.test',
@@ -807,6 +1195,28 @@ const verificationRequestAfterCancel = await call('/email-verification/request',
 assert.equal(verificationRequestAfterCancel.status, 200)
 assert.equal(verificationRequestAfterCancel.body.status, 'sent')
 assert.equal(String(verificationRequestAfterCancel.body.test_code || '').length, 6)
+syntheticProfileWriteFailure = true
+const partialVerification = await call('/email-verification/verify', {
+  id_token: tokenPendingEmail, code: verificationRequestAfterCancel.body.test_code,
+}, tokenPendingEmail)
+assert.ok(partialVerification.status >= 500)
+syntheticProfileWriteFailure = false
+const partialStatus = await call('/email-verification/status', { id_token: tokenPendingEmail }, tokenPendingEmail)
+assert.equal(partialStatus.body.verified, false, 'OTP acceptance is not successful account finalization')
+const partialVerificationRow = db.account_email_verifications.find((row) => row.email === 'pending@example.test' && row.status === 'verified')
+const frozenVerificationAt = partialVerificationRow.verified_at
+assert.equal((await call('/email-verification/verify', {
+  id_token: tokenPendingEmail, code: verificationRequestAfterCancel.body.test_code,
+}, tokenPendingEmail)).body.error, 'REGISTRATION_FINALIZING', 'an uncertain write retains its bounded lease')
+partialVerificationRow.metadata.registration.finalization_claim_expires_at = past(1)
+syntheticFirebaseUpdateFailure = true
+const partialProvider = await call('/email-verification/verify', {
+  id_token: tokenPendingEmail, code: verificationRequestAfterCancel.body.test_code,
+}, tokenPendingEmail)
+assert.equal(partialProvider.status, 503, 'the accepted proof must recover after a profile failure')
+assert.equal(partialProvider.body.error, 'ACCOUNT_FINALIZATION_CLAIM_UNAVAILABLE')
+syntheticFirebaseUpdateFailure = false
+partialVerificationRow.metadata.registration.finalization_claim_expires_at = past(1)
 const verificationComplete = await call('/email-verification/verify', {
   id_token: tokenPendingEmail,
   email: 'pending@example.test',
@@ -814,6 +1224,7 @@ const verificationComplete = await call('/email-verification/verify', {
 }, tokenPendingEmail)
 assert.equal(verificationComplete.status, 200)
 assert.equal(verificationComplete.body.status, 'verified')
+assert.equal(partialVerificationRow.verified_at, frozenVerificationAt, 'recovery must not advance the accepted credential epoch')
 const pendingProfile = db.account_profiles.find((row) => row.firebase_uid === 'uid-pending-email')
 assert.equal(pendingProfile?.email_verified, true)
 assert.equal(pendingProfile?.display_name, 'Pending Saturn Name')
@@ -832,6 +1243,246 @@ assert.equal(pendingAfterIdentity.body.user.profile.email_verified, true)
 assert.equal(pendingAfterIdentity.body.user.profile.display_name, 'Pending Saturn Name')
 const pendingLinkedAfterOtp = await link(tokenPendingEmailFinalized, '8'.repeat(32))
 assert.equal(pendingLinkedAfterOtp.session.entitlement_state, 'no_subscription')
+
+async function authenticatedOtpFixture(label) {
+  const uid = `uid-otp-recovery-${label}`
+  const email = `otp-recovery-${label}@example.test`
+  const token = rawToken(uid, email)
+  users.set(token, { localId: uid, email, emailVerified: false, providerUserInfo: [{ providerId: 'password' }] })
+  const issued = await call('/email-verification/request', {
+    id_token: token, display_name: `Recovery ${label}`, terms_accepted: true, terms_version: '2026-06',
+  }, token)
+  assert.equal(issued.status, 200)
+  const row = db.account_email_verifications.find((item) => item.firebase_user_id === uid)
+  return {
+    uid, email, token, row, code: issued.body.test_code,
+    verify: (code = issued.body.test_code) => call('/email-verification/verify', { id_token: token, code }, token),
+    status: () => call('/email-verification/status', { id_token: token }, token),
+    expireLease: () => { row.metadata.registration.finalization_claim_expires_at = past(1) },
+    profileWrites: () => profileWriteRequests.filter((item) => item.firebase_uid === uid).length,
+    providerWrites: () => firebaseUpdateRequests.filter((item) => item.localId === uid).length,
+  }
+}
+
+const activeRecovery = await authenticatedOtpFixture('active')
+syntheticBeforeProfileWrite = async () => {
+  syntheticBeforeProfileWrite = null
+  activeRecovery.row.expires_at = past(1)
+  const before = clone(activeRecovery.row)
+  const overlap = await Promise.all([
+    activeRecovery.verify(), activeRecovery.verify('000000'),
+    call('/email-verification/request', { id_token: activeRecovery.token }, activeRecovery.token),
+    call('/email-verification/cancel', { id_token: activeRecovery.token }, activeRecovery.token),
+  ])
+  assert.ok(overlap.every((reply) => reply.status === 409 && reply.body.error === 'REGISTRATION_FINALIZING'),
+    'an admitted finalizer must survive expiry, guesses, cancellation and replacement issuance')
+  assert.equal((await activeRecovery.status()).body.verified, false)
+  assert.deepEqual(activeRecovery.row, before, 'overlapping calls cannot mutate an active receipt')
+}
+assert.equal((await activeRecovery.verify()).status, 200, 'a finalizer admitted before expiry may finish')
+assert.equal(activeRecovery.providerWrites(), 1)
+
+const retryBudget = await authenticatedOtpFixture('budget')
+syntheticProfileWriteFailure = 409
+assert.equal((await retryBudget.verify()).status, 503)
+syntheticProfileWriteFailure = false
+assert.equal(retryBudget.row.metadata.registration.finalization_state, 'profile_failed', 'a definite rejection releases the lease')
+const badRetryCode = retryBudget.code === '000000' ? '000001' : '000000'
+await Promise.all(Array.from({ length: 12 }, () => retryBudget.verify(badRetryCode)))
+assert.equal(retryBudget.row.attempts, 6, 'accepted but incomplete proofs retain the atomic guess budget')
+assert.equal(retryBudget.row.status, 'blocked')
+assert.equal((await retryBudget.verify()).status, 404)
+assert.equal(retryBudget.providerWrites(), 0)
+
+const definiteProvider = await authenticatedOtpFixture('definite-provider')
+syntheticFirebaseUpdateFailure = 400
+assert.equal((await definiteProvider.verify()).status, 503)
+syntheticFirebaseUpdateFailure = false
+assert.equal(definiteProvider.row.metadata.registration.finalization_state, 'claim_failed')
+assert.equal((await definiteProvider.verify()).status, 200, 'a definite provider rejection permits immediate recovery')
+assert.equal(definiteProvider.profileWrites(), 1)
+
+const staleGuess = await authenticatedOtpFixture('stale-guess')
+syntheticProfileWriteFailure = 409
+assert.equal((await staleGuess.verify()).status, 503)
+syntheticProfileWriteFailure = false
+syntheticBeforeEmailPatch = async (patch, url) => {
+  if (url.searchParams.get('id') !== `eq.${staleGuess.row.id}` || patch.attempts !== 1) return
+  syntheticBeforeEmailPatch = null
+  assert.equal((await staleGuess.verify()).status, 200)
+}
+assert.equal((await staleGuess.verify(staleGuess.code === '000000' ? '000001' : '000000')).status, 400)
+assert.equal(staleGuess.row.attempts, 0, 'a stale wrong-code retry cannot mutate a receipt finalized during CAS contention')
+assert.equal((await call('/email-verification/cancel', { id_token: staleGuess.token }, staleGuess.token)).body.status, 'not_found',
+  'cancellation after completed verification is an idempotent no-op')
+
+for (const stage of ['profile', 'provider', 'claim', 'checkpoint', 'completion']) {
+  const recovery = await authenticatedOtpFixture(`lost-${stage}`)
+  const loseReply = () => { throw new TypeError('synthetic_response_lost') }
+  if (stage === 'profile') syntheticAfterProfileWrite = async () => {
+    syntheticAfterProfileWrite = null
+    loseReply()
+  }
+  if (stage === 'provider') syntheticAfterFirebaseUpdate = async () => {
+    syntheticAfterFirebaseUpdate = null
+    loseReply()
+  }
+  if (['claim', 'checkpoint', 'completion'].includes(stage)) syntheticAfterEmailPatch = async (patch, changed) => {
+    const state = patch.metadata?.registration?.finalization_state
+    const target = { claim: 'finalizing', checkpoint: 'claim_finalizing', completion: 'finalized' }[stage]
+    if (state !== target || !changed.length) return
+    syntheticAfterEmailPatch = null
+    loseReply()
+  }
+  assert.ok((await recovery.verify()).status >= 500, `${stage} lost reply must not report success`)
+  const acceptedAt = recovery.row.verified_at
+  assert.equal((await recovery.status()).body.verified, stage === 'completion', 'status requires a completed durable receipt and both finalization effects')
+  if (stage !== 'completion') {
+    assert.equal((await recovery.verify()).body.error, 'REGISTRATION_FINALIZING', 'uncertain effects retain their crash lease')
+    recovery.expireLease()
+  }
+  assert.equal((await recovery.verify()).status, 200, `${stage} must recover using the accepted proof`)
+  assert.equal(recovery.row.verified_at, acceptedAt)
+  assert.equal(recovery.profileWrites(), 1, `${stage} recovery must not repeat a saved profile write`)
+  assert.equal(recovery.providerWrites(), 1, `${stage} recovery must not repeat provider updates or advance revocation`)
+  const finalized = clone(recovery.row)
+  const wrong = recovery.code === '000000' ? '000001' : '000000'
+  assert.equal((await recovery.verify(wrong)).status, 400)
+  assert.deepEqual(recovery.row, finalized, 'wrong replays cannot regress a completed receipt')
+  recovery.row.expires_at = past(1)
+  assert.equal((await recovery.verify()).status, 200, 'completed owner-bound receipts remain idempotent after expiry')
+  assert.equal((await recovery.status()).body.verified, true)
+  assert.equal(recovery.providerWrites(), 1)
+}
+
+const legacyRecovery = await authenticatedOtpFixture('legacy')
+legacyRecovery.row.status = 'verified'
+legacyRecovery.row.verified_at = new Date(Date.now() - 60_000).toISOString()
+legacyRecovery.row.consumed_at = legacyRecovery.row.verified_at
+const legacyAcceptedAt = legacyRecovery.row.verified_at
+assert.equal((await legacyRecovery.status()).body.verified, false, 'legacy early consumption is not completion evidence')
+assert.equal((await legacyRecovery.verify()).status, 200)
+assert.equal(legacyRecovery.row.verified_at, legacyAcceptedAt)
+const legacyOtpProfile = db.account_profiles.find((row) => row.firebase_uid === legacyRecovery.uid)
+assert.equal(legacyOtpProfile.metadata.finalization.credential_epoch, Math.floor(Date.parse(legacyRecovery.row.verified_at) / 1000))
+
+for (const mutation of ['uid', 'email', 'disabled', 'newer-credential', 'profile-suspended']) {
+  const isolated = await authenticatedOtpFixture(mutation)
+  syntheticProfileWriteFailure = 409
+  assert.equal((await isolated.verify()).status, 503)
+  syntheticProfileWriteFailure = false
+  const savedAt = isolated.row.verified_at
+  const identity = users.get(isolated.token)
+  if (mutation === 'uid') identity.localId = `${isolated.uid}-different`
+  if (mutation === 'email') identity.email = `different-${isolated.email}`
+  if (mutation === 'disabled') identity.disabled = true
+  if (['newer-credential', 'profile-suspended'].includes(mutation)) {
+    db.account_profiles.push({ ...clone(legacyOtpProfile), id: `profile-${isolated.uid}`, firebase_uid: isolated.uid,
+      normalized_email: isolated.email, account_status: mutation === 'profile-suspended' ? 'suspended' : 'active',
+      metadata: { finalization: { ...legacyOtpProfile.metadata.finalization,
+        credential_epoch: Math.floor(Date.parse(savedAt) / 1000) + (mutation === 'newer-credential' ? 60 : 0) } } })
+  }
+  assert.ok((await isolated.verify()).status >= 400, `${mutation} cannot reuse another or revoked account proof`)
+  assert.equal(isolated.providerWrites(), 0)
+  assert.equal((await isolated.status()).body.verified, false)
+}
+
+for (const operation of ['cancel', 'request']) {
+  const stale = await authenticatedOtpFixture(`stale-${operation}`)
+  stale.row.last_sent_at = past(1)
+  stale.row.metadata.delivery.sent_at = past(1)
+  syntheticBeforeEmailPatch = async (patch, url) => {
+    if (url.searchParams.get('id') !== `eq.${stale.row.id}` || (operation === 'cancel' ? patch.status !== 'blocked' : !patch.code_hash)) return
+    syntheticBeforeEmailPatch = null
+    assert.equal((await stale.verify()).status, 200)
+  }
+  assert.equal((await call(`/email-verification/${operation}`, { id_token: stale.token }, stale.token)).status, 409,
+    'a stale cancellation or resend cannot overwrite a completed verification')
+  assert.equal(stale.row.status, 'verified')
+  assert.equal(stale.row.metadata.registration.finalization_state, 'finalized')
+}
+
+const issuanceRace = await authenticatedOtpFixture('issuance-race')
+issuanceRace.row.last_sent_at = past(1)
+issuanceRace.row.metadata.delivery.sent_at = past(1)
+let releaseIssuanceRace
+let issuanceEntered
+let issuanceVerifier
+const issuanceReady = new Promise((resolve) => { issuanceEntered = resolve })
+const issuanceBarrier = new Promise((resolve) => { releaseIssuanceRace = resolve })
+const issuanceRowsBefore = db.account_email_verifications.length
+syntheticAfterEmailRead = async (url) => {
+  if (url.searchParams.get('firebase_user_id') !== `eq.${issuanceRace.uid}` || url.searchParams.get('purpose') !== 'eq.email_verification') return
+  syntheticAfterEmailRead = null
+  syntheticBeforeProfileWrite = async () => {
+    syntheticBeforeProfileWrite = null
+    issuanceEntered()
+    await issuanceBarrier
+  }
+  issuanceVerifier = issuanceRace.verify()
+  await issuanceReady
+}
+try {
+  assert.equal((await call('/email-verification/request', { id_token: issuanceRace.token }, issuanceRace.token)).status, 409,
+    'a verifier winning after the issuance snapshot cannot be mistaken for a fresh challenge')
+  assert.equal(db.account_email_verifications.length, issuanceRowsBefore, 'the losing request must not admit or send a second code')
+} finally {
+  releaseIssuanceRace()
+}
+assert.equal((await issuanceVerifier).status, 200)
+
+for (const operation of ['request', 'cancel']) {
+  for (const winner of ['verification', 'replacement']) {
+    const edge = await authenticatedOtpFixture(`expiry-${operation}-${winner}`)
+    syntheticProfileWriteFailure = 409
+    assert.equal((await edge.verify()).status, 503)
+    syntheticProfileWriteFailure = false
+    edge.row.last_sent_at = past(1)
+    edge.row.metadata.delivery.sent_at = past(1)
+    const actualNow = Date.now
+    edge.row.expires_at = new Date(actualNow() + 5000).toISOString()
+    const rowsBefore = db.account_email_verifications.length
+    let replacementReply
+    let replacementRequest
+    let releaseReplacement
+    let replacementEntered
+    const replacementReady = new Promise((resolve) => { replacementEntered = resolve })
+    const replacementBarrier = new Promise((resolve) => { releaseReplacement = resolve })
+    syntheticBeforeEmailPatch = async (patch, url) => {
+      if (url.searchParams.get('id') !== `eq.${edge.row.id}`) return
+      if (patch.metadata?.registration?.finalization_state === 'finalizing') {
+        Date.now = () => actualNow() + 10_000
+        replacementRequest = call(`/email-verification/${operation}`, { id_token: edge.token }, edge.token)
+        if (winner === 'replacement') replacementReply = await replacementRequest
+        else await replacementReady
+      } else if (patch.status === 'expired' && winner === 'verification') {
+        replacementEntered()
+        await replacementBarrier
+      }
+    }
+    try {
+      const verified = await edge.verify()
+      releaseReplacement()
+      replacementReply ||= await replacementRequest
+      if (winner === 'verification') {
+        assert.equal(verified.status, 200)
+        assert.equal(replacementReply.status, 409, 'expiry-edge cancellation or resend must lose to the admitted finalizer')
+        assert.equal(edge.row.status, 'verified')
+        assert.equal(db.account_email_verifications.length, rowsBefore)
+      } else {
+        assert.equal(verified.status, 409, 'a delayed claim must lose to expiry terminalization')
+        assert.equal(replacementReply.status, 200)
+        assert.equal(edge.row.status, 'expired')
+        assert.equal(edge.providerWrites(), 0)
+        assert.equal(db.account_email_verifications.length, rowsBefore + (operation === 'request' ? 1 : 0))
+      }
+    } finally {
+      releaseReplacement()
+      Date.now = actualNow
+      syntheticBeforeEmailPatch = null
+    }
+  }
+}
 
 const wrongCode = await call('/device/complete', { id_token: tokenNone, device_code: 'missing-device-code' })
 assert.equal(wrongCode.status, 404)

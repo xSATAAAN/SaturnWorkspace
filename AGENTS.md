@@ -43,35 +43,15 @@ named verification path.
 Applied migration filenames are immutable operational history. Their names do
 not establish current roadmap, product, or engineering authority.
 
-## Cross-repository product decisions
+## Current product context
 
-The single cumulative owner-approved product decision register is the
-`Approved product decision register` section at
-https://github.com/xSATAAAN/SaturnWorkspace-Desktop/blob/main/README.md#approved-product-decision-register.
-An authenticated product-design or review context must read it before changing
-cross-repository product intent or capability boundaries. If that private
-register is unavailable, stop that work explicitly; do not infer intent from
-legacy Web code and do not create a local copy or fallback register. Web CI
-enforces repository-local executable contracts and the uniqueness of this
-pointer without receiving cross-repository credentials.
-
-## Product and ownership facts
-
-Saturn Workspace is owned and developed by one independent individual/student.
-There is no registered company, institutional publisher, or multi-person team.
-Do not invent one or disclose the owner's private legal identity.
-
-- Account connection and entitlement are separate states. A linked account
-  without an active subscription is valid and must fail closed only for paid
-  operations.
-- No production payment provider is active. Checkout, grants, and billing email
-  stay disabled or fail closed until a separately approved provider rollout.
-- Irreversible account deletion is not approved. Current account-management
-  surfaces must not claim that hard deletion occurs.
-- Gmail read access remains disabled until external verification and an explicit
-  rollout decision.
-- Real grants, production toggles, destructive migrations, Worker deployment,
-  Pages promotion, publication, and release require operation-specific approval.
+No cumulative product-decision register or historical project-state log is
+active during the context reset. Do not infer current product intent from Git
+history, archived documents, old handoffs, rejected designs, or untracked
+summaries. Use the Product Owner's current request and verified current product
+evidence. If a material cross-repository product meaning is missing, return that
+decision to the Product Owner instead of reviving an older decision as current
+truth.
 
 ## Change and deployment boundaries
 
@@ -87,47 +67,13 @@ Do not invent one or disclose the owner's private legal identity.
   tokens, private keys, production payloads, or real user data. Fixture tokens
   must remain unmistakably synthetic and confined to tests.
 
-## Required verification
+## Current verification boundary
 
-Run the narrow relevant checks while iterating, then reproduce protected CI:
-
-```powershell
-node --test tools/authority-surface.test.mjs tools/deployment-boundary.test.mjs tools/runtime-contract.test.mjs
-node tools/check-authority-surface.mjs
-node tools/check-deployment-boundary.mjs
-
-Push-Location site
-npm ci
-npm run lint
-npm run build
-npm run test:production-integration
-npm run test:production-rollout
-npm run test:content
-npm run test:admin-surface
-Pop-Location
-
-Push-Location workers/admin
-npm ci
-npm run check:syntax
-npm run test:required
-Pop-Location
-
-Push-Location workers/auth
-npm ci
-npm run check
-npm run test:device-linking
-Pop-Location
-
-Push-Location workers/policy
-npm ci
-npm run test:required
-Pop-Location
-
-Push-Location workers/route-check
-npm ci
-npm run test:required
-Pop-Location
-```
+Choose local verification from the changed code, contract, deployment, and
+trust boundaries. Reuse evidence while its source and meaning remain valid.
+Current branch protection requires `web-required`; do not bypass it while it
+remains enforced. The workflow and its constituent commands are current
+engineering controls, not permanent product requirements.
 
 Report the exact commit, PR, CI run, failed or skipped checks, deployment status,
 and rollback boundary. A source change is not a deployment authorization.

@@ -6,6 +6,7 @@
   "scripts": {
     "check": "tsc --noEmit",
     "test:device-linking": "node scripts/check-device-linking.mjs",
+    "test:email-otp-postgres": "node scripts/check-email-otp-postgres.mjs",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy"
   },

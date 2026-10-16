@@ -3,7 +3,7 @@
 - Status: canonical source guide
 - Scope: public/customer/admin Web surfaces and Auth, Admin, Policy, and Route Check Workers
 - Owner: repository maintainer
-- Last verified: 2026-10-13
+- Last verified: 2026-10-16
 - Verification: protected `web-required` CI
 
 Canonical Web and control-plane source for Saturn Workspace. The project is
@@ -117,24 +117,60 @@ Pop-Location
 fixtures and tokens must remain synthetic; never copy real customer or
 production data into tests.
 
-## Current product boundaries
+## Current executable boundaries
 
-- Account connection and entitlement are distinct. A linked account can have no
-  subscription, while paid operations remain denied.
-- No production payment provider is active. Checkout, manual grants, and
-  billing communications stay disabled or fail closed until separately
-  approved and externally verified.
-- Irreversible account deletion is not approved; do not promise hard deletion.
-- Gmail read access remains disabled until provider verification and an explicit
-  rollout decision.
-- The Route Check Worker source may be adopted through a protected PR, but its
-  custom route, Durable Object, and rate-limit binding are not live capability
-  until a separately authorized Worker deployment and browser-provider QA.
-- Desktop production signing, publisher verification, publication, and release
-  remain outside this repository and are deferred.
+Registration delivery is reported separately from request acceptance. Policy
+confirms the exact queued job and its provider acknowledgement; Auth returns only
+the delivery state, send time, and remaining resend delay. A queued request does
+not start the client countdown. When deploying this change, update Policy before
+Auth, then update clients. New Auth requires the Policy delivery fields and
+internal status endpoint. Apply Auth migration
+`20261016125303_email_otp_atomic_admission.sql` before deploying the new Auth
+Worker. Missing admission schema prevents new code issuance. This source change
+does not authorize a database migration or deployment.
 
-These boundaries are enforced in runtime code, contracts, and tests. A prose
-change cannot activate an integration or authorize an operation.
+Email OTP admission is serialized per normalized recipient across registration
+and authenticated verification. The initial send and five resends share one
+budget while admitted challenges remain unexpired. Cancellation, failed delivery,
+verification and reopening registration do not reset it. The 45-second delay
+also respects a persisted provider send acknowledgement. Existing unexpired
+challenge rows seed the budget during migration; legacy rows without exact-job
+delivery evidence keep their admission-time delay. Expired recipient digests are
+removed in batches of at most 64 on successful admissions. No raw email or code
+is stored in the admission table.
+
+Authenticated email verification accepts the code before finalizing the profile
+and Firebase identity. It reports success only after both effects and the
+completion receipt are saved. An incomplete attempt can resume with the same
+code, owner and original expiry; retries preserve its credential cutoff and
+attempt budget. A definite rejection permits immediate retry. An uncertain
+write retains a five-minute claim, which also prevents cancellation, replacement
+codes and expiry handling from interrupting an admitted finalizer. Legacy rows
+marked verified or consumed still require matching profile and provider evidence.
+
+`npm run test:email-otp-postgres` in `workers/auth` proves concurrent first sends,
+resends, cross-route and terminal-state limits, legacy rows, rollback, expiry,
+cleanup and database privileges. It requires an isolated loopback PostgreSQL 17
+cluster with administrator `otp_qa_admin`, `SATURN_OTP_TEST_PSQL` set to its `psql`
+executable and `SATURN_OTP_TEST_PORT` set to its port. It refuses an existing
+`saturn_otp_admission_test` database, creates only synthetic fixtures, and drops
+that database on completion or a caught failure. CI runs it against a pinned disposable
+PostgreSQL image. Do not point it at a user or production cluster.
+
+Roll back application code without removing the admission migration. Older Auth
+code remains subject to the database send budget, but does not provide the new
+verification and finalization race protection. Pause issuance before any schema
+rollback; removing the guard while issuance is enabled reopens the budget bypass.
+
+The production Route Check surface currently responds at
+`https://route-check.saturnws.com/check`. Its source, contracts, and tests are
+under `workers/route-check`. Deployment state remains separate from source
+adoption and must be verified from the deployed route when it matters.
+
+No cumulative product-decision register or historical project-state log is
+active during the context reset. Older product statements remain in Git history
+but do not establish current intent. A prose change cannot activate an
+integration, authorize an external operation, or prove deployed behavior.
 
 ## Source, deployment, and secrets
 

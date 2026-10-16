@@ -22,6 +22,7 @@ const userByToken = new Map([
 const receivedMessages = new Map()
 let failReceiveOnce = true
 let failSend = false
+let sendAttempts = 0
 let authUnavailable = false
 let authThrows = false
 
@@ -62,6 +63,7 @@ const mf = new Miniflare({
     RESEND_RECEIVE_API_KEY: 'local-receive-key',
     RESEND_WEBHOOK_SECRET: webhookSecret,
     AUTH_EMAIL_ENQUEUE_TOKEN: authEmailToken,
+    ADMIN_EMAIL_ENQUEUE_TOKEN: 'fixture-local-admin-email-token',
     EMAIL_SENSITIVE_PAYLOAD_KEY_B64: Buffer.alloc(32, 11).toString('base64'),
     RESEND_API_BASE: 'https://resend.local',
   },
@@ -76,9 +78,10 @@ const mf = new Miniflare({
     RESEND_SERVICE: async (request) => {
       const url = new URL(request.url)
       if (request.method === 'POST' && url.pathname === '/emails') {
+        sendAttempts += 1
         const input = await request.json().catch(() => ({}))
         if (failSend || String(input.to || '').includes('send-fail')) return Response.json({ message: 'provider unavailable' }, { status: 503 })
-        return Response.json({ id: `provider-${createHash('sha1').update(String(input.subject || Date.now())).digest('hex').slice(0, 12)}` })
+        return Response.json({ id: `provider-${createHash('sha1').update(JSON.stringify([input.subject, input.to, input.headers?.['Message-ID']])).digest('hex').slice(0, 12)}` })
       }
       const emailId = decodeURIComponent(url.pathname.split('/').pop() || '')
       if (emailId === 'provider-fail' && failReceiveOnce) {
@@ -149,6 +152,186 @@ try {
   assert.equal(sentAuthJob.sensitive_payload_ciphertext, null)
   assert.ok(sentAuthJob.sensitive_payload_purged_at)
   assert.ok(!JSON.stringify(sentAuthJob).includes(verificationCode), 'OTP must not be exposed outside encrypted payload')
+  assert.match(authEnqueueBody.sent_at, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
+
+  const deliveryIdentity = {
+    job_id: authEnqueueBody.job_id,
+    idempotency_key: 'auth-email-verification:fixture:1',
+    verification_request_id: 'fixture-verification-1',
+    recipient: 'user-a@example.test',
+    event_type: 'auth.email_verification',
+  }
+  const readAuthDelivery = async (input = deliveryIdentity, token = authEmailToken, method = 'POST') => {
+    const response = await mf.dispatchFetch('https://api.saturnws.com/v1/internal/email/auth/status', {
+      method,
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      ...(method === 'POST' ? { body: typeof input === 'string' ? input : JSON.stringify(input) } : {}),
+    })
+    return { response, body: await response.json() }
+  }
+  const assertDelivery = (result, status, sentAt = null) => {
+    assert.equal(result.response.status, 200)
+    assert.deepEqual(result.body, { success: true, status, sent_at: sentAt })
+    assert.equal(result.response.headers.get('Cache-Control'), 'no-store')
+  }
+  const deliverySendCount = sendAttempts
+  assertDelivery(await readAuthDelivery(), 'sent', authEnqueueBody.sent_at)
+  for (const token of ['', 'token-a', adminToken, 'fixture-local-admin-email-token', 'wrong-token']) {
+    const denied = await readAuthDelivery(deliveryIdentity, token)
+    assert.equal(denied.response.status, 401)
+    assert.deepEqual(denied.body, { success: false, error: 'unauthorized' })
+  }
+  assert.equal((await readAuthDelivery(deliveryIdentity, authEmailToken, 'GET')).response.status, 405)
+  for (const input of [
+    '{', '[]', 'null', {},
+    { ...deliveryIdentity, event_type: 'security.new_login' },
+    { ...deliveryIdentity, job_id: 1 },
+    { ...deliveryIdentity, job_id: ' ' },
+    { ...deliveryIdentity, job_id: 'x'.repeat(161) },
+    { ...deliveryIdentity, idempotency_key: 'x'.repeat(241) },
+    { ...deliveryIdentity, verification_request_id: 'x'.repeat(121) },
+    { ...deliveryIdentity, verification_request_id: 'invalid\nidentity' },
+    { ...deliveryIdentity, recipient: '<user-a@example.test>' },
+    { ...deliveryIdentity, extra: 'x'.repeat(2048) },
+  ]) {
+    const malformed = await readAuthDelivery(input)
+    assert.equal(malformed.response.status, 400)
+    assert.deepEqual(malformed.body, { success: false, error: 'invalid_payload' })
+  }
+  for (const key of Object.keys(deliveryIdentity)) {
+    const missing = { ...deliveryIdentity }
+    delete missing[key]
+    assert.equal((await readAuthDelivery(missing)).response.status, 400)
+  }
+  for (const patch of [
+    { job_id: 'missing-job' },
+    { idempotency_key: 'other-key' },
+    { verification_request_id: 'other-request' },
+    { recipient: 'user-b@example.test' },
+    { event_type: 'auth.verification_resend' },
+  ]) {
+    const mismatch = await readAuthDelivery({ ...deliveryIdentity, ...patch })
+    assert.equal(mismatch.response.status, 404)
+    assert.deepEqual(mismatch.body, { success: false, error: 'email_delivery_not_found' })
+  }
+  const metadata = JSON.parse(sentAuthJob.template_data_json)
+  for (const corrupt of [
+    '{', '[]', '{}',
+    JSON.stringify({ ...metadata, verification_request_id: 'other-request' }),
+    JSON.stringify({ ...metadata, purpose: 'password_reset' }),
+    JSON.stringify({ ...metadata, event_type: 'auth.verification_resend' }),
+  ]) {
+    await db.prepare('UPDATE email_jobs SET template_data_json = ?1 WHERE id = ?2').bind(corrupt, sentAuthJob.id).run()
+    assert.equal((await readAuthDelivery()).response.status, 404)
+  }
+  await db.prepare('UPDATE email_jobs SET template_data_json = ?1 WHERE id = ?2').bind(sentAuthJob.template_data_json, sentAuthJob.id).run()
+  for (const patch of [
+    { sent_at: null, provider_message_id: sentAuthJob.provider_message_id },
+    { sent_at: sentAuthJob.sent_at, provider_message_id: null },
+    { sent_at: 'not-a-timestamp', provider_message_id: sentAuthJob.provider_message_id },
+    { sent_at: '2026-02-31 10:00:00', provider_message_id: sentAuthJob.provider_message_id },
+  ]) {
+    await db.prepare('UPDATE email_jobs SET sent_at = ?1, provider_message_id = ?2 WHERE id = ?3').bind(patch.sent_at, patch.provider_message_id, sentAuthJob.id).run()
+    const incomplete = await readAuthDelivery()
+    assert.equal(incomplete.response.status, 503)
+    assert.deepEqual(incomplete.body, { success: false, error: 'email_delivery_unavailable' })
+  }
+  await db.prepare('UPDATE email_jobs SET sent_at = ?1, provider_message_id = ?2 WHERE id = ?3').bind(sentAuthJob.sent_at, sentAuthJob.provider_message_id, sentAuthJob.id).run()
+  assert.equal(sendAttempts, deliverySendCount, 'Status reads must never send or retry mail')
+
+  failSend = true
+  const queuedAuthInput = {
+    event_type: 'auth.verification_resend',
+    idempotency_key: 'auth-email-verification:fixture:queued',
+    verification_request_id: 'fixture-verification-queued',
+    purpose: 'email_verification',
+    recipient: 'queued@example.test',
+    locale: 'en',
+    payload: { code: '619283', expires_at: new Date(Date.now() + 600_000).toISOString() },
+  }
+  const queuedAuthResponse = await mf.dispatchFetch('https://api.saturnws.com/v1/internal/email/auth/enqueue', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authEmailToken}` },
+    body: JSON.stringify(queuedAuthInput),
+  })
+  const queuedAuthBody = await queuedAuthResponse.json()
+  assert.equal(queuedAuthResponse.status, 200)
+  assert.equal(queuedAuthBody.status, 'queued')
+  assert.equal(queuedAuthBody.sent_at, null)
+  const queuedIdentity = {
+    job_id: queuedAuthBody.job_id,
+    idempotency_key: queuedAuthInput.idempotency_key,
+    verification_request_id: queuedAuthInput.verification_request_id,
+    recipient: queuedAuthInput.recipient,
+    event_type: queuedAuthInput.event_type,
+  }
+  assertDelivery(await readAuthDelivery(queuedIdentity), 'queued')
+  const queuedSendCount = sendAttempts
+  const collidingEnqueue = await mf.dispatchFetch('https://api.saturnws.com/v1/internal/email/auth/enqueue', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authEmailToken}` },
+    body: JSON.stringify({ ...queuedAuthInput, verification_request_id: 'other-verification-request' }),
+  })
+  assert.equal(collidingEnqueue.status, 409)
+  assert.deepEqual(await collidingEnqueue.json(), { success: false, error: 'email_delivery_not_found' })
+  assert.equal(sendAttempts, queuedSendCount, 'A mismatched idempotency replay must not process another verification job')
+  await db.prepare("UPDATE email_jobs SET status = 'processing' WHERE id = ?1").bind(queuedAuthBody.job_id).run()
+  assertDelivery(await readAuthDelivery(queuedIdentity), 'processing')
+  await db.prepare("UPDATE email_jobs SET sensitive_payload_expires_at = datetime('now', '-1 minute') WHERE id = ?1").bind(queuedAuthBody.job_id).run()
+  assertDelivery(await readAuthDelivery(queuedIdentity), 'expired')
+  await db.prepare('UPDATE email_jobs SET sensitive_payload_expires_at = NULL WHERE id = ?1').bind(queuedAuthBody.job_id).run()
+  assert.equal((await readAuthDelivery(queuedIdentity)).response.status, 503)
+  await db.prepare("UPDATE email_jobs SET status = 'queued', next_attempt_at = datetime('now'), sensitive_payload_expires_at = ?1 WHERE id = ?2").bind(queuedAuthInput.payload.expires_at, queuedAuthBody.job_id).run()
+  failSend = false
+  await adminPost('/v1/admin/email/process', {})
+  const processedAuthJob = await db.prepare('SELECT provider_message_id, sent_at FROM email_jobs WHERE id = ?1').bind(queuedAuthBody.job_id).first()
+  const processedSentAt = new Date(`${processedAuthJob.sent_at.replace(' ', 'T')}Z`).toISOString()
+  assertDelivery(await readAuthDelivery(queuedIdentity), 'sent', processedSentAt)
+  const authDeliveryWebhook = async (type, suffix) => {
+    const payload = JSON.stringify({ type, data: { email_id: processedAuthJob.provider_message_id, to: [queuedAuthInput.recipient] } })
+    const eventId = `evt-auth-delivery-${suffix}`
+    const timestamp = String(Math.floor(Date.now() / 1000))
+    const signature = createHmac('sha256', webhookKey).update(`${eventId}.${timestamp}.${payload}`).digest('base64')
+    const response = await mf.dispatchFetch('https://api.saturnws.com/api/webhooks/resend', {
+      method: 'POST',
+      headers: { 'svix-id': eventId, 'svix-timestamp': timestamp, 'svix-signature': `v1,${signature}` },
+      body: payload,
+    })
+    assert.equal(response.status, 200)
+  }
+  await authDeliveryWebhook('email.delivered', 'delivered')
+  assertDelivery(await readAuthDelivery(queuedIdentity), 'delivered', processedSentAt)
+  await authDeliveryWebhook('email.failed', 'failed')
+  assertDelivery(await readAuthDelivery(queuedIdentity), 'failed')
+  await authDeliveryWebhook('email.bounced', 'bounced')
+  assertDelivery(await readAuthDelivery(queuedIdentity), 'failed')
+  await authDeliveryWebhook('email.complained', 'complained')
+  assertDelivery(await readAuthDelivery(queuedIdentity), 'failed')
+  await authDeliveryWebhook('email.suppressed', 'suppressed')
+  assertDelivery(await readAuthDelivery(queuedIdentity), 'suppressed')
+  const suppressedAuthInput = { ...queuedAuthInput, idempotency_key: 'auth-verification:suppressed', verification_request_id: 'fixture-verification-suppressed' }
+  const suppressedAuthResponse = await mf.dispatchFetch('https://api.saturnws.com/v1/internal/email/auth/enqueue', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authEmailToken}` },
+    body: JSON.stringify(suppressedAuthInput),
+  })
+  const suppressedAuthBody = await suppressedAuthResponse.json()
+  assert.equal(suppressedAuthResponse.status, 200)
+  assert.equal(suppressedAuthBody.status, 'suppressed')
+  assert.equal(suppressedAuthBody.sent_at, null)
+  assertDelivery(await readAuthDelivery({
+    ...queuedIdentity,
+    job_id: suppressedAuthBody.job_id,
+    idempotency_key: suppressedAuthInput.idempotency_key,
+    verification_request_id: suppressedAuthInput.verification_request_id,
+  }), 'suppressed')
+  for (const status of ['cancelled', 'expired']) {
+    await db.prepare('UPDATE email_jobs SET status = ?1 WHERE id = ?2').bind(status, queuedAuthBody.job_id).run()
+    assertDelivery(await readAuthDelivery(queuedIdentity), status)
+  }
+  await db.prepare("UPDATE email_jobs SET status = 'unknown-future-state' WHERE id = ?1").bind(queuedAuthBody.job_id).run()
+  assert.equal((await readAuthDelivery(queuedIdentity)).response.status, 503)
+  await db.prepare("UPDATE email_jobs SET status = 'failed' WHERE id = ?1").bind(queuedAuthBody.job_id).run()
 
   const createKey = 'ticket:create:a'
   const attachmentForm = new FormData()
@@ -352,7 +535,7 @@ try {
   assert.ok(audit.body.audit.some((event) => event.event_type === 'support_reply'))
   assert.ok(audit.body.audit.some((event) => event.event_type === 'inbound_email_processed'))
 
-  console.log('Support, notification, webhook, idempotency, ownership, rate-limit, and lock checks passed.')
+  console.log('Support, notification, verification delivery, webhook, idempotency, ownership, rate-limit, and lock checks passed.')
 } finally {
   await mf.dispose()
   await rm(temp, { recursive: true, force: true })

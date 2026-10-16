@@ -17,6 +17,7 @@ export type AppErrorCode =
   | 'VERIFICATION_DELIVERY_CONFIGURATION_ERROR'
   | 'VERIFICATION_DELIVERY_TEMPORARY_FAILURE'
   | 'VERIFICATION_DELIVERY_FAILED'
+  | 'VERIFICATION_DELIVERY_PENDING'
   | 'SUBSCRIPTION_INACTIVE'
   | 'DOWNLOAD_NOT_ENTITLED'
   | 'SUPPORT_TICKET_FORBIDDEN'
@@ -41,6 +42,7 @@ const rawToCode: Record<string, AppErrorCode> = {
   verification_delivery_configuration_error: 'VERIFICATION_DELIVERY_CONFIGURATION_ERROR',
   verification_delivery_temporary_failure: 'VERIFICATION_DELIVERY_TEMPORARY_FAILURE',
   verification_delivery_failed: 'VERIFICATION_DELIVERY_FAILED',
+  verification_delivery_pending: 'VERIFICATION_DELIVERY_PENDING',
   invalid_credentials: 'AUTH_INVALID_CREDENTIALS',
   auth_invalid_credentials: 'AUTH_INVALID_CREDENTIALS',
   not_authenticated: 'AUTH_SESSION_EXPIRED',
@@ -87,6 +89,7 @@ export function userSafeErrorMessage(raw: unknown, status?: number): string {
     case 'VERIFICATION_DELIVERY_CONFIGURATION_ERROR':
     case 'VERIFICATION_DELIVERY_TEMPORARY_FAILURE':
     case 'VERIFICATION_DELIVERY_FAILED':
+    case 'VERIFICATION_DELIVERY_PENDING':
       return code
     case 'AUTH_INVALID_CREDENTIALS':
       return 'AUTH_INVALID_CREDENTIALS'

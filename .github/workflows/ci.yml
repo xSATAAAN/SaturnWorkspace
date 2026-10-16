@@ -22,6 +22,18 @@ jobs:
     timeout-minutes: 30
     env:
       CI: "true"
+    services:
+      otp-postgres:
+        image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+        env:
+          POSTGRES_USER: otp_qa_admin
+          POSTGRES_PASSWORD: synthetic-otp-ci-password
+          POSTGRES_DB: postgres
+        options: >-
+          --health-cmd "pg_isready -U otp_qa_admin -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
     steps:
       - name: Check out the candidate
@@ -81,6 +93,15 @@ jobs:
         run: |
           npm run check
           npm run test:device-linking
+
+      - name: Verify atomic email OTP admission in PostgreSQL
+        working-directory: workers/auth
+        env:
+          SATURN_OTP_TEST_PSQL: psql
+          SATURN_OTP_TEST_CONTAINER: ${{ job.services.otp-postgres.id }}
+          SATURN_OTP_TEST_PORT: "5432"
+          PGPASSWORD: synthetic-otp-ci-password
+        run: npm run test:email-otp-postgres
 
       - name: Install locked policy Worker dependencies
         working-directory: workers/policy
