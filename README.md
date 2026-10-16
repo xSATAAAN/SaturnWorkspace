@@ -3,7 +3,7 @@
 - Status: canonical source guide
 - Scope: public/customer/admin Web surfaces and Auth, Admin, Policy, and Route Check Workers
 - Owner: repository maintainer
-- Last verified: 2026-10-01
+- Last verified: 2026-10-16
 - Verification: protected `web-required` CI
 
 Canonical Web and control-plane source for Saturn Workspace. The project is
@@ -89,6 +89,13 @@ fixtures and tokens must remain synthetic; never copy real customer or
 production data into tests.
 
 ## Current executable boundaries
+
+Registration delivery is reported separately from request acceptance. Policy
+confirms the exact queued job and its provider acknowledgement; Auth returns only
+the delivery state, send time, and remaining resend delay. A queued request does
+not start the client countdown. When deploying this change, update Policy before
+Auth, then update clients. New Auth requires the Policy delivery fields and
+internal status endpoint. This source change does not authorize deployment.
 
 The production Route Check surface currently responds at
 `https://route-check.saturnws.com/check`. Its source, contracts, and tests are
