@@ -115,6 +115,10 @@ const db = {
 }
 
 let sequence = 0
+let syntheticEmailWriteFailure = null
+let syntheticBeforeEmailPatch = null
+let syntheticDuringAccountCreate = null
+let syntheticProfileWriteFailure = false
 const nextId = (prefix) => `${prefix}-${++sequence}`
 const clone = (value) => JSON.parse(JSON.stringify(value))
 
@@ -181,6 +185,7 @@ async function mockFetch(input, init = {}) {
     }
     if (url.pathname.endsWith('/accounts') && request.method.toUpperCase() === 'POST') {
       const email = String(body.email || '').trim().toLowerCase()
+      if (syntheticDuringAccountCreate) await syntheticDuringAccountCreate(email)
       if ([...users.values()].some((user) => String(user.email || '').toLowerCase() === email)) {
         return Response.json({ error: { message: 'EMAIL_EXISTS' } }, { status: 409 })
       }
@@ -315,8 +320,26 @@ async function mockFetch(input, init = {}) {
   const rows = db[table]
   if (!Array.isArray(rows)) return Response.json({ message: `unknown_table:${table}` }, { status: 404 })
   const method = request.method.toUpperCase()
+  if (table === 'account_profiles' && method === 'POST' && syntheticProfileWriteFailure) {
+    return Response.json({ message: 'synthetic_profile_write_unavailable' }, { status: 503 })
+  }
+  if (table === 'account_email_verifications' && ['POST', 'PATCH'].includes(method) && syntheticEmailWriteFailure) {
+    return Response.json(syntheticEmailWriteFailure, { status: 400 })
+  }
   if (method === 'GET') {
-    const filtered = rows.filter((row) => matches(row, url.searchParams))
+    let filtered = rows.filter((row) => matches(row, url.searchParams))
+    const order = url.searchParams.get('order')
+    if (order) {
+      const fields = order.split(',').map((item) => item.split('.'))
+      filtered.sort((a, b) => {
+        for (const [field, direction] of fields) {
+          if (a[field] === b[field]) continue
+          return (String(a[field]) < String(b[field]) ? -1 : 1) * (direction === 'desc' ? -1 : 1)
+        }
+        return 0
+      })
+    }
+    if (url.searchParams.has('limit')) filtered = filtered.slice(0, Number(url.searchParams.get('limit')))
     const safeDeviceTables = new Set(['account_device_bindings', 'account_device_change_requests', 'account_device_events'])
     const selectedFields = String(url.searchParams.get('select') || '').split(',').map((field) => field.trim()).filter(Boolean)
     if (safeDeviceTables.has(table) && selectedFields.length) {
@@ -336,10 +359,12 @@ async function mockFetch(input, init = {}) {
   }
   if (method === 'PATCH') {
     const patch = await request.json()
+    if (table === 'account_email_verifications' && syntheticBeforeEmailPatch) await syntheticBeforeEmailPatch(patch, url)
     const changed = []
     for (const row of rows) {
       if (!matches(row, url.searchParams)) continue
-      Object.assign(row, patch)
+      Object.assign(row, patch, table === 'account_email_verifications'
+        ? { updated_at: new Date(Math.max(Date.now(), Date.parse(row.updated_at || '') + 1)).toISOString() } : {})
       changed.push(clone(row))
     }
     return Response.json(changed)
@@ -631,6 +656,85 @@ assert.notEqual(delayedRow.code_hash, delayedHash)
 assert.equal(enqueueCount(), beforeDelayed + 1)
 deliveryStatusReply = { success: true, status: 'queued', sent_at: null }
 
+const syntheticRegistration = (email) => call('/email-verification/start', {
+  email, display_name: 'Concurrency Test', terms_accepted: true, locale: 'en',
+})
+const definiteFailure = await startDeliveryRegistration('definite-failure@example.test', {
+  ...realDeliveryEnv, AUTH_EMAIL_ENQUEUE_TOKEN: '',
+})
+assert.equal(definiteFailure.status, 503)
+const definiteFailureRow = db.account_email_verifications.find((row) => row.email === 'definite-failure@example.test')
+assert.equal(definiteFailureRow.metadata.transport, 'delivery_failed')
+assert.equal((await startDeliveryRegistration(definiteFailureRow.email)).status, 429, 'known no-send failures retain the admission delay')
+definiteFailureRow.last_sent_at = past(1)
+assert.equal((await startDeliveryRegistration(definiteFailureRow.email)).status, 200, 'known no-send failures recover after spacing without expiring the challenge')
+for (const [failure, expectedStatus, expectedCode] of [
+  [{ message: 'email_verification_admission_rate_limited', details: '71' }, 429, 'VERIFICATION_RATE_LIMITED'],
+  [{ message: 'email_verification_admission_conflict' }, 409, 'VERIFICATION_DELIVERY_PENDING'],
+  [{ message: "Could not find the 'admission_version' column" }, 503, 'AUTH_PROVIDER_UNAVAILABLE'],
+]) {
+  syntheticEmailWriteFailure = failure
+  const rejected = await syntheticRegistration('admission-error@example.test')
+  assert.equal(rejected.status, expectedStatus)
+  assert.equal(rejected.body.error, expectedCode)
+  if (expectedStatus === 429) assert.equal(rejected.body.retry_after_seconds, 71)
+}
+syntheticEmailWriteFailure = null
+
+const guesses = await syntheticRegistration('parallel-guesses@example.test')
+const guessRow = db.account_email_verifications.find((row) => row.id === guesses.body.registration_id)
+let releaseGuesses
+const guessesReady = new Promise((resolve) => { releaseGuesses = resolve })
+let waitingGuesses = 0
+syntheticBeforeEmailPatch = async (patch, url) => {
+  if (url.searchParams.get('id') !== `eq.${guessRow.id}` || patch.attempts !== 1) return
+  waitingGuesses += 1
+  if (waitingGuesses === 12) releaseGuesses()
+  await guessesReady
+}
+const invalidCode = guesses.body.test_code === '000000' ? '000001' : '000000'
+const wrongGuesses = await Promise.all(Array.from({ length: 12 }, () => call('/email-verification/verify', {
+  registration_id: guessRow.id, email: guessRow.email, code: invalidCode,
+})))
+syntheticBeforeEmailPatch = null
+assert.ok(wrongGuesses.every((reply) => reply.status !== 200))
+assert.equal(guessRow.attempts, 6, 'parallel guesses must not lose increments')
+assert.equal(guessRow.status, 'blocked')
+assert.equal((await call('/email-verification/verify', {
+  registration_id: guessRow.id, code: guesses.body.test_code,
+})).status, 409, 'the correct code cannot revive an exhausted challenge')
+
+const concurrentVerified = await syntheticRegistration('parallel-verify@example.test')
+const proofReplies = await Promise.all(Array.from({ length: 8 }, () => call('/email-verification/verify', {
+  registration_id: concurrentVerified.body.registration_id, code: concurrentVerified.body.test_code,
+})))
+assert.equal(proofReplies.filter((reply) => reply.status === 200).length, 1, 'only one verification can issue a finalization proof')
+const cancelledVerify = await syntheticRegistration('cancel-verify@example.test')
+const cancelledRow = db.account_email_verifications.find((row) => row.id === cancelledVerify.body.registration_id)
+syntheticBeforeEmailPatch = async (patch, url) => {
+  if (url.searchParams.get('id') !== `eq.${cancelledRow.id}` || patch.status !== 'verified') return
+  syntheticBeforeEmailPatch = null
+  assert.equal((await call('/email-verification/cancel', { registration_id: cancelledRow.id })).status, 200)
+}
+assert.equal((await call('/email-verification/verify', {
+  registration_id: cancelledRow.id, code: cancelledVerify.body.test_code,
+})).status, 409)
+assert.equal(cancelledRow.status, 'blocked', 'late verification must not overwrite cancellation')
+syntheticBeforeEmailPatch = null
+const replacedVerify = await syntheticRegistration('resend-verify@example.test')
+const replacedRow = db.account_email_verifications.find((row) => row.id === replacedVerify.body.registration_id)
+syntheticBeforeEmailPatch = async (patch, url) => {
+  if (url.searchParams.get('id') !== `eq.${replacedRow.id}` || patch.status !== 'verified') return
+  syntheticBeforeEmailPatch = null
+  replacedRow.code_hash = 'synthetic-newer-challenge'
+  replacedRow.last_sent_at = new Date(Date.now() + 1).toISOString()
+}
+assert.equal((await call('/email-verification/verify', {
+  registration_id: replacedRow.id, code: replacedVerify.body.test_code,
+})).status, 409)
+assert.equal(replacedRow.status, 'pending', 'late verification must not verify a replacement code')
+syntheticBeforeEmailPatch = null
+
 const registrationStart = await call('/email-verification/start', {
   email: 'new-registration@example.test',
   display_name: 'New Registration',
@@ -656,7 +760,7 @@ assert.notEqual(unavailableBeforeFinalize.status, 200, 'protected account API mu
 const wrongRegistrationOtp = await call('/email-verification/verify', {
   registration_id: registrationStart.body.registration_id,
   email: 'new-registration@example.test',
-  code: '000000',
+  code: registrationStart.body.test_code === '000000' ? '000001' : '000000',
 })
 assert.equal(wrongRegistrationOtp.status, 400)
 assert.equal(wrongRegistrationOtp.body.error, 'VERIFICATION_CODE_INVALID')
@@ -664,6 +768,17 @@ assert.equal([...users.values()].some((user) => user.email === 'new-registration
 
 pendingRegistrationRow.last_sent_at = past(1)
 pendingRegistrationRow.metadata.delivery.sent_at = past(1)
+const originalRandom = crypto.getRandomValues
+let forcedRepeatedCode = false
+crypto.getRandomValues = function (array) {
+  if (!forcedRepeatedCode && array.length === 4) {
+    forcedRepeatedCode = true
+    const value = Number(registrationStart.body.test_code)
+    array.set([(value >>> 24) & 255, (value >>> 16) & 255, (value >>> 8) & 255, value & 255])
+    return array
+  }
+  return originalRandom.call(this, array)
+}
 const registrationResend = await call('/email-verification/start', {
   email: 'new-registration@example.test',
   display_name: 'New Registration',
@@ -671,6 +786,8 @@ const registrationResend = await call('/email-verification/start', {
   terms_accepted: true,
   terms_version: '2026-06',
 })
+crypto.getRandomValues = originalRandom
+assert.equal(forcedRepeatedCode, true)
 assert.equal(registrationResend.status, 200)
 assert.equal(registrationResend.body.registration_id, registrationStart.body.registration_id)
 assert.notEqual(registrationResend.body.test_code, registrationStart.body.test_code)
@@ -702,6 +819,14 @@ assert.equal(weakRegistrationFinalize.status, 400)
 assert.equal(weakRegistrationFinalize.body.error, 'AUTH_WEAK_PASSWORD')
 assert.equal([...users.values()].some((user) => user.email === 'new-registration@example.test'), false, 'weak password finalization must not create Firebase identity')
 
+pendingRegistrationRow.metadata.registration.finalization_state = 'finalizing'
+pendingRegistrationRow.metadata.registration.finalization_claim = 'synthetic-crashed-claim'
+pendingRegistrationRow.metadata.registration.finalization_claim_expires_at = future(1)
+assert.equal((await call('/email-verification/finalize', {
+  registration_id: registrationVerified.body.registration_id,
+  finalization_token: registrationVerified.body.finalization_token, password: 'strong-password-123',
+})).body.error, 'REGISTRATION_FINALIZING', 'an active claim excludes a second finalizer')
+pendingRegistrationRow.metadata.registration.finalization_claim_expires_at = past(1)
 const mismatchedProjectFinalize = await call('/email-verification/finalize', {
   registration_id: registrationVerified.body.registration_id,
   email: 'new-registration@example.test',
@@ -721,12 +846,45 @@ assert.equal(mismatchedProjectFinalize.body.error, 'AUTH_PROVIDER_SERVER_CREATE_
 assert.equal([...users.values()].some((user) => user.email === 'new-registration@example.test'), false, 'project mismatch must fail before Firebase identity creation')
 assert.equal(db.account_profiles.some((row) => row.normalized_email === 'new-registration@example.test'), false, 'project mismatch must fail before canonical profile creation')
 
-const registrationFinalized = await call('/email-verification/finalize', {
+let finalizationCreateCalls = 0
+pendingRegistrationRow.metadata.delivery = {
+  job_id: 'synthetic-finalizing-job', status: 'queued', sent_at: null,
+  idempotency_key: `auth-registration:${pendingRegistrationRow.id}:${pendingRegistrationRow.resend_count}`,
+  verification_request_id: pendingRegistrationRow.id, recipient: pendingRegistrationRow.email,
+  event_type: 'auth.verification_resend',
+}
+syntheticDuringAccountCreate = async (email) => {
+  assert.equal(email, 'new-registration@example.test')
+  finalizationCreateCalls += 1
+  const concurrent = await call('/email-verification/finalize', {
+    registration_id: registrationVerified.body.registration_id,
+    finalization_token: registrationVerified.body.finalization_token, password: 'other-strong-password-123',
+  })
+  assert.equal(concurrent.status, 409)
+  assert.equal(concurrent.body.error, 'REGISTRATION_FINALIZING')
+  assert.equal((await call('/email-verification/cancel', {
+    registration_id: registrationVerified.body.registration_id,
+  })).status, 409, 'cancellation must not race a provider-side account creation')
+  const beforeStatus = pendingRegistrationRow.updated_at
+  deliveryStatusReply = { success: true, status: 'sent', sent_at: new Date().toISOString() }
+  assert.equal((await readDeliveryRegistration(registrationStart, email)).status, 200)
+  assert.equal(pendingRegistrationRow.updated_at, beforeStatus, 'delivery readback must not invalidate the finalization claim')
+}
+const finalizeFixture = () => call('/email-verification/finalize', {
   registration_id: registrationVerified.body.registration_id,
   email: 'new-registration@example.test',
   finalization_token: registrationVerified.body.finalization_token,
   password: 'strong-password-123',
 })
+syntheticProfileWriteFailure = true
+const failedProfileFinalization = await finalizeFixture()
+assert.equal(failedProfileFinalization.status, 503)
+assert.equal(pendingRegistrationRow.metadata.registration.finalization_state, 'profile_failed')
+assert.equal(pendingRegistrationRow.status, 'verified', 'a profile write failure preserves the finalization proof')
+syntheticProfileWriteFailure = false
+const registrationFinalized = await finalizeFixture()
+syntheticDuringAccountCreate = null
+assert.equal(finalizationCreateCalls, 2, 'a definite profile failure is recoverable without waiting for the crash lease')
 assert.equal(registrationFinalized.status, 200)
 assert.equal(registrationFinalized.body.status, 'finalized')
 assert.ok(users.get(tokenRegistrationFinalized), 'Firebase identity must be created after OTP finalization')
@@ -974,6 +1132,13 @@ const verificationRequest = await call('/email-verification/request', {
 assert.equal(verificationRequest.status, 200)
 assert.equal(verificationRequest.body.status, 'sent')
 assert.equal(String(verificationRequest.body.test_code || '').length, 6)
+const authenticatedRow = db.account_email_verifications.find((row) => row.email === 'pending@example.test' && row.status === 'pending')
+const badAuthenticatedCode = verificationRequest.body.test_code === '000000' ? '000001' : '000000'
+const authenticatedGuesses = await Promise.all(Array.from({ length: 3 }, () => call('/email-verification/verify', {
+  id_token: tokenPendingEmail, code: badAuthenticatedCode,
+}, tokenPendingEmail)))
+assert.ok(authenticatedGuesses.every((reply) => reply.status === 400))
+assert.equal(authenticatedRow.attempts, 3, 'authenticated verification also counts parallel guesses')
 const verificationCancel = await call('/email-verification/cancel', {
   id_token: tokenPendingEmail,
   email: 'pending@example.test',
@@ -987,6 +1152,15 @@ const supersededVerification = await call('/email-verification/verify', {
 }, tokenPendingEmail)
 assert.equal(supersededVerification.status, 404)
 assert.equal(supersededVerification.body.error, 'VERIFICATION_CODE_INVALID')
+syntheticEmailWriteFailure = { message: 'email_verification_admission_rate_limited', details: '45' }
+const rejectedAfterCancel = await call('/email-verification/request', {
+  id_token: tokenPendingEmail, email: 'pending@example.test',
+}, tokenPendingEmail)
+assert.equal(rejectedAfterCancel.status, 429)
+assert.equal(rejectedAfterCancel.body.retry_after_seconds, 45, 'the authenticated route must preserve database cooldowns after cancellation')
+syntheticEmailWriteFailure = null
+authenticatedRow.last_sent_at = past(1)
+authenticatedRow.metadata.delivery.sent_at = past(1)
 const verificationRequestAfterCancel = await call('/email-verification/request', {
   id_token: tokenPendingEmail,
   email: 'pending@example.test',

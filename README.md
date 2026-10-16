@@ -95,7 +95,34 @@ confirms the exact queued job and its provider acknowledgement; Auth returns onl
 the delivery state, send time, and remaining resend delay. A queued request does
 not start the client countdown. When deploying this change, update Policy before
 Auth, then update clients. New Auth requires the Policy delivery fields and
-internal status endpoint. This source change does not authorize deployment.
+internal status endpoint. Apply Auth migration
+`20261016125303_email_otp_atomic_admission.sql` before deploying the new Auth
+Worker. Missing admission schema prevents new code issuance. This source change
+does not authorize a database migration or deployment.
+
+Email OTP admission is serialized per normalized recipient across registration
+and authenticated verification. The initial send and five resends share one
+budget while admitted challenges remain unexpired. Cancellation, failed delivery,
+verification and reopening registration do not reset it. The 45-second delay
+also respects a persisted provider send acknowledgement. Existing unexpired
+challenge rows seed the budget during migration; legacy rows without exact-job
+delivery evidence keep their admission-time delay. Expired recipient digests are
+removed in batches of at most 64 on successful admissions. No raw email or code
+is stored in the admission table.
+
+`npm run test:email-otp-postgres` in `workers/auth` proves concurrent first sends,
+resends, cross-route and terminal-state limits, legacy rows, rollback, expiry,
+cleanup and database privileges. It requires an isolated loopback PostgreSQL 17
+cluster with administrator `otp_qa_admin`, `SATURN_OTP_TEST_PSQL` set to its `psql`
+executable and `SATURN_OTP_TEST_PORT` set to its port. It refuses an existing
+`saturn_otp_admission_test` database, creates only synthetic fixtures, and drops
+that database on completion or a caught failure. CI runs it against a pinned disposable
+PostgreSQL image. Do not point it at a user or production cluster.
+
+Roll back application code without removing the admission migration. Older Auth
+code remains subject to the database send budget, but does not provide the new
+verification and finalization race protection. Pause issuance before any schema
+rollback; removing the guard while issuance is enabled reopens the budget bypass.
 
 The production Route Check surface currently responds at
 `https://route-check.saturnws.com/check`. Its source, contracts, and tests are

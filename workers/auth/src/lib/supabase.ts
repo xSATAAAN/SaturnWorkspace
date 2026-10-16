@@ -32,6 +32,7 @@ function isMissingAppSessionsColumnError(error: unknown, columnName: string): bo
 
 async function supabaseJson<T>(env: Env, path: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(`${baseUrl(env)}${path}`, {
+    signal: AbortSignal.timeout(15_000),
     ...init,
     headers: {
       ...headers(env),
@@ -50,6 +51,14 @@ async function supabaseJson<T>(env: Env, path: string, init: RequestInit = {}): 
       payload && typeof payload === "object" && "message" in payload
         ? String((payload as { message?: unknown }).message || "")
         : `supabase_${res.status}`
+    if (message === "email_verification_admission_rate_limited") {
+      const details = String((payload as { details?: unknown })?.details || "")
+      const retry = /^\d{1,4}$/.test(details) ? Math.max(1, Math.min(3600, Number(details))) : 45
+      throw Object.assign(new Error(message), { retryAfterSeconds: retry })
+    }
+    if (message.includes("admission_version") && [400, 404].includes(res.status)) {
+      throw new Error("email_verification_admission_unavailable")
+    }
     throw new Error(message || `supabase_${res.status}`)
   }
   return payload as T
@@ -756,7 +765,7 @@ export async function getLatestEmailVerification(
   if (input.firebaseUserId) filters.push(`firebase_user_id=eq.${encodeURIComponent(input.firebaseUserId)}`)
   const rows = await supabaseJson<Record<string, any>[]>(
     env,
-    `/account_email_verifications?${filters.join("&")}&select=*&order=created_at.desc&limit=1`,
+    `/account_email_verifications?${filters.join("&")}&select=*&order=last_sent_at.desc,created_at.desc&limit=1`,
   )
   return rows[0] || null
 }
@@ -779,27 +788,9 @@ export async function createEmailVerification(
   const rows = await supabaseJson<Record<string, any>[]>(env, "/account_email_verifications", {
     method: "POST",
     headers: { Prefer: "return=representation" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ ...payload, admission_version: 1 }),
   })
   if (!rows[0]) throw new Error("email_verification_insert_empty")
-  return rows[0]
-}
-
-export async function updateEmailVerification(
-  env: Env,
-  id: string,
-  patch: Record<string, unknown>,
-): Promise<Record<string, any>> {
-  const rows = await supabaseJson<Record<string, any>[]>(
-    env,
-    `/account_email_verifications?id=eq.${encodeURIComponent(id)}&select=*`,
-    {
-      method: "PATCH",
-      headers: { Prefer: "return=representation" },
-      body: JSON.stringify({ ...patch, updated_at: new Date().toISOString() }),
-    },
-  )
-  if (!rows[0]) throw new Error("email_verification_update_empty")
   return rows[0]
 }
 
@@ -808,15 +799,15 @@ export async function updateEmailVerificationIfCurrent(
   expected: Record<string, any>,
   patch: Record<string, unknown>,
 ): Promise<Record<string, any> | null> {
-  const filters = ["id", "code_hash", "last_sent_at", "updated_at", "status"].map((field) => {
-    const value = String(expected[field] || "")
+  const filters = ["id", "code_hash", "last_sent_at", "updated_at", "status", "attempts"].map((field) => {
+    const value = String(expected[field] ?? "")
     if (!value) throw new Error("email_verification_revision_missing")
     return `${field}=eq.${encodeURIComponent(value)}`
   })
   const rows = await supabaseJson<Record<string, any>[]>(env, `/account_email_verifications?${filters.join("&")}&select=*`, {
     method: "PATCH",
     headers: { Prefer: "return=representation" },
-    body: JSON.stringify({ ...patch, updated_at: new Date().toISOString() }),
+    body: JSON.stringify({ ...patch, ...(patch.code_hash !== undefined ? { admission_version: 1 } : {}), updated_at: new Date().toISOString() }),
   })
   return rows[0] || null
 }
