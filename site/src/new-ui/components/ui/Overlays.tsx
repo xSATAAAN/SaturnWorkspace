@@ -3,13 +3,16 @@ import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { Button, IconButton } from './Button'
 
-function useEscape(open: boolean, onClose: () => void) {
+function useEscape(open: boolean, onClose: () => void, dialogRef: RefObject<HTMLElement | null>) {
   useEffect(() => {
     if (!open) return
-    const handler = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose() }
+    const handler = (event: KeyboardEvent) => {
+      const dialogs = document.querySelectorAll('[role="dialog"][aria-modal="true"]')
+      if (event.key === 'Escape' && dialogs[dialogs.length - 1] === dialogRef.current) onClose()
+    }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [open, onClose])
+  }, [open, onClose, dialogRef])
 }
 
 function useOverlayLifecycle(open: boolean, dialogRef: RefObject<HTMLElement | null>) {
@@ -42,16 +45,17 @@ function trapDialogFocus(event: ReactKeyboardEvent<HTMLElement>) {
 }
 
 export function Modal({ open, onClose, title, description, closeLabel, children, footer, size = 'md' }: { open: boolean; onClose: () => void; title: string; description?: string; closeLabel: string; children: ReactNode; footer?: ReactNode; size?: 'sm' | 'md' | 'lg' }) {
-  useEscape(open, onClose)
   const dialogRef = useRef<HTMLElement | null>(null)
+  const titleId = useId()
+  useEscape(open, onClose, dialogRef)
   useOverlayLifecycle(open, dialogRef)
   if (!open) return null
-  return createPortal(<div className="ui-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><section ref={dialogRef} className={`ui-modal ui-modal--${size}`} role="dialog" aria-modal="true" aria-labelledby="modal-title" onKeyDown={trapDialogFocus}><header><div><h2 id="modal-title">{title}</h2>{description ? <p>{description}</p> : null}</div><IconButton label={closeLabel} onClick={onClose}><X size={18} /></IconButton></header><div className="ui-modal__body">{children}</div>{footer ? <footer>{footer}</footer> : null}</section></div>, document.body)
+  return createPortal(<div className="ui-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><section ref={dialogRef} className={`ui-modal ui-modal--${size}`} role="dialog" aria-modal="true" aria-labelledby={titleId} onKeyDown={trapDialogFocus}><header><div><h2 id={titleId}>{title}</h2>{description ? <p>{description}</p> : null}</div><IconButton label={closeLabel} onClick={onClose}><X size={18} /></IconButton></header><div className="ui-modal__body">{children}</div>{footer ? <footer>{footer}</footer> : null}</section></div>, document.body)
 }
 
 export function Drawer({ open, onClose, title, description, closeLabel, children, footer, className = '' }: { open: boolean; onClose: () => void; title: string; description?: string; closeLabel: string; children: ReactNode; footer?: ReactNode; className?: string }) {
-  useEscape(open, onClose)
   const dialogRef = useRef<HTMLElement | null>(null)
+  useEscape(open, onClose, dialogRef)
   useOverlayLifecycle(open, dialogRef)
   if (!open) return null
   return createPortal(<div className="ui-overlay ui-overlay--drawer" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><aside ref={dialogRef} className={`ui-drawer ${className}`.trim()} role="dialog" aria-modal="true" aria-labelledby="drawer-title" onKeyDown={trapDialogFocus}><header><div><h2 id="drawer-title">{title}</h2>{description ? <p>{description}</p> : null}</div><IconButton label={closeLabel} onClick={onClose}><X size={18} /></IconButton></header><div className="ui-drawer__body">{children}</div>{footer ? <footer>{footer}</footer> : null}</aside></div>, document.body)

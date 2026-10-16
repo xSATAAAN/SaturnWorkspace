@@ -36,6 +36,15 @@ const MANUAL_GRANT_SOURCES = {
 };
 const CRASH_PAYLOAD_REDACTED = "[redacted]";
 const CRASH_SENSITIVE_KEYS = new Set([
+  "account_id",
+  "account_ref",
+  "profile_id",
+  "profile_name",
+  "target_url",
+  "url",
+  "ip",
+  "public_ip",
+  "exit_ip",
   "access_token",
   "api_key",
   "apikey",
@@ -66,6 +75,11 @@ const CRASH_SENSITIVE_KEYS = new Set([
   "client_secret",
 ]);
 const CRASH_CONTENT_DUMP_KEYS = new Set([
+  "note",
+  "notes",
+  "text",
+  "request_body",
+  "response_body",
   "body",
   "html",
   "content",
@@ -190,10 +204,11 @@ export function sanitizeCrashValue(value, key = "") {
 
 const MAX_CRASH_INGEST_BYTES = 256 * 1024;
 
-export async function enforceCrashIngestRateLimit(request, env, body) {
+export async function enforceCrashIngestRateLimit(request, env, _body) {
   const limiter = env.ADMIN_RATE_LIMIT_CRASH_INGEST;
   if (!limiter || typeof limiter.limit !== "function") throw new Error("rate_limit_unavailable");
-  const stableClientKey = String(body?.hwid || request.headers.get("CF-Connecting-IP") || "anonymous").trim();
+  // Request payload fields are attacker-controlled and cannot define their own rate-limit bucket.
+  const stableClientKey = String(request.headers.get("CF-Connecting-IP") || "anonymous").trim();
   const hashedKey = await sha256Hex(`crash-ingest:${stableClientKey}`);
   const result = await limiter.limit({ key: hashedKey }).catch(() => null);
   if (!result) throw new Error("rate_limit_unavailable");
@@ -222,6 +237,9 @@ export async function readCrashIngestBody(request) {
 }
 
 export default {
+  async scheduled(_controller, env, context) {
+    context.waitUntil(purgeExpiredDiagnostics(env));
+  },
   async fetch(request, env) {
     const url = new URL(request.url);
     const host = (url.hostname || "").toLowerCase();
@@ -573,6 +591,11 @@ export default {
         await requireAdminContext(request, env, "diagnostics:read");
         return json(await listCrashLogs(url, env), 200, corsHeaders(request, env));
       }
+      const crashLogMatch = url.pathname.match(/^\/api\/admin\/crash-logs\/([^/]+)$/);
+      if (crashLogMatch && request.method === "GET") {
+        await requireAdminContext(request, env, "diagnostics:read");
+        return json(await getCrashLog(decodeURIComponent(crashLogMatch[1]), env), 200, corsHeaders(request, env));
+      }
       if (url.pathname === "/api/admin/crash-groups" && request.method === "GET") {
         await requireAdminContext(request, env, "diagnostics:read");
         return json(await listCrashGroups(url, env), 200, corsHeaders(request, env));
@@ -645,9 +668,11 @@ export default {
         "firebase_email_not_verified",
         "firebase_token_missing",
         "firebase_user_not_verified",
+        "session_expired",
+        "session_revoked",
       ]);
       const forbiddenErrors = new Set(["download_not_entitled", "forbidden_origin", "origin_not_allowed", "admin_permission_denied"]);
-      const notFoundErrors = new Set(["release_not_found", "release_artifact_missing", "order_not_found", "account_not_found", "subscription_not_found", "session_not_found", "device_not_found", "pending_grant_not_found", "device_change_request_not_found"]);
+      const notFoundErrors = new Set(["release_not_found", "release_artifact_missing", "order_not_found", "account_not_found", "subscription_not_found", "session_not_found", "device_not_found", "pending_grant_not_found", "device_change_request_not_found", "diagnostic_not_found"]);
       const conflictErrors = new Set(["pending_grant_already_exists", "pending_grant_not_pending", "device_change_request_not_pending", "device_change_request_changed", "preview_changed", "same_version_already_active", "release_version_not_newer", "subscription_integrity_conflict", "historical_subscription_cannot_be_reactivated", "stale_subscription_state", "operation_previously_failed"]);
       const status = authErrors.has(message) || message.startsWith("admin_email_not_allowed")
         ? 401
@@ -3496,41 +3521,238 @@ async function createOtaUpdate(request, env, adminEmail) {
   return { success: true, item: Array.isArray(created) ? created[0] : created };
 }
 
-async function listCrashLogs(url, env) {
-  const limit = safeInt(url.searchParams.get("limit"), 50);
-  const page = safeInt(url.searchParams.get("page"), 1, 5000);
-  const offset = (page - 1) * limit;
-  const requestedClassification = String(url.searchParams.get("classification") || "error").trim().toLowerCase();
-  const classification = ["error", "warning", "all"].includes(requestedClassification) ? requestedClassification : "error";
-  const search = safeSearchTerm(url.searchParams.get("search"));
-  const filters = [];
-  if (search) {
-    const term = encodeURIComponent(`*${search}*`);
-    filters.push(`or=(error_type.ilike.${term},message.ilike.${term},hwid.ilike.${term},device_name.ilike.${term})`);
+const DIAGNOSTIC_RETENTION_DAYS = 90;
+const DIAGNOSTIC_SELECT = "id,happened_at,user_id,subscription_id,hwid,device_name,windows_version,cpu,gpu,ram_gb,error_type,message,stack_trace,app_version,tool_channel,fingerprint,raw_payload";
+
+function diagnosticCutoff(now = Date.now()) {
+  return new Date(now - DIAGNOSTIC_RETENTION_DAYS * 86400000).toISOString();
+}
+
+async function diagnosticStorageId(eventId) {
+  const eventHash = await sha256Hex(`saturnws-diagnostic-event:${eventId}`);
+  return `${eventHash.slice(0, 8)}-${eventHash.slice(8, 12)}-4${eventHash.slice(13, 16)}-8${eventHash.slice(17, 20)}-${eventHash.slice(20, 32)}`;
+}
+
+export async function purgeExpiredDiagnostics(env, now = Date.now()) {
+  await supabaseRequest(env, "crash_logs", "DELETE", {
+    query: `happened_at=lt.${encodeURIComponent(diagnosticCutoff(now))}`,
+    prefer: "return=minimal",
+  });
+  return { success: true, retention_days: DIAGNOSTIC_RETENTION_DAYS };
+}
+
+function diagnosticCursor(row) {
+  return btoa(JSON.stringify({ at: row.happened_at, id: row.id }));
+}
+
+function parseDiagnosticCursor(value) {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(atob(String(value)));
+    if (!isUuid(parsed.id) || typeof parsed.at !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/.test(parsed.at) || !Number.isFinite(Date.parse(parsed.at))) throw new Error();
+    return { id: parsed.id, at: parsed.at };
+  } catch {
+    throw new Error("invalid_diagnostic_cursor");
   }
-  const data = await safeSupabaseRead(
-    env,
-    "crash_logs",
-    `select=id,happened_at,user_id,subscription_id,hwid,device_name,windows_version,cpu,gpu,ram_gb,error_type,message,stack_trace,app_version,tool_channel,fingerprint,raw_payload&order=happened_at.desc&limit=1000${filters.length ? `&${filters.join("&")}` : ""}`,
-  );
-  const classified = (Array.isArray(data) ? data : [])
-    .map((row) => ({ row, classification: classifyDiagnostic(row) }))
-    .filter((item) => item.classification !== "expected")
-    .filter((item) => classification === "all" || item.classification === classification);
-  const items = classified.slice(offset, offset + limit).map(({ row, classification: rowClassification }) => {
-    const { raw_payload: rawPayload, ...safeRow } = row;
+}
+
+function verifiedDiagnosticUid(row) {
+  const auth = row?.raw_payload?.auth;
+  return auth?.source === "app_session" && auth?.attribution === "verified"
+    ? String(auth.firebase_user_id || "").trim()
+    : "";
+}
+
+async function diagnosticOperatorScope(value, env) {
+  const key = String(value || "").trim();
+  if (!key) return null;
+  if (key.length > 254 || /[\x00-\x20,()"\\]/.test(key)) throw new Error("invalid_diagnostic_user");
+  const field = key.includes("@") ? "normalized_email" : "firebase_uid";
+  const profiles = await safeSupabaseRead(env, "account_profiles", `select=firebase_uid,normalized_email,display_name&${field}=eq.${encodeURIComponent(field === "normalized_email" ? normalizeEmail(key) : key)}&limit=2`);
+  if (profiles.length > 1) throw new Error("account_identity_conflict");
+  if (!profiles.length) return { missing: true };
+  const profile = profiles[0];
+  const subscriptionIds = [];
+  for (let page = 0; page < 50; page += 1) {
+    const rows = await safeSupabaseRead(env, "account_subscriptions", `select=id&firebase_user_id=eq.${encodeURIComponent(profile.firebase_uid)}&order=id&limit=200&offset=${page * 200}`);
+    subscriptionIds.push(...rows.map((row) => row.id).filter(isUuid));
+    if (rows.length < 200) return { profile, subscriptionIds };
+  }
+  throw new Error("diagnostic_identity_scope_too_large");
+}
+
+function diagnosticScopeFilter(scope) {
+  const clauses = [`and(raw_payload->auth->>source.eq.app_session,raw_payload->auth->>attribution.eq.verified,raw_payload->auth->>firebase_user_id.eq.${encodeURIComponent(scope.profile.firebase_uid)})`];
+  if (scope.subscriptionIds.length) clauses.push(`and(raw_payload->auth->>attribution.is.null,subscription_id.in.(${scope.subscriptionIds.join(",")}))`);
+  return `or=(${clauses.join(",")})`;
+}
+
+function diagnosticFilterQuery(filters) {
+  const logical = filters.filter((filter) => filter.startsWith("or=")).map((filter) => filter.replace(/^or=/, "or"));
+  const ordinary = filters.filter((filter) => !filter.startsWith("or="));
+  if (logical.length) ordinary.push(`and=(${logical.join(",")})`);
+  return ordinary.join("&");
+}
+
+async function projectDiagnosticRows(rows, env, { detail = false } = {}) {
+  const fingerprints = await Promise.all(rows.map(crashFingerprint));
+  const uids = [...new Set(rows.map(verifiedDiagnosticUid).filter(Boolean))];
+  const profiles = uids.length ? await safeSupabaseRead(env, "account_profiles", `select=firebase_uid,normalized_email,display_name&firebase_uid=in.(${uids.map((uid) => encodeURIComponent(uid)).join(",")})&limit=200`) : [];
+  const byUid = new Map(profiles.map((profile) => [profile.firebase_uid, profile]));
+  return rows.map((row, index) => {
+    const raw = row.raw_payload || {};
+    const uid = verifiedDiagnosticUid(row);
+    const profile = byUid.get(uid);
+    const classification = classifyDiagnostic(row);
+    const safe = sanitizeCrashValue(row);
+    delete safe.raw_payload;
     return {
-      ...safeRow,
-      classification: rowClassification,
+      ...safe,
+      fingerprint: fingerprints[index],
+      user_id: uid || null,
+      operator: uid ? { firebase_uid: uid, email: profile?.normalized_email || null, display_name: profile?.display_name || null } : null,
+      attribution: uid ? "verified" : raw.auth?.attribution || "legacy_unverified",
+      classification,
       message: sanitizeCrashString(row.message || ""),
-      stack_trace: sanitizeCrashString(String(row.stack_trace || "").split(/\r?\n/).slice(0, 12).join("\n")),
-      event_id: String(rawPayload?.event_id || "") || null,
-      component: String(rawPayload?.component || rawPayload?.source || "desktop-app") || "desktop-app",
-      context: String(rawPayload?.context || "") || null,
-      severity: String(rawPayload?.severity || rowClassification || "error"),
+      stack_trace: detail ? limitString(sanitizeCrashString(row.stack_trace || ""), 120000) : "",
+      event_id: String(raw.event_id || "") || null,
+      component: String(raw.component || raw.source || "desktop-app"),
+      context: String(raw.context || "") || null,
+      severity: String(raw.severity || classification),
+      occurrence_count: safeInt(raw.occurrence_count, 1, 1000000000),
+      first_happened_at: raw.first_happened_at || row.happened_at,
+      last_happened_at: raw.last_happened_at || row.happened_at,
+      ...(detail ? {
+        technical_context: sanitizeCrashValue({
+          source: raw.source || null,
+          severity: raw.severity || classification,
+          lifecycle: raw.lifecycle || null,
+          request: raw.request || null,
+          auth: raw.auth ? {
+            source: raw.auth.source || null,
+            attribution: raw.auth.attribution || null,
+            warning: raw.auth.warning || null,
+          } : null,
+          extra: raw.extra || {},
+          trace: diagnosticTrace(raw.trace),
+          collection: {
+            details_truncated: raw.details_truncated === true,
+            trace_status: raw.trace_status || null,
+          },
+        }),
+      } : {}),
     };
   });
-  return { success: true, items, page, limit, total: classified.length, classification };
+}
+
+export async function listCrashLogs(url, env) {
+  const limit = safeInt(url.searchParams.get("limit"), 50, 200);
+  const requested = String(url.searchParams.get("classification") || "all").toLowerCase();
+  const classification = ["error", "warning", "all"].includes(requested) ? requested : "all";
+  const scope = await diagnosticOperatorScope(url.searchParams.get("user"), env);
+  if (scope?.missing) return { success: true, items: [], limit, has_more: false, next_cursor: null, retention_days: DIAGNOSTIC_RETENTION_DAYS };
+  const filters = [`happened_at=gte.${encodeURIComponent(diagnosticCutoff())}`];
+  if (scope) filters.push(diagnosticScopeFilter(scope));
+  const search = safeSearchTerm(url.searchParams.get("search"));
+  if (search) {
+    const term = encodeURIComponent(`*${search}*`);
+    filters.push(`or=(error_type.ilike.${term},message.ilike.${term},app_version.ilike.${term},device_name.ilike.${term})`);
+  }
+  const component = safeSearchTerm(url.searchParams.get("component"));
+  if (component) filters.push(`raw_payload->>component=eq.${encodeURIComponent(component)}`);
+  const attribution = url.searchParams.get("attribution");
+  if (attribution === "verified") filters.push("raw_payload->auth->>attribution=eq.verified");
+  if (attribution === "unattributed") filters.push("or=(raw_payload->auth->>attribution.is.null,raw_payload->auth->>attribution.neq.verified)");
+  let cursor = parseDiagnosticCursor(url.searchParams.get("cursor"));
+  const selected = [];
+  let lastScanned = null;
+  let hasMore = false;
+  // Bound one request while keeping the continuation cursor for older history.
+  for (let batch = 0; batch < 5 && selected.length < limit; batch += 1) {
+    const pageFilters = [...filters];
+    if (cursor) pageFilters.push(`or=(happened_at.lt.${encodeURIComponent(cursor.at)},and(happened_at.eq.${encodeURIComponent(cursor.at)},id.lt.${cursor.id}))`);
+    const data = await safeSupabaseRead(env, "crash_logs", `select=${DIAGNOSTIC_SELECT}&order=happened_at.desc,id.desc&limit=200&${diagnosticFilterQuery(pageFilters)}`);
+    hasMore = data.length === 200;
+    for (let index = 0; index < data.length; index += 1) {
+      const row = data[index];
+      lastScanned = row;
+      const rowClassification = classifyDiagnostic(row);
+      if (rowClassification !== "expected" && (classification === "all" || rowClassification === classification)) selected.push(row);
+      if (selected.length === limit) {
+        hasMore = hasMore || index < data.length - 1;
+        break;
+      }
+    }
+    if (!hasMore || selected.length === limit || !lastScanned) break;
+    cursor = { at: lastScanned.happened_at, id: lastScanned.id };
+  }
+  return {
+    success: true,
+    items: await projectDiagnosticRows(selected, env),
+    limit, classification, has_more: hasMore,
+    next_cursor: hasMore && lastScanned ? diagnosticCursor(lastScanned) : null,
+    retention_days: DIAGNOSTIC_RETENTION_DAYS,
+  };
+}
+
+export async function getCrashLog(id, env) {
+  if (!isUuid(id)) throw new Error("invalid_diagnostic_id");
+  const rows = await safeSupabaseRead(env, "crash_logs", `select=${DIAGNOSTIC_SELECT}&id=eq.${id}&happened_at=gte.${encodeURIComponent(diagnosticCutoff())}&limit=1`);
+  if (!rows.length) throw new Error("diagnostic_not_found");
+  const item = (await projectDiagnosticRows(rows, env, { detail: true }))[0];
+  const trace = item.technical_context.trace;
+  if (trace && isUuid(trace.followup_event_id)) {
+    if (!isUuid(trace.run_id) || !isUuid(item.event_id)) {
+      item.technical_context.trace_followup_status = "identity_unverified";
+      return { success: true, item };
+    }
+    const followupId = await diagnosticStorageId(trace.followup_event_id);
+    const followups = await safeSupabaseRead(env, "crash_logs", `select=${DIAGNOSTIC_SELECT}&id=eq.${followupId}&happened_at=gte.${encodeURIComponent(diagnosticCutoff())}&limit=1`);
+    const followup = followups[0];
+    if (followup) {
+      const related = diagnosticTrace(followup.raw_payload?.trace);
+      const sameOwner = verifiedDiagnosticUid(followup) === verifiedDiagnosticUid(rows[0]);
+      if (sameOwner && followup.raw_payload?.event_id === trace.followup_event_id && related?.parent_event_id === item.event_id && isUuid(related.run_id) && related.run_id === trace.run_id) {
+        item.technical_context.trace_followup = sanitizeCrashValue(related);
+        item.technical_context.trace_followup_status = verifiedDiagnosticUid(rows[0]) ? "linked" : "linked_unattributed";
+      } else {
+        item.technical_context.trace_followup_status = "identity_unverified";
+      }
+    } else {
+      item.technical_context.trace_followup_status = "not_received";
+    }
+  } else {
+    item.technical_context.trace_followup_status = trace?.followup_status || "not_recorded";
+  }
+  return { success: true, item };
+}
+
+export function diagnosticTrace(value) {
+  if (!value || value.format !== "saturnws.technical-trace.v1") return null;
+  const output = { format: value.format };
+  for (const key of ["run_id", "parent_event_id", "followup_event_id"]) if (isUuid(value[key])) output[key] = value[key];
+  if (/^[a-f0-9]{24}$/.test(value.correlation || "")) output.correlation = value.correlation;
+  for (const key of ["pre_seconds", "post_seconds", "omitted_events", "persistence_failures"]) if (Number.isSafeInteger(value[key]) && value[key] >= 0) output[key] = value[key];
+  for (const key of ["history_at_capacity", "complete"]) if (typeof value[key] === "boolean") output[key] = value[key];
+  for (const key of ["followup_status", "window_end"]) if (/^[a-z_]{1,48}$/.test(value[key] || "")) output[key] = value[key];
+  const names = new Set(["api.begin", "api.end", "operation.stage", "browser.launch", "browser.probe", "browser.close_requested", "browser.exited", "browser.cleanup", "policy.fetch", "runtime.phase", "owner.boundary", "failure"]);
+  const codes = new Set(["method", "stage", "state", "reason", "browser", "mode", "action", "exception_type", "actor"]);
+  const numbers = new Set(["elapsed_ms", "exit_code", "winerror", "errno", "hresult", "http_status", "matched_count", "unreadable_count", "attempt", "pid"]);
+  const flags = new Set(["success", "profile_verified", "profile_exists", "identity_present", "identity_matches", "query_complete", "proxy_enabled"]);
+  output.events = (Array.isArray(value.events) ? value.events : []).slice(0, 96).filter((row) => row && names.has(row.event)).map((row) => {
+    const event = { event: row.event, facts: {} };
+    for (const key of ["sequence", "at_unix_ms"]) if (Number.isSafeInteger(row[key])) event[key] = row[key];
+    if (/^[a-f0-9]{24}$/.test(row.correlation || "")) event.correlation = row.correlation;
+    for (const [key, fact] of Object.entries(row.facts || {})) {
+      if (key === "browser" && ["1", "2", "3"].includes(fact)) event.facts[key] = fact;
+      if (codes.has(key) && typeof fact === "string" && /^[a-zA-Z][a-zA-Z0-9_.:-]{0,95}$/.test(fact)) event.facts[key] = fact;
+      if (numbers.has(key) && Number.isSafeInteger(fact)) event.facts[key] = fact;
+      if (flags.has(key) && typeof fact === "boolean") event.facts[key] = fact;
+    }
+    return event;
+  });
+  if (Array.isArray(value.events) && value.events.length > 96) output.events_truncated = true;
+  return output;
 }
 
 function isExpiredIso(value) {
@@ -3695,8 +3917,8 @@ export function crashSignatureSource(row) {
     .find(Boolean);
   return [
     String(row?.error_type || "unknown").trim().toLowerCase(),
-    String(row?.raw_payload?.component || row?.raw_payload?.source || "").trim().toLowerCase(),
-    String(row?.raw_payload?.context || "").trim().toLowerCase(),
+    String(row?.raw_payload?.component || row?.raw_payload?.source || row?.component || "").trim().toLowerCase(),
+    String(row?.raw_payload?.context || row?.context || "").trim().toLowerCase(),
     String(row?.message || "").trim().toLowerCase().slice(0, 240),
     String(stackLine || "").trim().toLowerCase().slice(0, 240),
   ].join("|");
@@ -3707,27 +3929,24 @@ async function crashFingerprint(row) {
   return sha256Hex(crashSignatureSource(row));
 }
 
-async function listCrashGroups(url, env) {
-  const limit = safeInt(url.searchParams.get("limit"), 500, 1000);
+export async function listCrashGroups(url, env) {
   const statusFilter = String(url.searchParams.get("status") || "").trim().toLowerCase();
-  const search = safeSearchTerm(url.searchParams.get("search")).toLowerCase();
-  const [data, states] = await Promise.all([
-    safeSupabaseRead(env, "crash_logs", `select=id,happened_at,user_id,subscription_id,hwid,error_type,message,stack_trace,app_version,fingerprint,raw_payload&order=happened_at.desc&limit=${limit}`),
-    safeSupabaseRead(env, "admin_crash_group_state", "select=fingerprint,status,assignee,note,updated_by,updated_at&limit=1000"),
-  ]);
+  const page = await listCrashLogs(url, env);
+  const fingerprints = await Promise.all(page.items.map(crashFingerprint));
+  const uniqueFingerprints = [...new Set(fingerprints)];
+  const states = uniqueFingerprints.length ? await safeSupabaseRead(env, "admin_crash_group_state", `select=fingerprint,status,assignee,note,updated_by,updated_at&fingerprint=in.(${uniqueFingerprints.map(encodeURIComponent).join(",")})&limit=200`) : [];
   const statesByFingerprint = new Map((Array.isArray(states) ? states : []).map((state) => [state.fingerprint, state]));
   const groups = new Map();
-  for (const row of Array.isArray(data) ? data : []) {
-    if (!isActionableCrash(row)) continue;
+  for (const row of page.items) {
     const fingerprint = await crashFingerprint(row);
     const existing = groups.get(fingerprint);
     if (!existing) {
       const state = statesByFingerprint.get(fingerprint) || {};
       groups.set(fingerprint, {
         fingerprint,
-        count: 1,
-        first_seen_at: row.happened_at,
-        last_seen_at: row.happened_at,
+        count: row.occurrence_count,
+        first_seen_at: row.first_happened_at,
+        last_seen_at: row.last_happened_at,
         error_type: row.error_type,
         message: sanitizeCrashString(row.message || ""),
         status: state.status || "open",
@@ -3740,11 +3959,11 @@ async function listCrashGroups(url, env) {
       });
       continue;
     }
-    existing.count += 1;
-    if (String(row.happened_at || "") > String(existing.last_seen_at || "")) {
-      existing.last_seen_at = row.happened_at;
+    existing.count += row.occurrence_count;
+    if (String(row.last_happened_at || "") > String(existing.last_seen_at || "")) {
+      existing.last_seen_at = row.last_happened_at;
     }
-    if (String(row.happened_at || "") < String(existing.first_seen_at || "")) existing.first_seen_at = row.happened_at;
+    if (String(row.first_happened_at || "") < String(existing.first_seen_at || "")) existing.first_seen_at = row.first_happened_at;
     if (row.hwid) existing.affected_hwids.add(row.hwid);
     const userKey = row.user_id || row.subscription_id;
     if (userKey) existing.affected_users.add(userKey);
@@ -3759,12 +3978,14 @@ async function listCrashGroups(url, env) {
     affected_users: undefined,
   }));
   if (statusFilter) items = items.filter((group) => group.status === statusFilter);
-  if (search) items = items.filter((group) => [group.error_type, group.message, group.fingerprint, group.assignee].filter(Boolean).some((value) => String(value).toLowerCase().includes(search)));
   return {
     success: true,
     items: items
-      .sort((a, b) => String(b.last_seen_at || "").localeCompare(String(a.last_seen_at || "")))
-      .slice(0, safeInt(url.searchParams.get("groups"), 50, 200)),
+      .sort((a, b) => String(b.last_seen_at || "").localeCompare(String(a.last_seen_at || ""))),
+    has_more: page.has_more,
+    next_cursor: page.next_cursor,
+    summarized_reports: page.items.length,
+    retention_days: DIAGNOSTIC_RETENTION_DAYS,
   };
 }
 
@@ -4126,9 +4347,7 @@ async function getUserDetail(userKey, env) {
   const diagnosticFilter = subscriptionDiagnosticFilter(subscriptionRows);
   const [sessions, crashes, loginRequests, tamperAlerts, recentAudit, recoveryEvidence, deviceBindings, deviceChangeRequests] = await Promise.all([
     safeSupabaseRead(env, "app_sessions", `select=id,user_id,user_email,subscription_id,hwid,expires_at,revoked_at,created_at,last_seen_at&user_id=eq.${encodeURIComponent(userId)}&order=last_seen_at.desc&limit=100`),
-    diagnosticFilter
-      ? safeSupabaseRead(env, "crash_logs", `select=id,happened_at,user_id,subscription_id,hwid,device_name,windows_version,error_type,message,stack_trace,app_version,tool_channel,fingerprint&${diagnosticFilter}&order=happened_at.desc&limit=50`)
-      : Promise.resolve([]),
+    listCrashLogs(new URL(`https://admin.saturnws.com/api/admin/crash-logs?user=${encodeURIComponent(userId)}&classification=all&limit=50`), env),
     safeSupabaseRead(env, "device_login_sessions", `select=id,hwid,status,user_id,user_email,subscription_id,expires_at,authorized_at,consumed_at,created_at&user_id=eq.${encodeURIComponent(userId)}&order=created_at.desc&limit=50`),
     diagnosticFilter
       ? safeSupabaseRead(env, "tamper_alerts", `select=id,happened_at,user_id,subscription_id,hwid,severity,reason,details,resolved,resolved_at&${diagnosticFilter}&order=happened_at.desc&limit=50`)
@@ -4146,11 +4365,7 @@ async function getUserDetail(userKey, env) {
   const supportThreads = (Array.isArray(supportPayload?.threads) ? supportPayload.threads : []).filter((thread) =>
     String(thread?.user_id || "").trim() === userId || normalizeEmail(thread?.email) === userEmail,
   );
-  const safeCrashes = (Array.isArray(crashes) ? crashes : []).filter(isActionableCrash).map((row) => ({
-    ...row,
-    message: sanitizeCrashString(row.message || ""),
-    stack_trace: sanitizeCrashString(String(row.stack_trace || "").split(/\r?\n/).slice(0, 8).join("\n")),
-  }));
+  const safeCrashes = crashes.items;
   const safeSessions = await Promise.all((Array.isArray(sessions) ? sessions : []).map(async (row) => {
     const { hwid, ...safe } = row;
     return { ...safe, device_key: hwid ? (await sha256Hex(`saturnws-device:${hwid}`)).slice(0, 16) : null };
@@ -4341,7 +4556,7 @@ async function resolveCrashIngestAuth(request, env, body) {
   throw new Error("unauthorized");
 }
 
-async function ingestCrashLog(request, env) {
+export async function ingestCrashLog(request, env) {
   const body = await readCrashIngestBody(request);
   await enforceCrashIngestRateLimit(request, env, body);
   const auth = await resolveCrashIngestAuth(request, env, body);
@@ -4350,10 +4565,23 @@ async function ingestCrashLog(request, env) {
   const rawPayload = safeBody?.raw_payload && typeof safeBody.raw_payload === "object"
     ? { ...safeBody.raw_payload }
     : {};
-  rawPayload.event_id = String(safeBody?.event_id || rawPayload.event_id || "") || null;
+  const eventId = String(safeBody?.event_id || rawPayload.event_id || crypto.randomUUID()).trim();
+  if (eventId.length > 128 || /[\x00-\x20]/.test(eventId)) throw new Error("invalid_diagnostic_event_id");
+  rawPayload.event_id = eventId;
+  const capturedOwner = String(rawPayload.runtime?.firebase_user_id || rawPayload.runtime?.user_id || "").trim();
+  const sessionOwner = String(session.user_id || "").trim();
+  const ownerMismatch = Boolean(capturedOwner && sessionOwner && capturedOwner !== sessionOwner);
+  const verifiedOwner = auth.source === "app_session" && sessionOwner && !ownerMismatch ? sessionOwner : "";
+  // Captured identity is a routing hint, never evidence of operator ownership.
+  if (rawPayload.runtime && typeof rawPayload.runtime === "object") {
+    rawPayload.runtime = { ...rawPayload.runtime };
+    for (const key of ["firebase_user_id", "user_id", "user_email", "subscription_id", "license_id", "hwid"]) delete rawPayload.runtime[key];
+  }
   rawPayload.auth = {
     source: auth.source,
-    warning: auth.warning || null,
+    attribution: verifiedOwner ? "verified" : "unattributed",
+    firebase_user_id: verifiedOwner || null,
+    warning: ownerMismatch ? "captured_owner_mismatch" : auth.warning || null,
   };
   const requestIp = String(request.headers.get("CF-Connecting-IP") || "").trim();
   rawPayload.request = {
@@ -4362,12 +4590,22 @@ async function ingestCrashLog(request, env) {
     colo: String(request.cf?.colo || "").trim() || null,
     country: String(request.cf?.country || "").trim() || null,
   };
+  const now = Date.now();
+  const firstAt = Date.parse(safeBody?.first_happened_at || safeBody?.happened_at || "");
+  const first = Number.isFinite(firstAt) ? Math.min(firstAt, now) : now;
+  if (first < now - DIAGNOSTIC_RETENTION_DAYS * 86400000) return { success: true, accepted: false, reason: "diagnostic_retention_expired", event_id: eventId };
+  const lastAt = Date.parse(safeBody?.last_happened_at || "");
+  rawPayload.occurrence_count = safeInt(safeBody?.occurrence_count || rawPayload.occurrence_count, 1, 1000000000);
+  rawPayload.first_happened_at = new Date(first).toISOString();
+  rawPayload.last_happened_at = new Date(Number.isFinite(lastAt) ? Math.max(first, Math.min(lastAt, now)) : first).toISOString();
+  const id = await diagnosticStorageId(eventId);
   const payload = {
-    happened_at: safeBody?.happened_at || new Date().toISOString(),
-    user_id: isUuid(safeBody?.user_id) ? String(safeBody.user_id) : null,
-    subscription_id: safeBody?.subscription_id || session.subscription_id || safeBody?.license_id || null,
-    license_id: safeBody?.license_id || null,
-    hwid: safeBody?.hwid || session.hwid || null,
+    id,
+    happened_at: rawPayload.first_happened_at,
+    user_id: null,
+    subscription_id: verifiedOwner && isUuid(session.subscription_id) ? session.subscription_id : null,
+    license_id: verifiedOwner && isUuid(session.license_id) ? session.license_id : null,
+    hwid: verifiedOwner ? session.hwid || null : ownerMismatch ? null : safeBody?.hwid || null,
     windows_version: safeBody?.windows_version || null,
     device_name: safeBody?.device_name || null,
     cpu: safeBody?.cpu || null,
@@ -4383,20 +4621,23 @@ async function ingestCrashLog(request, env) {
   if (!payload.stack_trace) throw new Error("missing_stack_trace");
   const classification = classifyDiagnostic(payload);
   if (classification === "expected") {
-    return { success: true, accepted: false, classification };
+    return { success: true, accepted: false, classification, event_id: eventId };
   }
   rawPayload.classification = classification;
   payload.fingerprint = await crashFingerprint(payload);
-  const created = await insertCrashLogPayload(env, payload);
-  return { success: true, accepted: true, classification, item: Array.isArray(created) ? created[0] : created };
+  await insertCrashLogPayload(env, payload);
+  return { success: true, accepted: true, classification, event_id: eventId, item: { id } };
 }
 
 async function insertCrashLogPayload(env, payload) {
   try {
-    return await supabaseRequest(env, "crash_logs", "POST", {
+    const created = await supabaseRequest(env, "crash_logs", "POST", {
+      query: "on_conflict=id",
       body: payload,
-      prefer: "return=representation",
+      prefer: "resolution=ignore-duplicates,return=representation",
     });
+    if (Array.isArray(created) && created.length) return created;
+    return await mergeDiagnosticOccurrences(env, payload);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error || "");
     const lower = message.toLowerCase();
@@ -4410,11 +4651,42 @@ async function insertCrashLogPayload(env, payload) {
     const fallback = { ...payload };
     if (lower.includes("fingerprint") || lower.includes("schema cache")) delete fallback.fingerprint;
     if (lower.includes("crash_logs_license_id_fkey")) delete fallback.license_id;
-    return supabaseRequest(env, "crash_logs", "POST", {
+    const created = await supabaseRequest(env, "crash_logs", "POST", {
+      query: "on_conflict=id",
       body: fallback,
+      prefer: "resolution=ignore-duplicates,return=representation",
+    });
+    return Array.isArray(created) && created.length ? created : mergeDiagnosticOccurrences(env, fallback);
+  }
+}
+
+async function mergeDiagnosticOccurrences(env, incoming) {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const rows = await supabaseRequest(env, "crash_logs", "GET", { query: `select=id,raw_payload&id=eq.${incoming.id}&limit=1` });
+    if (!rows.length) throw new Error("diagnostic_retry_record_missing");
+    const existing = rows[0];
+    const priorUid = verifiedDiagnosticUid(existing);
+    const nextUid = verifiedDiagnosticUid(incoming);
+    // A retry cannot change attribution, even after logout or an account switch.
+    if (priorUid !== nextUid || existing.raw_payload?.auth?.attribution !== incoming.raw_payload.auth.attribution) return rows;
+    const priorCount = safeInt(existing.raw_payload?.occurrence_count, 1, 1000000000);
+    const nextCount = incoming.raw_payload.occurrence_count;
+    if (nextCount <= priorCount) return rows;
+    const priorRaw = existing.raw_payload || {};
+    const merged = {
+      ...priorRaw,
+      occurrence_count: nextCount,
+      last_happened_at: String(incoming.raw_payload.last_happened_at) > String(priorRaw.last_happened_at || "") ? incoming.raw_payload.last_happened_at : priorRaw.last_happened_at,
+    };
+    const countFilter = priorRaw.occurrence_count == null ? "is.null" : `eq.${priorRaw.occurrence_count}`;
+    const updated = await supabaseRequest(env, "crash_logs", "PATCH", {
+      query: `id=eq.${incoming.id}&raw_payload->>occurrence_count=${countFilter}`,
+      body: { raw_payload: merged },
       prefer: "return=representation",
     });
+    if (Array.isArray(updated) && updated.length) return updated;
   }
+  throw new Error("diagnostic_count_update_busy");
 }
 
 function addPlanDuration(startIso, plan) {

@@ -44,6 +44,35 @@ commit.
 
 ## Local qualification
 
+Desktop diagnostics use a bounded local outbox and stable event IDs. The Admin
+Worker accepts sanitized technical failures from startup through shutdown,
+attributes reports only through a matching verified app session, and leaves
+pre-login reports unattributed. Administrator-only history and report detail
+support user filters, cursor pagination, occurrence counts, and lifecycle
+context. Diagnostics refreshes manually. The primary problem summary scans up
+to 1,000 recent matching records, groups recurring failures, and includes up
+to 40 full sanitized examples with four concurrent detail requests. Its JSON
+states the scanned window, occurrence counts, omitted signatures and examples,
+and whether more pages may remain. It is limited to 512 KiB; examples are
+included whole or omitted, never shortened. This is not a whole-history count
+or an atomic snapshot. A separate action copies every matching report across
+all pages. Administrators can also copy an individual full report.
+New Desktop reports can include a bounded technical timeline before the failure
+and a linked follow-up collected afterward. Report detail verifies the link's
+event, run and operator boundaries, displays ordered events with expandable
+facts, and includes both windows in the full copy. Unattributed reports remain
+unattributed. Missing follow-ups, capacity limits and incomplete collection are
+visible rather than presented as complete evidence.
+Summary collection stops after 45 seconds; full collection stops
+after 120 seconds. Cancellation and deadlines abort the underlying requests.
+If clipboard access is blocked, selectable text and a file download remain
+available. Collection errors never produce a partial export presented as complete.
+The daily scheduled task deletes reports older than 90 days. Delivery
+retries do not change a report's original attribution. Offline delivery is
+delayed; an abrupt shutdown can prevent an unsaved failure from being recorded.
+Passwords, authentication secrets, access tokens, message contents, and notes
+are excluded. Worker and Pages promotion are separate release operations.
+
 Use Node.js 22 and the committed npm lock files:
 
 ```powershell

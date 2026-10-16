@@ -7,10 +7,10 @@ const EXPECTED_MESSAGES = new Set([
   "profile does not exist",
   "profile_not_found",
   "session_ip_already_used",
-  "startup_preload_missing",
 ]);
 
 const WARNING_ERROR_TYPES = new Set([
+  "diagnostictracefollowup",
   "googledriveautosyncfailed",
   "googledriveinitialsyncfailed",
   "updatemanifesterror",
@@ -38,6 +38,9 @@ export function classifyDiagnostic(row) {
   const combined = `${message} ${stack}`;
 
   if (EXPECTED_MESSAGES.has(message)) return "expected";
+  const context = String(row?.raw_payload?.context || "").toLowerCase();
+  if (context === "app.main" || context === "extension-agent.main" || errorType.startsWith("launcher_") || errorType === "frontendstartuptimeout" || message === "startup_preload_missing") return "error";
+  if (String(row?.raw_payload?.severity || "").toLowerCase() === "warning" || errorType === "previousrununclosed") return "warning";
   if (WARNING_ERROR_TYPES.has(errorType)) return "warning";
   if (NETWORK_WARNING_TOKENS.some((token) => combined.includes(token))) return "warning";
   return "error";

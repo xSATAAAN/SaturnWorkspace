@@ -322,6 +322,12 @@ export type AdminCrashLog = {
   component?: string | null
   context?: string | null
   severity?: string | null
+  attribution?: 'verified' | 'unattributed' | 'legacy_unverified'
+  operator?: { firebase_uid: string; email?: string | null; display_name?: string | null } | null
+  occurrence_count?: number
+  first_happened_at?: string | null
+  last_happened_at?: string | null
+  technical_context?: Record<string, unknown>
   raw_payload?: {
     auth?: {
       source?: string | null
@@ -337,6 +343,25 @@ export type AdminCrashLog = {
     } | null
     [key: string]: unknown
   } | null
+}
+
+export type AdminDiagnosticFilters = {
+  user?: string
+  search?: string
+  cursor?: string
+  limit?: number
+  classification?: 'error' | 'warning' | 'all'
+  attribution?: 'verified' | 'unattributed'
+  component?: string
+}
+
+export type AdminDiagnosticPage<T = AdminCrashLog> = {
+  success: boolean
+  items: T[]
+  has_more: boolean
+  next_cursor: string | null
+  retention_days: number
+  summarized_reports?: number
 }
 
 export type AdminCrashGroup = {
@@ -1089,17 +1114,25 @@ export async function updateRemoteControls(payload: AdminRemoteControls & { chan
   })
 }
 
-export async function fetchCrashLogs(params: { search?: string; page?: number; limit?: number; classification?: 'error' | 'warning' | 'all' } = {}) {
+function diagnosticQuery(params: AdminDiagnosticFilters) {
   const query = new URLSearchParams()
-  query.set('limit', String(params.limit ?? 100))
-  if (params.page) query.set('page', String(params.page))
-  if (params.search) query.set('search', params.search)
-  if (params.classification) query.set('classification', params.classification)
-  return adminFetch<{ success: boolean; items: AdminCrashLog[]; page?: number; limit?: number }>(`/crash-logs?${query}`)
+  query.set('limit', String(params.limit ?? 50))
+  for (const key of ['user', 'search', 'cursor', 'classification', 'attribution', 'component'] as const) {
+    if (params[key]) query.set(key, params[key])
+  }
+  return query
 }
 
-export async function fetchCrashGroups() {
-  return adminFetch<{ success: boolean; items: AdminCrashGroup[] }>('/crash-groups?groups=100')
+export async function fetchCrashLogs(params: AdminDiagnosticFilters = {}, signal?: AbortSignal) {
+  return adminFetch<AdminDiagnosticPage>(`/crash-logs?${diagnosticQuery(params)}`, { signal })
+}
+
+export async function fetchCrashLog(id: string, signal?: AbortSignal) {
+  return adminFetch<{ success: boolean; item: AdminCrashLog }>(`/crash-logs/${encodeURIComponent(id)}`, { signal })
+}
+
+export async function fetchCrashGroups(params: AdminDiagnosticFilters = {}) {
+  return adminFetch<AdminDiagnosticPage<AdminCrashGroup>>(`/crash-groups?${diagnosticQuery(params)}`)
 }
 
 export async function fetchAuditLog() {

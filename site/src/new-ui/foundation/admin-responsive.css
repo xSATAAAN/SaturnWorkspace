@@ -206,6 +206,10 @@ html[data-surface='admin'] .detail-list > div {
   padding: 7px 0;
 }
 
+.diagnostic-event-window {
+  overflow-wrap: anywhere;
+}
+
 html[data-surface='admin'] .ui-form-field {
   gap: 4px;
 }
@@ -266,6 +270,29 @@ html[data-surface='admin'] .coverage-summary {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.diagnostic-table-message {
+  display: -webkit-box;
+  min-width: 180px;
+  max-width: 380px;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.diagnostic-technical-details summary {
+  cursor: pointer;
+  padding-block: 10px;
+  font-weight: 600;
+}
+
+.diagnostic-copy-text {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  overflow-wrap: normal;
+  white-space: pre;
 }
 
 @media (min-width: 1500px) {
