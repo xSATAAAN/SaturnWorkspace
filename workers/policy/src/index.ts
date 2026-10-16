@@ -958,6 +958,7 @@ const INTERNAL_EMAIL_ENQUEUE_EVENTS = new Set([
   "admin.auth_orphan_quarantine",
 ])
 const AUTH_EMAIL_ENQUEUE_MAX_BYTES = 8192
+const AUTH_EMAIL_STATUS_MAX_BYTES = 2048
 
 function emailOutboundEnabled(env: Env): boolean {
   return envFlag(env.EMAIL_OUTBOUND_ENABLED, false) && Boolean(normalizeText(env.RESEND_SEND_API_KEY))
@@ -1370,6 +1371,86 @@ async function readLimitedJson(request: Request, maxBytes: number): Promise<Reco
   }
 }
 
+interface AuthEmailDeliveryIdentity {
+  jobId: string
+  idempotencyKey: string
+  verificationRequestId: string
+  recipient: string
+  eventType: string
+}
+
+type AuthEmailDeliveryStatus = "queued" | "processing" | "sent" | "delivered" | "failed" | "suppressed" | "cancelled" | "expired"
+
+function authEmailTimestamp(value: unknown): string | null {
+  if (typeof value !== "string") return null
+  const source = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)
+    ? `${value.replace(" ", "T")}Z`
+    : value
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(source)) return null
+  const timestamp = Date.parse(source)
+  if (!Number.isFinite(timestamp)) return null
+  const canonical = new Date(timestamp).toISOString()
+  return canonical.slice(0, 19) === source.slice(0, 19) ? canonical : null
+}
+
+async function readAuthEmailDelivery(env: Env, identity: AuthEmailDeliveryIdentity): Promise<{ status: AuthEmailDeliveryStatus; sent_at: string | null } | null> {
+  const row = await env.DB.prepare(
+    `SELECT status, sent_at, provider_message_id, sensitive_payload_expires_at, template_data_json
+     FROM email_jobs
+     WHERE id = ?1 AND idempotency_key = ?2 AND recipient = ?3 AND email_type = ?4
+     LIMIT 1`
+  )
+    .bind(identity.jobId, identity.idempotencyKey, identity.recipient, identity.eventType)
+    .first<Pick<EmailJobRow, "status" | "sent_at" | "provider_message_id" | "sensitive_payload_expires_at" | "template_data_json">>()
+  if (!row) return null
+  const templateData = parseJsonObject(row.template_data_json)
+  if (templateData.verification_request_id !== identity.verificationRequestId
+    || templateData.purpose !== "email_verification"
+    || templateData.event_type !== identity.eventType) return null
+
+  const sentAt = authEmailTimestamp(row.sent_at)
+  if (row.status === "sent" || row.status === "delivered") {
+    if (!sentAt || !normalizeText(row.provider_message_id)) throw new Error("email_delivery_unavailable")
+    return { status: row.status, sent_at: sentAt }
+  }
+  if (row.status === "queued" || row.status === "processing") {
+    const expiresAt = authEmailTimestamp(row.sensitive_payload_expires_at)
+    if (!expiresAt) throw new Error("email_delivery_unavailable")
+    return { status: Date.parse(expiresAt) <= Date.now() ? "expired" : row.status, sent_at: null }
+  }
+  if (row.status === "bounced" || row.status === "complained" || row.status === "failed") return { status: "failed", sent_at: null }
+  if (row.status === "suppressed" || row.status === "cancelled" || row.status === "expired") return { status: row.status, sent_at: null }
+  throw new Error("email_delivery_unavailable")
+}
+
+async function handleInternalAuthEmailStatus(request: Request, env: Env): Promise<Response> {
+  if (request.method !== "POST") return json({ success: false, error: "method_not_allowed" }, 405)
+  const authError = await requireInternalEmailToken(request, env, "auth.email_verification")
+  if (authError) return authError
+  const body = await readLimitedJson(request, AUTH_EMAIL_STATUS_MAX_BYTES).catch(() => null)
+  if (!body) return json({ success: false, error: "invalid_payload" }, 400)
+  const field = (name: string, maxLength: number): string => {
+    const value = body[name]
+    return typeof value === "string" && value.length > 0 && value.length <= maxLength
+      && value === value.trim() && !/[\u0000-\u001f\u007f]/.test(value) ? value : ""
+  }
+  const eventType = field("event_type", 80)
+  const jobId = field("job_id", 160)
+  const idempotencyKey = field("idempotency_key", 240)
+  const verificationRequestId = field("verification_request_id", 120)
+  const recipient = field("recipient", 254)
+  if (!AUTH_EMAIL_VERIFICATION_EVENTS.has(eventType) || !jobId || !idempotencyKey || !verificationRequestId
+    || !recipient || normalizeEmailAddress(recipient) !== recipient) {
+    return json({ success: false, error: "invalid_payload" }, 400)
+  }
+  try {
+    const delivery = await readAuthEmailDelivery(env, { jobId, idempotencyKey, verificationRequestId, recipient, eventType })
+    return delivery ? json({ success: true, ...delivery }) : json({ success: false, error: "email_delivery_not_found" }, 404)
+  } catch {
+    return json({ success: false, error: "email_delivery_unavailable" }, 503)
+  }
+}
+
 async function cancelSupersededAuthEmailJobs(
   env: Env,
   input: { userId: string; recipient: string; purpose: string; currentIdempotencyKey: string }
@@ -1469,10 +1550,17 @@ async function handleInternalAuthEmailEnqueue(request: Request, env: Env): Promi
           "X-SaturnWS-Verification-Request": verificationRequestId,
         },
       })
+      if (jobId && !await readAuthEmailDelivery(env, { jobId, idempotencyKey, verificationRequestId, recipient, eventType })) {
+        return json({ success: false, error: "email_delivery_not_found" }, 409)
+      }
       const immediate = jobId ? await processEmailJobImmediately(env, jobId).catch(() => ({ attempted: false, sent: false, skipped: true })) : null
+      const delivery = jobId
+        ? await readAuthEmailDelivery(env, { jobId, idempotencyKey, verificationRequestId, recipient, eventType })
+        : { status: "suppressed" as const, sent_at: null }
+      if (!delivery) return json({ success: false, error: "email_delivery_not_found" }, 409)
       return json({
         success: true,
-        status: immediate?.sent ? "sent" : jobId ? "queued" : "suppressed",
+        ...delivery,
         job_id: jobId,
         delivery: immediate
           ? { mode: immediate.attempted ? "immediate" : "queued_fallback", sent: immediate.sent }
@@ -4673,6 +4761,9 @@ export default {
       }
       if (url.pathname === "/v1/internal/email/auth/enqueue") {
         return await handleInternalAuthEmailEnqueue(request, env)
+      }
+      if (url.pathname === "/v1/internal/email/auth/status") {
+        return await handleInternalAuthEmailStatus(request, env)
       }
       if (url.pathname.startsWith("/v1/web/notifications/")) {
         const res = await handleWebNotificationsRequest(request, env)

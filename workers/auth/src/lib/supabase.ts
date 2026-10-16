@@ -803,6 +803,24 @@ export async function updateEmailVerification(
   return rows[0]
 }
 
+export async function updateEmailVerificationIfCurrent(
+  env: Env,
+  expected: Record<string, any>,
+  patch: Record<string, unknown>,
+): Promise<Record<string, any> | null> {
+  const filters = ["id", "code_hash", "last_sent_at", "updated_at", "status"].map((field) => {
+    const value = String(expected[field] || "")
+    if (!value) throw new Error("email_verification_revision_missing")
+    return `${field}=eq.${encodeURIComponent(value)}`
+  })
+  const rows = await supabaseJson<Record<string, any>[]>(env, `/account_email_verifications?${filters.join("&")}&select=*`, {
+    method: "PATCH",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({ ...patch, updated_at: new Date().toISOString() }),
+  })
+  return rows[0] || null
+}
+
 export async function insertEmailVerificationAudit(
   env: Env,
   payload: Record<string, unknown>,

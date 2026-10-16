@@ -326,7 +326,11 @@ async function mockFetch(input, init = {}) {
   }
   if (method === 'POST') {
     const body = await request.json()
-    const inserted = { id: body.id || nextId(table), created_at: body.created_at || new Date().toISOString(), last_seen_at: body.last_seen_at ?? null, revoked_at: body.revoked_at ?? null, ...body }
+    const timestamp = new Date().toISOString()
+    const verificationDefaults = table === 'account_email_verifications'
+      ? { updated_at: timestamp, last_sent_at: timestamp, resend_count: 0, max_resends: 5, attempts: 0, max_attempts: 6 }
+      : {}
+    const inserted = { id: body.id || nextId(table), created_at: body.created_at || timestamp, last_seen_at: body.last_seen_at ?? null, revoked_at: body.revoked_at ?? null, ...verificationDefaults, ...body }
     rows.push(inserted)
     return Response.json([clone(inserted)], { status: 201 })
   }
@@ -443,6 +447,190 @@ assert.equal(gmailCapabilityEnabled.status, 200)
 assert.equal(gmailCapabilityEnabled.body.enabled, true)
 assert.equal(gmailCapabilityEnabled.body.reason, '')
 
+const deliveryRequests = []
+let deliveryEnqueueReply = { success: true, status: 'queued', sent_at: null }
+let deliveryStatusReply = { success: true, status: 'queued', sent_at: null }
+let duringDeliveryEnqueue = null
+let duringDeliveryRead = null
+const realDeliveryEnv = {
+  ...env,
+  EMAIL_AUTH_ENABLED: 'true',
+  EMAIL_VERIFICATION_TEST_TRANSPORT: '',
+  AUTH_EMAIL_ENQUEUE_URL: 'https://api.saturnws.com/v1/internal/email/auth/enqueue',
+  POLICY_SERVICE: { async fetch(request) {
+    const body = await request.json()
+    const pathname = new URL(request.url).pathname
+    deliveryRequests.push({ pathname, body })
+    if (pathname.endsWith('/enqueue')) {
+      if (duringDeliveryEnqueue) await duringDeliveryEnqueue(body)
+      return Response.json({ job_id: `job-${body.verification_request_id}-${body.idempotency_key.split(':').at(-1)}`, ...deliveryEnqueueReply })
+    }
+    assert.equal(pathname, '/v1/internal/email/auth/status')
+    if (duringDeliveryRead) await duringDeliveryRead(body)
+    return Response.json(deliveryStatusReply)
+  } },
+}
+const startDeliveryRegistration = (email, requestEnv = realDeliveryEnv) => call('/email-verification/start', {
+  email, display_name: 'Delivery Test', terms_accepted: true, locale: 'en',
+}, null, requestEnv)
+const readDeliveryRegistration = (started, email, requestEnv = realDeliveryEnv) => call('/email-verification/registration-status', {
+  registration_id: started.body.registration_id, email,
+}, null, requestEnv)
+const queuedRegistration = await startDeliveryRegistration('queued-delivery@example.test')
+assert.equal(queuedRegistration.status, 200)
+assert.equal(queuedRegistration.body.status, 'sent', 'legacy status is not delivery authority')
+assert.equal(queuedRegistration.body.delivery_status, 'queued')
+assert.equal(queuedRegistration.body.sent_at, null)
+assert.equal(queuedRegistration.body.resend_after_seconds, 0)
+assert.equal(queuedRegistration.body.test_code, undefined)
+const queuedRow = db.account_email_verifications.find((row) => row.id === queuedRegistration.body.registration_id)
+assert.equal(queuedRow.metadata.delivery.idempotency_key, `auth-registration:${queuedRow.id}:0`)
+const queuedRead = await readDeliveryRegistration(queuedRegistration, 'QUEUED-DELIVERY@example.test')
+assert.equal(queuedRead.status, 200)
+assert.equal(queuedRead.body.delivery_status, 'queued')
+assert.equal(queuedRead.body.resend_after_seconds, 0)
+assert.deepEqual(Object.keys(queuedRead.body).sort(), ['delivery_status', 'email', 'expires_at', 'registration_id', 'resend_after_seconds', 'sent_at', 'status', 'success'].sort())
+assert.deepEqual(deliveryRequests.at(-1).body, {
+  job_id: queuedRow.metadata.delivery.job_id,
+  idempotency_key: queuedRow.metadata.delivery.idempotency_key,
+  verification_request_id: queuedRow.id,
+  recipient: 'queued-delivery@example.test',
+  event_type: 'auth.email_verification',
+})
+deliveryStatusReply = { success: true, status: 'sent', sent_at: new Date(Date.now() - 10_000).toISOString() }
+const sentRead = await readDeliveryRegistration(queuedRegistration, 'queued-delivery@example.test')
+assert.equal(sentRead.body.delivery_status, 'sent')
+assert.ok(sentRead.body.resend_after_seconds >= 33 && sentRead.body.resend_after_seconds <= 35)
+assert.equal(sentRead.body.sent_at, deliveryStatusReply.sent_at)
+deliveryStatusReply = { success: true, status: 'delivered', sent_at: new Date(Date.now() - 60_000).toISOString() }
+assert.equal((await readDeliveryRegistration(queuedRegistration, 'queued-delivery@example.test')).body.resend_after_seconds, 0)
+for (const status of ['failed', 'suppressed', 'cancelled', 'expired']) {
+  deliveryStatusReply = { success: true, status, sent_at: null }
+  const failedRead = await readDeliveryRegistration(queuedRegistration, 'queued-delivery@example.test')
+  assert.equal(failedRead.body.delivery_status, 'failed')
+  assert.equal(failedRead.body.sent_at, null)
+  assert.equal(failedRead.body.resend_after_seconds, 0)
+}
+for (const malformed of [
+  { success: true, status: 'sent', sent_at: null },
+  { success: true, status: 'sent', sent_at: '2026-01-01 12:00:00' },
+  { success: true, status: 'sent', sent_at: new Date(Date.now() + 120_000).toISOString() },
+  { success: true, status: 'queued', sent_at: new Date().toISOString() },
+  { success: true, status: 'invented', sent_at: null },
+  { success: false, status: 'sent', sent_at: new Date().toISOString() },
+]) {
+  deliveryStatusReply = malformed
+  const malformedRead = await readDeliveryRegistration(queuedRegistration, 'queued-delivery@example.test')
+  assert.equal(malformedRead.status, 503)
+  assert.equal(malformedRead.body.error, 'VERIFICATION_DELIVERY_TEMPORARY_FAILURE')
+}
+deliveryStatusReply = { success: true, status: 'sent', sent_at: new Date().toISOString() }
+const requestsBeforeMismatch = deliveryRequests.length
+assert.equal((await readDeliveryRegistration(queuedRegistration, 'different@example.test')).status, 404)
+queuedRow.purpose = 'email_verification'
+assert.equal((await readDeliveryRegistration(queuedRegistration, 'queued-delivery@example.test')).status, 404)
+queuedRow.purpose = 'registration'
+assert.equal(deliveryRequests.length, requestsBeforeMismatch, 'identity mismatches must not query Policy')
+const failClosedRead = await readDeliveryRegistration(queuedRegistration, 'queued-delivery@example.test', { ...realDeliveryEnv, AUTH_RATE_LIMIT_STANDARD: undefined })
+assert.equal(failClosedRead.status, 429)
+const legacyDelivery = queuedRow.metadata.delivery
+delete queuedRow.metadata.delivery
+const legacyRead = await readDeliveryRegistration(queuedRegistration, 'queued-delivery@example.test')
+assert.equal(legacyRead.body.delivery_status, 'unknown')
+assert.equal(legacyRead.body.sent_at, null)
+assert.equal(legacyRead.body.resend_after_seconds, 0)
+queuedRow.metadata.delivery = legacyDelivery
+const requestsBeforeUnsafeUrl = deliveryRequests.length
+assert.equal((await readDeliveryRegistration(queuedRegistration, 'queued-delivery@example.test', { ...realDeliveryEnv, AUTH_EMAIL_ENQUEUE_URL: 'https://unexpected.test/status' })).status, 503)
+assert.equal(deliveryRequests.length, requestsBeforeUnsafeUrl)
+const oldExpiresAt = queuedRow.expires_at
+duringDeliveryRead = () => { queuedRow.expires_at = past(1) }
+assert.equal((await readDeliveryRegistration(queuedRegistration, 'queued-delivery@example.test')).status, 410)
+queuedRow.expires_at = oldExpiresAt
+duringDeliveryRead = () => { queuedRow.status = 'cancelled' }
+assert.equal((await readDeliveryRegistration(queuedRegistration, 'queued-delivery@example.test')).status, 409)
+queuedRow.status = 'pending'
+duringDeliveryRead = () => { queuedRow.code_hash = 'replacement-challenge-hash' }
+assert.equal((await readDeliveryRegistration(queuedRegistration, 'queued-delivery@example.test')).status, 409)
+duringDeliveryRead = null
+queuedRow.code_hash = 'legacy-manual-challenge'
+queuedRow.metadata.delivery = { ...legacyDelivery, idempotency_key: 'foreign-challenge' }
+assert.equal((await readDeliveryRegistration(queuedRegistration, 'queued-delivery@example.test')).body.delivery_status, 'unknown')
+deliveryEnqueueReply = { success: true, status: 'sent', sent_at: new Date().toISOString() }
+const immediateSent = await startDeliveryRegistration('immediate-delivery@example.test')
+assert.equal(immediateSent.body.delivery_status, 'sent')
+assert.ok(immediateSent.body.resend_after_seconds > 0 && immediateSent.body.resend_after_seconds <= 45)
+deliveryEnqueueReply = { success: true, status: 'suppressed', sent_at: null }
+assert.equal((await startDeliveryRegistration('suppressed-delivery@example.test')).body.delivery_status, 'failed')
+deliveryEnqueueReply = { success: true, status: 'queued' }
+assert.equal((await startDeliveryRegistration('malformed-delivery@example.test')).status, 503)
+deliveryEnqueueReply = { success: true, status: 'queued', sent_at: null }
+duringDeliveryEnqueue = (input) => {
+  const row = db.account_email_verifications.find((item) => item.id === input.verification_request_id)
+  row.status = 'verified'
+  row.updated_at = new Date(Date.now() + 1).toISOString()
+  row.metadata.registration.finalization_token_hash = 'test-concurrent-proof-hash'
+}
+const concurrentProof = await startDeliveryRegistration('proof-during-delivery@example.test')
+assert.equal(concurrentProof.status, 200)
+assert.equal(db.account_email_verifications.find((row) => row.id === concurrentProof.body.registration_id).metadata.registration.finalization_token_hash, 'test-concurrent-proof-hash')
+assert.equal(concurrentProof.body.finalization_token, undefined)
+duringDeliveryEnqueue = (input) => {
+  const row = db.account_email_verifications.find((item) => item.id === input.verification_request_id)
+  row.code_hash = 'newer-resend-hash'
+  row.updated_at = new Date(Date.now() + 1).toISOString()
+  row.metadata.delivery = { status: 'queued', job_id: 'newer-delivery-job' }
+}
+const staleEnqueue = await startDeliveryRegistration('replacement-during-delivery@example.test')
+assert.equal(staleEnqueue.status, 409)
+assert.equal(db.account_email_verifications.find((row) => row.email === 'replacement-during-delivery@example.test').metadata.delivery.job_id, 'newer-delivery-job')
+duringDeliveryEnqueue = null
+
+const delayedRegistration = await startDeliveryRegistration('delayed-delivery@example.test')
+const delayedRow = db.account_email_verifications.find((row) => row.id === delayedRegistration.body.registration_id)
+delayedRow.last_sent_at = new Date(Date.now() - 60_000).toISOString()
+const delayedHash = delayedRow.code_hash
+const enqueueCount = () => deliveryRequests.filter((item) => item.pathname.endsWith('/enqueue')).length
+const beforeDelayed = enqueueCount()
+for (const status of ['queued', 'processing']) {
+  deliveryStatusReply = { success: true, status, sent_at: null }
+  const blocked = await startDeliveryRegistration(delayedRow.email)
+  assert.equal(blocked.status, 409)
+  assert.equal(blocked.body.error, 'VERIFICATION_DELIVERY_PENDING')
+  assert.equal(delayedRow.code_hash, delayedHash)
+  assert.equal(delayedRow.resend_count, 0)
+}
+deliveryStatusReply = { success: true, status: 'sent', sent_at: new Date().toISOString() }
+const delayedCooldown = await startDeliveryRegistration(delayedRow.email)
+assert.equal(delayedCooldown.status, 429)
+assert.ok(delayedCooldown.body.retry_after_seconds >= 43 && delayedCooldown.body.retry_after_seconds <= 45)
+assert.equal(enqueueCount(), beforeDelayed)
+deliveryStatusReply = { success: true, status: 'sent', sent_at: null }
+assert.equal((await startDeliveryRegistration(delayedRow.email)).status, 503)
+assert.equal(enqueueCount(), beforeDelayed)
+deliveryStatusReply = { success: true, status: 'failed', sent_at: null }
+for (const status of ['verified', 'cancelled']) {
+  duringDeliveryRead = () => { delayedRow.status = status }
+  assert.equal((await startDeliveryRegistration(delayedRow.email)).status, 409)
+  assert.equal(delayedRow.status, status)
+  assert.equal(enqueueCount(), beforeDelayed)
+  delayedRow.status = 'pending'
+}
+duringDeliveryRead = () => { delayedRow.status = 'verified' }
+delayedRow.resend_count = delayedRow.max_resends
+delayedRow.metadata.delivery.idempotency_key = `auth-registration:${delayedRow.id}:${delayedRow.resend_count}`
+assert.equal((await startDeliveryRegistration(delayedRow.email)).status, 409)
+assert.equal(delayedRow.status, 'verified', 'a late limit check must not overwrite verification')
+delayedRow.status = 'pending'
+delayedRow.resend_count = 0
+delayedRow.metadata.delivery.idempotency_key = `auth-registration:${delayedRow.id}:0`
+duringDeliveryRead = null
+assert.equal((await startDeliveryRegistration(delayedRow.email)).status, 200)
+assert.equal(delayedRow.resend_count, 1)
+assert.notEqual(delayedRow.code_hash, delayedHash)
+assert.equal(enqueueCount(), beforeDelayed + 1)
+deliveryStatusReply = { success: true, status: 'queued', sent_at: null }
+
 const registrationStart = await call('/email-verification/start', {
   email: 'new-registration@example.test',
   display_name: 'New Registration',
@@ -452,6 +640,8 @@ const registrationStart = await call('/email-verification/start', {
 })
 assert.equal(registrationStart.status, 200)
 assert.equal(registrationStart.body.status, 'sent')
+assert.equal(registrationStart.body.delivery_status, 'sent')
+assert.ok(Number.isFinite(Date.parse(registrationStart.body.sent_at)))
 assert.ok(registrationStart.body.registration_id)
 assert.equal(String(registrationStart.body.test_code || '').length, 6)
 assert.equal([...users.values()].some((user) => user.email === 'new-registration@example.test'), false, 'pending registration must not create a Firebase password identity before OTP')
@@ -473,6 +663,7 @@ assert.equal(wrongRegistrationOtp.body.error, 'VERIFICATION_CODE_INVALID')
 assert.equal([...users.values()].some((user) => user.email === 'new-registration@example.test'), false, 'wrong OTP must not create a Firebase identity')
 
 pendingRegistrationRow.last_sent_at = past(1)
+pendingRegistrationRow.metadata.delivery.sent_at = past(1)
 const registrationResend = await call('/email-verification/start', {
   email: 'new-registration@example.test',
   display_name: 'New Registration',

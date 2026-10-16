@@ -11,7 +11,8 @@ const future = new Date(Date.now() + 60_000).toISOString()
 test('email registration proves an identity separately from desktop session authorization', () => {
   const identity = { registration_id: 'synthetic-registration-id', email: 'qa@example.test' }
   const cases = [
-    ['email_registration_start', { success: true, status: 'sent', ...identity, expires_at: future, resend_after_seconds: 45 }],
+    ['email_registration_start', { success: true, status: 'sent', ...identity, expires_at: future, resend_after_seconds: 45, delivery_status: 'sent', sent_at: new Date().toISOString() }],
+    ['email_registration_delivery', { success: true, status: 'sent', ...identity, expires_at: future, resend_after_seconds: 0, delivery_status: 'queued', sent_at: null }],
     ['email_registration_verify', { success: true, status: 'verified', ...identity, verified_at: future, finalization_token: 'synthetic-finalization-proof', finalization_expires_at: future }],
     ['email_registration_finalize', { success: true, status: 'finalized', email: identity.email }],
     ['email_registration_cancel', { success: true, status: 'superseded' }],

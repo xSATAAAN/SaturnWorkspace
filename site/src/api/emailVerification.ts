@@ -17,6 +17,8 @@ export type EmailVerificationRequestResult = {
   email?: string
   expires_at?: string
   resend_after_seconds?: number
+  delivery_status?: 'queued' | 'sent' | 'failed' | 'unknown'
+  sent_at?: string | null
   retry_after_seconds?: number
   error?: string
   test_code?: string
@@ -73,6 +75,13 @@ export async function startEmailRegistration(input: EmailVerificationRequestInpu
     terms_version: input.termsVersion,
     terms_accepted_at: input.termsAcceptedAt,
   })
+}
+
+export async function fetchEmailRegistrationStatus(input: { registrationId: string; email: string }, signal?: AbortSignal): Promise<EmailVerificationRequestResult> {
+  return postJson<EmailVerificationRequestResult>(`${authApiBase()}/email-verification/registration-status`, {
+    registration_id: input.registrationId,
+    email: input.email,
+  }, { signal })
 }
 
 export async function requestEmailVerificationCode(idToken: string, email: string, input: EmailVerificationRequestInput = {}): Promise<EmailVerificationRequestResult> {

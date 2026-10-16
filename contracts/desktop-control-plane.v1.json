@@ -14,6 +14,7 @@
     "policy_is_signed_and_fail_closed": true
   },
   "auth": {
+    "email_delivery_states": ["queued", "sent", "failed", "unknown"],
     "connection_states": [
       "signed_out",
       "link_pending",
@@ -135,9 +136,31 @@
             "registration_id": "non_empty_string",
             "email": "non_empty_string",
             "expires_at": "iso_datetime",
-            "resend_after_seconds": "positive_integer"
+            "resend_after_seconds": "number",
+            "delivery_status": "non_empty_string",
+            "sent_at": ["iso_datetime", "null"]
           },
-          "fixed": {"success": true, "status": "sent"}
+          "fixed": {"success": true, "status": "sent"},
+          "enums": {"delivery_status": "$auth.email_delivery_states"}
+        }
+      },
+      "email_registration_delivery": {
+        "method": "POST",
+        "path": "/email-verification/registration-status",
+        "request_required": ["registration_id", "email"],
+        "response": {
+          "required": {
+            "success": "boolean",
+            "status": "non_empty_string",
+            "registration_id": "non_empty_string",
+            "email": "non_empty_string",
+            "expires_at": "iso_datetime",
+            "resend_after_seconds": "number",
+            "delivery_status": "non_empty_string",
+            "sent_at": ["iso_datetime", "null"]
+          },
+          "fixed": {"success": true, "status": "sent"},
+          "enums": {"delivery_status": "$auth.email_delivery_states"}
         }
       },
       "email_registration_verify": {

@@ -78,6 +78,7 @@ import {
   cancelEmailRegistrationCode as cancelEmailRegistrationRequest,
   cancelEmailVerificationCode,
   finalizeEmailRegistration as finalizeEmailRegistrationRequest,
+  fetchEmailRegistrationStatus,
   requestEmailVerificationCode,
   startEmailRegistration as startEmailRegistrationRequest,
   verifyEmailRegistrationCode,
@@ -439,9 +440,17 @@ export const productionAdapters: AppAdapters = {
         email: result.email,
         expiresAt: result.expires_at,
         resendAfterSeconds: result.resend_after_seconds,
+        deliveryStatus: result.delivery_status,
+        sentAt: result.sent_at,
         retryAfterSeconds: result.retry_after_seconds,
         error: result.error,
       }
+    },
+    async getEmailRegistrationStatus(input, signal) {
+      const result = await fetchEmailRegistrationStatus(input, signal)
+      return { success: result.success, status: result.status, registrationId: result.registration_id,
+        email: result.email, expiresAt: result.expires_at, resendAfterSeconds: result.resend_after_seconds,
+        deliveryStatus: result.delivery_status, sentAt: result.sent_at, error: result.error }
     },
     async finalizeEmailRegistration(input) {
       const finalized = await finalizeEmailRegistrationRequest({

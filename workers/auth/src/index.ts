@@ -38,6 +38,7 @@ import {
   upsertAccountProfile,
   updateDeviceLogin,
   updateEmailVerification,
+  updateEmailVerificationIfCurrent,
 } from "./lib/supabase"
 import { isIsoExpired, isValidHwid, normalizeHwid } from "./lib/validators"
 import type { AccountProfileRow, AppSessionRow, Env, SubscriptionRow } from "./types"
@@ -1100,9 +1101,9 @@ async function deliverEmailVerificationCode(
     idempotencyKey: string
     resend?: boolean
   },
-): Promise<{ transport: "test" | "email_operations" }> {
+): Promise<{ transport: "test" | "email_operations"; delivery: Record<string, unknown> }> {
   if (emailVerificationTestMode(env) && String(env.EMAIL_VERIFICATION_TEST_TRANSPORT || "").trim() === "response") {
-    return { transport: "test" }
+    return { transport: "test", delivery: { transport: "test", status: "sent", sent_at: new Date().toISOString() } }
   }
   if (String(env.EMAIL_AUTH_ENABLED || "").trim().toLowerCase() !== "true") {
     throw new Error("verification_delivery_disabled")
@@ -1162,7 +1163,100 @@ async function deliverEmailVerificationCode(
     if (response.status >= 500) throw new Error("verification_delivery_temporary_failure")
     throw new Error("verification_delivery_failed")
   }
-  return { transport: "email_operations" }
+  const payload = await response.json().catch(() => null)
+  const delivery = parseEmailDeliveryReply(payload)
+  if (!delivery) throw new Error("verification_delivery_temporary_failure")
+  return { transport: "email_operations", delivery: {
+    ...delivery,
+    idempotency_key: input.idempotencyKey,
+    verification_request_id: input.verificationId,
+    recipient: input.email,
+    event_type: input.resend ? "auth.verification_resend" : "auth.email_verification",
+  } }
+}
+
+const EMAIL_DELIVERY_STATES = new Set(["queued", "processing", "sent", "delivered", "failed", "suppressed", "cancelled", "expired"])
+
+function deliverySentAt(value: unknown): string | null {
+  if (typeof value !== "string" || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,3})?(?:Z|[+-]\d\d:\d\d)$/.test(value)) return null
+  const timestamp = Date.parse(value)
+  return Number.isFinite(timestamp) && timestamp <= Date.now() + 5000 ? new Date(timestamp).toISOString() : null
+}
+
+function parseEmailDeliveryReply(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null
+  const payload = value as Record<string, unknown>
+  if (payload.success !== true || typeof payload.status !== "string" || !EMAIL_DELIVERY_STATES.has(payload.status)) return null
+  if (typeof payload.job_id !== "string" || !/^[a-zA-Z0-9_-]{1,160}$/.test(payload.job_id)) return null
+  const sent = payload.status === "sent" || payload.status === "delivered"
+  const sentAt = deliverySentAt(payload.sent_at)
+  if (sent ? !sentAt : payload.sent_at !== null) return null
+  return { job_id: payload.job_id, status: payload.status, sent_at: sentAt }
+}
+
+function pinnedEmailDelivery(row: Record<string, any>): Record<string, any> | null {
+  const delivery = metadataObject(metadataObject(row.metadata).delivery)
+  if (delivery.transport === "test") return delivery
+  const eventType = delivery.event_type
+  if (delivery.verification_request_id !== row.id || delivery.recipient !== normalizeRegistrationEmail(row.email)
+      || (eventType !== "auth.email_verification" && eventType !== "auth.verification_resend")
+      || delivery.idempotency_key !== `auth-registration:${row.id}:${Number(row.resend_count || 0)}`
+      || typeof delivery.job_id !== "string" || !/^[a-zA-Z0-9_-]{1,160}$/.test(delivery.job_id)) return null
+  return delivery
+}
+
+function registrationDeliveryProjection(env: Env, row: Record<string, any>, supplied?: Record<string, any>): Record<string, unknown> {
+  const delivery = supplied || pinnedEmailDelivery(row)
+  if (!delivery || (delivery.transport === "test" && !emailVerificationTestMode(env))) {
+    return { delivery_status: "unknown", sent_at: null, resend_after_seconds: 0 }
+  }
+  const sentAt = deliverySentAt(delivery.sent_at)
+  if ((delivery.status === "sent" || delivery.status === "delivered") && sentAt) {
+    return { delivery_status: "sent", sent_at: sentAt,
+      resend_after_seconds: Math.max(0, Math.min(45, Math.ceil((Date.parse(sentAt) + 45_000 - Date.now()) / 1000))) }
+  }
+  return { delivery_status: ["queued", "processing"].includes(delivery.status) ? "queued"
+    : ["failed", "suppressed", "cancelled", "expired"].includes(delivery.status) ? "failed" : "unknown",
+    sent_at: null, resend_after_seconds: 0 }
+}
+
+async function persistRegistrationDelivery(env: Env, row: Record<string, any>, codeHash: string, delivery: Record<string, unknown>): Promise<Record<string, any>> {
+  let current = row
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (current.code_hash !== codeHash || current.last_sent_at !== row.last_sent_at
+        || !["pending", "verified"].includes(String(current.status))) return current
+    const updated = await updateEmailVerificationIfCurrent(env, current, { metadata: { ...metadataObject(current.metadata), delivery } })
+    if (updated) return updated
+    const latest = await getEmailVerificationById(env, row.id)
+    if (!latest) throw new Error("email_verification_delivery_unavailable")
+    current = latest
+  }
+  throw new Error("email_verification_delivery_unavailable")
+}
+
+async function readRegistrationDelivery(env: Env, request: Request, row: Record<string, any>): Promise<Record<string, unknown>> {
+  const delivery = pinnedEmailDelivery(row)
+  if (!delivery || delivery.transport === "test") return registrationDeliveryProjection(env, row)
+  const target = new URL(String(env.AUTH_EMAIL_ENQUEUE_URL || ""))
+  if (target.protocol !== "https:" || target.hostname !== "api.saturnws.com"
+      || target.pathname !== "/v1/internal/email/auth/enqueue" || target.port || target.username || target.password) {
+    throw new Error("email_verification_delivery_unavailable")
+  }
+  target.pathname = "/v1/internal/email/auth/status"
+  target.search = ""
+  target.hash = ""
+  const token = String(env.AUTH_EMAIL_ENQUEUE_TOKEN || "").trim()
+  if (!token) throw new Error("email_verification_delivery_unavailable")
+  const statusRequest = new Request(target, { method: "POST", headers: {
+    "Content-Type": "application/json", Authorization: `Bearer ${token}`, "X-Request-Id": requestId(request),
+  }, signal: AbortSignal.timeout(5000), body: JSON.stringify({ job_id: delivery.job_id, idempotency_key: delivery.idempotency_key,
+    verification_request_id: row.id, recipient: delivery.recipient, event_type: delivery.event_type }) })
+  const response = env.POLICY_SERVICE ? await env.POLICY_SERVICE.fetch(statusRequest) : await fetch(statusRequest)
+  if (!response.ok) throw new Error("email_verification_delivery_unavailable")
+  const payload = await response.json().catch(() => null)
+  const parsed = parseEmailDeliveryReply({ ...metadataObject(payload), job_id: delivery.job_id })
+  if (!parsed) throw new Error("email_verification_delivery_unavailable")
+  return registrationDeliveryProjection(env, row, parsed)
 }
 
 function emailVerificationDeliveryFailure(error: unknown): { code: string; status: number } {
@@ -1296,14 +1390,14 @@ function registrationFromRow(row: Record<string, any> | null): Record<string, an
   return metadataObject(metadata.registration)
 }
 
-function registrationResponse(row: Record<string, any>, testCode?: string): Record<string, unknown> {
+function registrationResponse(env: Env, row: Record<string, any>, testCode?: string, delivery?: Record<string, unknown>): Record<string, unknown> {
   return {
     success: true,
     status: "sent",
     registration_id: row.id,
     email: row.email,
     expires_at: row.expires_at,
-    resend_after_seconds: 45,
+    ...(delivery || registrationDeliveryProjection(env, row)),
     ...(testCode ? { test_code: testCode } : {}),
   }
 }
@@ -1348,19 +1442,35 @@ async function handlePendingRegistrationStart(request: Request, env: Env): Promi
     status: "pending",
   })
   if (existing) {
+    const metadata = metadataObject(existing.metadata)
+    const existingExpiry = Date.parse(String(existing.expires_at || ""))
+    if (existingExpiry > now && (pinnedEmailDelivery(existing) || metadata.transport === "provider_pending")) {
+      let delivery: Record<string, unknown>
+      try {
+        delivery = await readRegistrationDelivery(env, request, existing)
+      } catch {
+        return errorJson(request, "VERIFICATION_DELIVERY_TEMPORARY_FAILURE", 503, true)
+      }
+      if (delivery.delivery_status === "queued" || delivery.delivery_status === "unknown") {
+        return errorJson(request, "VERIFICATION_DELIVERY_PENDING", 409, true)
+      }
+      const remaining = Number(delivery.resend_after_seconds || 0)
+      if (delivery.delivery_status === "sent" && remaining > 0) return verificationRateLimited(request, remaining)
+    }
     const lastSent = Date.parse(String(existing.last_sent_at || existing.created_at || ""))
     if (Number.isFinite(lastSent) && now - lastSent < 45_000) {
       await auditEmailVerification(env, { verificationId: existing.id, email, action: "registration_start", result: "rate_limited", request })
       return verificationRateLimited(request, (45_000 - (now - lastSent)) / 1000)
     }
     if (Number(existing.resend_count || 0) >= Number(existing.max_resends || 5)) {
-      await updateEmailVerification(env, existing.id, { status: "blocked" }).catch(() => undefined)
+      const blocked = await updateEmailVerificationIfCurrent(env, existing, { status: "blocked" })
+      if (!blocked) return errorJson(request, "VERIFICATION_DELIVERY_PENDING", 409, true)
       await auditEmailVerification(env, { verificationId: existing.id, email, action: "registration_start", result: "blocked", request })
       const retryAt = Date.parse(String(existing.expires_at || ""))
       return verificationRateLimited(request, Number.isFinite(retryAt) ? (retryAt - now) / 1000 : 300)
     }
     const existingMetadata = metadataObject(existing.metadata)
-    const updated = await updateEmailVerification(env, existing.id, {
+    const updated = await updateEmailVerificationIfCurrent(env, existing, {
       code_hash: codeHash,
       attempts: 0,
       resend_count: Number(existing.resend_count || 0) + 1,
@@ -1370,10 +1480,12 @@ async function handlePendingRegistrationStart(request: Request, env: Env): Promi
       firebase_user_id: null,
       metadata: {
         ...existingMetadata,
+        delivery: null,
         transport: emailVerificationTestMode(env) ? "test" : "provider_pending",
         registration: { ...registrationFromRow(existing), ...registration, finalization_state: "pending" },
       },
     })
+    if (!updated) return errorJson(request, "VERIFICATION_DELIVERY_PENDING", 409, true)
     try {
       const delivery = await deliverEmailVerificationCode(env, {
         email,
@@ -1386,15 +1498,19 @@ async function handlePendingRegistrationStart(request: Request, env: Env): Promi
         idempotencyKey: `auth-registration:${updated.id}:${Number(updated.resend_count || 0)}`,
         resend: true,
       })
-      await updateEmailVerification(env, updated.id, { metadata: { ...(updated.metadata || {}), transport: delivery.transport } }).catch(() => undefined)
+      const recorded = await persistRegistrationDelivery(env, updated, codeHash, delivery.delivery)
+      if (recorded.code_hash !== codeHash || recorded.last_sent_at !== updated.last_sent_at
+          || !["pending", "verified"].includes(String(recorded.status))) {
+        return errorJson(request, "VERIFICATION_CODE_INVALID", 409)
+      }
+      updated.metadata = recorded.metadata
     } catch (error) {
-      await updateEmailVerification(env, updated.id, { status: "delivery_failed", metadata: { ...(updated.metadata || {}), delivery_error: String(error instanceof Error ? error.message : error || "delivery_failed") } }).catch(() => undefined)
       await auditEmailVerification(env, { verificationId: updated.id, email, action: "registration_start", result: "delivery_failed", request })
       const failure = emailVerificationDeliveryFailure(error)
       return errorJson(request, failure.code, failure.status, true)
     }
     await auditEmailVerification(env, { verificationId: updated.id, email, action: "registration_start", result: "sent", request })
-    return json(registrationResponse(updated, canReturnTestCode ? code : undefined))
+    return json(registrationResponse(env, updated, canReturnTestCode ? code : undefined))
   }
 
   const created = await createEmailVerification(env, {
@@ -1422,15 +1538,49 @@ async function handlePendingRegistrationStart(request: Request, env: Env): Promi
       verificationId: created.id,
       idempotencyKey: `auth-registration:${created.id}:0`,
     })
-    await updateEmailVerification(env, created.id, { metadata: { ...(created.metadata || {}), transport: delivery.transport } }).catch(() => undefined)
+    const recorded = await persistRegistrationDelivery(env, created, codeHash, delivery.delivery)
+    if (recorded.code_hash !== codeHash || recorded.last_sent_at !== created.last_sent_at
+        || !["pending", "verified"].includes(String(recorded.status))) {
+      return errorJson(request, "VERIFICATION_CODE_INVALID", 409)
+    }
+    created.metadata = recorded.metadata
   } catch (error) {
-    await updateEmailVerification(env, created.id, { status: "delivery_failed", metadata: { ...(created.metadata || {}), delivery_error: String(error instanceof Error ? error.message : error || "delivery_failed") } }).catch(() => undefined)
     await auditEmailVerification(env, { verificationId: created.id, email, action: "registration_start", result: "delivery_failed", request })
     const failure = emailVerificationDeliveryFailure(error)
     return errorJson(request, failure.code, failure.status, true)
   }
   await auditEmailVerification(env, { verificationId: created.id, email, action: "registration_start", result: "sent", request })
-  return json(registrationResponse(created, canReturnTestCode ? code : undefined))
+  return json(registrationResponse(env, created, canReturnTestCode ? code : undefined))
+}
+
+async function handlePendingRegistrationStatus(request: Request, env: Env): Promise<Response> {
+  const body = await request.json<any>().catch(() => null)
+  const email = normalizeRegistrationEmail(body?.email)
+  const registrationId = body?.registration_id
+  if (!isValidRegistrationEmail(email) || typeof registrationId !== "string"
+      || !/^[a-zA-Z0-9_-]{1,128}$/.test(registrationId)) return errorJson(request, "VERIFICATION_CODE_INVALID", 400)
+  const ip = request.headers.get("CF-Connecting-IP") || "unknown"
+  const allowed = await Promise.all([
+    allowRateLimit(env.AUTH_RATE_LIMIT_STANDARD, `registration-status:ip:${ip}`),
+    allowRateLimit(env.AUTH_RATE_LIMIT_STANDARD, `registration-status:email:${email}`),
+  ])
+  if (allowed.some((value) => !value)) return verificationRateLimited(request, 60)
+  const row = await getEmailVerificationById(env, registrationId)
+  if (!row || row.purpose !== "registration" || normalizeRegistrationEmail(row.email) !== email
+      || !["pending", "verified"].includes(String(row.status))) return errorJson(request, "VERIFICATION_CODE_INVALID", 404)
+  if (isIsoExpired(row.expires_at)) return errorJson(request, "VERIFICATION_CODE_EXPIRED", 410)
+  try {
+    const delivery = await readRegistrationDelivery(env, request, row)
+    const current = await getEmailVerificationById(env, registrationId)
+    if (!current || current.code_hash !== row.code_hash || current.last_sent_at !== row.last_sent_at
+        || JSON.stringify(pinnedEmailDelivery(current)) !== JSON.stringify(pinnedEmailDelivery(row))
+        || current.purpose !== "registration" || normalizeRegistrationEmail(current.email) !== email
+        || !["pending", "verified"].includes(String(current.status))) return errorJson(request, "VERIFICATION_CODE_INVALID", 409)
+    if (isIsoExpired(current.expires_at)) return errorJson(request, "VERIFICATION_CODE_EXPIRED", 410)
+    return json(registrationResponse(env, current, undefined, delivery))
+  } catch {
+    return errorJson(request, "VERIFICATION_DELIVERY_TEMPORARY_FAILURE", 503, true)
+  }
 }
 
 async function handlePendingRegistrationVerify(request: Request, env: Env, body: Record<string, any> | null): Promise<Response> {
@@ -3044,6 +3194,10 @@ export default {
       }
       if (request.method === "POST" && apiPath === "/email-verification/start") {
         const res = await handlePendingRegistrationStart(request, env)
+        return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
+      }
+      if (request.method === "POST" && apiPath === "/email-verification/registration-status") {
+        const res = await handlePendingRegistrationStatus(request, env)
         return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers.entries()), ...cors } })
       }
       if (request.method === "POST" && apiPath === "/email-verification/verify") {
