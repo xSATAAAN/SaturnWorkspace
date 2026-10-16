@@ -800,7 +800,9 @@ async function updateFirebaseUserAdmin(
     body: JSON.stringify(body),
   })
   const payload = await response.json<any>().catch(() => null)
-  if (!response.ok) throw new Error(mapFirebasePasswordError(String(payload?.error?.message || "")))
+  if (!response.ok) throw Object.assign(new Error(mapFirebasePasswordError(String(payload?.error?.message || ""))), {
+    remoteRejected: response.status < 500,
+  })
   const merged = {
     ...payload,
     localId: payload?.localId || input.userId,
@@ -1395,11 +1397,11 @@ async function resolveEmailVerificationUser(
   request: Request,
   env: Env,
   body: Record<string, any> | null,
-): Promise<{ userId: string | null; email: string; displayName?: string | null }> {
+): Promise<{ userId: string | null; email: string; displayName?: string | null; firebaseUser?: VerifiedFirebaseUser }> {
   const idToken = String(body?.id_token || "").trim()
   if (idToken) {
     const user = await verifyFirebaseUser(idToken, env)
-    return { userId: user.userId, email: user.email, displayName: user.displayName }
+    return { userId: user.userId, email: user.email, displayName: user.displayName, firebaseUser: user }
   }
   if (emailVerificationTestMode(env) && String(env.EMAIL_VERIFICATION_ALLOW_UNAUTHENTICATED_TEST || "").trim() === "1") {
     const email = String(body?.email || "").trim().toLowerCase()
@@ -1430,6 +1432,46 @@ async function hashFinalizationToken(env: Env, registrationId: string, token: st
 function registrationFromRow(row: Record<string, any> | null): Record<string, any> {
   const metadata = metadataObject(row?.metadata)
   return metadataObject(metadata.registration)
+}
+
+function emailFinalizationInProgress(row: Record<string, any>): boolean {
+  const registration = registrationFromRow(row)
+  return ["finalizing", "profile_finalizing", "claim_finalizing"].includes(String(registration.finalization_state))
+    && Date.parse(String(registration.finalization_claim_expires_at || "")) > Date.now()
+}
+
+async function claimEmailFinalization(env: Env, row: Record<string, any>, patch: Record<string, unknown> = {}): Promise<Record<string, any> | null> {
+  if (emailFinalizationInProgress(row)) return null
+  return updateEmailVerificationIfCurrent(env, row, {
+    ...patch,
+    metadata: { ...metadataObject(row.metadata), registration: {
+      ...registrationFromRow(row), finalization_state: "finalizing",
+      finalization_claim: randomBase64Url(24), finalization_claim_expires_at: new Date(Date.now() + 300_000).toISOString(),
+    } },
+  })
+}
+
+async function releaseEmailFinalization(env: Env, row: Record<string, any>, state: string): Promise<void> {
+  await updateEmailVerificationIfCurrent(env, row, {
+    metadata: { ...metadataObject(row.metadata), registration: { ...registrationFromRow(row), finalization_state: state } },
+  }).catch(() => undefined)
+}
+
+function emailVerificationFinalized(row: Record<string, any>, user: VerifiedFirebaseUser | undefined, profile: AccountProfileRow | null): boolean {
+  const epoch = Math.floor(Date.parse(String(row.verified_at || "")) / 1000)
+  return row.status === "verified" && Boolean(row.consumed_at) && Boolean(user && !user.disabled && user.emailVerified
+    && row.firebase_user_id === user.userId && normalizeRegistrationEmail(row.email) === user.email
+    && isSaturnFinalizedClaim(user.accountClaims) && isFinalizedProfile(profile, user)
+    && !accountLifecycleBlock(profile!) && Number.isFinite(epoch) && (profileCredentialEpoch(profile) || 0) >= epoch)
+}
+
+async function canReplaceEmailVerification(env: Env, row: Record<string, any> | null, user: VerifiedFirebaseUser | undefined): Promise<boolean> {
+  if (row?.status !== "verified") return true
+  if (emailFinalizationInProgress(row)) return false
+  const profile = user ? await getAccountProfileByFirebaseUid(env, user.userId) : null
+  if (emailVerificationFinalized(row, user, profile)) return true
+  if (!isIsoExpired(row.expires_at)) return false
+  return Boolean(await updateEmailVerificationIfCurrent(env, row, { status: "expired" }))
 }
 
 function registrationResponse(env: Env, row: Record<string, any>, testCode?: string, delivery?: Record<string, unknown>): Record<string, unknown> {
@@ -1692,11 +1734,14 @@ async function handlePendingRegistrationVerify(request: Request, env: Env, body:
 async function consumeInvalidEmailCode(env: Env, expected: Record<string, any>): Promise<void> {
   let current = expected
   for (let retry = 0; retry < 8; retry += 1) {
-    if (current.status !== "pending" || current.code_hash !== expected.code_hash
+    if (current.status !== expected.status || !["pending", "verified"].includes(String(current.status))
+        || emailFinalizationInProgress(current)
+        || (current.status === "verified" && registrationFromRow(current).finalization_state === "finalized")
+        || current.code_hash !== expected.code_hash
         || current.last_sent_at !== expected.last_sent_at || isIsoExpired(current.expires_at)) return
     const attempts = Math.min(Number(current.max_attempts || 6), Number(current.attempts || 0) + 1)
     if (await updateEmailVerificationIfCurrent(env, current, {
-      attempts, status: attempts >= Number(current.max_attempts || 6) ? "blocked" : "pending",
+      attempts, status: attempts >= Number(current.max_attempts || 6) ? "blocked" : current.status,
     })) return
     const latest = await getEmailVerificationById(env, expected.id)
     if (!latest) return
@@ -1750,17 +1795,7 @@ async function handlePendingRegistrationFinalize(request: Request, env: Env): Pr
     await auditEmailVerification(env, { verificationId: row.id, email: rowEmail, action: "registration_finalize", result: "profile_collision", request })
     return errorJson(request, "AUTH_EMAIL_ALREADY_USED", 409, false)
   }
-  const claimDeadline = Date.parse(String(registration.finalization_claim_expires_at || ""))
-  if (["finalizing", "profile_finalizing"].includes(String(registration.finalization_state)) && claimDeadline > Date.now()) {
-    return errorJson(request, "REGISTRATION_FINALIZING", 409, true)
-  }
-  const claimed = await updateEmailVerificationIfCurrent(env, row, {
-    metadata: {
-      ...metadataObject(row.metadata),
-      registration: { ...registration, finalization_state: "finalizing", finalization_claim: randomBase64Url(24),
-        finalization_claim_expires_at: new Date(Date.now() + 300_000).toISOString() },
-    },
-  })
+  const claimed = await claimEmailFinalization(env, row)
   if (!claimed) return errorJson(request, "REGISTRATION_FINALIZING", 409, true)
   row = claimed
   registration = registrationFromRow(row)
@@ -1919,12 +1954,9 @@ async function handleEmailVerificationRequest(request: Request, env: Env): Promi
   const now = Date.now()
   const expiresAt = new Date(now + emailVerificationTtlMs(env)).toISOString()
   const registration = pendingRegistrationMetadata(body, user, env)
-  const existing = await getLatestEmailVerification(env, {
-    email: user.email,
-    firebaseUserId: user.userId,
-    purpose: "email_verification",
-    status: "pending",
-  })
+  const previous = await getLatestEmailVerification(env, { email: user.email, firebaseUserId: user.userId, purpose: "email_verification" })
+  if (!await canReplaceEmailVerification(env, previous, user.firebaseUser)) return errorJson(request, "REGISTRATION_FINALIZING", 409, true)
+  const existing = previous?.status === "pending" ? previous : null
   const { code, codeHash } = await replacementEmailCode(env, user.email, existing?.code_hash)
   if (existing) {
     const existingMetadata = typeof existing.metadata === "object" && existing.metadata ? existing.metadata : {}
@@ -2037,13 +2069,25 @@ async function handleEmailVerificationVerify(request: Request, env: Env): Promis
   if (user instanceof Response) return user
   const code = String(body?.code || "").replace(/\D/g, "").slice(0, 6)
   if (code.length !== 6) return errorJson(request, "VERIFICATION_CODE_INVALID", 400)
-  const row = await getLatestEmailVerification(env, {
+  let row = await getLatestEmailVerification(env, {
     email: user.email,
     firebaseUserId: user.userId,
     purpose: "email_verification",
-    status: "pending",
   })
-  if (!row) return errorJson(request, "VERIFICATION_CODE_INVALID", 404)
+  if (!row || !["pending", "verified"].includes(String(row.status))) return errorJson(request, "VERIFICATION_CODE_INVALID", 404)
+  if (!user.userId || row.firebase_user_id !== user.userId || normalizeRegistrationEmail(row.email) !== user.email) {
+    return errorJson(request, "VERIFICATION_CODE_INVALID", 409)
+  }
+  if (user.firebaseUser?.disabled) return errorJson(request, "ACCOUNT_DISABLED", 403, false)
+  if (emailFinalizationInProgress(row)) return errorJson(request, "REGISTRATION_FINALIZING", 409, true)
+  let existingProfile = row.status === "verified" && row.consumed_at
+    ? await getAccountProfileByFirebaseUid(env, user.userId) : null
+  const actual = await hashEmailCode(env, user.email, code)
+  if (emailVerificationFinalized(row, user.firebaseUser, existingProfile)) {
+    if (!timingSafeEqualHex(String(row.code_hash || ""), actual)) return errorJson(request, "VERIFICATION_CODE_INVALID", 400)
+    return json({ success: true, status: "verified", verified_at: row.verified_at,
+      profile: profileProjection(existingProfile!, user.firebaseUser!), token_refresh_required: true })
+  }
   if (Date.parse(String(row.expires_at || "")) <= Date.now()) {
     await updateEmailVerificationIfCurrent(env, row, { status: "expired" })
     await auditEmailVerification(env, { verificationId: row.id, firebaseUserId: user.userId, email: user.email, action: "verify", result: "expired", request })
@@ -2056,19 +2100,24 @@ async function handleEmailVerificationVerify(request: Request, env: Env): Promis
     return verificationRateLimited(request, Number.isFinite(retryAt) ? (retryAt - Date.now()) / 1000 : 300)
   }
   const expected = String(row.code_hash || "")
-  const actual = await hashEmailCode(env, user.email, code)
   if (!timingSafeEqualHex(expected, actual)) {
     await consumeInvalidEmailCode(env, row)
     await auditEmailVerification(env, { verificationId: row.id, firebaseUserId: user.userId, email: user.email, action: "verify", result: "invalid", request })
     return errorJson(request, "VERIFICATION_CODE_INVALID", 400)
   }
-  const verifiedAt = new Date().toISOString()
-  const credentialEpoch = Math.floor(Date.now() / 1000)
-  if (!await updateEmailVerificationIfCurrent(env, row, { status: "verified", verified_at: verifiedAt, consumed_at: verifiedAt })) {
+  const verifiedAt = row.status === "verified" ? String(row.verified_at || "") : new Date().toISOString()
+  const credentialEpoch = Math.floor(Date.parse(verifiedAt) / 1000)
+  if (!Number.isFinite(credentialEpoch)) return errorJson(request, "AUTH_PROVIDER_UNAVAILABLE", 503, true)
+  existingProfile ||= await getAccountProfileByFirebaseUid(env, user.userId)
+  if (existingProfile && accountLifecycleBlock(existingProfile)) return errorJson(request, "ACCOUNT_DISABLED", 403, false)
+  if (existingProfile && (profileCredentialEpoch(existingProfile) || 0) > credentialEpoch) {
     return errorJson(request, "VERIFICATION_CODE_INVALID", 409)
   }
+  if (isIsoExpired(row.expires_at)) return errorJson(request, "VERIFICATION_CODE_EXPIRED", 410)
+  const claimed = await claimEmailFinalization(env, row, { status: "verified", verified_at: verifiedAt, consumed_at: null })
+  if (!claimed) return errorJson(request, "REGISTRATION_FINALIZING", 409, true)
+  row = claimed
   const registration = registrationMetadataFromRow(row, env)
-  if (!user.userId) return errorJson(request, "AUTH_SESSION_EXPIRED", 401, true)
   const verifiedProfileUser: VerifiedFirebaseUser = {
     userId: user.userId || "",
     email: user.email,
@@ -2083,33 +2132,56 @@ async function handleEmailVerificationVerify(request: Request, env: Env): Promis
     authTime: null,
     createdAtMs: null,
   }
-  const profile = await provisionProfile(env, verifiedProfileUser, {
-    displayName: registration.displayName || user.displayName || null,
-    locale: registration.locale,
-    termsAccepted: registration.termsAccepted,
-    termsVersion: registration.termsVersion,
-    termsAcceptedAt: registration.termsAcceptedAt,
-    emailVerified: true,
-    verificationSource: "saturnws_otp",
-    metadata: mergeFinalizedProfileMetadata(
-      { email_verification_id: row.id },
-      { finalizedAt: verifiedAt, credentialEpoch, source: "saturnws_otp" },
-    ),
+  let profile = existingProfile
+  const profileSaved = profile && isFinalizedProfile(profile, verifiedProfileUser)
+    && profileMetadata(profile).email_verification_id === row.id && profileCredentialEpoch(profile) === credentialEpoch
+  if (!profileSaved) {
+    try {
+      profile = await provisionProfile(env, verifiedProfileUser, {
+        displayName: registration.displayName || user.displayName || null,
+        locale: registration.locale,
+        termsAccepted: registration.termsAccepted,
+        termsVersion: registration.termsVersion,
+        termsAcceptedAt: registration.termsAcceptedAt,
+        emailVerified: true,
+        verificationSource: "saturnws_otp",
+        metadata: mergeFinalizedProfileMetadata(
+          { email_verification_id: row.id },
+          { finalizedAt: verifiedAt, credentialEpoch, source: "saturnws_otp" },
+        ),
+      })
+    } catch (error) {
+      if ((error as { remoteRejected?: boolean })?.remoteRejected) await releaseEmailFinalization(env, row, "profile_failed")
+      await auditEmailVerification(env, { verificationId: row.id, firebaseUserId: user.userId, email: user.email, action: "verify", result: "profile_failed", request })
+      return errorJson(request, "AUTH_PROVIDER_UNAVAILABLE", 503, true)
+    }
+  }
+  const checkpoint = await updateEmailVerificationIfCurrent(env, row, {
+    metadata: { ...metadataObject(row.metadata), registration: { ...registrationFromRow(row), finalization_state: "claim_finalizing" } },
   })
+  if (!checkpoint) return errorJson(request, "REGISTRATION_FINALIZING", 409, true)
+  row = checkpoint
+  const providerFinalized = user.firebaseUser?.emailVerified && isSaturnFinalizedClaim(user.firebaseUser.accountClaims)
   try {
-    await updateFirebaseUserAdmin(env, {
+    if (!providerFinalized) await updateFirebaseUserAdmin(env, {
       userId: user.userId,
       email: user.email,
       emailVerified: true,
       customAttributes: finalizedClaimPayload(),
       revokeRefreshTokens: true,
     })
-  } catch {
+  } catch (error) {
+    if ((error as { remoteRejected?: boolean })?.remoteRejected) await releaseEmailFinalization(env, row, "claim_failed")
     await auditEmailVerification(env, { verificationId: row.id, firebaseUserId: user.userId, email: user.email, action: "verify", result: "claim_failed", request })
     return errorJson(request, "ACCOUNT_FINALIZATION_CLAIM_UNAVAILABLE", 503, true)
   }
+  const completed = await updateEmailVerificationIfCurrent(env, row, {
+    consumed_at: new Date().toISOString(),
+    metadata: { ...metadataObject(row.metadata), registration: { ...registrationFromRow(row), finalization_state: "finalized" } },
+  })
+  if (!completed) return errorJson(request, "REGISTRATION_FINALIZING", 409, true)
   await auditEmailVerification(env, { verificationId: row.id, firebaseUserId: user.userId, email: user.email, action: "verify", result: "verified", request })
-  return json({ success: true, status: "verified", verified_at: verifiedAt, profile: profileProjection(profile, verifiedProfileUser), token_refresh_required: true })
+  return json({ success: true, status: "verified", verified_at: verifiedAt, profile: profileProjection(profile!, verifiedProfileUser), token_refresh_required: true })
 }
 
 async function handleEmailVerificationStatus(request: Request, env: Env): Promise<Response> {
@@ -2121,10 +2193,12 @@ async function handleEmailVerificationStatus(request: Request, env: Env): Promis
   })
   if (user instanceof Response) return user
   const row = await getLatestEmailVerification(env, { email: user.email, firebaseUserId: user.userId, purpose: "email_verification" })
+  const profile = row?.status === "verified" && user.userId ? await getAccountProfileByFirebaseUid(env, user.userId) : null
+  const verified = row ? emailVerificationFinalized(row, user.firebaseUser, profile) : false
   return json({
     success: true,
-    status: row?.status || "unverified",
-    verified: row?.status === "verified",
+    status: row?.status === "verified" && !verified ? "pending" : row?.status || "unverified",
+    verified,
     expires_at: row?.expires_at || null,
     attempts: row?.attempts || 0,
   })
@@ -2172,9 +2246,11 @@ async function handleEmailVerificationCancel(request: Request, env: Env): Promis
     email: user.email,
     firebaseUserId: user.userId,
     purpose: "email_verification",
-    status: "pending",
   })
-  if (!row) {
+  if (!await canReplaceEmailVerification(env, row, user.firebaseUser)) {
+    return errorJson(request, "REGISTRATION_FINALIZING", 409, true)
+  }
+  if (!row || row.status !== "pending") {
     await auditEmailVerification(env, { firebaseUserId: user.userId, email: user.email, action: "cancel", result: "not_found", request })
     return json({ success: true, status: "not_found" })
   }

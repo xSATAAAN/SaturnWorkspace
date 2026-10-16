@@ -139,6 +139,15 @@ delivery evidence keep their admission-time delay. Expired recipient digests are
 removed in batches of at most 64 on successful admissions. No raw email or code
 is stored in the admission table.
 
+Authenticated email verification accepts the code before finalizing the profile
+and Firebase identity. It reports success only after both effects and the
+completion receipt are saved. An incomplete attempt can resume with the same
+code, owner and original expiry; retries preserve its credential cutoff and
+attempt budget. A definite rejection permits immediate retry. An uncertain
+write retains a five-minute claim, which also prevents cancellation, replacement
+codes and expiry handling from interrupting an admitted finalizer. Legacy rows
+marked verified or consumed still require matching profile and provider evidence.
+
 `npm run test:email-otp-postgres` in `workers/auth` proves concurrent first sends,
 resends, cross-route and terminal-state limits, legacy rows, rollback, expiry,
 cleanup and database privileges. It requires an isolated loopback PostgreSQL 17

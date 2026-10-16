@@ -59,7 +59,7 @@ async function supabaseJson<T>(env: Env, path: string, init: RequestInit = {}): 
     if (message.includes("admission_version") && [400, 404].includes(res.status)) {
       throw new Error("email_verification_admission_unavailable")
     }
-    throw new Error(message || `supabase_${res.status}`)
+    throw Object.assign(new Error(message || `supabase_${res.status}`), { remoteRejected: res.status < 500 })
   }
   return payload as T
 }
