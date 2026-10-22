@@ -3115,6 +3115,8 @@ export function AdminPolicies() {
   const [mandatory, setMandatory] = useState(false);
   const [minimumVersion, setMinimumVersion] = useState("");
   const [updateMode, setUpdateMode] = useState("optional");
+  const [androidBetaEnabled, setAndroidBetaEnabled] = useState(true);
+  const [globalBlockedActions, setGlobalBlockedActions] = useState<string[]>([]);
   const [reason, setReason] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
@@ -3134,6 +3136,9 @@ export function AdminPolicies() {
       setMandatory(Boolean(global.mandatory_update_enabled));
       setMinimumVersion(global.minimum_supported_version || "");
       setUpdateMode(global.update_mode || "optional");
+      const blocked = safeJsonArray(global.blocked_actions_json);
+      setGlobalBlockedActions(blocked);
+      setAndroidBetaEnabled(!blocked.includes("android_beta_access"));
     });
     return () => {
       active = false;
@@ -3143,11 +3148,18 @@ export function AdminPolicies() {
     setBusy(true);
     setError("");
     try {
+      const blockedActions = androidBetaEnabled
+        ? globalBlockedActions.filter((action) => action !== "android_beta_access")
+        : [...new Set([...globalBlockedActions, "android_beta_access"])];
+      const global = state.data?.global_policy;
       await admin.updateGlobalPolicy({
         kill_switch_enabled: killSwitch,
         mandatory_update_enabled: mandatory,
         minimum_supported_version: minimumVersion,
         update_mode: updateMode,
+        blocked_actions: blockedActions,
+        features: safeJsonObject(global?.features_json),
+        limits: safeJsonObject(global?.limits_json),
         reason,
       });
       setPreviewOpen(false);
@@ -3363,6 +3375,20 @@ export function AdminPolicies() {
             <label className="ui-check">
               <input
                 type="checkbox"
+                checked={androidBetaEnabled}
+                onChange={(event) => setAndroidBetaEnabled(event.target.checked)}
+              />
+              <span>
+                {copy(
+                  locale,
+                  "Allow Saturn Android Beta to run",
+                  "السماح بتشغيل Saturn Android Beta",
+                )}
+              </span>
+            </label>
+            <label className="ui-check">
+              <input
+                type="checkbox"
                 checked={killSwitch}
                 onChange={(event) => setKillSwitch(event.target.checked)}
               />
@@ -3491,6 +3517,16 @@ export function AdminPolicies() {
                 </Badge>
               </dd>
             </div>
+            <div>
+              <dt>{copy(locale, "Saturn Android Beta", "Saturn Android Beta")}</dt>
+              <dd>
+                <Badge tone={androidBetaEnabled ? "success" : "danger"}>
+                  {androidBetaEnabled
+                    ? copy(locale, "Allowed", "مسموح")
+                    : copy(locale, "Blocked", "موقوف")}
+                </Badge>
+              </dd>
+            </div>
           </dl>
           <label className="ui-check">
             <input
@@ -3545,6 +3581,29 @@ function safeJsonCount(value?: string | null) {
         : 0;
   } catch {
     return 0;
+  }
+}
+
+function safeJsonArray(value?: string | null): string[] {
+  try {
+    const parsed = JSON.parse(value || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((item) => String(item || "").trim().toLowerCase())
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function safeJsonObject(value?: string | null): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(value || "{}");
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
   }
 }
 

@@ -34,7 +34,7 @@ class Statement {
   constructor(db, sql) { this.db = db; this.sql = sql; this.args = [] }
   bind(...args) { this.args = args; return this }
   async first() {
-    if (this.sql.includes('FROM global_policy')) return { id: 'global', kill_switch_enabled: 0, mandatory_update_enabled: 0, minimum_supported_version: null, update_mode: 'optional', blocked_actions_json: '[]', features_json: '{}', limits_json: '{}' }
+    if (this.sql.includes('FROM global_policy')) return this.db.globalPolicy
     if (this.sql.includes('FROM disabled_versions')) return null
     if (this.sql.includes('FROM users WHERE id')) return { id: this.args[0], email: `${this.args[0]}@example.test`, status: 'active', role: 'user', plan_id: 'default' }
     if (this.sql.includes('FROM users WHERE lower(email)')) return null
@@ -81,18 +81,19 @@ class Statement {
 }
 
 class D1Mock {
-  constructor() {
+  constructor(blockedActions = []) {
     this.subscriptionWrites = 0
     this.syntheticSubscription = null
     this.staleSubscription = { id: 'stale', user_id: 'uid-test', plan_id: 'monthly', status: 'active', expires_at: '2099-01-01T00:00:00Z' }
     this.routeCapability = null
+    this.globalPolicy = { id: 'global', kill_switch_enabled: 0, mandatory_update_enabled: 0, minimum_supported_version: null, update_mode: 'optional', blocked_actions_json: JSON.stringify(blockedActions), features_json: '{}', limits_json: '{}' }
   }
   prepare(sql) { return new Statement(this, sql) }
 }
 
 const seed = Buffer.alloc(32, 7).toString('base64')
-async function evaluate(entitlementState, subscriptionId = null) {
-  const db = new D1Mock()
+async function evaluate(entitlementState, subscriptionId = null, options = {}) {
+  const db = new D1Mock(options.blockedActions || [])
   const env = {
     DB: db,
     POLICY_SIGNING_SEED_B64: seed,
@@ -117,7 +118,7 @@ async function evaluate(entitlementState, subscriptionId = null) {
   const request = new Request('https://api.saturnws.com/v1/policy/check', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer test-session-token' },
-    body: JSON.stringify({ user_id: 'uid-test', email: 'uid-test@example.test', device_id: 'a'.repeat(32), requested_action: 'app_start' }),
+    body: JSON.stringify({ user_id: 'uid-test', email: 'uid-test@example.test', device_id: 'a'.repeat(32), requested_action: options.requestedAction || 'app_start' }),
   })
   const response = await worker.fetch(request, env, { waitUntil() {} })
   const body = await response.json()
@@ -146,6 +147,13 @@ const grace = await evaluate('grace', 'sub-grace')
 assert.equal(grace.body.decision, 'allow')
 assert.equal(grace.body.allow, true)
 assert.equal(grace.db.subscriptionWrites, 1)
+
+const androidBetaBlocked = await evaluate('active', 'sub-active', {
+  requestedAction: 'android_beta_access',
+  blockedActions: ['android_beta_access'],
+})
+assert.equal(androidBetaBlocked.body.decision, 'plan_feature_not_allowed')
+assert.equal(androidBetaBlocked.body.allow, false)
 
 async function mintRouteCapability(entitlementState, body = {}) {
   const db = new D1Mock()

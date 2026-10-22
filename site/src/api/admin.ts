@@ -990,7 +990,7 @@ export async function fetchAdminPolicyState() {
   return adminFetch<AdminPolicyState>('/policy/state')
 }
 
-export async function updateAdminGlobalPolicy(payload: { kill_switch_enabled: boolean; mandatory_update_enabled: boolean; minimum_supported_version?: string; update_mode: string; reason: string }) {
+export async function updateAdminGlobalPolicy(payload: { kill_switch_enabled: boolean; mandatory_update_enabled: boolean; minimum_supported_version?: string; update_mode: string; blocked_actions?: string[]; features?: Record<string, unknown>; limits?: Record<string, unknown>; reason: string }) {
   return adminFetch<{ success: boolean }>('/policy/global-policy', { method: 'POST', body: JSON.stringify(payload) })
 }
 

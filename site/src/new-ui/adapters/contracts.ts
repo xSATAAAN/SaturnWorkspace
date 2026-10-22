@@ -354,7 +354,7 @@ export type AdminAdapter = {
   revokeInvite(inviteId: string, reason: string): Promise<void>
   listInviteUsage(inviteId: string): Promise<AdminInviteUsage[]>
   getPolicyState(): Promise<AdminPolicyState>
-  updateGlobalPolicy(input: { kill_switch_enabled: boolean; mandatory_update_enabled: boolean; minimum_supported_version?: string; update_mode: string; reason: string }): Promise<void>
+  updateGlobalPolicy(input: { kill_switch_enabled: boolean; mandatory_update_enabled: boolean; minimum_supported_version?: string; update_mode: string; blocked_actions?: string[]; features?: Record<string, unknown>; limits?: Record<string, unknown>; reason: string }): Promise<void>
   updateDisabledVersion(input: { version: string; reason?: string; disabled: boolean }): Promise<void>
 }
 

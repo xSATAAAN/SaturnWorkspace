@@ -232,6 +232,7 @@ const manualGrant = section('function ManualGrantDrawer', 'function AdminOperati
 const userDetail = section('function UserDetailDrawer', 'function SubscriptionRecoveryDrawer')
 const recovery = section('function SubscriptionRecoveryDrawer', 'export function AdminSubscriptions')
 const diagnostics = section('export function AdminDiagnostics', 'export function AdminAudit')
+const policies = section('export function AdminPolicies', 'function safeJsonCount')
 const adminReleasesStart = adapters.indexOf('async listReleases(')
 const adminReleasesAdapter = adapters.slice(adminReleasesStart, adapters.indexOf('async uploadRelease(', adminReleasesStart))
 
@@ -241,6 +242,8 @@ const checks = [
   ['Readiness route is real', pages.includes("page === 'readiness' ? <AdminReadiness")],
   ['Settings route is real', pages.includes("page === 'settings' ? <AdminSettings")],
   ['Policy route uses the structured admin page', pages.includes("page === 'policies' ? <AdminPolicies")],
+  ['Android beta access has a dedicated policy control', policies.includes('android_beta_access') && policies.includes('Allow Saturn Android Beta to run')],
+  ['Global policy updates preserve existing structured policy fields', policies.includes('blocked_actions: blockedActions') && policies.includes('safeJsonObject(global?.features_json)') && policies.includes('safeJsonObject(global?.limits_json)')],
   ['Manual grant uses a user picker', manualGrant.includes('Search by name or email')],
   ['Manual grant does not expose Firebase UID input', !manualGrant.includes('Firebase UID')],
   ['Manual grant does not invent a reason note', manualGrant.includes('reason: note.trim()') && !manualGrant.includes('reason: note || reasonCode')],
