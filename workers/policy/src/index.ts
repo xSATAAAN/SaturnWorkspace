@@ -4297,19 +4297,36 @@ async function handleAdminState(env: Env): Promise<Response> {
 
 async function handleAdminGlobalPolicy(request: Request, env: Env): Promise<Response> {
   const body = (await request.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
-  const updateMode = normalizeLower(body.update_mode || "optional")
+  const current = await env.DB.prepare("SELECT * FROM global_policy WHERE id = 'global'").first<GlobalPolicyRow>()
+  const owns = (key: string) => Object.prototype.hasOwnProperty.call(body, key)
+  const updateMode = normalizeLower(owns("update_mode") ? body.update_mode : current?.update_mode || "optional")
   const safeUpdateMode = ["optional", "mandatory"].includes(updateMode) ? updateMode : "optional"
+  const blockedActions = owns("blocked_actions")
+    ? normalizeListInput(body.blocked_actions)
+    : parseJsonArray(current?.blocked_actions_json)
+  const features = owns("features")
+    ? toJsonText(body.features, {})
+    : toJsonText(parseJsonObject(current?.features_json), {})
+  const limits = owns("limits")
+    ? toJsonText(body.limits, {})
+    : toJsonText(parseJsonObject(current?.limits_json), {})
   await env.DB.prepare(
     "UPDATE global_policy SET kill_switch_enabled = ?1, mandatory_update_enabled = ?2, minimum_supported_version = ?3, update_mode = ?4, blocked_actions_json = ?5, features_json = ?6, limits_json = ?7, updated_at = datetime('now') WHERE id = 'global'"
   )
     .bind(
-      parseBooleanInput(body.kill_switch_enabled) ? 1 : 0,
-      parseBooleanInput(body.mandatory_update_enabled) ? 1 : 0,
-      normalizeText(body.minimum_supported_version),
+      owns("kill_switch_enabled")
+        ? (parseBooleanInput(body.kill_switch_enabled) ? 1 : 0)
+        : (current?.kill_switch_enabled ? 1 : 0),
+      owns("mandatory_update_enabled")
+        ? (parseBooleanInput(body.mandatory_update_enabled) ? 1 : 0)
+        : (current?.mandatory_update_enabled ? 1 : 0),
+      owns("minimum_supported_version")
+        ? normalizeText(body.minimum_supported_version)
+        : normalizeText(current?.minimum_supported_version),
       safeUpdateMode,
-      JSON.stringify(normalizeListInput(body.blocked_actions)),
-      toJsonText(body.features, {}),
-      toJsonText(body.limits, {})
+      JSON.stringify(blockedActions),
+      features,
+      limits
     )
     .run()
   return json({ success: true })
