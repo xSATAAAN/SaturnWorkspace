@@ -189,10 +189,6 @@
       "license_id": {
         "status": "deprecated_optional_alias",
         "canonical": "subscription_id"
-      },
-      "SATAN_environment_prefix": {
-        "status": "legacy_local_compatibility",
-        "canonical": "SATURNWS_environment_prefix"
       }
     }
   },
